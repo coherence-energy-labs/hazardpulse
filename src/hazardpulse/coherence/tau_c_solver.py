@@ -2,10 +2,21 @@
 
 Solves:
 
-    D(x) * nabla^2 tau_c - kappa(x)^2 * tau_c + S(x) = 0
+    D(x) * nabla^2 tau_c - Gamma(x) * tau_c + S(x) = 0
 
 on a 2-D regular grid using a Jacobi iterative scheme with SOR
 relaxation under Dirichlet (zero) boundary conditions.
+
+PARAMETER SEMANTICS (FVCS W-2). The damping argument is GAMMA — the
+coefficient that multiplies tau_c directly, with units of a rate. It was
+historically named ``kappa`` and squared internally, which invited callers
+to pass the screening wavenumber kappa = sqrt(Gamma/D); with a non-unit D
+that solves ``D*nabla^2(tau) - (Gamma/D)*tau + S = 0`` — screening
+understated by a factor of D (the tornado engine shipped exactly this).
+kappa and the coherence length ell are DERIVED reporting quantities,
+never solver inputs:
+
+    kappa = sqrt(Gamma / D)        ell = 1 / kappa = sqrt(D / Gamma)
 
 Both the earthquake and tornado coherence engines previously held
 near-identical copies of this routine; this module is now the single
@@ -15,7 +26,7 @@ less memory — appropriate for large CONUS-scale grids) or float64
 
 Numerically the routine converges within ~250-300 iterations for
 typical hazard sources at omega=0.7. The denominator is floored to
-1e-12 to avoid singular cells when D=0 and kappa=0 simultaneously.
+1e-12 to avoid singular cells when D=0 and Gamma=0 simultaneously.
 """
 from __future__ import annotations
 
@@ -27,7 +38,7 @@ SOR_OMEGA_DEFAULT: float = 0.7
 
 def solve_helmholtz_2d(
     source: np.ndarray,
-    kappa: float | np.ndarray,
+    gamma: float | np.ndarray,
     dx: float = 1.0,
     *,
     D: float | np.ndarray = 1.0,
@@ -35,14 +46,16 @@ def solve_helmholtz_2d(
     omega: float = SOR_OMEGA_DEFAULT,
     dtype: np.dtype = np.float32,
 ) -> np.ndarray:
-    """Solve ``D * nabla^2(tau) - kappa^2 * tau + S = 0`` on a 2-D grid.
+    """Solve ``D * nabla^2(tau) - gamma * tau + S = 0`` on a 2-D grid.
 
     Parameters
     ----------
     source : ndarray, shape (ny, nx)
         Source term S(x).
-    kappa : float or ndarray
-        Screening wavenumber. Scalars are broadcast.
+    gamma : float or ndarray
+        Damping rate Gamma(x) — multiplies tau directly. Scalars are
+        broadcast. NOT the screening wavenumber: kappa = sqrt(gamma/D)
+        and ell = 1/kappa are derived from this, never passed in.
     dx : float
         Grid spacing (the routine assumes dx == dy).
     D : float or ndarray
@@ -64,7 +77,7 @@ def solve_helmholtz_2d(
     ny, nx = source.shape
     tau = np.zeros((ny, nx), dtype=dtype)
     src = np.asarray(source, dtype=dtype)
-    kappa2 = np.asarray(kappa, dtype=dtype) ** 2
+    gamma_arr = np.asarray(gamma, dtype=dtype)
     D_arr = np.asarray(D, dtype=dtype)
     dx2 = dtype(dx ** 2)
 
@@ -80,7 +93,7 @@ def solve_helmholtz_2d(
         neighbors[:, 1:] += tau[:, :-1]   # from left
         neighbors[:, :-1] += tau[:, 1:]   # from right
 
-        denom = 4.0 * D_arr / dx2 + kappa2
+        denom = 4.0 * D_arr / dx2 + gamma_arr
         denom = np.maximum(denom, eps)
         tau_new = (D_arr * neighbors / dx2 + src) / denom
 

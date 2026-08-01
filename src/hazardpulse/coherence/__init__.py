@@ -17,7 +17,7 @@ two projects produce bit-identical fields when given the same inputs
 (important for federation queries that span both atlases).
 
 Public API:
-    - solve_helmholtz_2d(source, kappa, dx, *, D, n_iter, omega, dtype)
+    - solve_helmholtz_2d(source, gamma, dx, *, D, n_iter, omega, dtype)
     - gradient_2d(field, dx, dy)
     - laplacian_2d(field, dx, dy)
 """

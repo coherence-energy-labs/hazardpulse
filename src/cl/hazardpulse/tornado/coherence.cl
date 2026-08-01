@@ -121,13 +121,19 @@ fn gaussian_smooth(field: &GridField, sigma_cells: USize) -> GridField @ L0 {
     result
 }
 
-/// Solve the steady-state Helmholtz PDE: ∇²τ - κ²τ = -S/D
+/// Solve the steady-state Helmholtz PDE: ∇²τ - Γτ + S = 0  (unit diffusivity).
 /// Uses SOR (Successive Over-Relaxation) iteration.
+///
+/// The damping argument is GAMMA — it multiplies τ directly (FVCS W-2: the old
+/// name `kappa2` invited the κ² = Γ/D confusion; this solver has no D field, so
+/// its Γ input IS the screening term, and κ = sqrt(Γ) is derived-only). The old
+/// header also claimed an `-S/D` source normalization the code never performed;
+/// the equation above is what the stencil actually solves, arithmetic unchanged.
 ///
 /// This is Form 7 of S_One — the coherence field equation.
 fn solve_helmholtz(
     source: &GridField,
-    kappa2: &GridField,
+    gamma: &GridField,
     n_iterations: USize,
     omega: F64
 ) -> GridField @ L0 {
@@ -140,11 +146,11 @@ fn solve_helmholtz(
                 let neighbors = tau.get(i - 1, j) + tau.get(i + 1, j)
                               + tau.get(i, j - 1) + tau.get(i, j + 1);
 
-                // Helmholtz: (neighbors - 4*tau) - kappa2*tau + S = 0
-                // Solve for tau: tau = (neighbors + S) / (4 + kappa2)
-                let k2 = kappa2.get(i, j);
+                // Helmholtz: (neighbors - 4*tau) - gamma*tau + S = 0
+                // Solve for tau: tau = (neighbors + S) / (4 + gamma)
+                let g = gamma.get(i, j);
                 let s = source.get(i, j);
-                let new_val = (neighbors + s) / (4.0 + k2);
+                let new_val = (neighbors + s) / (4.0 + g);
 
                 // SOR update
                 let old_val = tau.get(i, j);
@@ -213,7 +219,6 @@ fn build_coherence_fields(
 ) -> (GridField, GridField, GridField, GridField) @ L0 {
     let mut source = GridField::new(N_LAT, N_LON);
     let mut gamma = GridField::new(N_LAT, N_LON);
-    let mut kappa2 = GridField::new(N_LAT, N_LON);
 
     for i in 0..N_LAT {
         for j in 0..N_LON {
@@ -229,10 +234,8 @@ fn build_coherence_fields(
             let td_dep = max(0.0, td_depression_field.get(i, j));
             let g = cin / 200.0 + td_dep / 20.0 + 0.1;
             gamma.set(i, j, g);
-
-            // Screening wavenumber: κ² = Γ/D
-            let d = 1.0; // default diffusion
-            kappa2.set(i, j, g / d);
+            // (kappa = sqrt(Γ/D) is derived-only; the old kappa2 = g/1.0 field
+            //  was bitwise-equal to gamma and is gone — FVCS W-2.)
         }
     }
 
@@ -240,7 +243,7 @@ fn build_coherence_fields(
     let source_smooth = gaussian_smooth(&source, 2);
 
     // Solve Helmholtz PDE
-    let tau = solve_helmholtz(&source_smooth, &kappa2, 200, 0.7);
+    let tau = solve_helmholtz(&source_smooth, &gamma, 200, 0.7);
 
     // Compute gradient
     let grad_tau = compute_gradient(&tau);
@@ -330,8 +333,8 @@ fn test_latlon_to_cell() {
 #[test]
 fn test_helmholtz_zero_source() {
     let source = GridField::new(N_LAT, N_LON);
-    let kappa2 = GridField::new(N_LAT, N_LON);
-    let tau = solve_helmholtz(&source, &kappa2, 50, 0.7);
+    let gamma = GridField::new(N_LAT, N_LON);
+    let tau = solve_helmholtz(&source, &gamma, 50, 0.7);
     // Zero source → zero tau everywhere
     assert_approx_eq!(tau.max_value(), 0.0, 1e-6);
 }

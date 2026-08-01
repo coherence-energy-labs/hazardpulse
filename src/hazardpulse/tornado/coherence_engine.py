@@ -22,7 +22,8 @@ where:
   - S(x,t)     = source term (CAPE, SRH, shear, reflectivity)
   - Gamma(x,t) = damping (CIN, Td depression)
   - D(x,t)     = diffusivity (storm-relative flow)
-  - kappa^2    = Gamma / D  (screening wavenumber)
+  - kappa^2    = Gamma / D  (screening wavenumber — DERIVED reporting quantity;
+                 the solver consumes Gamma directly, never kappa: FVCS W-2)
 
 From tau we derive:
   - grad(tau)    -- coherence gradient (front strength)
@@ -70,24 +71,26 @@ ROTATION_THRESHOLD: float = 0.003
 
 def solve_helmholtz_2d(
     source: np.ndarray,
-    kappa: float | np.ndarray,
+    gamma: float | np.ndarray,
     dx: float = 1.0,
     *,
     D: float | np.ndarray = 1.0,
     n_iter: int = HELMHOLTZ_ITERS,
     omega: float = 0.7,
 ) -> np.ndarray:
-    """Solve ``D nabla^2 tau - kappa^2 tau + S = 0`` on the CONUS grid.
+    """Solve ``D nabla^2 tau - gamma tau + S = 0`` on the CONUS grid.
 
     Tornado-grid wrapper around the shared
     ``hazardpulse.coherence.tau_c_solver.solve_helmholtz_2d``.
     Uses float32 (large 34x63 CONUS grid; speed over precision).
+    ``gamma`` is the damping rate Gamma(x) itself — kappa = sqrt(gamma/D)
+    is a derived reporting quantity, never the solver input (FVCS W-2).
     """
     from hazardpulse.coherence.tau_c_solver import (
         solve_helmholtz_2d as _shared_solver,
     )
     return _shared_solver(
-        source, kappa, dx,
+        source, gamma, dx,
         D=D, n_iter=n_iter, omega=omega, dtype=np.float32,
     )
 
@@ -320,13 +323,11 @@ def compute_coherence_fields(
     storm_speed = derived["storm_speed"]
     D_field = (1.0 + 0.3 * (storm_speed / 20.0)).astype(np.float32)
 
-    # Screening wavenumber
-    kappa_field = np.sqrt(
-        Gamma_field / np.maximum(D_field, 1e-6)
-    ).astype(np.float32)
-
-    # Solve Helmholtz PDE
-    tau = solve_helmholtz_2d(S_field, kappa_field, dx=1.0, D=D_field)
+    # Solve Helmholtz PDE: D nabla^2 tau - Gamma tau + S = 0. Gamma goes in
+    # DIRECTLY — the old kappa = sqrt(Gamma/D) input understated screening by a
+    # factor of D on this non-unit-D grid (FVCS W-2), letting hazard influence
+    # over-diffuse past the model's intended coherence length sqrt(D/Gamma).
+    tau = solve_helmholtz_2d(S_field, Gamma_field, dx=1.0, D=D_field)
 
     # Spatial derivatives
     grad_y, grad_x = _gradient_2d(tau)

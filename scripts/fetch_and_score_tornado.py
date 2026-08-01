@@ -261,13 +261,9 @@ def build_coherence_from_probsevere(
     # Diffusivity: uniform
     D_field = np.ones_like(S_field, dtype=np.float32)
 
-    # Screening wavenumber
-    kappa_field = np.sqrt(Gamma_field / np.maximum(D_field, 1e-6)).astype(
-        np.float32
-    )
-
-    # Solve Helmholtz PDE
-    tau = solve_helmholtz_2d(S_field, kappa_field, dx=1.0, D=D_field)
+    # Solve Helmholtz PDE: D nabla^2 tau - Gamma tau + S = 0 (Gamma goes in
+    # directly; kappa = sqrt(Gamma/D) is derived-only — FVCS W-2)
+    tau = solve_helmholtz_2d(S_field, Gamma_field, dx=1.0, D=D_field)
 
     # Spatial derivatives
     from hazardpulse.tornado.coherence_engine import (
