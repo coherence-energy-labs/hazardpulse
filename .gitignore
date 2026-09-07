@@ -48,6 +48,11 @@ cache/
 # API keys and secrets
 .env
 .env.*
+# Wrangler's local secret file. This repo is PUBLIC and deploys a Worker, so an
+# unignored .dev.vars is one `wrangler dev` + `git add -A` from publishing every
+# production Worker secret. Ignored 2026-08-06.
+.dev.vars
+.dev.vars.*
 *.key
 *.pem
 .cdsapirc

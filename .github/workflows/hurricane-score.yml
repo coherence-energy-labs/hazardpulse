@@ -39,6 +39,13 @@ jobs:
           HAZARDPULSE_ALERT_WEBHOOK_URL: ${{ secrets.HAZARDPULSE_ALERT_WEBHOOK_URL }}
         run: python scripts/fetch_and_score.py
 
+      # This job commits `dist/` wholesale, which contains earthquake-ledger.jsonl and
+      # tornado-ledger.jsonl. It does not intend to touch them, but a wholesale add cannot
+      # tell intent from effect -- so the same gate the scoring jobs run must run here too,
+      # or hurricane is an unguarded path to publishing a rewritten ledger.
+      - name: Ledger hash chain must verify before publishing
+        run: python scripts/verify_ledger_chain.py
+
       - name: Check for changes
         id: changes
         run: |

@@ -556,6 +556,15 @@ def _build_gate_decisions(entries: list[dict], pulse: dict) -> list[dict]:
 
 
 def _count_link_mismatches(path: Path) -> tuple[int, int]:
+    """LINKAGE ONLY: does each row's stored prev_hash equal the previous row's stored hash?
+
+    This is NOT an integrity check and must never be published as one. It compares two stored
+    values to each other and never recomputes a digest from row content, so it returns 0 for a
+    rewritten entry, a backdated timestamp, a wholly re-chained history and a truncated tail
+    alike. `_ledger_integrity()` below is the real check; this one is kept because the number it
+    produces ("do the pointers agree?") is still worth reporting SEPARATELY, and because the
+    negative tests use it to prove each forgery fixture is one the linkage check cannot see.
+    """
     rows = _read_jsonl(path)
     mismatches = 0
     previous_hash = "0" * 64
@@ -565,6 +574,50 @@ def _count_link_mismatches(path: Path) -> tuple[int, int]:
             mismatches += 1
         previous_hash = str(row.get("hash", previous_hash))
     return len(rows), mismatches
+
+
+def _load_ledger_verifier():
+    import importlib.util
+    import sys
+
+    name = "hazardpulse_ledger_verifier"
+    if name in sys.modules:
+        return sys.modules[name]
+    module_path = Path(__file__).resolve().parent / "verify_ledger_chain.py"
+    spec = importlib.util.spec_from_file_location(name, module_path)
+    module = importlib.util.module_from_spec(spec)
+    # MUST be registered BEFORE exec_module: @dataclass resolves cls.__module__ through
+    # sys.modules, and raises AttributeError on None if the module is not there yet.
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _ledger_integrity(path: Path) -> dict:
+    """RECOMPUTE every digest, verify the linkage and the anchor. This is what gets published."""
+    verifier = _load_ledger_verifier()
+    rel = path.relative_to(ROOT).as_posix()
+    spec = next((s for s in verifier.LEDGERS if s.path == rel), None)
+    if spec is None:
+        return {"n_rows": 0, "link_mismatches": 0, "violations": ["no digest spec registered for "
+                                                                 f"{rel}"], "verified": False}
+    text, _origin = verifier.read_source(rel, None)
+    n_rows, link_mismatches = _count_link_mismatches(path)
+    if text is None:
+        return {"n_rows": n_rows, "link_mismatches": link_mismatches, "verified": False,
+                "violations": [f"{rel} could not be read"]}
+    report = verifier.Report(path=rel)
+    rows = verifier.parse_rows(text, report)
+    verifier.verify_rows(rows, spec, report)
+    verifier.verify_anchor(report, verifier.load_anchors(None).get(rel))
+    return {
+        "n_rows": report.n_rows,
+        "link_mismatches": link_mismatches,
+        "violations": report.violations,
+        "verified": report.ok,
+        "head_hash": report.head_hash,
+        "chain_commitment": report.chain_commitment,
+    }
 
 
 def _artifact_hazard_key(artifact: dict) -> str | None:
@@ -700,8 +753,10 @@ def _build_verification_summary(pulse: dict) -> dict:
     score_as_of = _parse_utc(pulse.get("updated_at")) or dt.datetime.now(dt.timezone.utc)
     legacy_summary = _read_json(VERIFICATION_SUMMARY_PATH, {"hazards": []})
     replay_groups = _load_replay_artifacts_by_hazard()
-    eq_rows, eq_mismatches = _count_link_mismatches(EQ_LEDGER_PATH)
-    to_rows, to_mismatches = _count_link_mismatches(TO_LEDGER_PATH)
+    eq_integrity = _ledger_integrity(EQ_LEDGER_PATH)
+    to_integrity = _ledger_integrity(TO_LEDGER_PATH)
+    eq_rows, eq_mismatches = eq_integrity["n_rows"], len(eq_integrity["violations"])
+    to_rows, to_mismatches = to_integrity["n_rows"], len(to_integrity["violations"])
     live_map = {hazard.get("key"): hazard for hazard in pulse.get("hazards", [])}
     eq_related = _earthquake_related_benchmark()
     to_related = _tornado_related_benchmark()
@@ -782,7 +837,12 @@ def _build_verification_summary(pulse: dict) -> dict:
                 "supported": True,
                 "path": "/data/earthquake-ledger.jsonl",
                 "n_rows": eq_rows,
-                "prev_hash_mismatches": eq_mismatches,
+                # Every digest RECOMPUTED from row content, not just pointers compared.
+                "verified": eq_integrity["verified"],
+                "integrity_violations": eq_mismatches,
+                "prev_hash_mismatches": eq_integrity["link_mismatches"],
+                "head_hash": eq_integrity.get("head_hash"),
+                "verifier": "scripts/verify_ledger_chain.py",
             },
             "prospective": {
                 "summary_path": "results/earthquake_prospective/prospective_summary.json",
@@ -870,6 +930,8 @@ def _build_verification_summary(pulse: dict) -> dict:
                 "supported": False,
                 "path": None,
                 "n_rows": 0,
+                "verified": False,
+                "integrity_violations": 0,
                 "prev_hash_mismatches": 0,
             },
             "prospective": {
@@ -952,7 +1014,12 @@ def _build_verification_summary(pulse: dict) -> dict:
                 "supported": True,
                 "path": "/data/tornado-ledger.jsonl",
                 "n_rows": to_rows,
-                "prev_hash_mismatches": to_mismatches,
+                # Every digest RECOMPUTED from row content, not just pointers compared.
+                "verified": to_integrity["verified"],
+                "integrity_violations": to_mismatches,
+                "prev_hash_mismatches": to_integrity["link_mismatches"],
+                "head_hash": to_integrity.get("head_hash"),
+                "verifier": "scripts/verify_ledger_chain.py",
             },
             "prospective": {
                 "summary_path": None,
@@ -977,7 +1044,10 @@ def _build_verification_summary(pulse: dict) -> dict:
     if total_backlog:
         alerts.append(f"{total_backlog} matured forecast windows are waiting for scoring.")
     if total_chain_mismatches:
-        alerts.append(f"{total_chain_mismatches} hash-chain mismatches were detected in raw ledgers.")
+        alerts.append(
+            f"{total_chain_mismatches} hash-chain INTEGRITY VIOLATIONS were detected by "
+            f"recomputing every entry's digest from its own content. Do not trust these ledgers "
+            f"until they are resolved.")
     for item in hazards:
         if item.get("exact_model_benchmark") is None and item.get("auc") is None:
             alerts.append(
@@ -1190,7 +1260,8 @@ def _render_verification_page(summary: dict) -> None:
             )
         ledger_html = (
             f'<div class="kv"><span>Raw ledger</span><strong>{int(ledger.get("n_rows", 0) or 0)} rows &middot; '
-            f'{int(ledger.get("prev_hash_mismatches", 0) or 0)} mismatches</strong></div>'
+            f'{int(ledger.get("integrity_violations", 0) or 0)} integrity violations '
+            f'({"every digest recomputed" if ledger.get("verified") else "NOT VERIFIED"})</strong></div>'
             if ledger.get("supported")
             else '<div class="kv"><span>Raw ledger</span><strong>Not implemented for this hazard yet</strong></div>'
         )
@@ -1411,8 +1482,10 @@ def _render_evidence_page(
     replay_index: dict,
 ) -> None:
     hazard_map = {hazard.get("key"): hazard for hazard in pulse.get("hazards", [])}
-    eq_rows, eq_mismatches = _count_link_mismatches(EQ_LEDGER_PATH)
-    to_rows, to_mismatches = _count_link_mismatches(TO_LEDGER_PATH)
+    eq_integrity = _ledger_integrity(EQ_LEDGER_PATH)
+    to_integrity = _ledger_integrity(TO_LEDGER_PATH)
+    eq_rows, eq_mismatches = eq_integrity["n_rows"], len(eq_integrity["violations"])
+    to_rows, to_mismatches = to_integrity["n_rows"], len(to_integrity["violations"])
     replayable_entries = [entry for entry in entries if entry.get("replay_artifact")]
 
     evidence_cards: list[str] = []
@@ -1574,7 +1647,7 @@ def _render_evidence_page(
     <section class="section">
       <div class="grid">
         <div class="card col-3"><div class="metric mono">{eq_rows + to_rows}</div><div class="metric-label">Raw chain rows audited</div></div>
-        <div class="card col-3"><div class="metric mono">{eq_mismatches + to_mismatches}</div><div class="metric-label">Prev-hash mismatches</div></div>
+        <div class="card col-3"><div class="metric mono">{eq_mismatches + to_mismatches}</div><div class="metric-label">Integrity violations (digests recomputed)</div></div>
         <div class="card col-3"><div class="metric mono">{coverage}</div><div class="metric-label">Provenance coverage</div></div>
         <div class="card col-3"><div class="metric mono">{len(replay_index.get("items", []))}</div><div class="metric-label">Replay artifacts</div></div>
       </div>

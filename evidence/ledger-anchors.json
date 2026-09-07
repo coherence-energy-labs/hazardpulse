@@ -1,0 +1,23 @@
+{
+  "explain": "Length and head commitment for each hash-chain ledger. `chain_commitment` is sha256 over the domain tag then every complete canonical row (sort_keys, compact separators, INCLUDING each row's own `hash` and any field the write-time digest does not cover). Truncating, reordering or rewriting any row changes it.",
+  "ledgers": {
+    "dist/data/earthquake-ledger.jsonl": {
+      "chain_commitment": "b6c7658f1c171a09d0b8be34d4b7b4d7f8b6b5462eb2f3e842d5b33dfba664fc",
+      "digest_separators": "default",
+      "first_hash": "0050558464236672ce9b0bfa030162ea863f37cfe340a48072c0a4d88346e101",
+      "head_hash": "4bf3969ffb2b089bb1dea37ac3d68204a6a01da6f61d4aa434960855ebc83989",
+      "legacy_rows_not_covering_forecast_id": 13,
+      "n_entries": 494
+    },
+    "dist/data/tornado-ledger.jsonl": {
+      "chain_commitment": "0836b55cbbacf1904246ec975e36a43a8f85bc8a8ab170e30a5aecec9f9a832e",
+      "digest_separators": "compact",
+      "first_hash": "dd40cf57b75914f96c0396b17eceee2e1d527f60b31deb37313f0cfba2f3b3ee",
+      "head_hash": "0540ba38deea38121651007d3f180eb02a200920071767792d3d1d8ebb7e4791",
+      "legacy_rows_not_covering_forecast_id": 170,
+      "n_entries": 1351
+    }
+  },
+  "mode": "append_only",
+  "schema": "hazardpulse.ledger-anchors.v1"
+}

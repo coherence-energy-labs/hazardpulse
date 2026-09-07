@@ -63,6 +63,12 @@ jobs:
           echo "=== Hurricane ==="
           cat results/hurricane_prospective/prospective_summary.json | python -m json.tool 2>/dev/null || true
 
+      # Uniform gate: every job that can push must prove the ledgers still recompute first.
+      # This job scores predictions AGAINST the ledger, so publishing a verification result
+      # derived from a ledger that no longer recomputes would launder the corruption.
+      - name: Ledger hash chain must verify before publishing
+        run: python scripts/verify_ledger_chain.py
+
       - name: Check for changes
         id: changes
         run: |

@@ -3499,6 +3499,32 @@ def render_homepage_cards(
     print(f"  Wrote {homepage_path} (static homepage)")
 
 
+def refresh_ledger_anchor() -> None:
+    """Re-commit the chain's length and head after an append.
+
+    The anchor (`evidence/ledger-anchors.json`) is what makes TRUNCATION detectable: a chain with
+    its tail removed is still a perfectly linked chain. Refreshing it here, in the writer, is the
+    only placement that cannot be forgotten by a new workflow. It RAISES if the chain no longer
+    verifies -- publishing a forged ledger is worse than a failed run.
+    """
+    import importlib.util
+    import sys as _sys
+
+    name = "hazardpulse_ledger_anchor"
+    module = _sys.modules.get(name)
+    if module is None:
+        module_path = Path(__file__).resolve().parent / "verify_ledger_chain.py"
+        spec = importlib.util.spec_from_file_location(name, module_path)
+        module = importlib.util.module_from_spec(spec)
+        # MUST be registered BEFORE exec_module: @dataclass resolves cls.__module__ through
+        # sys.modules and raises AttributeError on None if the module is not there yet.
+        _sys.modules[name] = module
+        spec.loader.exec_module(module)
+    document = module.refresh_anchor()
+    counts = {k.split("/")[-1]: v["n_entries"] for k, v in document["ledgers"].items()}
+    print(f"  Re-anchored ledger chains: {counts}")
+
+
 def append_ledger(
     scored_storms: list[dict],
     now: dt.datetime,
@@ -3541,12 +3567,16 @@ def append_ledger(
     # Verification: to recompute, exclude the "hash" key from the entry,
     # then json.dumps(entry_without_hash, sort_keys=True, separators=(",",":"))
     # and SHA-256 the result.
+    # The digest covers EVERY key present at this point. Do not attach fields to `entry` after this
+    # line: `forecast_id` was once added post-hash and 170 rows of the live chain still carry it
+    # outside their own digest (see scripts/verify_ledger_chain.py).
     payload = json.dumps(entry, sort_keys=True, separators=(",", ":"))
     entry["hash"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     with LEDGER_PATH.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, separators=(",", ":")) + "\n")
     print(f"  Appended to {LEDGER_PATH}")
+    refresh_ledger_anchor()
 
 
 # ---------------------------------------------------------------------------

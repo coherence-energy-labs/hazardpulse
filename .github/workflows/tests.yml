@@ -87,12 +87,43 @@ jobs:
       # evidence artifact that silently SHRINKS is indistinguishable from backdating. A long-lived
       # branch that regenerated these files at its fork point would have destroyed 547 records in
       # each of four ledgers, in a commit indistinguishable from a routine data update.
+      # On a PUSH TO MAIN this step used `--base origin/main --head HEAD`, which is main compared to
+      # ITSELF: one commit, zero possible shrink, GATE GREEN printed unconditionally -- on the exact
+      # path the scoring bot uses to land every data commit. The base for a push is the commit the
+      # ref pointed at BEFORE the push (`github.event.before`); origin/main is only a meaningful
+      # base for a pull request.
       - name: Append-only evidence ledgers must never lose records
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
         run: |
           set -eu
           python scripts/check_append_only_monotonic.py --self-test
-          git fetch --no-tags --depth=0 origin main 2>/dev/null || git fetch --no-tags origin main
-          python scripts/check_append_only_monotonic.py --base origin/main --head HEAD
+          if [ "$EVENT_NAME" = "push" ]; then
+            BASE="$PUSH_BEFORE"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+              echo "APPEND-ONLY GATE: this push created the ref, so there is no prior state to" >&2
+              echo "compare against. Failing closed rather than printing a green nobody earned." >&2
+              exit 1
+            fi
+            git fetch --no-tags origin "$BASE" 2>/dev/null || true
+          else
+            git fetch --no-tags origin main
+            BASE="origin/main"
+          fi
+          echo "comparing $BASE ($(git rev-parse --short "$BASE")) -> HEAD ($(git rev-parse --short HEAD))"
+          # The gate itself refuses to run when these resolve to the same commit.
+          python scripts/check_append_only_monotonic.py --base "$BASE" --head HEAD
+
+      # A chain that only checks that its own pointers agree with each other is a linked list, not a
+      # hash chain: rewriting an entry, re-chaining the whole history or dropping the tail all left
+      # the shipped check at "0 mismatches". This RECOMPUTES every digest.
+      - name: Ledger hash chains must recompute from their own content
+        run: |
+          set -eu
+          python scripts/verify_ledger_chain.py --self-test
+          python scripts/verify_ledger_chain.py
+          python -m pytest -q tests/test_ledger_chain_integrity.py
 
       - name: Compile all scoring + training scripts
         run: |

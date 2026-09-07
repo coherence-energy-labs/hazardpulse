@@ -69,6 +69,12 @@ jobs:
                   print(f\"  {a['analysis_id']:<40s} delta={a['delta_mean']:+.3f}  p={a.get('welch_p_two_sided', a.get('welch_p', float('nan'))):.3f}\")
           "
 
+      # Uniform gate: every job that can push must prove the ledgers still recompute first.
+      # This job's add is scoped and should never touch them -- the gate is what makes that
+      # an enforced fact rather than a claim that a future scope change could silently break.
+      - name: Ledger hash chain must verify before publishing
+        run: python scripts/verify_ledger_chain.py
+
       - name: Commit results
         run: |
           git config user.name "github-actions[bot]"

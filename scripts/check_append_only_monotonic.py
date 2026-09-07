@@ -48,14 +48,27 @@ ROOT = Path(__file__).resolve().parents[1]
 #: Files known to be append-only evidence. The `"mode": "append_only"` marker is the real contract;
 #: this list covers the ones that do not carry it yet, and the gate REPORTS that gap so the marker
 #: gets added rather than the list quietly becoming the source of truth.
+#:
+#: The two `.jsonl` files are the ACTUAL SHA-256 hash chains (499 and 1367 entries on origin/main as
+#: of 2026-08-06). Until this commit they were covered by NOTHING: `discover()` only globbed
+#: `dist/data/evidence/**.json`, and the real chains are `.jsonl` files outside that prefix. The gate
+#: printed "GATE GREEN - 4 evidence artifact(s) checked" while the two artifacts the product's
+#: central claim actually rests on were not among them.
 KNOWN_EVIDENCE = (
     "dist/data/evidence/prediction-ledger.json",
     "dist/data/evidence/gate-decisions.json",
     "dist/data/evidence/provenance-envelopes.json",
     "dist/data/evidence/replay-index.json",
+    "dist/data/earthquake-ledger.jsonl",
+    "dist/data/tornado-ledger.jsonl",
+    "evidence/ledger-anchors.json",
 )
 
 COUNT_KEYS = ("entries", "records", "items", "decisions", "envelopes", "predictions")
+
+#: The anchor written by scripts/verify_ledger_chain.py: one entry per chain, each with its own
+#: length. Summing them would let a shrink in one chain hide behind growth in the other.
+ANCHOR_PATH = "evidence/ledger-anchors.json"
 
 
 def git(*args: str) -> str:
@@ -69,8 +82,34 @@ def blob_at(ref: str, path: str) -> str | None:
     return proc.stdout if proc.returncode == 0 else None
 
 
-def record_count(text: str) -> tuple[int | None, bool]:
+def jsonl_count(text: str) -> tuple[int | None, bool]:
+    """A .jsonl hash chain: one record per line. Any unparseable line makes the count meaningless."""
+    lines = [line for line in text.splitlines() if line.strip()]
+    for line in lines:
+        try:
+            json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            return None, False
+    return len(lines), True          # a hash chain IS append-only by construction
+
+
+def anchor_counts(text: str) -> dict[str, int]:
+    """Per-chain lengths from the anchor. Per-chain, never summed."""
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return {}
+    ledgers = data.get("ledgers") if isinstance(data, dict) else None
+    if not isinstance(ledgers, dict):
+        return {}
+    return {name: entry["n_entries"] for name, entry in ledgers.items()
+            if isinstance(entry, dict) and isinstance(entry.get("n_entries"), int)}
+
+
+def record_count(text: str, path: str = "") -> tuple[int | None, bool]:
     """Returns (count, declares_append_only). None means 'no countable record list'."""
+    if path.endswith(".jsonl"):
+        return jsonl_count(text)
     try:
         data = json.loads(text)
     except (json.JSONDecodeError, ValueError):
@@ -90,25 +129,46 @@ def record_count(text: str) -> tuple[int | None, bool]:
 
 
 def discover(ref: str) -> list[str]:
-    """Every tracked JSON that declares append_only, plus the known evidence artifacts."""
+    """Every tracked append-only artifact: the evidence JSON, the .jsonl hash chains, the anchor.
+
+    Discovery is by declaration (`"mode": "append_only"`) OR by living in the evidence directory
+    OR by being a `*-ledger.jsonl` hash chain. The last clause is the one that was missing: the
+    real chains are `.jsonl` and live in `dist/data/`, not `dist/data/evidence/`.
+    """
     found = set(KNOWN_EVIDENCE)
     for path in git("ls-tree", "-r", "--name-only", ref).splitlines():
         if path.endswith(".json") and path.startswith("dist/data/evidence/"):
             found.add(path)
+        if path.endswith("-ledger.jsonl") and path.startswith("dist/data/"):
+            found.add(path)
     return sorted(found)
 
 
-def check(base: str, head: str) -> tuple[list[str], list[str]]:
+def check(base: str, head: str) -> tuple[list[str], list[str], int]:
+    """Returns (violations, notes, n_compared). n_compared is how many artifacts were REALLY
+    compared -- discovery alone proves nothing if every comparison was skipped."""
     violations: list[str] = []
     notes: list[str] = []
+    compared = 0
     for path in discover(head):
         base_text, head_text = blob_at(base, path), blob_at(head, path)
-        if base_text is None or head_text is None:
-            continue                                  # new or removed file: not a shrink
-        base_n, _ = record_count(base_text)
-        head_n, head_declares = record_count(head_text)
-        if base_n is None or head_n is None:
+        if head_text is None:
+            if path in KNOWN_EVIDENCE and base_text is not None:
+                violations.append(
+                    f"{path}: present at {base}, GONE at {head}. Deleting an append-only evidence "
+                    f"artifact destroys every record in it.")
+            else:
+                notes.append(f"{path}: absent at {head}; nothing to compare")
             continue
+        if base_text is None:
+            notes.append(f"{path}: new at {head} (absent at {base}); nothing to compare")
+            continue
+        base_n, _ = record_count(base_text, path)
+        head_n, head_declares = record_count(head_text, path)
+        if base_n is None or head_n is None:
+            notes.append(f"{path}: no countable record list at one of the refs; NOT COMPARED")
+            continue
+        compared += 1
         if not head_declares:
             notes.append(f"{path}: treated as append-only evidence but does NOT declare "
                          f'"mode": "append_only" -- add the marker so the contract is in the file')
@@ -116,7 +176,23 @@ def check(base: str, head: str) -> tuple[list[str], list[str]]:
             violations.append(
                 f"{path}: {base_n} records at {base} -> {head_n} at {head} "
                 f"({base_n - head_n} DESTROYED). An append-only ledger may grow, never shrink.")
-    return violations, notes
+
+    # The anchor carries one length PER CHAIN. Checking only the file-level record count would let a
+    # shrink in one chain hide behind growth in the other.
+    base_anchor, head_anchor = blob_at(base, ANCHOR_PATH), blob_at(head, ANCHOR_PATH)
+    if base_anchor and head_anchor:
+        base_map, head_map = anchor_counts(base_anchor), anchor_counts(head_anchor)
+        for name, base_n in base_map.items():
+            head_n = head_map.get(name)
+            if head_n is None:
+                violations.append(f"{ANCHOR_PATH}: chain {name} was anchored at {base} and is GONE "
+                                  f"at {head}")
+            elif head_n < base_n:
+                violations.append(f"{ANCHOR_PATH}: chain {name} anchored at {base_n} entries, now "
+                                  f"{head_n} ({base_n - head_n} DESTROYED)")
+            else:
+                compared += 1
+    return violations, notes, compared
 
 
 def self_test() -> int:
@@ -142,8 +218,47 @@ def self_test() -> int:
     if n_shrank >= n_grew:
         print("SELF-TEST FAILED: the shrink fixture is not smaller, so it proves nothing")
         return 1
+
+    # The hash chains are .jsonl. Counting them as if they were JSON documents returns None, which
+    # the comparison treats as "nothing to compare" -- that is how 1866 chained records went
+    # unchecked while the gate printed GREEN.
+    chain = '{"a": 1}\n{"a": 2}\n\n{"a": 3}\n'
+    n_chain, chain_declares = record_count(chain, "dist/data/earthquake-ledger.jsonl")
+    if (n_chain, chain_declares) != (3, True):
+        print(f"SELF-TEST FAILED: a 3-entry .jsonl chain counted as {n_chain}/{chain_declares}")
+        return 1
+    if record_count(chain)[0] is not None:
+        print("SELF-TEST FAILED: a .jsonl chain must not be counted as a JSON document")
+        return 1
+    if record_count('{"a": 1}\nnot json\n', "x.jsonl")[0] is not None:
+        print("SELF-TEST FAILED: an unparseable chain line produced a count anyway")
+        return 1
+    for known in ("dist/data/earthquake-ledger.jsonl", "dist/data/tornado-ledger.jsonl",
+                  ANCHOR_PATH):
+        if known not in KNOWN_EVIDENCE:
+            print(f"SELF-TEST FAILED: {known} is not in the discovery set, so the real hash chain "
+                  f"is not covered by this gate")
+            return 1
+
+    # Per-chain anchor lengths must never be summed.
+    anchor_base = json.dumps({"ledgers": {"a": {"n_entries": 100}, "b": {"n_entries": 100}}})
+    anchor_head = json.dumps({"ledgers": {"a": {"n_entries": 150}, "b": {"n_entries": 50}}})
+    base_map, head_map = anchor_counts(anchor_base), anchor_counts(anchor_head)
+    if not (base_map == {"a": 100, "b": 100} and head_map == {"a": 150, "b": 50}):
+        print(f"SELF-TEST FAILED: anchor counts parsed as {base_map} / {head_map}")
+        return 1
+    if sum(base_map.values()) != sum(head_map.values()):
+        print("SELF-TEST FAILED: the hidden-shrink fixture must have an unchanged TOTAL, or it "
+              "does not prove that per-chain comparison is what catches it")
+        return 1
+    if not any(head_map[k] < v for k, v in base_map.items()):
+        print("SELF-TEST FAILED: the hidden-shrink fixture does not actually shrink a chain")
+        return 1
+
     print("SELF-TEST GREEN: a shrink is counted as smaller, an undeclared file is flagged, "
-          "and unparseable content yields no count instead of a zero.")
+          "unparseable content yields no count instead of a zero, a .jsonl hash chain is counted "
+          "by line, both live chains are in the discovery set, and a per-chain shrink that leaves "
+          "the TOTAL unchanged is still visible.")
     return 0
 
 
@@ -157,13 +272,29 @@ def main() -> int:
     if args.self_test:
         return self_test()
 
+    # A tree compared to ITSELF can never shrink, so it always passes. That is not a green gate,
+    # it is a broken one -- and it was the exact invocation the push-to-main workflow used
+    # (`--base origin/main --head HEAD` on a push to main resolves to one commit). Compare the
+    # RESOLVED commits, not the ref strings: "origin/main" and "HEAD" look different and are not.
+    base_sha = git("rev-parse", args.base).strip()
+    head_sha = git("rev-parse", args.head).strip()
+    if not base_sha or not head_sha:
+        print(f"APPEND-ONLY GATE: cannot resolve {args.base!r} / {args.head!r}. Failing closed.",
+              file=sys.stderr)
+        return 1
+    if base_sha == head_sha:
+        print(f"APPEND-ONLY GATE MISCONFIGURED: --base {args.base!r} and --head {args.head!r} are "
+              f"the SAME commit ({base_sha[:12]}). Comparing a tree to itself proves nothing.",
+              file=sys.stderr)
+        return 1
+
     checked = discover(args.head)
     if not checked:
         # An empty check passes for any input. Say so instead of printing a confident green.
         print("APPEND-ONLY GATE VACUOUS: no evidence artifacts discovered", file=sys.stderr)
         return 1
 
-    violations, notes = check(args.base, args.head)
+    violations, notes, compared = check(args.base, args.head)
     for note in notes:
         print(f"  note: {note}")
     if violations:
@@ -171,8 +302,15 @@ def main() -> int:
         print("\nResolve these files toward the LIVE branch. A regenerated evidence artifact from an "
               "older fork point is stale data, not a change.")
         return 1
-    print(f"APPEND-ONLY GATE GREEN - {len(checked)} evidence artifact(s) checked against {args.base}; "
-          f"none lost records.")
+    if not compared:
+        # Discovery is not verification. Every artifact can be discovered and every comparison
+        # skipped (missing at a ref, uncountable, wrong extension) and the gate would still be
+        # green -- which is precisely how the .jsonl chains went unchecked.
+        print(f"APPEND-ONLY GATE VACUOUS: {len(checked)} artifact(s) discovered but ZERO were "
+              f"actually compared against {args.base}.", file=sys.stderr)
+        return 1
+    print(f"APPEND-ONLY GATE GREEN - {compared} of {len(checked)} discovered artifact(s) compared "
+          f"against {args.base}; none lost records.")
     return 0
 
 
