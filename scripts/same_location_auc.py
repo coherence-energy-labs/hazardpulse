@@ -110,26 +110,11 @@ def main():
     gnss = GNSSIndex()
 
     # For rest_of_world (the dominant region with adequate test data),
-    # build samples and track locations
+    # build samples and track locations using the same public code path as the
+    # honest evaluation.
     print()
     print("[5] Building rest_of_world samples with location tracking...")
-
-    # Filter mainshocks to rest_of_world
-    row_mainshocks = []
-    specific_regions = {k: v for k, v in REGIONS.items() if k != "rest_of_world"}
-    for ms in mainshocks:
-        lat, lon = ms["latitude"], ms["longitude"]
-        in_specific = False
-        for rname, rdef in specific_regions.items():
-            lat_range = rdef["lat"]
-            lon_range = rdef["lon"]
-            if lat_range[0] <= lat <= lat_range[1] and lon_range[0] <= lon <= lon_range[1]:
-                in_specific = True
-                break
-        if not in_specific:
-            row_mainshocks.append(ms)
-
-    samples, params = build_samples_for_region(row_mainshocks, "rest_of_world", verbose=True)
+    samples, params = build_samples_for_region(mainshocks, "rest_of_world", verbose=True)
 
     # Split into test only
     test_samples = [s for s in samples if TEST_START <= s["year"] <= TEST_END]
@@ -186,13 +171,13 @@ def main():
     ckpt = np.load(ckpt_file)
     X_train = ckpt["X_train"]
     y_train = ckpt["y_train"]
-    X_val = np.zeros((1, N_FEAT), dtype=np.float32)  # dummy
-    y_val = np.zeros(1, dtype=np.float32)
+    X_val = ckpt["X_val"]
+    y_val = ckpt["y_val"]
 
     # Impute NaN
     train_mean = np.nanmean(X_train, axis=0)
     train_mean = np.where(np.isnan(train_mean), 0.0, train_mean)
-    for X in [X_train, X_test]:
+    for X in [X_train, X_val, X_test]:
         nan_mask = np.isnan(X)
         for col in range(X.shape[1]):
             col_nans = nan_mask[:, col]
@@ -203,16 +188,14 @@ def main():
     normalizer = FeatureNormalizer()
     normalizer.fit(X_train)
     X_train_n = normalizer.transform(X_train)
+    X_val_n = normalizer.transform(X_val)
     X_test_n = normalizer.transform(X_test)
 
     # Train GBT
     print()
-    print("[8] Training GBT (200 trees, depth 4)...")
-    gbt = GradientBoostedTrees(
-        n_trees=200, max_depth=4, learning_rate=0.03,
-        subsample=0.6, min_samples_leaf=20, l2_reg=1.0, gamma=0.1,
-    )
-    gbt.fit(X_train_n, y_train, verbose=True)
+    print("[8] Training GBT with the same hyperparameters as the honest pipeline...")
+    gbt = GradientBoostedTrees()
+    gbt.fit(X_train_n, y_train, X_val=X_val_n, y_val=y_val, verbose=True)
 
     # Predict on test
     p_test = gbt.predict_proba(X_test_n)

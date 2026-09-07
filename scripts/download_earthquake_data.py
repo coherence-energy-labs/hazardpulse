@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import datetime as _dt
 import io
 import json
 import math
@@ -68,29 +69,62 @@ USGS_API = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
 
 def download_usgs_year(year: int) -> Path:
-    """Download USGS M2.5+ events for a single calendar year."""
+    """Download USGS M2.5+ events for a single calendar year.
+
+    The USGS CSV endpoint caps responses at 20,000 rows, so we fetch one month
+    at a time and stitch the rows into a yearly cache file.
+    """
     dest = USGS_DIR / f"usgs_catalog_{year}.csv"
     if dest.exists():
         print(f"  [USGS] {year} -- cached ({dest.stat().st_size:,} bytes)")
         return dest
 
-    start = f"{year}-01-01"
-    end = f"{year + 1}-01-01"
-    url = (
-        f"{USGS_API}?format=csv&starttime={start}&endtime={end}"
-        f"&minmagnitude=2.5&orderby=time-asc&limit=20000"
-    )
+    def _month_start(month: int) -> _dt.date:
+        return _dt.date(year, month, 1)
 
-    print(f"  [USGS] {year} -- downloading ...")
-    try:
-        text = _fetch_text(url, timeout=180)
-    except Exception as exc:
-        print(f"  [USGS] {year} FAILED: {exc}")
+    def _next_month_start(month: int) -> _dt.date:
+        if month == 12:
+            return _dt.date(year + 1, 1, 1)
+        return _dt.date(year, month + 1, 1)
+
+    print(f"  [USGS] {year} -- downloading by month ...")
+    header: str | None = None
+    rows: list[str] = []
+    n_lines = 0
+
+    for month in range(1, 13):
+        start = _month_start(month)
+        end = _next_month_start(month)
+        url = (
+            f"{USGS_API}?format=csv&starttime={start.isoformat()}&endtime={end.isoformat()}"
+            f"&minmagnitude=2.5&orderby=time-asc&limit=20000"
+        )
+        try:
+            text = _fetch_text(url, timeout=180)
+        except Exception as exc:
+            print(f"  [USGS] {year}-{month:02d} FAILED: {exc}")
+            return dest
+
+        lines = text.splitlines()
+        if not lines:
+            continue
+        if header is None:
+            header = lines[0]
+        month_rows = lines[1:]
+        rows.extend(month_rows)
+        n_lines += len(month_rows)
+        print(f"    month {month:02d}: {len(month_rows):,} events")
+        time.sleep(0.1)
+
+    if header is None:
+        print(f"  [USGS] {year} FAILED: empty response")
         return dest
 
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(text, encoding="utf-8")
-    n_lines = text.count("\n") - 1  # minus header
+    dest.write_text(
+        header + "\n" + "\n".join(rows) + ("\n" if rows else ""),
+        encoding="utf-8",
+    )
     print(f"  [USGS] {year} -- {n_lines:,} events")
     return dest
 

@@ -14,8 +14,12 @@ scan_gnss_cache     -- List available cached GPS station codes
 from __future__ import annotations
 
 import csv
+import datetime as _dt
 import json
+import ssl
+import time
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 # ---------------------------------------------------------------------------
 # Cache layout (mirrors download_earthquake_data.py)
@@ -29,6 +33,10 @@ GCMT_DIR = CACHE_ROOT / "gcmt"
 PLATES_DIR = CACHE_ROOT / "plates"
 GNSS_DIR = CACHE_ROOT / "gnss"
 
+_SSL_CTX = ssl.create_default_context()
+_USER_AGENT = "hazardpulse/0.1 (+https://github.com/Jphilbrick10/hazardpulse)"
+_USGS_API = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+
 
 # ---------------------------------------------------------------------------
 # 1. USGS Global Earthquake Catalog
@@ -40,6 +48,90 @@ _USGS_KEEP_FIELDS = {
     "time", "latitude", "longitude", "depth", "mag",
     "magType", "place", "type", "id",
 }
+
+
+def _fetch_text(url: str, timeout: int = 180) -> str:
+    req = Request(url, headers={"User-Agent": _USER_AGENT})
+    with urlopen(req, timeout=timeout, context=_SSL_CTX) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def _month_start(year: int, month: int) -> _dt.date:
+    return _dt.date(year, month, 1)
+
+
+def _next_month_start(year: int, month: int) -> _dt.date:
+    if month == 12:
+        return _dt.date(year + 1, 1, 1)
+    return _dt.date(year, month + 1, 1)
+
+
+def bootstrap_usgs_catalog(
+    min_year: int = 2000,
+    max_year: int = 2025,
+    *,
+    force: bool = False,
+    verbose: bool = True,
+) -> list[Path]:
+    """Download yearly USGS catalog files into the local cache.
+
+    The USGS CSV endpoint caps a single query at 20,000 rows, so we fetch one
+    calendar month at a time and stitch the rows back into a yearly CSV.
+    """
+    USGS_DIR.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+
+    for year in range(min_year, max_year + 1):
+        dest = USGS_DIR / f"usgs_catalog_{year}.csv"
+        if dest.exists() and not force:
+            written.append(dest)
+            continue
+
+        header: str | None = None
+        rows: list[str] = []
+        total_rows = 0
+
+        for month in range(1, 13):
+            start = _month_start(year, month)
+            end = _next_month_start(year, month)
+            url = (
+                f"{_USGS_API}?format=csv"
+                f"&starttime={start.isoformat()}"
+                f"&endtime={end.isoformat()}"
+                f"&minmagnitude=2.5"
+                f"&orderby=time-asc"
+                f"&limit=20000"
+            )
+            if verbose:
+                print(
+                    f"  [USGS bootstrap] {year}-{month:02d} "
+                    f"{start.isoformat()}..{end.isoformat()}"
+                )
+            text = _fetch_text(url)
+            lines = text.splitlines()
+            if not lines:
+                continue
+
+            month_header = lines[0]
+            month_rows = lines[1:]
+            if header is None:
+                header = month_header
+            rows.extend(month_rows)
+            total_rows += len(month_rows)
+            time.sleep(0.1)
+
+        if header is None:
+            continue
+
+        dest.write_text(
+            header + "\n" + "\n".join(rows) + ("\n" if rows else ""),
+            encoding="utf-8",
+        )
+        if verbose:
+            print(f"  [USGS bootstrap] {year} wrote {total_rows:,} rows to {dest}")
+        written.append(dest)
+
+    return written
 
 
 def _coerce_usgs_row(row: dict[str, str]) -> dict:
@@ -85,6 +177,10 @@ def load_usgs_catalog(
         Each dict has keys: time, latitude, longitude, depth, mag,
         magType, place, type, id.  Numeric fields are float/int.
     """
+    expected_paths = [USGS_DIR / f"usgs_catalog_{year}.csv" for year in range(min_year, max_year + 1)]
+    if any(not path.exists() for path in expected_paths):
+        bootstrap_usgs_catalog(min_year=min_year, max_year=max_year, verbose=True)
+
     events: list[dict] = []
     for year in range(min_year, max_year + 1):
         path = USGS_DIR / f"usgs_catalog_{year}.csv"

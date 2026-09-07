@@ -971,8 +971,8 @@ class RegionalCatalogSlice:
 class GNSSIndex:
     """Spatial index for GNSS station data.
 
-    Pre-loads all GNSS station summaries from .cache/gnss/gnss_summary.json
-    and builds a 2-degree grid for fast nearest-station lookups.
+    Pre-loads GNSS station summaries from whichever public cache layout is
+    available and builds a 2-degree grid for fast nearest-station lookups.
     """
 
     def __init__(self, verbose: bool = True) -> None:
@@ -987,9 +987,15 @@ class GNSSIndex:
     def _try_load(self, verbose: bool = True) -> None:
         """Try to load GNSS summary from cache."""
         project_root = Path(__file__).resolve().parents[3]
-        summary_path = project_root / ".cache" / "gnss" / "gnss_summary.json"
+        candidate_paths = [
+            project_root / ".cache" / "gnss" / "gnss_summary.json",
+            project_root / ".cache" / "gnss" / "gnss_regional_summary.json",
+            project_root / ".cache" / "earthquake" / "gnss" / "gnss_summary.json",
+            project_root / ".cache" / "earthquake" / "gnss" / "gnss_regional_summary.json",
+        ]
+        summary_path = next((path for path in candidate_paths if path.exists()), None)
 
-        if not summary_path.exists():
+        if summary_path is None:
             if verbose:
                 print("    GNSS data not found -- Block G will be NaN")
                 sys.stdout.flush()
@@ -1017,7 +1023,7 @@ class GNSSIndex:
 
         self._loaded = True
         if verbose:
-            print(f"    GNSS index loaded: {len(self.stations)} stations")
+            print(f"    GNSS index loaded: {len(self.stations)} stations from {summary_path}")
             sys.stdout.flush()
 
     def find_nearest(
@@ -1852,7 +1858,8 @@ def load_all_data(
 
     if len(full_catalog) == 0:
         raise RuntimeError(
-            "No earthquake data found. Run scripts/download_earthquake_data.py first."
+            "No earthquake data found after attempting to bootstrap the USGS cache. "
+            "Check network access or run scripts/download_earthquake_data.py manually."
         )
 
     if verbose:
