@@ -1,6 +1,6 @@
 {
   "gate_set_version": "2026.04",
-  "generated_at": "2026-09-12T20:08:01Z",
+  "generated_at": "2026-09-12T20:52:07Z",
   "decisions": [
     {
       "gate_decision_id": "gdec_to_fcst_20260912_2006",
@@ -59,6 +59,64 @@
         }
       ],
       "issued_at": "2026-09-12T20:06:56Z"
+    },
+    {
+      "gate_decision_id": "gdec_eq_fcst_20260912_2000",
+      "forecast_id": "eq_fcst_20260912_2000",
+      "hazard": "earthquake",
+      "gate_set_version": "hp-gates-v1",
+      "decision": "degrade",
+      "reasons": [],
+      "warnings": [
+        "high-risk probability with wide uncertainty"
+      ],
+      "emitted_at": "2026-09-12T20:00:00Z",
+      "artifact_refs": [
+        "/data/replay/eq_fcst_20260912_2000.json"
+      ],
+      "gates": [
+        {
+          "gate_id": "G0_SCHEMA_VALIDITY",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G1_SOURCE_FRESHNESS",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G3_PROVENANCE_COMPLETE",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G4_CALIBRATION_FLOOR",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G5_SPATIOTEMPORAL_SANITY",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G6_ALERT_HARM_GUARD",
+          "outcome": "degrade",
+          "reason": "high-risk probability with wide uncertainty"
+        },
+        {
+          "gate_id": "G8_REPLAYABILITY_REQUIRED",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G9_PUBLIC_PROJECTION_POLICY",
+          "outcome": "pass",
+          "reason": null
+        }
+      ],
+      "issued_at": "2026-09-12T20:00:00Z"
     },
     {
       "gate_decision_id": "gdec_to_fcst_20260912_1642",
