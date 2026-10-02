@@ -1,18 +1,29 @@
 name: Earthquake Monthly Retrain
 
-# Continuous learning: each month, fold every newly-captured earthquake into the
-# model. retrain_and_deploy.py honestly tunes, gates on a temporal holdout
-# (never-worse), trains the winner on ALL data, and overwrites the deployed
-# earthquake_gbt_v1.json -- so the model keeps learning instead of staying frozen.
+# Continuous learning: fold every newly-captured earthquake into the model.
+# retrain_and_deploy.py honestly tunes, gates on a temporal holdout (never-worse), trains
+# the winner on ALL data, and overwrites the deployed earthquake_gbt_v1.json.
 #
-# NOTE: the feature extraction scans the full ~0.5M-event catalog per sample and is
-# CPU-bound; it needs many cores. Run on a SELF-HOSTED runner (the 24-core box where
-# the .cache and omega_one live). GitHub's 2-core hosted runners are too slow for the
-# cold extraction. Locally this is just:  python scripts/retrain_and_deploy.py --deploy
+# STATUS (2026-10-01): MANUAL ONLY -- there is no runner that can take this job.
+#   `gh api repos/coherence-energy-labs/hazardpulse/actions/runners` -> total_count 0 (the org
+#   has none either). Both scheduled runs ever made (2026-09-01, 2026-10-01) sat queued for
+#   24 h and were cancelled by GitHub -- "cancelled", so nobody was notified, and the model was
+#   never retrained by CI. The monthly cron is therefore removed rather than left implying a
+#   learning loop that does not exist. Retrain locally on the 24-core box:
+#       python scripts/retrain_and_deploy.py --hazard earthquake --max-year <YYYY> --deploy
+#
+# To make it automatic again (needs the repo owner):
+#   1. Register a runner on the box with the dedicated label (token from the repo's
+#      Settings > Actions > Runners > New self-hosted runner):
+#        config.cmd --url https://github.com/coherence-energy-labs/hazardpulse --token <TOKEN> --labels hazardpulse-retrain
+#      (the label keeps this 4-hour CPU job off any other self-hosted runner).
+#   2. The runner works in its OWN checkout (_work/...), not the checkout that holds
+#      .cache/earthquake and the sibling omega_one repo, so point those at it (junction the
+#      cache into the workspace) or the extraction runs cold and omega_one is skipped.
+#   3. Restore the trigger:   schedule: [ { cron: "0 7 1 * *" } ]
+# Steps use bash explicitly so they behave the same on the Windows box (Git Bash) as on Linux.
 
 on:
-  schedule:
-    - cron: "0 7 1 * *"   # 07:00 UTC on the 1st of each month
   workflow_dispatch:
     inputs:
       deploy:
@@ -26,16 +37,19 @@ concurrency:
 
 jobs:
   retrain:
-    runs-on: [self-hosted]
+    runs-on: [self-hosted, hazardpulse-retrain]
     timeout-minutes: 240
     permissions:
       contents: write
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
