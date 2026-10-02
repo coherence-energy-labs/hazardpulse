@@ -1,0 +1,49 @@
+{
+ "what": "the independent adversary attack docs/HURRICANE_RI_PROGRAM.md ('Final') requires before the result is reported",
+ "date": "2026-10-02",
+ "attacked": {
+  "final": "results/calibration/hurricane_ri_stack_final.json",
+  "final_sha256_lf": "530a12b36f02d692",
+  "selection": "results/calibration/hurricane_ri_stack_selection.json",
+  "selection_sha256_lf": "4bef803deb44cd5d",
+  "claim": "A (DTOPS raw, SHIPS-RII where DTOPS is missing), chosen on 2020-2024, beats SHIPS-RII, RIOC and v8.2 on the read-once 2025 season (paired storm-bootstrap 95% intervals on log loss and Brier exclude 0)"
+ },
+ "attacker": "a separate agent with no part in producing the result; read-only on the repository; its scripts and logs a01-a08 were kept outside the repository",
+ "verdict": "CONFIRMED, scoped to the 601-cycle case set",
+ "surviving_statement": "On the 601 2025 NHC cycles whose archived e-deck holds a 30 kt / 24 h RIOD record (44 of the season's 53 truth-able tropical-cyclone RI events; Melissa's RI is absent from the archive), DTOPS raw beats SHIPS-RII, RIOC and v8.2 (both the model-C variant and the served artifact) on log loss and Brier, paired 95% storm-bootstrap intervals excluding 0.",
+ "attacks_survived": {
+  "independent_recomputation": "own LL / Brier / AUC from the case table reproduce every number; the module bootstrap (seed 20261002) gives identical intervals",
+  "bootstrap_seed_variation_8_seeds": {"A_minus_B_dLL_upper": [-0.0369, -0.0353], "A_minus_v82_dLL_upper": [-0.0209, -0.0192]},
+  "cluster_robust_t_33_storms": {"A_minus_B": [-0.0827, -0.0351], "A_minus_C": [-0.0610, -0.0156], "A_minus_v82": [-0.0803, -0.0165]},
+  "leave_one_storm_out": {"A_minus_B_range": [-0.0645, -0.0540], "A_minus_v82_range": [-0.0533, -0.0382]},
+  "drop_5_most_A_favourable_storms": {"A_minus_B": -0.0414, "A_minus_v82": -0.0153},
+  "storm_level_sign": {"A_minus_B_favours_A": "28/33", "A_minus_v82_favours_A": "22/33"},
+  "log_loss_clip_eps_0p0005_to_0p05": {"A_minus_B": [-0.0666, -0.0423], "A_minus_C": [-0.0462, -0.0248], "A_minus_v82": [-0.0500, -0.0237],
+                                       "note": "A has 204 zero forecasts with 0 events there: the clip costs A, it does not help it; B has 2 events at 0%"},
+  "dtop_present_subset_580": {"A_minus_B": -0.0610, "fallback_cycles": 21, "events_on_fallback_cycles": 0},
+  "per_basin_log_loss": {"AL": {"A": 0.1246, "B": 0.1736, "C": 0.1702, "v82": 0.1759},
+                         "EP": {"A": 0.1676, "B": 0.2349, "C": 0.1980, "v82": 0.2130},
+                         "CP": {"A": 0.3006, "B": 0.3331, "C": 0.3797, "v82": 0.3634}},
+  "leakage_timing": "2025 deck files created 17:50:48-17:51:56Z, after the selection file (17:45:25Z), inside the final's run; the select path reads 2020-2024 decks and IBTrACS winds to 2024-12-31 only; dry/smoke scripts use dev years only",
+  "dtop_post_t_information": "a storm's first DTOP never precedes its first early (interpolated) aid in 234 of 235 storm-seasons 2020-2025; DTOPS appears in all 203 real-time 2026 SHIPS text files",
+  "selection_reimplementation": {"D_minus_A": [-0.01236, 0.00233], "E_minus_A": [-0.01264, 0.00215], "F_minus_A": [-0.00950, 0.00690], "choice": "A"},
+  "truth": "own IBTrACS parse: 0 mismatches over 4,091 + 601 cases; with operational CARQ intensity as truth (524 cycles, 8 labels differ) A still wins: A-B -0.0867 [-0.1244,-0.0548], A-C -0.0626 [-0.0943,-0.0339], A-v8.2 -0.0663 [-0.1060,-0.0321]",
+  "aid_values": "own e-deck parse matches the case table on 601 cases x 5 techs; no conflicting repeats in 2025",
+  "v82_comparator": "model C reproduces the evaluation exactly; a HEAD snapshot rebuilds all 601 v8.2 values with max difference 0.0; the SERVED v8.2 artifact on the same cycles: LL 0.2058, AUC 0.846, A minus it dLL -0.0480 [-0.0787,-0.0204], dBrier -0.01274 [-0.02149,-0.00499]",
+  "script_change_between_phases": "exactly one string (the artifact's 'representation' text); ri_stack.py and the protocol unchanged across the phases"
+ },
+ "weaknesses_to_state": [
+  "Coverage: every development season's case set holds all truth-able TC RI events (53/53, 36/36, 36/36, 60/60, 48/48); 2025 holds 44 of 53. All 9 missing events (30 cycles) are Melissa AL132025: the archived e-deck eal132025.dat.gz has no line of any kind from 2025101918 to 2025102812. v8.2 on those 30 cycles: LL 0.565. With them added, A vs v8.2 still excludes 0 if DTOPS gave >= 20% at her event cycles, not if <= 5% (or <= 10% with non-event cycles >= 10%). NHC discussion #16 (5 AM EDT 25 Oct 2025) calls DTOPS 'quite aggressive, showing a very high probability of a 55-kt increase in intensity over the next 48 hours' -- consistent with the favourable side, but the 30 kt / 24 h values are not recoverable from the archive. Full-season A vs B and A vs C cannot be decided.",
+  "Effective sample: the 44 events come from 10 storms; Bonferroni over three comparisons (98.33%) leaves A-C dBrier at [-0.01728, -0.00020]; the log-loss intervals hold comfortably.",
+  "The 4,091/4,091 agreement with the v8.2 evaluation labels shares IBTrACS with our truth and the (SID, time) key: it verifies the dV arithmetic, not the e-deck -> storm mapping. The mapping is supported independently (e-deck position vs fix: median 11 km; 2025 max 94.6 km; the attacker's own parse).",
+  "'v8.2' in the final is the benchmark's model C (members <= 2018, calibration 2019-2021), not the served artifact; the claim holds for both (numbers above).",
+  "Protocol text error: candidate E's note that 'no development season is in-sample' for model C is false -- its calibration window 2019-2021 contains the development seasons 2020-2021. It affects only E's training rows; E was not chosen.",
+  "Process: a 20-draw wiring smoke of the select phase computed the pooled development metrics two minutes before the official select (same script and protocol bytes, so no second decision path); the final started 22 s after the one-string script edit; fetch_and_score.py (on v8.2's live-builder import path) was edited after the final -- parity of the v8.2 inputs rests on the dev-table sha guard and the attacker's 601/601 reproduction."
+ ],
+ "untested_and_what_would_settle_it": [
+  "DTOPS / SHIPS-RII at Melissa's 30 missing cycles: a real-time SHIPS text archive for 2025 or the NHC discussions' quotes",
+  "whether archived e-decks equal the real-time SHIPS text: the 2026 e-decks, once archived, against the 2026 SHIPS text (the protocol's own pending check)",
+  "whether the 2025 IBTrACS winds are final HURDAT2: rows are TRACK_TYPE main with USA_AGENCY hurdat_*, consistent with final HURDAT2, not checked against a HURDAT2 file"
+ ],
+ "instrument_fix_recommended": "both phases should emit a per-split coverage census (truth-able events with and without an aid record) and flag a final whose coverage differs from the development seasons'"
+}
