@@ -246,8 +246,21 @@ def out_of_fold_calibrated(kind: str, s_val, y_val, days) -> np.ndarray:
     return out
 
 
+EXPERIMENTS = Path(__file__).resolve().parent / "experiments"
+
+
+def resolve_blocks(exp: dict) -> dict:
+    """``blocks_from: "best"`` -> the block set chosen on validation, as committed in
+    experiments/best_blocks.json (written once step 1 of the protocol has decided it)."""
+    if exp.get("blocks_from") != "best":
+        return exp
+    best = json.loads((EXPERIMENTS / "best_blocks.json").read_text(encoding="utf-8"))
+    return {**exp, "blocks": best["blocks"], "drop": best.get("drop", [])}
+
+
 def run(exp: dict) -> dict:
     t0 = time.time()
+    exp = resolve_blocks(exp)
     lab = LIDX[exp.get("label", "storm_60")]                  # the label the model is TRAINED on
     ev = LIDX[exp.get("eval_label", exp.get("label", "storm_60"))]   # the label it is calibrated and SCORED on
     cols = cols_for(exp["blocks"], exp.get("drop"))
