@@ -1,0 +1,7 @@
+{
+ "model": "lgbm",
+ "params": {"learning_rate": 0.03, "num_leaves": 127, "min_child_samples": 500, "feature_fraction": 0.7,
+            "bagging_fraction": 0.6, "lambda_l2": 1.0, "min_split_gain": 0.0, "max_depth": 10},
+ "chosen_by": "amendment 4 on validation: family step -> LightGBM (0.9654 vs NumPy GBT 0.9640, XGBoost 0.9639, CatBoost 0.9636, logistic 0.9540); search step (40 fixed-seed configurations, results/lab/s_lgbm_*.json) -> s_lgbm_37, AUC 0.96584 (s_lgbm_28 0.96581, default 0.96537).",
+ "caveat": "the search surface is flat (median 0.9649, max 0.9658); the winner beats the default by 0.0004 on the data it was picked on, so its advantage is unproven until dev 2024"
+}
