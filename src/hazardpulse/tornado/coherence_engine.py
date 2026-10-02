@@ -66,9 +66,14 @@ HELMHOLTZ_TOL: float = 1e-8
 
 # Shear normalisation for the torsion (tilting) coupling, m/s.
 TORSION_SHEAR_SCALE: float = 25.0
-# Singularity condition 3 threshold on |torsion|. PROVISIONAL until set from
-# the training split (see TORSION_THRESHOLD_PROVENANCE once calibrated).
-TORSION_SINGULARITY_THRESHOLD: float = 0.1
+# Singularity condition 3 threshold on |torsion|: the 90th percentile of
+# |torsion| over cells already meeting condition 1 (S/Gamma > 1), on every
+# 3-hourly HRRR analysis (geometry g3) of the TRAINING split -- label-free, no
+# validation or test day. Measured 2026-10-02 over 367 training days / 2,933
+# analyses / 3,738,415 condition-1 cells: q50 0.0263, q75 0.0634, q90 0.1295,
+# q99 0.391. (Against the old curl-of-gradient torsion, ~1e-8 everywhere, no
+# cell ever met the former 0.1.)
+TORSION_SINGULARITY_THRESHOLD: float = 0.13
 
 # Mesocyclone rotation threshold (s^-1)
 ROTATION_THRESHOLD: float = 0.003
