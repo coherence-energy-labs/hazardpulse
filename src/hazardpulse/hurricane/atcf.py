@@ -18,9 +18,14 @@ DEFAULT_AID_MODELS = (
     "EMX0", "AEMN", "OFCL", "JTWC",
 )
 
-# Priority order for picking analysis (tau=0) record
+# Priority order for picking the analysis (tau=0) record. CARQ precedes OFCL: an NHC OFCL
+# tau-0 line carries MSLP 0 (151 of 151 in Ian 2022, Otis 2023, Milton 2024; CARQ 291 of
+# 291 carry one), so with OFCL first 88% of live cases lost the analysis pressure and all
+# three pressure tendencies -- live v8.2 AUC 0.824 and mean forecast 0.042 against 0.832 and
+# 0.060 from CARQ on the same 2,220 held-out cases (observed 0.067; results/calibration/
+# hurricane_vs_ships.json "operational_inputs"). CARQ is also what SHIPS-RII starts from.
 DEFAULT_ANALYSIS_PRIORITY = (
-    "BEST", "OFCL", "JTWC", "CARQ", "WRNG",
+    "BEST", "CARQ", "OFCL", "JTWC", "WRNG",
     "AVNO", "HWRF", "HMON",
 )
 

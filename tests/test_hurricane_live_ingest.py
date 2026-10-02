@@ -172,6 +172,36 @@ def test_live_motion_and_age_use_the_training_sets_definitions(fas):
     assert jtwc["translation_speed_kmh"] is None and jtwc["storm_age_h"] is None
 
 
+def test_live_analysis_takes_carq_whose_pressure_ofcl_does_not_carry(fas):
+    """An NHC a-deck cycle has both a CARQ and an OFCL tau-0 line; OFCL's MSLP is 0 (parsed as
+    None). With OFCL first, 88% of live cases lost the pressure and its 6/12/24 h tendencies."""
+    cycle = dt.datetime(2026, 9, 30, 12)
+    recs = []
+    for h, p in ((0, 970.0), (6, 980.0), (12, 985.0), (24, 995.0)):
+        t = cycle - dt.timedelta(hours=h)
+        recs.append(fas.ATCFRecord(basin="AL", storm_number=1, cycle=t, tau_hours=0, model="OFCL",
+                                   lat=20.0, lon=-60.0, vmax_kt=90.0 - h, mslp_hpa=None, storm_name="X"))
+        recs.append(fas.ATCFRecord(basin="AL", storm_number=1, cycle=t, tau_hours=0, model="CARQ",
+                                   lat=20.0, lon=-60.0, vmax_kt=90.0 - h, mslp_hpa=p, storm_name="X"))
+    case = fas.build_live_case("AL012026", recs)
+    assert case["analysis_model"] == "CARQ"
+    assert case["analysis_mslp_hpa"] == 970.0
+    assert (case["analysis_dp_6h"], case["analysis_dp_12h"], case["analysis_dp_24h"]) == (-10.0, -15.0, -25.0)
+    # A cycle with only OFCL still builds (wind from OFCL), pressure honestly missing.
+    only = fas.build_live_case("AL012026", [r for r in recs if r.model == "OFCL"])
+    assert only["analysis_model"] == "OFCL" and only["analysis_mslp_hpa"] is None
+
+
+def test_the_atcf_parser_reads_a_zero_pressure_as_missing():
+    from hazardpulse.hurricane.atcf import parse_atcf_deck
+    line = ("AL, 09, 2022092612, 03, OFCL,   0, 182N,  830W,  75,    0, HU,  34, NEQ,   80,   60,"
+            "   40,   60,    0,    0,   0,   0,   0,   0,   0,   0,    ,   0,         IAN")
+    carq = line.replace("OFCL", "CARQ").replace(",    0, HU", ",  979, HU")
+    ofcl_rec, carq_rec = parse_atcf_deck(line + "\n" + carq)
+    assert ofcl_rec.mslp_hpa is None and carq_rec.mslp_hpa == 979.0
+    assert ofcl_rec.vmax_kt == carq_rec.vmax_kt == 75.0
+
+
 def test_v8_1_artifacts_declare_their_unmatched_live_features():
     pin = ri_model.load_model(ri_model.ARTIFACTS["hurricane_ri_v8_1"], verify_data=False)
     assert pin["serving"]["impute_live"] == ["translation_speed_kmh", "storm_age_h"]
