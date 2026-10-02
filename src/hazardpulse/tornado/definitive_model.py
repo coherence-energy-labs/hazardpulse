@@ -36,8 +36,10 @@ hazardpulse.tornado.coherence_engine.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import math
+import re
 import sys
 import time
 from pathlib import Path
@@ -187,8 +189,31 @@ EARLY_STOP_PATIENCE: int = 20
 LABEL_RADIUS_KM: float = 40.0
 FORWARD_WINDOW_MIN: int = 60
 
+# Negatives kept per positive in the TRAIN split only (GBT tractability).
+# Val and test are never downsampled -- see load_all_data.
+TRAIN_NEG_RATIO: int = 5
+
 # Rotation threshold for sustained rotation tracking
 ROTATION_THRESHOLD: float = 0.003
+
+# Storm-evolution history: past steps searched for the same storm ID. Shared
+# by training and live scoring -- the live scorer used to pass the WHOLE
+# track, so storm_age_min / sustained_rotation_min were capped in training
+# and unbounded live.
+STORM_HISTORY_LOOKBACK: int = 8
+# Cadence assumed when a day's own stamps cannot be parsed (the fetcher's
+# S3 path keeps one file per 30-minute slot).
+PROBSEVERE_STEP_MIN_DEFAULT: float = 30.0
+
+# HRRR analysis matching. Each storm reads the LATEST analysis valid at or
+# before its own observation time, at most MAX_ANALYSIS_AGE_H old -- never a
+# later one. Until 2026-10-01 every storm of a day read the 18Z analysis: the
+# 72-84% of samples observed before 18Z saw the atmosphere (and the
+# radar-assimilated reflectivity) of up to 18 hours in their FUTURE, while the
+# live scorer reads a 1-3 h old analysis. Training now samples the 3-hourly
+# analyses so its staleness (0-3 h) matches what live scoring can have.
+HRRR_ANALYSIS_HOURS: tuple[int, ...] = (0, 3, 6, 9, 12, 15, 18, 21)
+MAX_ANALYSIS_AGE_H: float = 3.0
 
 
 # ===================================================================
@@ -213,60 +238,192 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 # ===================================================================
+# TIME AXIS -- EVERYTHING IS COMPARED AS AN ABSOLUTE UTC INSTANT
+# ===================================================================
+#
+# Two clocks meet in the label, and until 2026-10-01 they were compared as
+# if they were one:
+#
+#   * ProbSevere storm objects are stamped in UTC and filed under their UTC
+#     date (the S3 prefix ``ProbSevere/{YYYYMMDD}/`` is a UTC day).
+#   * SPC tornado reports are stamped in LOCAL STANDARD TIME. The ``tz``
+#     column of the SPC database says which: 3 = CST (UTC-6, never daylight
+#     time), 9 = GMT. Every 2021-2024 row is tz=3.
+#
+# The old code read the SPC hour as a UTC hour, filed each report under its
+# CST date, and wrapped negative differences by +24 h. A storm 30 minutes
+# before a tornado could therefore be labelled 0, a storm ~6.5 h before it
+# could be labelled 1, the evening peak (00-06 UTC = previous CST evening)
+# was matched against the wrong day's reports, and the +24 h wrap matched
+# tornadoes up to ~23 h in the PAST as if they were in the future.
+#
+# The fix converts both sides to absolute UTC instants and compares those.
+
+# SPC ``tz`` code -> hours to ADD to the recorded local time to reach UTC.
+# Source: SPC Severe Weather Database file description (field "tz").
+SPC_TZ_TO_UTC_HOURS: dict[int, int] = {3: 6, 9: 0}
+
+_PROBSEVERE_NATIVE_TIME = re.compile(r"^(\d{8})_(\d{6})\s*UTC$")
+_ISO_UTC_TIME = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?Z?$")
+
+
+def parse_spc_time_utc(
+    yr: int,
+    mo: int,
+    dy: int,
+    time_str: str,
+    tz_code: int,
+) -> dt.datetime | None:
+    """Convert an SPC report's local date/time to an aware UTC datetime.
+
+    Returns ``None`` when the time or the time zone is unknown -- such reports
+    are never matched (the label refuses to guess a clock).
+    """
+    offset = SPC_TZ_TO_UTC_HOURS.get(int(tz_code))
+    if offset is None or not time_str or ":" not in time_str:
+        return None
+    parts = time_str.strip().split(":")
+    try:
+        hh = int(parts[0])
+        mm = int(parts[1]) if len(parts) > 1 else 0
+        ss = int(parts[2]) if len(parts) > 2 else 0
+        local = dt.datetime(int(yr), int(mo), int(dy), hh, mm, ss)
+    except (ValueError, IndexError):
+        return None
+    return (local + dt.timedelta(hours=offset)).replace(tzinfo=dt.timezone.utc)
+
+
+def parse_probsevere_valid_time(valid_time: str) -> dt.datetime | None:
+    """Parse a ProbSevere time-step stamp to an aware UTC datetime.
+
+    Accepts both forms the cache has ever held:
+
+    * ``"20240427_000042 UTC"`` -- the native v3 ``validTime``, stored by the
+      fetcher since 2026-03-22;
+    * ``"2024-04-27T00:00:00Z"`` -- the ISO stamp the first fetcher
+      synthesised from its slot time.
+
+    The old parser keyed on the letter ``T`` and so matched the ``T`` inside
+    ``"UTC"``: every native stamp parsed to an unknown hour and every sample
+    built from a cache filled after 2026-03-22 was silently excluded.
+    Returns ``None`` for anything else.
+    """
+    s = str(valid_time or "").strip()
+    m = _PROBSEVERE_NATIVE_TIME.match(s)
+    if m:
+        try:
+            return dt.datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S").replace(
+                tzinfo=dt.timezone.utc
+            )
+        except ValueError:
+            return None
+    m = _ISO_UTC_TIME.match(s)
+    if m:
+        y, mo, d, hh, mi, ss = m.groups()
+        try:
+            return dt.datetime(
+                int(y), int(mo), int(d), int(hh), int(mi), int(ss or 0),
+                tzinfo=dt.timezone.utc,
+            )
+        except ValueError:
+            return None
+    return None
+
+
+def select_analysis_hour(
+    storm_time_utc: dt.datetime | None,
+    available_hours,
+    max_age_h: float = None,
+) -> int | None:
+    """Latest available analysis hour (same UTC day) at or before the storm.
+
+    Returns ``None`` when no analysis is at most ``max_age_h`` old -- the
+    sample then has no causal atmosphere and is excluded, never zero-filled.
+    """
+    if storm_time_utc is None:
+        return None
+    if max_age_h is None:
+        max_age_h = MAX_ANALYSIS_AGE_H
+    t = storm_time_utc.hour + storm_time_utc.minute / 60.0 + storm_time_utc.second / 3600.0
+    ok = [h for h in available_hours if h <= t and (t - h) <= max_age_h]
+    return max(ok) if ok else None
+
+
+def reports_in_label_window(
+    reports_by_utc_date: dict[str, list[dict]],
+    date_str: str,
+) -> list[dict]:
+    """Reports that can label a storm observed on UTC date ``date_str``.
+
+    The forward window crosses 00 UTC for storms observed after
+    ``24h - FORWARD_WINDOW_MIN``, so the next UTC day's reports are included;
+    ``compute_label`` compares absolute instants, so including them can never
+    match a report outside the window.
+    """
+    day = dt.datetime.strptime(date_str, "%Y%m%d")
+    nxt = (day + dt.timedelta(days=1)).strftime("%Y%m%d")
+    return list(reports_by_utc_date.get(date_str, [])) + list(reports_by_utc_date.get(nxt, []))
+
+
+# ===================================================================
 # LABEL COMPUTATION -- STRICT TEMPORAL ORDERING
 # ===================================================================
 
 def compute_label(
     storm_lat: float,
     storm_lon: float,
-    storm_hour: float,
-    tornado_reports_today: list[dict],
+    storm_time_utc: dt.datetime | None,
+    candidate_reports: list[dict],
     forward_minutes: int = FORWARD_WINDOW_MIN,
 ) -> int:
     """Compute binary label: will this storm produce a tornado within forward_minutes?
 
     STRICT: requires temporal ordering. Tornado must occur AFTER storm observation.
-    Samples with unknown tornado timing are EXCLUDED (returns -1).
+    Samples with unknown storm timing are EXCLUDED (returns -1).
 
     Parameters
     ----------
     storm_lat, storm_lon : float
         Storm centroid coordinates.
-    storm_hour : float
-        Fractional hour of day (UTC) when storm was observed.
-    tornado_reports_today : list[dict]
-        SPC tornado reports for the same date. Each dict must have keys:
-        ``slat``, ``slon``, ``hour`` (fractional UTC hour, or -1 if unknown).
+    storm_time_utc : datetime or None
+        Aware UTC instant of the storm observation (``None`` if unknown).
+    candidate_reports : list[dict]
+        SPC tornado reports that may fall in the window -- use
+        ``reports_in_label_window``. Each dict carries ``slat``, ``slon`` and
+        ``time_utc`` (POSIX seconds, or ``None`` when the report's clock is
+        unknown).
     forward_minutes : int
         Maximum lookahead window in minutes.
 
     Returns
     -------
     int
-        1 if tornado match found, 0 if no match, -1 if sample must be EXCLUDED
-        (unknown storm timing).
+        1 if a tornado starts within ``LABEL_RADIUS_KM`` and
+        ``[0, forward_minutes]`` after the observation, 0 if none does,
+        -1 if the sample must be EXCLUDED (unknown storm timing).
     """
-    if storm_hour < 0:
+    if storm_time_utc is None:
         return -1  # Can't verify temporal ordering without storm time
+    t_storm = storm_time_utc.timestamp()
+    window_s = forward_minutes * 60.0
 
-    for tor in tornado_reports_today:
-        tor_hour = tor.get("hour", -1)
-        if tor_hour < 0:
+    for tor in candidate_reports:
+        t_tor = tor.get("time_utc")
+        if t_tor is None:
             continue  # Skip tornadoes with unknown timing -- never guess
+
+        # Temporal filter: tornado must start AFTER the observation, within
+        # the window -- absolute instants, so no day boundary is special.
+        dt_s = float(t_tor) - t_storm
+        if not (0.0 <= dt_s <= window_s):
+            continue
 
         # Spatial filter: within LABEL_RADIUS_KM of storm centroid
         dist_km = haversine_km(
             storm_lat, storm_lon,
             tor.get("slat", 0.0), tor.get("slon", 0.0),
         )
-        if dist_km > LABEL_RADIUS_KM:
-            continue
-
-        # Temporal filter: tornado must occur AFTER storm observation
-        dt_hours = tor_hour - storm_hour
-        if dt_hours < 0:
-            dt_hours += 24.0  # midnight crossing
-        if 0 <= dt_hours <= (forward_minutes / 60.0):
+        if dist_km <= LABEL_RADIUS_KM:
             return 1
 
     return 0
@@ -388,9 +545,14 @@ class GradientBoostedTrees:
             if len(unique_vals) <= 1:
                 continue
 
-            # Candidate thresholds: percentiles for efficiency
+            # Candidate thresholds: percentiles for efficiency. Thresholds are
+            # float32 VALUES, the dtype of the data they split: every later
+            # comparison (training partition, batch and row prediction, the
+            # live payload walk) is then exact, whatever the scalar promotion
+            # rules -- a float64 percentile compared against float32 data
+            # rounds differently in different code paths.
             if len(unique_vals) > 20:
-                thresholds = np.percentile(col, np.linspace(5, 95, 20))
+                thresholds = np.percentile(col, np.linspace(5, 95, 20)).astype(np.float32)
             else:
                 thresholds = unique_vals[:-1]
 
@@ -450,10 +612,25 @@ class GradientBoostedTrees:
         return node["val"]
 
     def _predict_tree_batch(self, node: dict, X: np.ndarray) -> np.ndarray:
-        """Predict all rows through a single tree, row by row."""
+        """Predict all rows through a single tree, one mask per node.
+
+        Routes index sets, not rows: the cost is O(N * depth) NumPy work
+        instead of O(N * depth) Python steps. Bit-identical to walking each
+        row with ``_predict_tree_row`` (same ``<=`` comparison, same float32
+        leaf values).
+        """
         result = np.empty(X.shape[0], dtype=np.float32)
-        for i in range(X.shape[0]):
-            result[i] = self._predict_tree_row(node, X[i])
+        stack: list[tuple[dict, np.ndarray]] = [(node, np.arange(X.shape[0]))]
+        while stack:
+            nd, idx = stack.pop()
+            if idx.size == 0:
+                continue
+            if nd["leaf"]:
+                result[idx] = nd["val"]
+                continue
+            go_left = X[idx, nd["feat"]] <= nd["thresh"]
+            stack.append((nd["left"], idx[go_left]))
+            stack.append((nd["right"], idx[~go_left]))
         return result
 
     def fit(
@@ -516,6 +693,17 @@ class GradientBoostedTrees:
             X_val = np.asarray(X_val, dtype=np.float32)
             y_val = np.asarray(y_val, dtype=np.float32)
             F_val = np.full(len(y_val), self.init_pred, dtype=np.float32)
+            # Score validation with the SAME class-balanced objective the trees
+            # minimise. The validation split keeps its real base rate, while
+            # the balanced weights make F a log-odds at a 50/50 prior; an
+            # unweighted val loss would mostly measure that prior gap and stop
+            # the ensemble for calibration reasons, not ranking ones.
+            # Calibration to the real base rate is a separate, later step.
+            nv = float(len(y_val))
+            nv_pos = float(y_val.sum())
+            nv_neg = nv - nv_pos
+            assert nv_pos > 0 and nv_neg > 0, "validation split needs both classes"
+            val_w = np.where(y_val == 1, nv / (2.0 * nv_pos), nv / (2.0 * nv_neg))
 
         rng = np.random.RandomState(42)
         self._rng = rng
@@ -551,12 +739,12 @@ class GradientBoostedTrees:
             # Early stopping check on validation
             if use_early_stop:
                 F_val += self.lr * self._predict_tree_batch(tree, X_val)
-                # Log-loss on validation
-                p_val = sigmoid(F_val)
-                val_loss = -float(np.mean(
+                # Class-balanced log-loss on validation (the training objective)
+                p_val = sigmoid(F_val).astype(np.float64)
+                val_loss = -float(np.mean(val_w * (
                     y_val * np.log(p_val + 1e-12)
                     + (1 - y_val) * np.log(1 - p_val + 1e-12)
-                ))
+                )))
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
                     best_n_trees = t + 1
@@ -587,6 +775,10 @@ class GradientBoostedTrees:
                 print(msg)
                 sys.stdout.flush()
 
+        if use_early_stop and 0 < best_n_trees < len(self.trees):
+            # Patience never ran out, but the best validation loss was still
+            # reached before the last tree: keep the ensemble that earned it.
+            self.trees = self.trees[:best_n_trees]
         return {
             "n_trees_used": len(self.trees),
             "stopped_early": False,
@@ -608,13 +800,15 @@ class GradientBoostedTrees:
         ndarray, shape (n_samples,)
             Predicted probabilities in [0, 1].
         """
+        return sigmoid(self.decision_function(X))
+
+    def decision_function(self, X: np.ndarray) -> np.ndarray:
+        """Raw additive score F(x) (log-odds under the training weighting)."""
         X = np.asarray(X, dtype=np.float32)
-        N = X.shape[0]
-        F = np.full(N, self.init_pred, dtype=np.float32)
+        F = np.full(X.shape[0], self.init_pred, dtype=np.float32)
         for tree in self.trees:
-            for i in range(N):
-                F[i] += self.lr * self._predict_tree_row(tree, X[i])
-        return sigmoid(F)
+            F += np.float32(self.lr) * self._predict_tree_batch(tree, X)
+        return F
 
     def feature_importances(self, n_features: int) -> np.ndarray:
         """Compute feature importance from tree split counts.
@@ -657,8 +851,34 @@ class GradientBoostedTrees:
 # EVALUATION METRICS
 # ===================================================================
 
+def _midranks(x: np.ndarray) -> np.ndarray:
+    """1-based ranks of ``x`` with tied values sharing their average rank."""
+    order = np.argsort(x, kind="mergesort")
+    xs = x[order]
+    # Boundaries of runs of equal values in sorted order
+    new_run = np.concatenate(([True], xs[1:] != xs[:-1]))
+    run_id = np.cumsum(new_run) - 1
+    run_start = np.flatnonzero(new_run)
+    run_end = np.concatenate((run_start[1:], [len(xs)]))
+    avg_rank = (run_start + run_end + 1) / 2.0  # mean of 1-based ranks in the run
+    ranks = np.empty(len(x), dtype=np.float64)
+    ranks[order] = avg_rank[run_id]
+    return ranks
+
+
 def compute_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
-    """ROC-AUC via trapezoidal integration.
+    """ROC-AUC as the Mann-Whitney statistic, with ties scored one half.
+
+    ``P(score_pos > score_neg) + 0.5 * P(score_pos == score_neg)``.
+
+    The previous implementation walked a ``np.argsort`` order one sample at
+    a time, so within a block of tied scores it credited positives and
+    negatives in whatever order the (unstable) sort happened to leave them.
+    Tree ensembles emit many exactly-tied scores, so that order -- not the
+    model -- moved the reported AUC; on a fully tied scorer it could return
+    anything from 0 to 1 instead of 0.5. It was also an O(N) Python loop,
+    which made a 2,000-draw bootstrap over a full test population
+    impractical.
 
     Handles edge cases (no positives, no negatives) by returning 0.5.
     """
@@ -666,32 +886,14 @@ def compute_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
     y_score = np.asarray(y_score, dtype=np.float64)
     if len(y_true) < 2:
         return 0.5
-    n_pos = y_true.sum()
+    pos = y_true == 1
+    n_pos = int(pos.sum())
     n_neg = len(y_true) - n_pos
     if n_pos == 0 or n_neg == 0:
         return 0.5
-
-    order = np.argsort(-y_score)
-    y_sorted = y_true[order]
-
-    tp = 0
-    fp = 0
-    tpr_prev = 0.0
-    fpr_prev = 0.0
-    auc = 0.0
-
-    for i in range(len(y_sorted)):
-        if y_sorted[i] == 1:
-            tp += 1
-        else:
-            fp += 1
-        tpr = tp / n_pos
-        fpr = fp / n_neg
-        auc += (fpr - fpr_prev) * (tpr + tpr_prev) / 2.0
-        tpr_prev = tpr
-        fpr_prev = fpr
-
-    return float(auc)
+    ranks = _midranks(y_score)
+    u = ranks[pos].sum() - n_pos * (n_pos + 1) / 2.0
+    return float(u / (n_pos * n_neg))
 
 
 def compute_pr_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
@@ -842,7 +1044,11 @@ def bootstrap_auc_ci(
     }
 
 
-def evaluate(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
+def evaluate(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    groups: np.ndarray | None = None,
+) -> dict:
     """Complete evaluation suite for a single model.
 
     Parameters
@@ -850,7 +1056,11 @@ def evaluate(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     y_true : ndarray
         Binary labels.
     y_pred : ndarray
-        Predicted probabilities.
+        Predicted probabilities. Brier, BSS and reliability are only
+        meaningful if these are calibrated to the population being scored.
+    groups : ndarray, optional
+        Cluster label per sample (UTC day). When given, the AUC interval is
+        a day-clustered bootstrap; otherwise an i.i.d. sample bootstrap.
 
     Returns
     -------
@@ -860,16 +1070,22 @@ def evaluate(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     """
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
+    if groups is not None:
+        ci = cluster_bootstrap_auc_ci(y_true, y_pred, groups, n_boot=2000)
+    else:
+        ci = bootstrap_auc_ci(y_true, y_pred, n_boot=2000)
+        ci["unit"] = "sample"
     return {
         "auc": compute_auc(y_true, y_pred),
         "pr_auc": compute_pr_auc(y_true, y_pred),
         "brier": compute_brier(y_true, y_pred),
         "bss": compute_bss(y_true, y_pred),
         "calibration": compute_calibration_curve(y_true, y_pred, n_bins=10),
-        "bootstrap_ci": bootstrap_auc_ci(y_true, y_pred, n_boot=2000),
+        "bootstrap_ci": ci,
         "n_positive": int(y_true.sum()),
         "n_negative": int((1 - y_true).sum()),
         "base_rate": float(y_true.mean()),
+        "mean_forecast": float(y_pred.mean()),
     }
 
 
@@ -941,6 +1157,195 @@ def paired_bootstrap_test(
 
 
 # ===================================================================
+# DAY-CLUSTERED BOOTSTRAP
+# ===================================================================
+#
+# A storm object is observed every 15-30 minutes for as long as it lives, and
+# one day's storms share one environment, so samples within a day are far
+# from independent. Resampling individual samples treats a 48-step track as
+# 48 independent draws and makes every interval too narrow. The honest unit
+# is the day: resample whole days with replacement.
+
+def _cluster_index(groups: np.ndarray) -> list[np.ndarray]:
+    groups = np.asarray(groups)
+    order = np.argsort(groups, kind="mergesort")
+    g_sorted = groups[order]
+    cut = np.flatnonzero(np.concatenate(([True], g_sorted[1:] != g_sorted[:-1], [True])))
+    return [order[cut[k]:cut[k + 1]] for k in range(len(cut) - 1)]
+
+
+def cluster_bootstrap_auc_ci(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    groups: np.ndarray,
+    n_boot: int = 2000,
+    alpha: float = 0.05,
+    seed: int = 42,
+) -> dict:
+    """Bootstrap CI for ROC-AUC resampling whole clusters (days)."""
+    rng = np.random.RandomState(seed)
+    y_true = np.asarray(y_true, dtype=np.float64)
+    y_score = np.asarray(y_score, dtype=np.float64)
+    clusters = _cluster_index(groups)
+    k = len(clusters)
+    aucs = np.empty(n_boot, dtype=np.float64)
+    for b in range(n_boot):
+        pick = rng.randint(0, k, size=k)
+        idx = np.concatenate([clusters[c] for c in pick])
+        aucs[b] = compute_auc(y_true[idx], y_score[idx])
+    return {
+        "mean": float(np.mean(aucs)),
+        "ci_lo": float(np.percentile(aucs, 100 * alpha / 2)),
+        "ci_hi": float(np.percentile(aucs, 100 * (1 - alpha / 2))),
+        "std": float(np.std(aucs)),
+        "unit": "day",
+        "n_clusters": k,
+    }
+
+
+def paired_cluster_bootstrap_test(
+    y_true: np.ndarray,
+    y_pred_a: np.ndarray,
+    y_pred_b: np.ndarray,
+    groups: np.ndarray,
+    n_boot: int = 2000,
+    seed: int = 42,
+) -> dict:
+    """``paired_bootstrap_test`` with whole days as the resampling unit."""
+    rng = np.random.RandomState(seed)
+    y_true = np.asarray(y_true, dtype=np.float64)
+    a = np.asarray(y_pred_a, dtype=np.float64)
+    b_ = np.asarray(y_pred_b, dtype=np.float64)
+    clusters = _cluster_index(groups)
+    k = len(clusters)
+    delta_full = compute_auc(y_true, b_) - compute_auc(y_true, a)
+    deltas = np.empty(n_boot, dtype=np.float64)
+    n_a_wins = 0
+    for i in range(n_boot):
+        pick = rng.randint(0, k, size=k)
+        idx = np.concatenate([clusters[c] for c in pick])
+        d = compute_auc(y_true[idx], b_[idx]) - compute_auc(y_true[idx], a[idx])
+        deltas[i] = d
+        if d <= 0:
+            n_a_wins += 1
+    return {
+        "delta_auc": float(delta_full),
+        "ci_lo": float(np.percentile(deltas, 2.5)),
+        "ci_hi": float(np.percentile(deltas, 97.5)),
+        "p_value": float(n_a_wins / n_boot),
+        "unit": "day",
+        "n_clusters": k,
+    }
+
+
+# ===================================================================
+# PROBABILITY CALIBRATION -- FITTED ON VALIDATION, NEVER ON TEST
+# ===================================================================
+#
+# The GBT trains with class-balanced weights on a 5:1 downsampled train
+# split, so its sigmoid(F) is a probability at a 50/50 prior: on a
+# population whose base rate is ~1-2% it overstates the odds by roughly
+# (1 - base_rate) / base_rate, i.e. ~50-100x. The live scorer served that
+# number as "tornado probability". Platt scaling, p = sigmoid(a F + b),
+# fitted by maximum likelihood on the FULL validation population, maps F
+# to the real base rate (b absorbs the prior shift, a any over- or
+# under-confidence). It is monotone, so AUC is untouched.
+
+def fit_platt(F: np.ndarray, y: np.ndarray, max_iter: int = 100) -> dict:
+    """Maximum-likelihood fit of ``p = sigmoid(a * F + b)`` (Newton's method)."""
+    F = np.asarray(F, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    if len(y) == 0 or y.min() == y.max():
+        raise ValueError("Platt calibration needs both classes")
+    a, b = 1.0, float(np.log(y.mean() / (1.0 - y.mean())) - np.mean(F))
+    ridge = 1e-9
+    for _ in range(max_iter):
+        z = np.clip(a * F + b, -60.0, 60.0)
+        p = 1.0 / (1.0 + np.exp(-z))
+        w = p * (1.0 - p)
+        r = p - y
+        g = np.array([np.sum(r * F), np.sum(r)])
+        h = np.array([
+            [np.sum(w * F * F) + ridge, np.sum(w * F)],
+            [np.sum(w * F), np.sum(w) + ridge],
+        ])
+        step = np.linalg.solve(h, g)
+        a -= step[0]
+        b -= step[1]
+        if np.max(np.abs(step)) < 1e-10:
+            break
+    return {"method": "platt", "a": float(a), "b": float(b)}
+
+
+def apply_calibration(F: np.ndarray, calibration: dict | None) -> np.ndarray:
+    """Map raw additive scores to probabilities (identity sigmoid if None)."""
+    F = np.asarray(F, dtype=np.float64)
+    if calibration is None:
+        z = F
+    elif calibration.get("method") == "platt":
+        z = calibration["a"] * F + calibration["b"]
+    else:
+        raise ValueError(f"unknown calibration method: {calibration.get('method')!r}")
+    return 1.0 / (1.0 + np.exp(-np.clip(z, -60.0, 60.0)))
+
+
+LEGACY_MODEL_VERSION: str = "tornado_storm_v1_0"
+
+
+def model_version_of_payload(path: str | Path) -> str:
+    """The served model's IDENTITY, bound to its exact weights.
+
+    Live forecasts, the prospective calibration dataset and the trust-layer
+    calibrator all carry this string, and a calibrator is applied only to
+    forecasts from the model it was fitted on. Until 2026-10-01 the identity
+    was the constant ``"tornado_storm_v1_0"`` whatever the weights were, so a
+    retrained model would have been "calibrated" by its predecessor's curve.
+    Uncalibrated v1 payloads keep the legacy name (their calibrator stays
+    valid); a calibrated payload is ``"tornado_gbt_v2-<sha256[:12]>"``.
+    """
+    import hashlib
+
+    raw = Path(path).read_bytes()
+    payload = json.loads(raw.decode("utf-8"))
+    if payload.get("calibration") is None:
+        return LEGACY_MODEL_VERSION
+    return "tornado_gbt_v2-" + hashlib.sha256(raw).hexdigest()[:12]
+
+
+def predict_proba_from_payload(payload: dict, raw_features: dict[str, float]) -> tuple[float, bool]:
+    """Score one storm from a saved model payload -- the ONLY live scoring path.
+
+    Normalises with the payload's stored train statistics, walks the trees,
+    and applies the payload's calibration. Returns ``(probability,
+    calibrated)``; ``calibrated`` is False for legacy payloads saved before
+    calibration existed, whose probability is at the 50/50 training prior and
+    must not be presented as a real-world probability.
+    """
+    names = payload["feature_names"]
+    means = payload["normalization"]["means"]
+    stds = payload["normalization"]["stds"]
+    # Normalise in float32, element for element what FeatureNormalizer did to
+    # the training matrix. The old live path normalised in float64, so a value
+    # sitting exactly on a split threshold (e.g. hrrr_refc = -10 dBZ, the modal
+    # "no echo" value) could route the other way than in training: 287 of 761
+    # live storm-steps differed by > 1e-3, with risk-band flips.
+    f32 = np.float32
+    x = [
+        float((f32(raw_features.get(n, 0.0)) - f32(means[i])) / f32(stds[i]))
+        for i, n in enumerate(names)
+    ]
+    F = float(payload["init_pred"])
+    lr = float(payload["learning_rate"])
+    for tree in payload["trees"]:
+        node = tree
+        while not node.get("leaf", False):
+            node = node["left"] if x[node["feat"]] <= node["thresh"] else node["right"]
+        F += lr * float(node["val"])
+    cal = payload.get("calibration")
+    return float(apply_calibration(np.array([F]), cal)[0]), cal is not None
+
+
+# ===================================================================
 # SPC TORNADO REPORT LOADING
 # ===================================================================
 
@@ -961,8 +1366,14 @@ def load_spc_tornado_reports(
     Returns
     -------
     dict[str, list[dict]]
-        Mapping from date string (``YYYYMMDD``) to list of tornado report
-        dicts with keys: ``slat``, ``slon``, ``hour``, ``mag``.
+        Mapping from **UTC** date string (``YYYYMMDD``) to list of tornado
+        report dicts with keys: ``slat``, ``slon``, ``mag``, ``time_utc``
+        (POSIX seconds of the UTC start instant, or ``None`` if the report's
+        time or time zone is unknown), ``hour`` (fractional **UTC** hour, -1
+        if unknown) and ``local_date`` (the SPC row's own CST date).
+
+        Reports with an unknown clock are filed under their local date and
+        can never be matched by ``compute_label``.
     """
     import csv
 
@@ -994,30 +1405,32 @@ def load_spc_tornado_reports(
             except (ValueError, TypeError):
                 continue
 
-            # Parse time to fractional hour
-            time_str = rec.get("time", "").strip()
-            hour = -1.0  # default: unknown
-            if time_str and ":" in time_str:
-                parts = time_str.split(":")
-                try:
-                    h = int(parts[0])
-                    m = int(parts[1]) if len(parts) > 1 else 0
-                    hour = float(h) + float(m) / 60.0
-                except (ValueError, IndexError):
-                    hour = -1.0
-
             # Skip obviously bad coordinates
             if abs(slat) < 1.0 or abs(slon) < 1.0:
                 continue
 
-            date_str = f"{yr:04d}{mo:02d}{dy:02d}"
-            if date_str not in reports:
-                reports[date_str] = []
-            reports[date_str].append({
+            try:
+                tz_code = int(rec.get("tz", -1))
+            except (ValueError, TypeError):
+                tz_code = -1
+            t_utc = parse_spc_time_utc(yr, mo, dy, rec.get("time", ""), tz_code)
+            local_date = f"{yr:04d}{mo:02d}{dy:02d}"
+            if t_utc is None:
+                key = local_date
+                hour = -1.0
+                time_utc = None
+            else:
+                key = t_utc.strftime("%Y%m%d")
+                hour = t_utc.hour + t_utc.minute / 60.0
+                time_utc = t_utc.timestamp()
+
+            reports.setdefault(key, []).append({
                 "slat": slat,
                 "slon": slon,
                 "hour": hour,
+                "time_utc": time_utc,
                 "mag": mag,
+                "local_date": local_date,
             })
 
     return reports
@@ -1046,21 +1459,47 @@ def extract_block_p(storm: dict) -> np.ndarray:
     return feat
 
 
+def probsevere_step_minutes(time_steps: list[dict]) -> float:
+    """Median spacing, in minutes, between consecutive ProbSevere time steps.
+
+    The fetcher keeps one file per 30-minute slot when the S3 listing works
+    and probes 15-minute slots when it does not, so the cadence is a property
+    of each cached day, not a constant. Falls back to
+    ``PROBSEVERE_STEP_MIN_DEFAULT`` when fewer than two stamps parse.
+    """
+    stamps = [parse_probsevere_valid_time(ts.get("valid_time", "")) for ts in time_steps]
+    secs = sorted(s.timestamp() for s in stamps if s is not None)
+    if len(secs) < 2:
+        return PROBSEVERE_STEP_MIN_DEFAULT
+    gaps = np.diff(np.asarray(secs)) / 60.0
+    gaps = gaps[gaps > 0]
+    return float(np.median(gaps)) if gaps.size else PROBSEVERE_STEP_MIN_DEFAULT
+
+
 def extract_block_e(
     storm: dict,
     storm_history: list[dict],
+    step_minutes: float = None,
 ) -> np.ndarray:
     """Extract Block E: storm evolution features (6).
 
     All 6 features are derived from PAST observations of the same storm ID
     tracked across ProbSevere time steps. Available at prediction time
     because they use only historical data.
+
+    ``storm_history`` must come from ``build_storm_history`` (at most
+    ``STORM_HISTORY_LOOKBACK`` + 1 steps) in training AND in live scoring,
+    and ``step_minutes`` from ``probsevere_step_minutes`` on the same day's
+    steps. The "trend" features compare the current step with the previous
+    one, whatever the cadence.
     """
+    if step_minutes is None:
+        step_minutes = PROBSEVERE_STEP_MIN_DEFAULT
     feat = np.zeros(N_FEAT_E, dtype=np.float32)
     n_steps = len(storm_history)
 
-    # 14. storm_age_min: minutes since first appearance
-    feat[0] = np.float32(max(0, (n_steps - 1)) * 15.0)
+    # 14. storm_age_min: minutes since first appearance (within the lookback)
+    feat[0] = np.float32(max(0, (n_steps - 1)) * step_minutes)
 
     if n_steps >= 2:
         current = storm_history[-1]
@@ -1086,7 +1525,7 @@ def extract_block_e(
             1 for s in storm_history
             if float(s.get("maxllaz", 0)) > ROTATION_THRESHOLD
         )
-        feat[4] = np.float32(rot_count * 15.0)
+        feat[4] = np.float32(rot_count * step_minutes)
     else:
         feat[1] = np.float32(1.0)  # No trend data: neutral
         feat[2] = np.float32(1.0)
@@ -1265,11 +1704,28 @@ def date_in_range(date_str: str, start: str, end: str) -> bool:
     return start <= date_str <= end
 
 
+def index_storms_by_id(time_steps: list[dict]) -> list[dict]:
+    """Per-step ``{storm_id: storm}`` maps, for O(1) history lookups.
+
+    The first storm with a given ID in a step wins, matching the linear
+    scan in ``build_storm_history``.
+    """
+    out: list[dict] = []
+    for ts in time_steps:
+        m: dict = {}
+        for s in ts.get("storms", []):
+            m.setdefault(s.get("id"), s)
+        out.append(m)
+    return out
+
+
 def build_storm_history(
     time_steps: list[dict],
     storm_id: int | str,
     current_step_idx: int,
-    max_lookback: int = 8,
+    max_lookback: int = STORM_HISTORY_LOOKBACK,
+    *,
+    id_index: list[dict] | None = None,
 ) -> list[dict]:
     """Collect past observations of the same storm ID.
 
@@ -1296,6 +1752,11 @@ def build_storm_history(
     history: list[dict] = []
     start_idx = max(0, current_step_idx - max_lookback)
     for idx in range(start_idx, current_step_idx + 1):
+        if id_index is not None:
+            s = id_index[idx].get(storm_id)
+            if s is not None:
+                history.append(s)
+            continue
         ts = time_steps[idx]
         for s in ts.get("storms", []):
             if s.get("id") == storm_id:
@@ -1308,29 +1769,33 @@ def build_samples_for_date(
     date_str: str,
     time_steps: list[dict],
     tornado_reports: list[dict],
-    hrrr_grids: dict[str, np.ndarray] | None,
-    derived_hrrr: dict[str, np.ndarray] | None,
-    coherence_fields: dict[str, np.ndarray] | None,
+    analyses: dict[int, tuple[dict, dict, dict | None]],
     include_coherence: bool = True,
-) -> tuple[np.ndarray, np.ndarray, int]:
+    *,
+    analysis_policy: str = "latest_at_or_before",
+) -> tuple[np.ndarray, np.ndarray, int, int]:
     """Build feature/label samples from one day of ProbSevere data.
 
     Parameters
     ----------
     date_str : str
-        Date in YYYYMMDD format.
+        UTC date in YYYYMMDD format (the ProbSevere S3 day).
     time_steps : list[dict]
         ProbSevere time steps for this date.
     tornado_reports : list[dict]
-        SPC tornado reports for this date.
-    hrrr_grids : dict or None
-        Raw HRRR grids (None if not available).
-    derived_hrrr : dict or None
-        Derived HRRR parameters (None if not available).
-    coherence_fields : dict or None
-        Coherence field output (None if not available).
+        SPC tornado reports that can fall in any of this day's label windows:
+        ``reports_in_label_window(reports_by_utc_date, date_str)``.
+    analyses : dict[int, (hrrr_grids, derived_hrrr, coherence_fields)]
+        HRRR analyses of this UTC day keyed by analysis hour. Each storm reads
+        the one chosen by ``analysis_policy``.
     include_coherence : bool
         Whether to include Block C features.
+    analysis_policy : str
+        ``"latest_at_or_before"`` (default): the latest analysis at most
+        ``MAX_ANALYSIS_AGE_H`` before the observation; storms with none are
+        EXCLUDED, never zero-filled. ``"fixed_18z"``: every storm reads the
+        18Z analysis -- the pre-2026-10-01 behaviour, which leaks up to 18 h
+        of future atmosphere; kept ONLY to measure that leak, never a default.
 
     Returns
     -------
@@ -1339,24 +1804,28 @@ def build_samples_for_date(
     y : ndarray, shape (n_samples,)
         Binary labels.
     n_excluded : int
-        Number of samples excluded due to unknown timing.
+        Samples excluded due to unknown timing.
+    n_no_analysis : int
+        Samples excluded because no causal HRRR analysis was available.
     """
+    if analysis_policy not in ("latest_at_or_before", "fixed_18z"):
+        raise ValueError(f"unknown analysis_policy {analysis_policy!r}")
     n_feat = N_FEAT_FULL if include_coherence else N_FEAT_ENHANCED
     rows: list[np.ndarray] = []
     labels: list[float] = []
     n_excluded = 0
+    n_no_analysis = 0
+    step_minutes = probsevere_step_minutes(time_steps)
+    id_index = index_storms_by_id(time_steps)
+    hours = sorted(analyses)
 
     for step_idx, ts in enumerate(time_steps):
-        valid_time = ts.get("valid_time", "")
-        # Extract fractional hour from valid_time (ISO format: ...THH:MM:SSZ)
-        storm_hour = -1.0
-        if "T" in valid_time:
-            time_part = valid_time.split("T")[1].replace("Z", "")
-            parts = time_part.split(":")
-            try:
-                storm_hour = float(parts[0]) + float(parts[1]) / 60.0
-            except (ValueError, IndexError):
-                storm_hour = -1.0
+        storm_time_utc = parse_probsevere_valid_time(ts.get("valid_time", ""))
+        if analysis_policy == "fixed_18z":
+            hour = 18 if 18 in analyses else None
+        else:
+            hour = select_analysis_hour(storm_time_utc, hours)
+        analysis = analyses.get(hour) if hour is not None else None
 
         storms = ts.get("storms", [])
         for storm in storms:
@@ -1364,7 +1833,7 @@ def build_samples_for_date(
             label = compute_label(
                 float(storm.get("lat", 0)),
                 float(storm.get("lon", 0)),
-                storm_hour,
+                storm_time_utc,
                 tornado_reports,
                 forward_minutes=FORWARD_WINDOW_MIN,
             )
@@ -1372,29 +1841,26 @@ def build_samples_for_date(
             if label == -1:
                 n_excluded += 1
                 continue  # EXCLUDED: cannot verify temporal ordering
+            if analysis is None:
+                n_no_analysis += 1
+                continue  # EXCLUDED: no causal atmosphere for this observation
+            hrrr_grids, derived_hrrr, coherence_fields = analysis
 
             # Build feature vector
             feat_p = extract_block_p(storm)
 
             # Build storm history for evolution features
             storm_id = storm.get("id", None)
-            history = build_storm_history(time_steps, storm_id, step_idx)
-            feat_e = extract_block_e(storm, history)
+            history = build_storm_history(time_steps, storm_id, step_idx, id_index=id_index)
+            feat_e = extract_block_e(storm, history, step_minutes)
 
-            # HRRR features (zeros if not available)
-            if hrrr_grids is not None and derived_hrrr is not None:
-                feat_h = extract_block_h(storm, hrrr_grids, derived_hrrr)
-            else:
-                feat_h = np.zeros(N_FEAT_H, dtype=np.float32)
+            feat_h = extract_block_h(storm, hrrr_grids, derived_hrrr)
 
-            # Coherence features (zeros if not available or not requested)
-            if include_coherence and coherence_fields is not None:
-                feat_c = extract_block_c(storm, coherence_fields, hrrr_grids or {})
-            else:
-                feat_c = np.zeros(N_FEAT_C, dtype=np.float32)
-
-            # Concatenate all blocks
             if include_coherence:
+                if coherence_fields is None:
+                    n_no_analysis += 1
+                    continue
+                feat_c = extract_block_c(storm, coherence_fields, hrrr_grids)
                 feat = np.concatenate([feat_p, feat_e, feat_h, feat_c])
             else:
                 feat = np.concatenate([feat_p, feat_e, feat_h])
@@ -1411,11 +1877,14 @@ def build_samples_for_date(
             np.zeros((0, n_feat), dtype=np.float32),
             np.zeros(0, dtype=np.float32),
             n_excluded,
+            n_no_analysis,
         )
 
     X = np.stack(rows).astype(np.float32)
     y = np.array(labels, dtype=np.float32)
-    return X, y, n_excluded
+    return X, y, n_excluded, n_no_analysis
+
+
 
 
 # ===================================================================
@@ -1425,6 +1894,9 @@ def build_samples_for_date(
 def load_all_data(
     spc_csv_path: Path,
     verbose: bool = True,
+    *,
+    train_neg_ratio: int = TRAIN_NEG_RATIO,
+    analysis_policy: str = "latest_at_or_before",
 ) -> tuple[
     dict[str, np.ndarray],  # X_train variants
     dict[str, np.ndarray],  # X_val variants
@@ -1440,6 +1912,14 @@ def load_all_data(
     and coherence fields, builds samples with strict temporal labeling,
     and splits into train/val/test by date.
 
+    Only the TRAIN split is negative-downsampled (to ``train_neg_ratio``:1,
+    for GBT tractability). Validation and test keep their full storm-object
+    populations, so the probabilities scored on them are scored at the real
+    base rate. Until 2026-10-01 the test split was downsampled to 5:1 too,
+    which left AUC unbiased but made the reported Brier, BSS, PR-AUC and
+    reliability describe a population with a 1/6 base rate that does not
+    exist anywhere outside the experiment.
+
     Returns
     -------
     X_train, X_val, X_test : dict[str, ndarray]
@@ -1448,38 +1928,44 @@ def load_all_data(
     y_train, y_val, y_test : ndarray
         Binary labels for each split.
     metadata : dict
-        Loading statistics.
+        Loading statistics. ``metadata["_groups"]`` maps each split to an
+        int array (one entry per sample, aligned with ``y``) holding the
+        sample's UTC day as ``YYYYMMDD`` -- the cluster unit for the day-block
+        bootstrap. Keys starting with ``_`` are not JSON-serialised.
     """
     from hazardpulse.tornado.coherence_engine import (
         compute_coherence_fields,
         compute_derived_hrrr,
     )
 
-    # Load SPC tornado reports
+    # Load SPC tornado reports (keyed by UTC date, absolute UTC instants)
     if verbose:
         print("Loading SPC tornado reports...")
         sys.stdout.flush()
     tornado_reports = load_spc_tornado_reports(spc_csv_path)
+    n_unknown_clock = sum(
+        1 for v in tornado_reports.values() for r in v if r.get("time_utc") is None
+    )
     if verbose:
         total_reports = sum(len(v) for v in tornado_reports.values())
-        print(f"  Loaded {total_reports} tornado reports across {len(tornado_reports)} days")
+        print(f"  Loaded {total_reports} tornado reports across {len(tornado_reports)} UTC days "
+              f"({n_unknown_clock} with an unknown clock, never matched)")
 
     # Scan available ProbSevere dates
     available_dates = scan_probsevere_cache()
     if verbose:
         print(f"  Found {len(available_dates)} cached ProbSevere dates")
 
-    # Accumulators for each split
-    train_rows: list[np.ndarray] = []
-    train_labels: list[float] = []
-    val_rows: list[np.ndarray] = []
-    val_labels: list[float] = []
-    test_rows: list[np.ndarray] = []
-    test_labels: list[float] = []
+    rows: dict[str, list[np.ndarray]] = {"train": [], "val": [], "test": []}
+    labels: dict[str, list[np.ndarray]] = {"train": [], "val": [], "test": []}
+    groups: dict[str, list[np.ndarray]] = {"train": [], "val": [], "test": []}
 
     total_excluded = 0
+    total_no_analysis = 0
+    n_analyses_loaded = 0
     dates_processed = 0
     dates_with_hrrr = 0
+    days_without_hrrr: list[str] = []
 
     for date_str in available_dates:
         # Determine which split this date belongs to
@@ -1497,149 +1983,160 @@ def load_all_data(
         if time_steps is None or len(time_steps) == 0:
             continue
 
-        # Load HRRR (may be None if not cached)
-        hrrr_grids = load_cached_hrrr(date_str, hour=18)
-        derived = None
-        coh_fields = None
-        if hrrr_grids is not None:
+        # Load this UTC day's HRRR analyses (each storm later reads the latest
+        # one at or before its own observation -- see HRRR_ANALYSIS_HOURS).
+        month = int(date_str[4:6])
+        analyses: dict[int, tuple] = {}
+        wanted = (18,) if analysis_policy == "fixed_18z" else HRRR_ANALYSIS_HOURS
+        for hour in wanted:
+            grids = load_cached_hrrr(date_str, hour=hour)
+            if grids is None:
+                continue
+            analyses[hour] = (
+                grids,
+                compute_derived_hrrr(grids),
+                compute_coherence_fields(grids, month=month),
+            )
+        n_analyses_loaded += len(analyses)
+        if analyses:
             dates_with_hrrr += 1
-            derived = compute_derived_hrrr(hrrr_grids)
-            # Compute coherence fields from HRRR atmospheric state
-            month = int(date_str[4:6])
-            coh_fields = compute_coherence_fields(hrrr_grids, month=month)
+        else:
+            days_without_hrrr.append(date_str)
 
-        # Get tornado reports for this date
-        tor_today = tornado_reports.get(date_str, [])
+        # Reports that can fall in any of this UTC day's label windows
+        tor_window = reports_in_label_window(tornado_reports, date_str)
 
         # Build samples (always build full feature vector)
-        X_day, y_day, n_exc = build_samples_for_date(
+        X_day, y_day, n_exc, n_no_an = build_samples_for_date(
             date_str,
             time_steps,
-            tor_today,
-            hrrr_grids,
-            derived,
-            coh_fields,
+            tor_window,
+            analyses,
             include_coherence=True,
+            analysis_policy=analysis_policy,
         )
 
         total_excluded += n_exc
+        total_no_analysis += n_no_an
 
         if X_day.shape[0] == 0:
             continue
 
         dates_processed += 1
-
-        # Route to correct split
-        if split == "train":
-            train_rows.append(X_day)
-            train_labels.extend(y_day.tolist())
-        elif split == "val":
-            val_rows.append(X_day)
-            val_labels.extend(y_day.tolist())
-        elif split == "test":
-            test_rows.append(X_day)
-            test_labels.extend(y_day.tolist())
+        rows[split].append(X_day)
+        labels[split].append(y_day)
+        groups[split].append(np.full(len(y_day), int(date_str), dtype=np.int64))
 
         if verbose and dates_processed % 50 == 0:
             print(f"  Processed {dates_processed} dates...")
             sys.stdout.flush()
 
-    # Stack into arrays
-    def _stack(rows: list[np.ndarray]) -> np.ndarray:
-        if len(rows) == 0:
-            return np.zeros((0, N_FEAT_FULL), dtype=np.float32)
-        return np.vstack(rows).astype(np.float32)
+    def _stack(parts: list[np.ndarray], width: int | None, dtype) -> np.ndarray:
+        if len(parts) == 0:
+            shape = (0, width) if width is not None else (0,)
+            return np.zeros(shape, dtype=dtype)
+        if width is None:
+            return np.concatenate(parts).astype(dtype)
+        return np.vstack(parts).astype(dtype)
 
-    X_train_full = _stack(train_rows)
-    X_val_full = _stack(val_rows)
-    X_test_full = _stack(test_rows)
-    y_train = np.array(train_labels, dtype=np.float32)
-    y_val = np.array(val_labels, dtype=np.float32)
-    y_test = np.array(test_labels, dtype=np.float32)
+    X_full = {s: _stack(rows[s], N_FEAT_FULL, np.float32) for s in rows}
+    y_all = {s: _stack(labels[s], None, np.float32) for s in rows}
+    g_all = {s: _stack(groups[s], None, np.int64) for s in rows}
 
     if verbose:
-        print(f"\n  === RAW DATA ===")
+        print(f"\n  === RAW DATA (full storm-object populations) ===")
         print(f"  Dates processed: {dates_processed}")
-        print(f"  Dates with HRRR: {dates_with_hrrr}")
+        print(f"  Dates with HRRR: {dates_with_hrrr} ({n_analyses_loaded} analyses, "
+              f"policy {analysis_policy})")
         print(f"  Samples excluded (unknown timing): {total_excluded}")
-        print(f"  Train: {len(y_train)} samples ({int(y_train.sum())} positive)")
-        print(f"  Val:   {len(y_val)} samples ({int(y_val.sum())} positive)")
-        print(f"  Test:  {len(y_test)} samples ({int(y_test.sum())} positive)")
+        print(f"  Samples excluded (no causal HRRR analysis): {total_no_analysis}")
+        for s in ("train", "val", "test"):
+            y = y_all[s]
+            rate = float(y.mean()) if len(y) else float("nan")
+            print(f"  {s:5s}: {len(y)} samples ({int(y.sum())} positive, base rate {rate:.5f})")
         sys.stdout.flush()
 
-    # Downsample negatives to 5:1 ratio for each split
-    # This makes GBT training feasible and prevents early-stop-at-tree-1
-    NEG_RATIO = 5
+    # Negative downsampling -- TRAIN ONLY. Keep all positives.
     rng = np.random.RandomState(42)
-    for split_name, X_split, y_split in [
-        ("train", "X_train_full", "y_train"),
-        ("val", "X_val_full", "y_val"),
-        ("test", "X_test_full", "y_test"),
-    ]:
-        X_s = locals()[X_split]
-        y_s = locals()[y_split]
-        pos_mask = y_s == 1
-        neg_mask = y_s == 0
-        n_pos = int(pos_mask.sum())
-        n_neg = int(neg_mask.sum())
-        if n_pos == 0 or n_neg <= NEG_RATIO * n_pos:
-            continue
-        # Keep all positives, subsample negatives
-        pos_idx = np.where(pos_mask)[0]
-        neg_idx = np.where(neg_mask)[0]
-        keep_neg = rng.choice(neg_idx, size=NEG_RATIO * n_pos, replace=False)
+    y_tr = y_all["train"]
+    n_pos_train = int((y_tr == 1).sum())
+    n_neg_train = int((y_tr == 0).sum())
+    neg_keep_rate = 1.0
+    if n_pos_train > 0 and n_neg_train > train_neg_ratio * n_pos_train:
+        pos_idx = np.where(y_tr == 1)[0]
+        neg_idx = np.where(y_tr == 0)[0]
+        keep_neg = rng.choice(neg_idx, size=train_neg_ratio * n_pos_train, replace=False)
         keep = np.sort(np.concatenate([pos_idx, keep_neg]))
-        if X_split == "X_train_full":
-            X_train_full = X_s[keep]
-            y_train = y_s[keep]
-        elif X_split == "X_val_full":
-            X_val_full = X_s[keep]
-            y_val = y_s[keep]
-        else:
-            X_test_full = X_s[keep]
-            y_test = y_s[keep]
+        X_full["train"] = X_full["train"][keep]
+        y_all["train"] = y_tr[keep]
+        g_all["train"] = g_all["train"][keep]
+        neg_keep_rate = (train_neg_ratio * n_pos_train) / n_neg_train
 
     if verbose:
-        print(f"\n  === AFTER 5:1 DOWNSAMPLING ===")
-        print(f"  Train: {len(y_train)} samples ({int(y_train.sum())} positive, "
-              f"rate={y_train.mean():.4f})")
-        print(f"  Val:   {len(y_val)} samples ({int(y_val.sum())} positive)")
-        print(f"  Test:  {len(y_test)} samples ({int(y_test.sum())} positive)")
+        print(f"\n  === AFTER TRAIN-ONLY {train_neg_ratio}:1 DOWNSAMPLING ===")
+        print(f"  Train: {len(y_all['train'])} samples ({int(y_all['train'].sum())} positive, "
+              f"negative keep rate {neg_keep_rate:.5f})")
+        print(f"  Val:   {len(y_all['val'])} samples ({int(y_all['val'].sum())} positive) -- full population")
+        print(f"  Test:  {len(y_all['test'])} samples ({int(y_all['test'].sum())} positive) -- full population")
         sys.stdout.flush()
 
     # Build variant-specific feature matrices by column slicing
     # Baseline: Block P only (columns 0..12)
     # Enhanced: Block P + E + H (columns 0..30)
     # Full: Block P + E + H + C (columns 0..40)
-    X_train = {
-        "baseline": X_train_full[:, :N_FEAT_BASELINE],
-        "enhanced": X_train_full[:, :N_FEAT_ENHANCED],
-        "full": X_train_full[:, :N_FEAT_FULL],
-    }
-    X_val = {
-        "baseline": X_val_full[:, :N_FEAT_BASELINE],
-        "enhanced": X_val_full[:, :N_FEAT_ENHANCED],
-        "full": X_val_full[:, :N_FEAT_FULL],
-    }
-    X_test = {
-        "baseline": X_test_full[:, :N_FEAT_BASELINE],
-        "enhanced": X_test_full[:, :N_FEAT_ENHANCED],
-        "full": X_test_full[:, :N_FEAT_FULL],
-    }
+    def _variants(X: np.ndarray) -> dict[str, np.ndarray]:
+        return {
+            "baseline": X[:, :N_FEAT_BASELINE],
+            "enhanced": X[:, :N_FEAT_ENHANCED],
+            "full": X[:, :N_FEAT_FULL],
+        }
+
+    X_train = _variants(X_full["train"])
+    X_val = _variants(X_full["val"])
+    X_test = _variants(X_full["test"])
+    y_train, y_val, y_test = y_all["train"], y_all["val"], y_all["test"]
+
+    def _days(g: np.ndarray) -> list[str]:
+        return [str(d) for d in np.unique(g)]
 
     metadata = {
         "dates_processed": dates_processed,
         "dates_with_hrrr": dates_with_hrrr,
+        "days_without_hrrr": len(days_without_hrrr),
+        "hrrr_analyses_loaded": n_analyses_loaded,
+        "hrrr_analysis_policy": analysis_policy,
+        "hrrr_max_analysis_age_h": MAX_ANALYSIS_AGE_H,
         "total_excluded": total_excluded,
+        "excluded_no_causal_analysis": total_no_analysis,
+        "spc_reports_unknown_clock": n_unknown_clock,
+        "label_time_axis": "absolute UTC instants (SPC tz-converted; ProbSevere validTime)",
+        "train_negative_downsampling": {
+            "neg_ratio": train_neg_ratio,
+            "n_pos_population": n_pos_train,
+            "n_neg_population": n_neg_train,
+            "neg_keep_rate": neg_keep_rate,
+            "population_base_rate": (n_pos_train / (n_pos_train + n_neg_train))
+            if (n_pos_train + n_neg_train) else None,
+        },
+        "val_test_downsampled": False,
         "n_train": len(y_train),
         "n_val": len(y_val),
         "n_test": len(y_test),
         "n_train_pos": int(y_train.sum()) if len(y_train) > 0 else 0,
         "n_val_pos": int(y_val.sum()) if len(y_val) > 0 else 0,
         "n_test_pos": int(y_test.sum()) if len(y_test) > 0 else 0,
+        "n_train_days": len(_days(g_all["train"])),
+        "n_val_days": len(_days(g_all["val"])),
+        "n_test_days": len(_days(g_all["test"])),
+        "_groups": g_all,
     }
 
+    # The anti-leakage guarantee, enforced on the data actually built.
+    assert_temporal_integrity(_days(g_all["train"]), _days(g_all["val"]), _days(g_all["test"]))
+
     return X_train, X_val, X_test, y_train, y_val, y_test, metadata
+
+
 
 
 # ===================================================================
@@ -1689,23 +2186,27 @@ def main(
     spc_csv_path: str | Path | None = None,
     output_dir: str | Path | None = None,
     verbose: bool = True,
+    *,
+    analysis_policy: str = "latest_at_or_before",
 ) -> dict:
     """Run the complete definitive tornado prediction pipeline.
+
+    ``analysis_policy`` exists to MEASURE the pre-2026-10-01 18Z leak
+    (``"fixed_18z"``); every product run uses the default.
 
     Steps:
         1. Load ProbSevere cache
         2. Load HRRR cache
-        3. Load SPC tornado reports
+        3. Load SPC tornado reports (converted to absolute UTC instants)
         4. Build samples with STRICT temporal labeling
-            - Assert no train sample date >= VAL_START
-            - Assert no val sample date >= TEST_START
+            - Temporal integrity asserted on the days actually built
             - Print: "X samples EXCLUDED due to unknown timing"
         5. Build feature matrices (P, E, H, C)
         6. Normalize features (fit on train, apply to val/test)
-        7. Train 3 GBT models on train
-        8. Evaluate on val (sanity check only)
-        9. Evaluate on test ONCE
-        10. Significance tests
+        7. Train 3 GBT models on train (early stopping on val)
+        8. Calibrate each model on the full validation population
+        9. Evaluate on test ONCE (full population, day-clustered CIs)
+        10. Significance tests (day-clustered paired bootstrap)
         11. Save results JSON
 
     Parameters
@@ -1737,9 +2238,11 @@ def main(
         output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    variants = ["baseline", "enhanced", "full"]
+
     if verbose:
         print("=" * 72)
-        print("DEFINITIVE TORNADO PREDICTION MODEL v1")
+        print("DEFINITIVE TORNADO PREDICTION MODEL v2")
         print("RESEARCH ONLY -- NOT OPERATIONAL")
         print("=" * 72)
         print()
@@ -1750,7 +2253,8 @@ def main(
         print()
         print(f"GBT config: {GBT_N_TREES} trees, depth={GBT_MAX_DEPTH}, "
               f"lr={GBT_LEARNING_RATE}, subsample={GBT_SUBSAMPLE}")
-        print(f"Label: {LABEL_RADIUS_KM} km radius, {FORWARD_WINDOW_MIN} min forward")
+        print(f"Label: {LABEL_RADIUS_KM} km radius, {FORWARD_WINDOW_MIN} min forward, "
+              f"absolute UTC instants")
         print()
         sys.stdout.flush()
 
@@ -1762,12 +2266,11 @@ def main(
         sys.stdout.flush()
 
     X_train, X_val, X_test, y_train, y_val, y_test, meta = load_all_data(
-        spc_csv_path, verbose=verbose,
+        spc_csv_path, verbose=verbose, analysis_policy=analysis_policy,
     )
+    groups = meta.pop("_groups")
+    g_test = groups["test"]
 
-    # Enforce temporal integrity via date-based splits
-    # The load_all_data function uses date_in_range() which provides
-    # temporal separation by construction. We additionally verify:
     assert len(y_train) > 0, "No training samples loaded"
     assert len(y_val) > 0, "No validation samples loaded"
     assert len(y_test) > 0, "No test samples loaded"
@@ -1775,6 +2278,10 @@ def main(
     if verbose:
         print(f"\n  {meta['total_excluded']} samples EXCLUDED due to unknown timing")
         sys.stdout.flush()
+
+    # Raw (physical-unit) test features, kept for the analytic NPE blend,
+    # which applies physical thresholds and must never see z-scores.
+    X_test_raw_full = X_test["full"].copy()
 
     # ---------------------------------------------------------------
     # Step 5-6: Normalize features (fit on train, apply to val/test)
@@ -1784,7 +2291,7 @@ def main(
         sys.stdout.flush()
 
     normalizers: dict[str, FeatureNormalizer] = {}
-    for variant in ["baseline", "enhanced", "full"]:
+    for variant in variants:
         norm = FeatureNormalizer()
         X_train[variant] = norm.fit_transform(X_train[variant])
         X_val[variant] = norm.transform(X_val[variant])
@@ -1801,15 +2308,9 @@ def main(
     models: dict[str, GradientBoostedTrees] = {}
     train_meta: dict[str, dict] = {}
 
-    for variant in ["baseline", "enhanced", "full"]:
+    for variant in variants:
         if verbose:
-            n_feat = X_train[variant].shape[1]
-            feature_names = {
-                "baseline": ALL_FEATURE_NAMES_BASELINE,
-                "enhanced": ALL_FEATURE_NAMES_ENHANCED,
-                "full": ALL_FEATURE_NAMES_FULL,
-            }[variant]
-            print(f"\n  --- {variant.upper()} ({n_feat} features) ---")
+            print(f"\n  --- {variant.upper()} ({X_train[variant].shape[1]} features) ---")
             sys.stdout.flush()
 
         gbt = GradientBoostedTrees(
@@ -1822,13 +2323,11 @@ def main(
             l2_reg=GBT_L2_REG,
             gamma=GBT_GAMMA,
         )
-
         tmeta = gbt.fit(
             X_train[variant], y_train,
             X_val=X_val[variant], y_val=y_val,
             verbose=verbose,
         )
-
         models[variant] = gbt
         train_meta[variant] = tmeta
 
@@ -1838,24 +2337,30 @@ def main(
             sys.stdout.flush()
 
     # ---------------------------------------------------------------
-    # Step 8: Evaluate on val (sanity check ONLY)
+    # Step 8: Calibrate on the full validation population
     # ---------------------------------------------------------------
     if verbose:
-        print("\n[8] Validation sanity check...")
+        print("\n[8] Validation: sanity AUC + probability calibration...")
         sys.stdout.flush()
 
+    calibrations: dict[str, dict] = {}
     val_preds: dict[str, np.ndarray] = {}
-    for variant in ["baseline", "enhanced", "full"]:
-        p_val = models[variant].predict_proba(X_val[variant])
-        val_preds[variant] = p_val
-        val_auc = compute_auc(y_val, p_val)
+    val_auc: dict[str, float] = {}
+    for variant in variants:
+        F_val = models[variant].decision_function(X_val[variant])
+        cal = fit_platt(F_val, y_val)
+        cal["fitted_on"] = f"validation {VAL_START}-{VAL_END}, full population"
+        cal["n"] = int(len(y_val))
+        cal["base_rate"] = float(y_val.mean())
+        calibrations[variant] = cal
+        val_preds[variant] = apply_calibration(F_val, cal)
+        val_auc[variant] = compute_auc(y_val, val_preds[variant])
         if verbose:
-            print(f"  {variant}: val_auc = {val_auc:.4f}")
-
-        # Sanity check: AUC should be > 0.55 (better than noise)
-        if val_auc < 0.55:
+            print(f"  {variant}: val_auc = {val_auc[variant]:.4f}  "
+                  f"platt a={cal['a']:.4f} b={cal['b']:.4f}")
+        if val_auc[variant] < 0.55:
             print(
-                f"  WARNING: {variant} val AUC ({val_auc:.4f}) is very low. "
+                f"  WARNING: {variant} val AUC ({val_auc[variant]:.4f}) is very low. "
                 f"Model may be broken."
             )
 
@@ -1863,41 +2368,41 @@ def main(
     # Step 9: Evaluate on test ONCE
     # ---------------------------------------------------------------
     if verbose:
-        print("\n[9] TEST EVALUATION (single pass, no going back)...")
+        print("\n[9] TEST EVALUATION (single pass, full population, no going back)...")
         sys.stdout.flush()
 
     test_preds: dict[str, np.ndarray] = {}
     test_results: dict[str, dict] = {}
-
-    for variant in ["baseline", "enhanced", "full"]:
-        p_test = models[variant].predict_proba(X_test[variant])
+    for variant in variants:
+        F_test = models[variant].decision_function(X_test[variant])
+        p_test = apply_calibration(F_test, calibrations[variant])
         test_preds[variant] = p_test
-        test_results[variant] = evaluate(y_test, p_test)
-
+        test_results[variant] = evaluate(y_test, p_test, groups=g_test)
         if verbose:
             r = test_results[variant]
+            ci = r["bootstrap_ci"]
             print(f"\n  {variant.upper()} on TEST:")
-            print(f"    AUC:    {r['auc']:.4f} "
-                  f"[{r['bootstrap_ci']['ci_lo']:.4f}, {r['bootstrap_ci']['ci_hi']:.4f}]")
+            print(f"    AUC:    {r['auc']:.4f} [{ci['ci_lo']:.4f}, {ci['ci_hi']:.4f}] "
+                  f"(day-clustered, {ci['n_clusters']} days)")
             print(f"    PR-AUC: {r['pr_auc']:.4f}")
             print(f"    Brier:  {r['brier']:.6f}")
             print(f"    BSS:    {r['bss']:.4f}")
             print(f"    N_pos:  {r['n_positive']}, N_neg: {r['n_negative']}, "
-                  f"base_rate: {r['base_rate']:.6f}")
+                  f"base_rate: {r['base_rate']:.6f}, mean forecast: {r['mean_forecast']:.6f}")
             sys.stdout.flush()
 
     # ---------------------------------------------------------------
     # Step 10: Significance tests
     # ---------------------------------------------------------------
     if verbose:
-        print("\n[10] Paired bootstrap significance tests...")
+        print("\n[10] Paired day-clustered bootstrap significance tests...")
         sys.stdout.flush()
 
-    hrrr_lift = paired_bootstrap_test(
-        y_test, test_preds["baseline"], test_preds["enhanced"]
+    hrrr_lift = paired_cluster_bootstrap_test(
+        y_test, test_preds["baseline"], test_preds["enhanced"], g_test
     )
-    cft_lift = paired_bootstrap_test(
-        y_test, test_preds["enhanced"], test_preds["full"]
+    cft_lift = paired_cluster_bootstrap_test(
+        y_test, test_preds["enhanced"], test_preds["full"], g_test
     )
 
     if verbose:
@@ -1918,53 +2423,40 @@ def main(
         print("\n[10b] NPE Fusion: analytic-learned blend...")
         sys.stdout.flush()
 
+    npe_lift = None
+    npe_health = None
     try:
-        from hazardpulse.tornado.tornado_npe import (
-            TornadoNPEEngine,
-            analytic_tornado_probability,
-        )
+        from hazardpulse.tornado.tornado_npe import TornadoNPEEngine
 
         npe_engine = TornadoNPEEngine()
+        # Coherence tracking learns from the VALIDATION outcomes first, then
+        # predicts test -- the old order recorded val after predicting test,
+        # so the tracker never informed a single test prediction.
+        for idx in range(len(y_val)):
+            npe_engine.record_outcome(float(val_preds["full"][idx]), bool(y_val[idx] > 0.5))
 
-        # Compute fused predictions on test set using X_test["full"]
-        X_t = X_test["full"]
-        p_npe_test = np.zeros(len(y_test), dtype=np.float32)
+        col = {name: k for k, name in enumerate(ALL_FEATURE_NAMES_FULL)}
+        Xr = X_test_raw_full  # PHYSICAL units -- the analytic model's thresholds are physical
+        p_npe_test = np.zeros(len(y_test), dtype=np.float64)
         for idx in range(len(y_test)):
-            # Extract coherence features (Block C starts after P+E+H)
-            c_offset = N_FEAT_P + N_FEAT_E + N_FEAT_H
-            tau_val = float(X_t[idx, c_offset]) if c_offset < X_t.shape[1] else 0.0
-            grad_val = float(X_t[idx, c_offset + 1]) if c_offset + 1 < X_t.shape[1] else 0.0
-            tors_val = float(X_t[idx, c_offset + 2]) if c_offset + 2 < X_t.shape[1] else 0.0
-            align_val = float(X_t[idx, c_offset + 3]) if c_offset + 3 < X_t.shape[1] else 0.0
-            sg_val = float(X_t[idx, c_offset + 4]) if c_offset + 4 < X_t.shape[1] else 0.0
-            da_val = float(X_t[idx, c_offset + 5]) if c_offset + 5 < X_t.shape[1] else 0.0
-
-            # ProbSevere features for analytic model
-            maxllaz_val = float(X_t[idx, 9]) if 9 < X_t.shape[1] else 0.0
-            srh_val = float(X_t[idx, 4]) if 4 < X_t.shape[1] else 0.0
-
-            gbt_p = float(test_preds["full"][idx])
-
             pred = npe_engine.predict(
-                tau=tau_val, grad_tau=grad_val, torsion=tors_val,
-                alignment=align_val, s_over_gamma=sg_val, da=da_val,
-                maxllaz=maxllaz_val, srh01=srh_val,
-                gbt_probability=gbt_p,
+                tau=float(Xr[idx, col["tau"]]),
+                grad_tau=float(Xr[idx, col["grad_tau"]]),
+                torsion=float(Xr[idx, col["torsion"]]),
+                alignment=float(Xr[idx, col["alignment"]]),
+                s_over_gamma=float(Xr[idx, col["S_over_Gamma"]]),
+                da=float(Xr[idx, col["Da"]]),
+                maxllaz=float(Xr[idx, col["maxllaz"]]),
+                srh01=float(Xr[idx, col["srh01"]]),
+                gbt_probability=float(test_preds["full"][idx]),
             )
             p_npe_test[idx] = pred.probability
 
-        # Record outcomes for coherence tracking (on validation set first)
-        for idx in range(len(y_val)):
-            gbt_p = float(val_preds["full"][idx])
-            npe_engine.record_outcome(gbt_p, bool(y_val[idx] > 0.5))
-
-        test_results["npe_fusion"] = evaluate(y_test, p_npe_test)
+        test_results["npe_fusion"] = evaluate(y_test, p_npe_test, groups=g_test)
         test_preds["npe_fusion"] = p_npe_test
-
-        npe_lift = paired_bootstrap_test(
-            y_test, test_preds["full"], test_preds["npe_fusion"]
+        npe_lift = paired_cluster_bootstrap_test(
+            y_test, test_preds["full"], test_preds["npe_fusion"], g_test
         )
-
         npe_health = npe_engine.health()
 
         if verbose:
@@ -1980,7 +2472,6 @@ def main(
     except ImportError:
         if verbose:
             print("  [SKIP] tornado_npe not available, skipping fusion")
-        npe_lift = None
 
     # ---------------------------------------------------------------
     # Feature importance for full model
@@ -2001,10 +2492,12 @@ def main(
     # ---------------------------------------------------------------
     # Step 11: Assemble and save results
     # ---------------------------------------------------------------
+    from hazardpulse.tornado import coherence_engine as _coh
+
     elapsed = time.time() - t_start
 
     results = {
-        "model": "hazardpulse_tornado_definitive_v1",
+        "model": "hazardpulse_tornado_definitive_v2",
         "disclaimer": "RESEARCH ONLY. NOT operational. NOT a replacement for NWS.",
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "elapsed_seconds": round(elapsed, 1),
@@ -2012,9 +2505,24 @@ def main(
             "temporal_split": f"Train {TRAIN_START}-{TRAIN_END}, "
                               f"Val {VAL_START}-{VAL_END}, "
                               f"Test {TEST_START}-{TEST_END}",
+            "temporal_integrity_asserted_on_built_days": True,
             "label_temporal_ordering": True,
+            "label_time_axis": "absolute UTC instants: SPC local time + tz offset "
+                               "(tz=3 CST -> +6 h); ProbSevere validTime UTC; "
+                               "reports from the observation's UTC day and the next",
             "unknown_timing_excluded": True,
+            "hrrr_analysis_matching": (
+                f"latest 3-hourly analysis at or before each observation, <= "
+                f"{MAX_ANALYSIS_AGE_H:g} h old; storms without one excluded"
+                if analysis_policy == "latest_at_or_before" else
+                f"ABLATION {analysis_policy}: every storm reads the 18Z analysis (future leak)"
+            ),
+            "hrrr_grid_geometry": "g2: native Lambert points binned by true lat/lon",
             "n_excluded_unknown_timing": meta["total_excluded"],
+            "negative_downsampling": f"train only, {TRAIN_NEG_RATIO}:1; val and test "
+                                     "are full storm-object populations",
+            "probabilities": "Platt-calibrated on the full validation population",
+            "confidence_intervals": "bootstrap over whole UTC days",
             "meta_stacker": False,
             "hyperparameter_tuning_on_test": False,
             "single_test_evaluation": True,
@@ -2028,11 +2536,21 @@ def main(
                 "min_samples_leaf": GBT_MIN_SAMPLES_LEAF,
                 "l2_reg": GBT_L2_REG,
                 "gamma": GBT_GAMMA,
+                "early_stopping": "class-balanced val log-loss, patience "
+                                  f"{EARLY_STOP_PATIENCE}",
             },
             "label_config": {
                 "radius_km": LABEL_RADIUS_KM,
                 "forward_window_min": FORWARD_WINDOW_MIN,
             },
+            "coherence_solver": {
+                "mode": "certified PCG" if _coh.HELMHOLTZ_TOL is not None else "legacy Jacobi",
+                "tol": _coh.HELMHOLTZ_TOL,
+                "damping_semantics": "Gamma passed directly (FVCS W-2)",
+            },
+            "torsion": "(S_01 x grad tau).k / "
+                       f"{_coh.TORSION_SHEAR_SCALE} -- tilting of low-level horizontal "
+                       "vorticity by the coherence gradient",
         },
         "data_summary": meta,
         "training_metadata": {
@@ -2041,13 +2559,11 @@ def main(
                 "stopped_early": train_meta[variant]["stopped_early"],
                 "best_val_loss": train_meta[variant].get("best_val_loss"),
             }
-            for variant in ["baseline", "enhanced", "full"]
+            for variant in variants
         },
+        "calibration": calibrations,
         "validation_sanity_check": {
-            variant: {
-                "auc": compute_auc(y_val, val_preds[variant]),
-            }
-            for variant in ["baseline", "enhanced", "full"]
+            variant: {"auc": val_auc[variant]} for variant in variants
         },
         "baseline": test_results["baseline"],
         "enhanced": test_results["enhanced"],
@@ -2086,8 +2602,11 @@ def main(
     # Attach trained artifacts so callers can save them
     results["_models"] = models
     results["_normalizers"] = normalizers
+    results["_calibrations"] = calibrations
 
     return results
+
+
 
 
 # ===================================================================
@@ -2114,8 +2633,14 @@ def save_model(
     feature_names: list[str],
     path: str | Path,
     variant: str = "full",
+    calibration: dict | None = None,
+    provenance: dict | None = None,
 ) -> None:
     """Serialize a trained GBT + normalizer to a JSON file.
+
+    ``calibration`` (from ``fit_platt`` on the validation population) is
+    what makes the served number a probability; ``provenance`` records how
+    the payload was produced (label time axis, splits, solver, metrics).
 
     The output is pure JSON with no numpy types, so it can be loaded
     by the live scoring pipeline without training dependencies.
@@ -2153,6 +2678,10 @@ def save_model(
             "stds": [float(x) for x in normalizer.std],
         },
     }
+    if calibration is not None:
+        payload["calibration"] = calibration
+    if provenance is not None:
+        payload["provenance"] = provenance
 
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2)
@@ -2242,10 +2771,23 @@ if __name__ == "__main__":
     )
 
     if args.save_model and "_models" in results and "_normalizers" in results:
+        full = results["full"]
         save_model(
             model=results["_models"]["full"],
             normalizer=results["_normalizers"]["full"],
             feature_names=ALL_FEATURE_NAMES_FULL,
             path=args.save_model,
             variant="full",
+            calibration=results["_calibrations"]["full"],
+            provenance={
+                "trained": results["timestamp"],
+                "model": results["model"],
+                "audit_guarantees": results["audit_guarantees"],
+                "test_auc": full["auc"],
+                "test_auc_ci_day_clustered": [
+                    full["bootstrap_ci"]["ci_lo"], full["bootstrap_ci"]["ci_hi"],
+                ],
+                "test_bss_calibrated": full["bss"],
+                "test_base_rate": full["base_rate"],
+            },
         )
