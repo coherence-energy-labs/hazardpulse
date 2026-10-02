@@ -76,6 +76,24 @@ def test_stress_strata_follow_their_declared_definitions(lab):
         assert (np.sum(fam, axis=0) == 1).all(), k
 
 
+def test_day_bootstrap_auc_by_quadratic_form_equals_resampling_the_rows(lab):
+    """The fast compare must give, draw for draw, the AUC of the actually resampled rows."""
+    rng = np.random.RandomState(3)
+    days = np.repeat(np.arange(12), rng.randint(20, 60, size=12))
+    y = (rng.rand(len(days)) < 0.15).astype(np.int8)
+    s = np.round(rng.randn(len(days)) + 1.5 * y, 1)        # rounded: ties must count 1/2
+    uniq, day_idx = np.unique(days, return_inverse=True)
+    U, P, N = lab.day_pair_matrix(y, s, day_idx, len(uniq))
+    M = lab.day_bootstrap_counts(len(uniq), 25, seed=9)
+    for m in M:
+        rows = np.concatenate([np.flatnonzero(day_idx == d) for d in range(len(uniq)) for _ in range(int(m[d]))])
+        brute = lab.dm.compute_auc(y[rows].astype(np.float64), s[rows])
+        fast = (m @ U @ m) / ((m @ P) * (m @ N))
+        assert fast == pytest.approx(brute, abs=1e-12)
+    ones = np.ones(len(uniq))
+    assert (ones @ U @ ones) / ((ones @ P) * (ones @ N)) == pytest.approx(lab.dm.compute_auc(y.astype(float), s), abs=1e-12)
+
+
 def test_block_w_is_appended_after_the_store_columns_and_only_when_asked(lab):
     X = np.arange(40, dtype=np.float32).reshape(10, 4)
     W = np.full((10, 2), np.nan, np.float32)

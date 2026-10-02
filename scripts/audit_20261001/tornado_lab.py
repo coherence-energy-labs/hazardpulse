@@ -371,12 +371,21 @@ def baselines(splits=("val", "dev"), label: str = "storm_60") -> dict:
             raw = np.nan_to_num(np.asarray(X[:, j], np.float64), nan=-1.0)
             s_val = np.nan_to_num(sources[name](val_X), nan=-1.0)
             if scale is not None:
+                # a published probability is Platt-scaled on its LOG-ODDS: on the raw 0-100 percent
+                # the Newton fit collapsed to a constant (AUC exactly 0.5000 on 2023)
+                def lo(v, scale=scale):
+                    q = np.clip(np.where(v < 0, 0.0, v) * scale, 0.0005, 0.9995)
+                    return np.log(q / (1 - q))
+                s_val_platt, raw_platt = lo(s_val), lo(raw)
+            else:
+                s_val_platt, raw_platt = s_val, raw
+            if scale is not None:
                 p_raw = np.clip(raw * scale, 0.0, 1.0)
                 np.save(LAB / "preds" / f"{name}_raw_{split}.npy", p_raw.astype(np.float32))
                 res[f"{name}_raw"] = metrics(y, p_raw, m["day"], n_boot=200)
             # Platt on validation: a monotone recalibration, the fairest probability a raw index gets
-            p_cal = (out_of_fold_calibrated("platt", s_val, y_val, val_m["day"]) if split == "val"
-                     else fit_calibrator("platt", s_val, y_val)(raw))
+            p_cal = (out_of_fold_calibrated("platt", s_val_platt, y_val, val_m["day"]) if split == "val"
+                     else fit_calibrator("platt", s_val_platt, y_val)(raw_platt))
             np.save(LAB / "preds" / f"{name}_platt_{split}.npy", p_cal.astype(np.float32))
             res[f"{name}_platt"] = metrics(y, p_cal, m["day"], n_boot=200)
         v2 = np.asarray(m["v2"], np.float64)
@@ -442,7 +451,38 @@ def stress(name: str, split: str, label: str = "storm_60", others=("v2", "probto
     return out
 
 
-def compare(name_a: str, name_b: str, split: str, label: str = "storm_60", n_boot: int = 1000, seed: int = 42) -> dict:
+def day_pair_matrix(y, s, day_idx: np.ndarray, n_days: int):
+    """``U[d, e]`` = Mann-Whitney pair count between the positives of day d and the negatives of
+    day e (ties 1/2), plus per-day positive / negative counts. A day bootstrap with day
+    multiplicities m then has AUC = m.U.m / ((m.P)(m.N)) exactly -- every replicate costs a
+    D x D quadratic form instead of a sort of the whole split."""
+    y = np.asarray(y)
+    s = np.asarray(s, np.float64)
+    pos = np.flatnonzero(y == 1)
+    neg = np.flatnonzero(y == 0)
+    C = np.zeros((len(pos), n_days))
+    sp = s[pos]
+    for e in range(n_days):
+        ne = np.sort(s[neg[day_idx[neg] == e]])
+        if len(ne):
+            lo = np.searchsorted(ne, sp, side="left")
+            hi = np.searchsorted(ne, sp, side="right")
+            C[:, e] = lo + 0.5 * (hi - lo)
+    U = np.zeros((n_days, n_days))
+    np.add.at(U, day_idx[pos], C)
+    P = np.bincount(day_idx[pos], minlength=n_days).astype(np.float64)
+    N = np.bincount(day_idx[neg], minlength=n_days).astype(np.float64)
+    return U, P, N
+
+
+def day_bootstrap_counts(n_days: int, n_boot: int, seed: int) -> np.ndarray:
+    """(n_boot, n_days) day multiplicities of a whole-day bootstrap."""
+    rng = np.random.RandomState(seed)
+    return np.stack([np.bincount(rng.randint(0, n_days, size=n_days), minlength=n_days) for _ in range(n_boot)]
+                    ).astype(np.float64)
+
+
+def compare(name_a: str, name_b: str, split: str, label: str = "storm_60", n_boot: int = 2000, seed: int = 42) -> dict:
     """B minus A on one split, paired, whole UTC days resampled: AUC and Brier deltas with 95% intervals.
     Both experiments must have been run with save_preds on the same split rows."""
     pa = np.load(LAB / "preds" / f"{name_a}_{split}.npy").astype(np.float64)
@@ -454,15 +494,18 @@ def compare(name_a: str, name_b: str, split: str, label: str = "storm_60", n_boo
     ok = np.isfinite(pa) & np.isfinite(pb)          # e.g. v2 cannot score a row with no analysis
     n_masked = int((~ok).sum())
     pa, pb, y, days = pa[ok], pb[ok], y[ok], np.asarray(meta["day"])[ok]
-    clusters = dm._cluster_index(days)
-    rng = np.random.RandomState(seed)
-    d_auc = np.empty(n_boot)
-    d_bri = np.empty(n_boot)
-    for i in range(n_boot):
-        idx = np.concatenate([clusters[c] for c in rng.randint(0, len(clusters), size=len(clusters))])
-        yy = y[idx]
-        d_auc[i] = dm.compute_auc(yy, pb[idx]) - dm.compute_auc(yy, pa[idx])
-        d_bri[i] = np.mean((pb[idx] - yy) ** 2) - np.mean((pa[idx] - yy) ** 2)
+    uniq, day_idx = np.unique(days, return_inverse=True)
+    D = len(uniq)
+    M = day_bootstrap_counts(D, n_boot, seed)                    # the SAME draws for both forecasts
+    Ua, P, N = day_pair_matrix(y, pa, day_idx, D)
+    Ub, _, _ = day_pair_matrix(y, pb, day_idx, D)
+    denom = (M @ P) * (M @ N)
+    d_auc = (np.einsum("bi,ij,bj->b", M, Ub, M) - np.einsum("bi,ij,bj->b", M, Ua, M)) / denom
+    sse_a = np.bincount(day_idx, weights=(pa - y) ** 2, minlength=D)
+    sse_b = np.bincount(day_idx, weights=(pb - y) ** 2, minlength=D)
+    n_d = np.bincount(day_idx, minlength=D).astype(np.float64)
+    d_bri = (M @ sse_b - M @ sse_a) / (M @ n_d)
+    clusters = uniq
     out = {"a": name_a, "b": name_b, "split": split, "label": label, "n_days": len(clusters), "n_boot": n_boot,
            "n_rows": int(len(y)), "n_rows_masked_nonfinite": n_masked,
            "delta_auc": dm.compute_auc(y, pb) - dm.compute_auc(y, pa),
