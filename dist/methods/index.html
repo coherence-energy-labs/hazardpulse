@@ -206,7 +206,7 @@
           </div>
           <div class="card col-4 hazard-to">
             <h3>Tornado</h3>
-            <p class="muted">Scores individual thunderstorms using radar rotation, atmospheric instability, and wind shear to estimate tornado probability. AUC: 0.894 (storm-object model).</p>
+            <p class="muted">Scores individual thunderstorms using radar rotation, atmospheric instability, and wind shear to estimate tornado probability. AUC: 0.940 on every 2024 storm object (storm-object model).</p>
           </div>
         </div>
       </div>
@@ -248,13 +248,15 @@
           </div>
 
           <div class="card col-4 hazard-to">
-            <h3>Tornado storm-object (hp-tornado-coherence-v1)</h3>
-            <div class="kv"><span>Architecture</span><strong>Coherence Field Theory scoring on ProbSevere storm objects</strong></div>
+            <h3>Tornado storm-object (hp-tornado-coherence v2)</h3>
+            <div class="kv"><span>Architecture</span><strong>Gradient-boosted trees on ProbSevere storm objects, HRRR environment and coherence-field diagnostics</strong></div>
             <div class="kv"><span>Features</span><strong>41</strong></div>
-            <div class="kv"><span>Key inputs</span><strong>ProbSevere attributes, CAPE, SRH, MaxLLAz, coherence field diagnostics</strong></div>
-            <div class="kv"><span>Training cutoff</span><strong>2026-03-15</strong></div>
-            <div class="kv"><span>Calibration method</span><strong>Platt scaling on 2024 strict temporal holdout</strong></div>
-            <div class="kv"><span>AUC</span><strong>0.894 (2024 test, strict temporal)</strong></div>
+            <div class="kv"><span>Target</span><strong>Tornado report within 40 km in the next 60 minutes (absolute UTC times)</strong></div>
+            <div class="kv"><span>Key inputs</span><strong>ProbSevere attributes, CAPE, SRH, MaxLLAz, latest HRRR analysis at most 3 h old, coherence field diagnostics</strong></div>
+            <div class="kv"><span>Data split</span><strong>Train 2021-2022, calibrate 2023, test 2024 (evaluated once)</strong></div>
+            <div class="kv"><span>Calibration method</span><strong>Platt scaling fitted on the full 2023 validation population</strong></div>
+            <div class="kv"><span>AUC</span><strong>0.940 [0.930, 0.947] on every 2024 storm object (1,004,531; base rate 0.32%), interval resampled by day</strong></div>
+            <div class="kv"><span>Brier skill</span><strong>+0.056 against climatology on the same population</strong></div>
             <div class="kv"><span>Status</span><strong>Accumulating</strong></div>
           </div>
         </div>
