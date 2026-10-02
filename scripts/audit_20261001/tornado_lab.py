@@ -205,7 +205,7 @@ def fit_model(kind: str, params: dict, Xtr, ytr, wtr, Xes, yes, wes, seed: int):
         from catboost import CatBoostClassifier
         p = dict(iterations=4000, learning_rate=0.05, depth=7, l2_leaf_reg=3.0, random_seed=seed,
                  thread_count=4, verbose=False, od_type="Iter", od_wait=200, task_type="CPU",
-                 eval_metric="AUC")
+                 eval_metric="AUC", allow_writing_files=False)
         p.update(params)
         m = CatBoostClassifier(**p)
         m.fit(Xtr, ytr, sample_weight=wtr, eval_set=(Xes, yes), use_best_model=True)
