@@ -152,6 +152,16 @@ def train_sample(X, y, neg_per_pos: int, seed: int):
     return rows, w
 
 
+def balanced_weights(y_rows: np.ndarray) -> np.ndarray:
+    """Class-balanced training weights (amendment 5): negatives 1, positives n_neg/n_pos, so both
+    classes carry equal total weight and a positive's Hessian is not ~0.001 of a negative's.
+    Population weights made every model early-stop at 22-45 trees; the calibrator restores
+    the population afterwards."""
+    y_rows = np.asarray(y_rows)
+    n_pos, n_neg = int((y_rows == 1).sum()), int((y_rows == 0).sum())
+    return np.where(y_rows == 1, n_neg / max(n_pos, 1), 1.0)
+
+
 def predict_stream(model_fn, X, cols, chunk=200_000, W=None):
     out = np.empty(X.shape[0], np.float64)
     for s in range(0, X.shape[0], chunk):
@@ -169,6 +179,7 @@ def fit_model(kind: str, params: dict, Xtr, ytr, wtr, Xes, yes, wes, seed: int):
         import lightgbm as lgb
         p = dict(objective="binary", learning_rate=0.03, num_leaves=63, min_child_samples=50,
                  feature_fraction=0.7, bagging_fraction=0.8, bagging_freq=1, lambda_l2=1.0,
+                 metric="auc", first_metric_only=True,
                  verbose=-1, seed=seed, num_threads=4, deterministic=True, force_row_wise=True)
         p.update(params)
         n_rounds = p.pop("n_rounds", 4000)
@@ -181,7 +192,7 @@ def fit_model(kind: str, params: dict, Xtr, ytr, wtr, Xes, yes, wes, seed: int):
         import xgboost as xgb
         p = dict(objective="binary:logistic", eta=0.03, max_depth=7, subsample=0.8, colsample_bytree=0.7,
                  min_child_weight=5, reg_lambda=1.0, tree_method="hist", nthread=4, seed=seed,
-                 eval_metric="logloss")
+                 eval_metric="auc")
         p.update(params)
         n_rounds = p.pop("n_rounds", 4000)
         dtr = xgb.DMatrix(Xtr, label=ytr, weight=wtr)
@@ -193,7 +204,8 @@ def fit_model(kind: str, params: dict, Xtr, ytr, wtr, Xes, yes, wes, seed: int):
     if kind == "cat":
         from catboost import CatBoostClassifier
         p = dict(iterations=4000, learning_rate=0.05, depth=7, l2_leaf_reg=3.0, random_seed=seed,
-                 thread_count=4, verbose=False, od_type="Iter", od_wait=200, task_type="CPU")
+                 thread_count=4, verbose=False, od_type="Iter", od_wait=200, task_type="CPU",
+                 eval_metric="AUC")
         p.update(params)
         m = CatBoostClassifier(**p)
         m.fit(Xtr, ytr, sample_weight=wtr, eval_set=(Xes, yes), use_best_model=True)
@@ -279,14 +291,16 @@ def run(exp: dict) -> dict:
         rng = np.random.RandomState(seed + 99)
         for idx in dm._cluster_index(mt["day"]):
             y_tr_all[idx] = y_tr_all[idx][rng.permutation(len(idx))]
-    rows, w = train_sample(None, y_tr_all, int(exp.get("neg_per_pos", 30)), seed)
+    rows, _pop_w = train_sample(None, y_tr_all, int(exp.get("neg_per_pos", 30)), seed)
     Xtr = matrix(Xt, load_w("train"), rows, cols, use_w)
     ytr = y_tr_all[rows]
+    w = balanced_weights(ytr)                                  # amendment 5
     Xv, Yv, mv = load("val")
     yv_train = np.asarray(Yv[:, lab], np.int8)
     yv = np.asarray(Yv[:, ev], np.int8)
     # early-stopping set: a fixed weighted sample of VAL (model selection data), on the training label
-    es_rows, es_w = train_sample(None, yv_train, 30, seed + 1)
+    es_rows, _ = train_sample(None, yv_train, 30, seed + 1)
+    es_w = balanced_weights(yv_train[es_rows])                 # AUC is unchanged by class-constant weights
     Wv = load_w("val") if use_w else None
     Xes = matrix(Xv, Wv, es_rows, cols, use_w)
     score_fn, info, model = fit_model(exp["model"], dict(exp.get("params", {})), Xtr, ytr, w,

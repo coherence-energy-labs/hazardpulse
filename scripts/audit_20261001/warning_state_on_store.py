@@ -21,11 +21,13 @@ from hazardpulse.verification import nws_warnings as nw
 ROOT = Path(__file__).resolve().parents[2]
 STORE = Path(os.environ.get("HAZARDPULSE_FEATURE_STORE", str(ROOT / ".cache" / "feature_store_v3")))
 OUT = STORE / "_nws"
+LAST_WARNING_YEAR = 2025          # the program's last season (the final test year)
 
 
 def main() -> int:
     start, end = dt.date.fromisoformat(sys.argv[1]), dt.date.fromisoformat(sys.argv[2])
-    warnings = nw.load_tor_warnings(list(range(start.year, end.year + 1)))
+    # the following year too: an observation late on 31 Dec queries warnings into the new year
+    warnings = nw.load_tor_warnings(list(range(start.year, min(end.year + 1, LAST_WARNING_YEAR) + 1)))
     OUT.mkdir(parents=True, exist_ok=True)
     d = start
     while d <= end:

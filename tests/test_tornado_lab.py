@@ -31,6 +31,13 @@ def test_train_sample_keeps_every_positive_and_weights_back_to_the_population(la
     assert (w[y[rows] == 1] == 1.0).all()
 
 
+def test_balanced_weights_give_both_classes_equal_total_weight(lab):
+    y = np.array([1, 0, 0, 0, 0, 0, 0, 0, 1, 0], np.int8)
+    w = lab.balanced_weights(y)
+    assert w[y == 1].sum() == pytest.approx(w[y == 0].sum())
+    assert (w[y == 0] == 1.0).all() and (w[y == 1] == 4.0).all()
+
+
 def test_out_of_fold_calibration_never_sees_its_own_day(lab):
     rng = np.random.RandomState(0)
     days = np.repeat(np.arange(20230101, 20230161), 400)

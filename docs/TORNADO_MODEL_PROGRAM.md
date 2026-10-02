@@ -113,6 +113,21 @@ of the warnings it is compared with.
   (`tornado_lab.py compare`) on validation, then on dev 2024 and final 2025; a block "adds
   information" only if the interval excludes zero in BOTH test years.
 
+## Amendment 5 (2026-10-02, after the first ladder run, before any choice was taken from it)
+
+The first ladder (12 arms, validation only) is VOID as evidence about features: every arm
+early-stopped at 22-45 trees at learning rate 0.03. Root cause, measured: the training rows
+carried weights that restore the population (negatives x ~30), so a positive's gradient is
+~1 while its Hessian is ~0.0011; Newton leaf steps on positive-heavy leaves are huge, the
+population-weighted log loss used for early stopping turns up within a few dozen trees, and
+a ~40-tree model cannot use 159 inputs -- hence a flat ladder (0.946-0.952) on which the
+28 ProbSevere columns "won". Independent check: the served v2 model (class-balanced
+training) ranks the same validation rows at AUC 0.959, above every arm; ProbTor 0.867.
+Fix: training weights are class-balanced (every positive weight n_neg/n_pos over the sampled
+rows; negatives 1) and early stopping monitors AUC on the validation sample. Probabilities
+still come only from the calibrator fitted afterwards, so the population is restored there,
+as for v2. The void run's results are kept under results/lab/void_population_weights/.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-
