@@ -1,0 +1,31 @@
+{
+ "primary": {
+  "name": "v3_primary",
+  "model": "lgbm",
+  "params": {"learning_rate": 0.03, "num_leaves": 127, "min_child_samples": 500, "feature_fraction": 0.7,
+             "bagging_fraction": 0.6, "lambda_l2": 1.0, "min_split_gain": 0.0, "max_depth": 10},
+  "blocks": ["P", "E", "H80"],
+  "calibration": "platt",
+  "neg_per_pos": 30,
+  "label": "storm_60",
+  "seed": 0,
+  "validation_auc": 0.96584,
+  "validation_bss": 0.0722
+ },
+ "secondary_with_warnings": {
+  "name": "v3_plus_W",
+  "same_as_primary_except": {"blocks": ["P", "E", "H80", "W"]},
+  "why_secondary": "amendment 3: a model using NWS warnings is reported apart; amendment 4: blocks are read by AUC (+0.0003 [-0.0010, +0.0016]) though its Brier gain is significant (-2.0e-5 [-3.5e-5, -8.0e-6])"
+ },
+ "steps": {
+  "1 blocks": "P+E+H80 (results/lab/b_*.json; best_blocks.json)",
+  "2 family": "LightGBM 0.9654 > NumPy GBT 0.9640 > XGBoost 0.9639 > CatBoost 0.9636 > logistic 0.9540",
+  "3 search": "s_lgbm_37 0.96584; surface flat (median 0.9649); +0.0004 over default is inside seed spread",
+  "4 calibration": "Platt BSS +0.0722; Venn-Abers -0.0021; none -20.15",
+  "5 negatives": "10: 0.9656, 30: 0.9658, 100: 0.9648",
+  "6 label": "train storm_60 -> 0.9658 on storm_60; train nbhd_60 -> 0.9588 on storm_60",
+  "7 ensembles": "5 seeds +0.0000 [-0.0006, +0.0007]; 4 families -0.0000 [-0.0013, +0.0014]: single model carried",
+  "8 learning curve": "25%: 0.9584, 50%: 0.9632, 100%: 0.9658 -- still rising, so the final refit on 2020-10..2024 is expected to help",
+  "seed spread": "0.9648-0.9658 over 5 seeds: differences under ~0.001 on validation are noise"
+ }
+}
