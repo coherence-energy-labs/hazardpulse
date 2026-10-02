@@ -27,10 +27,10 @@ PS_V2 = Path(os.environ.get("HAZARDPULSE_PROBSEVERE_V2_CACHE", str(ROOT / ".cach
 SPC = Path(os.environ.get("HAZARDPULSE_SPC_CSV", str(ROOT / ".cache" / "spc" / "1950-2025_actual_tornadoes.csv")))
 UTC = dt.timezone.utc
 LEAD_MAX_S = 3600.0
-REACH_KM = 150.0      # centroid-to-report distance (plus advection) beyond which no candidate can match
-CANDIDATES = ("L0_centroid_R", "L1_polygon_5km", "L2_polygon_10km", "T5_tracked_5km", "T10_tracked_10km",
-              "nbhd_40km")
-TRACK_MATCH_S = 900.0
+# candidate name (amendments 1-2) -> storm_features label family; ONE label definition, shared with the store
+CANDIDATES = {"L0_centroid_R": "centroid", "L1_polygon_5km": "poly5", "L2_polygon_10km": "poly10",
+              "T5_tracked_5km": "track5", "T10_tracked_10km": "track10", "nbhd_40km": "nbhd"}
+COL60 = {c: sf.LABEL_NAMES.index(f"{fam}_60") for c, fam in CANDIDATES.items()}
 
 
 def km(lat1, lon1, lat2, lon2):
@@ -53,22 +53,6 @@ def _slots(ds: str) -> list[tuple[float, dict]]:
         for k in sorted(_DAY_CACHE)[:-3]:
             del _DAY_CACHE[k]
     return _DAY_CACHE[ds]
-
-
-def tracked_distance_km(track: list[tuple[float, dict]], r: dict) -> float:
-    """Distance from report r to the polygon of the same storm id at its slot nearest the report
-    time (within TRACK_MATCH_S), else at its last slot before the report, advected by the residual."""
-    tr = r["time_utc"]
-    near = min(track, key=lambda e: abs(e[0] - tr))
-    if abs(near[0] - tr) > TRACK_MATCH_S:
-        before = [e for e in track if e[0] <= tr]
-        if not before:
-            return float("inf")
-        near = before[-1]
-    ring = sf.polygon_ring_km(near[1])
-    if ring is None:
-        return float("inf")
-    return sf.advected_polygon_distance_km(near[1], ring, r["slat"], r["slon"], tr - near[0])
 
 
 def main() -> int:
@@ -116,40 +100,25 @@ def main() -> int:
                 lat0, lon0 = float(storm["lat"]), float(storm["lon"])
                 ue, vn = sf.storm_motion(storm)
                 sid = str(storm.get("id"))
-                ring = None
+                ring = sf.polygon_ring_km(storm)
+                n_poly_missing += ring is None
                 for i in sel:
                     r = window[i]
                     dt_s = r["time_utc"] - ts
-                    if km(lat0, lon0, r["slat"], r["slon"]) > REACH_KM + math.hypot(ue, vn) * dt_s / 1000.0:
+                    if km(lat0, lon0, r["slat"], r["slon"]) > sf.LABEL_REACH_KM + math.hypot(ue, vn) * dt_s / 1000.0:
                         continue
                     key = rid[id(r)]
-                    lab, _, _ = sf.labels(storm, ts, [r])
-                    if lab[sf.LABEL_NAMES.index("storm_60")]:
-                        credited["L0_centroid_R"][key].add(sid)
-                    if lab[sf.LABEL_NAMES.index("nbhd_60")]:
-                        credited["nbhd_40km"][key].add(sid)
+                    lab, _, _ = sf.labels(storm, ts, [r], track=tracks[sid])
+                    for c, col in COL60.items():
+                        if lab[col]:
+                            credited[c][key].add(sid)
                     mk = (sid, key)
                     if mk not in tracked_memo:
-                        tracked_memo[mk] = tracked_distance_km(tracks[sid], r)
-                    dtk = tracked_memo[mk]
-                    nearest_tracked[key] = min(nearest_tracked.get(key, float("inf")), dtk)
-                    if dtk <= 5.0:
-                        credited["T5_tracked_5km"][key].add(sid)
-                    if dtk <= 10.0:
-                        credited["T10_tracked_10km"][key].add(sid)
-                    if ring is None:
-                        ring = sf.polygon_ring_km(storm)
-                        if ring is None:
-                            n_poly_missing += 1
-                            ring = False
-                    if ring is False:
-                        continue
-                    dp = sf.advected_polygon_distance_km(storm, ring, r["slat"], r["slon"], dt_s)
-                    nearest_any[key] = min(nearest_any.get(key, float("inf")), dp)
-                    if dp <= 5.0:
-                        credited["L1_polygon_5km"][key].add(sid)
-                    if dp <= 10.0:
-                        credited["L2_polygon_10km"][key].add(sid)
+                        tracked_memo[mk] = sf.tracked_distance_km(tracks[sid], r["slat"], r["slon"], r["time_utc"])
+                    nearest_tracked[key] = min(nearest_tracked.get(key, float("inf")), tracked_memo[mk])
+                    if ring is not None:
+                        dp = sf.advected_polygon_distance_km(storm, ring, r["slat"], r["slon"], dt_s)
+                        nearest_any[key] = min(nearest_any.get(key, float("inf")), dp)
         print(ds, len(covered), flush=True)
     out = {"period": [str(start), str(end)], "reports": len(period), "covered": len(covered),
            "observations_scanned": n_obs, "observations_without_polygon": n_poly_missing, "candidates": {}}

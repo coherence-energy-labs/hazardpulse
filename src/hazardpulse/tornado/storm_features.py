@@ -343,10 +343,21 @@ def feature_vector(storm, history, step_minutes, h80=None, c80=None, fields9=Non
 # Labels
 # ---------------------------------------------------------------------------
 HORIZONS_MIN: tuple[int, ...] = (30, 60, 90)
+# Every candidate attribution of docs/TORNADO_MODEL_PROGRAM.md amendments 1-2, kept in the store so
+# the choice can be audited; "storm_*" aliases the family chosen by the declared rule.
+LABEL_FAMILIES: tuple[str, ...] = ("centroid", "poly5", "poly10", "track5", "track10", "nbhd")
+# Chosen 2026-10-02 by the amendment rule on 2021 (results/lab/label_attribution_2021-01-01_2021-12-31.json):
+# report coverage 0.848 at ambiguity 1.21 vs centroid 0.629, advected polygon 10 km 0.797, nbhd 0.903 at 2.43.
+PRIMARY_FAMILY = "track10"
 LABEL_NAMES: tuple[str, ...] = (
-    tuple(f"storm_{h}" for h in HORIZONS_MIN) + tuple(f"nbhd_{h}" for h in HORIZONS_MIN)
+    tuple(f"storm_{h}" for h in HORIZONS_MIN)
+    + tuple(f"{fam}_{h}" for fam in LABEL_FAMILIES for h in HORIZONS_MIN)
 )
 NBHD_RADIUS_KM = dm.LABEL_RADIUS_KM
+POLY_BUFFERS_KM = {"poly5": 5.0, "poly10": 10.0}
+TRACK_BUFFERS_KM = {"track5": 5.0, "track10": 10.0}
+TRACK_MATCH_S = 900.0
+LABEL_REACH_KM = 150.0   # centroid-to-report distance (plus advection) beyond which no family can match
 
 
 def storm_radius_km(storm: dict) -> float:
@@ -396,13 +407,43 @@ def advected_polygon_distance_km(storm: dict, ring: np.ndarray, rep_lat: float, 
     return point_polygon_distance_km(ring, px, py)
 
 
-def labels(storm: dict, t_storm: float, reports: list[dict]) -> tuple[np.ndarray, float, float]:
-    """(labels[LABEL_NAMES], max EF of storm_60 matches (-1 none), minutes to first storm_90 match (nan))."""
-    lab = np.zeros(len(LABEL_NAMES), dtype=np.int8)
+def tracked_distance_km(track: list[tuple[float, dict]], rep_lat: float, rep_lon: float, t_rep: float) -> float:
+    """Distance from a report to the polygon of the storm's OWN track at the report time: the
+    slot of the same id nearest t_rep (within TRACK_MATCH_S), else its last slot before t_rep,
+    advected by the residual time. ``track`` = [(valid time, storm)] of one id, any order."""
+    if not track:
+        return float("inf")
+    near = min(track, key=lambda e: abs(e[0] - t_rep))
+    if abs(near[0] - t_rep) > TRACK_MATCH_S:
+        before = [e for e in track if e[0] <= t_rep]
+        if not before:
+            return float("inf")
+        near = max(before, key=lambda e: e[0])
+    ring = polygon_ring_km(near[1])
+    if ring is None:
+        return float("inf")
+    return advected_polygon_distance_km(near[1], ring, rep_lat, rep_lon, t_rep - near[0])
+
+
+def labels(storm: dict, t_storm: float, reports: list[dict],
+           track: list[tuple[float, dict]] | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """All label families for one storm observation.
+
+    Returns (labels[LABEL_NAMES], ef[LABEL_FAMILIES], lead[LABEL_FAMILIES]): per family, the max EF
+    of the reports it matches within 60 min (-1 none) and the minutes to its first match within the
+    longest horizon (nan none). ``track``: the same storm id's [(valid time, storm)] (labels may use
+    the future); None means only this observation is known, i.e. the track-ended fallback.
+    """
+    nf, nh = len(LABEL_FAMILIES), len(HORIZONS_MIN)
+    fam_lab = np.zeros((nf, nh), dtype=np.int8)
+    ef = np.full(nf, -1.0)
+    lead = np.full(nf, np.nan)
     lat0, lon0 = float(storm.get("lat", 0.0)), float(storm.get("lon", 0.0))
     ue, vn = storm_motion(storm)
+    speed = math.hypot(ue, vn)
     R = storm_radius_km(storm)
-    ef, lead = -1.0, np.nan
+    ring = None
+    trk = track if track is not None else [(t_storm, storm)]
     for rep in reports:
         tr = rep.get("time_utc")
         if tr is None:
@@ -410,21 +451,34 @@ def labels(storm: dict, t_storm: float, reports: list[dict]) -> tuple[np.ndarray
         dt_s = float(tr) - t_storm
         if not (0.0 <= dt_s <= 60.0 * HORIZONS_MIN[-1]):
             continue
-        dmin = dt_s / 60.0
         d_nb = dm.haversine_km(lat0, lon0, rep["slat"], rep["slon"])
-        # advect the centroid by the storm's motion to the report time
+        if d_nb > LABEL_REACH_KM + speed * dt_s / 1000.0:
+            continue
+        dmin = dt_s / 60.0
+        # centroid advected by the storm's motion to the report time
         dn_km, de_km = vn * dt_s / 1000.0, ue * dt_s / 1000.0
         lat_a = lat0 + dn_km / 111.32
         lon_a = lon0 + de_km / (111.32 * max(math.cos(math.radians(lat0)), 1e-3))
-        d_st = dm.haversine_km(lat_a, lon_a, rep["slat"], rep["slon"])
-        for j, h in enumerate(HORIZONS_MIN):
-            if dmin <= h:
-                if d_st <= R:
-                    lab[j] = 1
-                if d_nb <= NBHD_RADIUS_KM:
-                    lab[len(HORIZONS_MIN) + j] = 1
-        if d_st <= R:
+        hit = {"centroid": dm.haversine_km(lat_a, lon_a, rep["slat"], rep["slon"]) <= R,
+               "nbhd": d_nb <= NBHD_RADIUS_KM}
+        if ring is None:
+            ring = polygon_ring_km(storm)
+            ring = False if ring is None else ring
+        d_poly = (advected_polygon_distance_km(storm, ring, rep["slat"], rep["slon"], dt_s)
+                  if ring is not False else float("inf"))
+        for fam, buf in POLY_BUFFERS_KM.items():
+            hit[fam] = d_poly <= buf
+        d_trk = tracked_distance_km(trk, rep["slat"], rep["slon"], float(tr))
+        for fam, buf in TRACK_BUFFERS_KM.items():
+            hit[fam] = d_trk <= buf
+        for i, fam in enumerate(LABEL_FAMILIES):
+            if not hit[fam]:
+                continue
+            for j, h in enumerate(HORIZONS_MIN):
+                if dmin <= h:
+                    fam_lab[i, j] = 1
             if dmin <= 60:
-                ef = max(ef, float(rep.get("mag", -1)))
-            lead = dmin if not np.isfinite(lead) else min(lead, dmin)
-    return lab, ef, lead
+                ef[i] = max(ef[i], float(rep.get("mag", -1)))
+            lead[i] = dmin if not np.isfinite(lead[i]) else min(lead[i], dmin)
+    primary = fam_lab[LABEL_FAMILIES.index(PRIMARY_FAMILY)]
+    return np.concatenate([primary, fam_lab.reshape(-1)]), ef, lead

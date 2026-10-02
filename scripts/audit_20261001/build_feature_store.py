@@ -39,6 +39,7 @@ PS_V2 = Path(os.environ.get("HAZARDPULSE_PROBSEVERE_V2_CACHE", str(ROOT / ".cach
 STORE = Path(os.environ.get("HAZARDPULSE_FEATURE_STORE", str(ROOT / ".cache" / "feature_store_v3")))
 SPC = Path(os.environ.get("HAZARDPULSE_SPC_CSV", str(ROOT / ".cache" / "spc" / "1950-2025_actual_tornadoes.csv")))
 HOURS = dm.HRRR_ANALYSIS_HOURS
+PRIMARY = sf.LABEL_FAMILIES.index(sf.PRIMARY_FAMILY)
 
 _REPORTS = None
 
@@ -64,8 +65,9 @@ def producer_sha() -> dict[str, str]:
 
 def input_fingerprint(d: str) -> dict:
     """Every input file of day ``d`` that exists now, with its size, plus the producers' hashes."""
-    files = [_ps_path(d, cache_dir=PS_V2)] + [H._npz_path(d, h) for h in HOURS] + \
-            [H._lcc_path(d, h, sf.LCC_K) for h in HOURS] + [SPC]
+    nxt = (dt.datetime.strptime(d, "%Y%m%d") + dt.timedelta(days=1)).strftime("%Y%m%d")
+    files = ([_ps_path(d, cache_dir=PS_V2), _ps_path(nxt, cache_dir=PS_V2)]
+             + [H._npz_path(d, h) for h in HOURS] + [H._lcc_path(d, h, sf.LCC_K) for h in HOURS] + [SPC])
     return {"inputs": {p.name: p.stat().st_size for p in files if p.exists()}, "producers": producer_sha()}
 
 
@@ -103,6 +105,17 @@ def build_day(d: str) -> str:
             an9[h] = sf.analysis_fields(b)
     t_an = time.time() - t0
     window = dm.reports_in_label_window(_reports(), d)
+    # tracks for the tracked-polygon labels: every slot of each storm id on day d and d+1 (a label may
+    # use the future; the next day's file is part of the fingerprint)
+    nxt = (dt.datetime.strptime(d, "%Y%m%d") + dt.timedelta(days=1)).strftime("%Y%m%d")
+    tracks: dict[str, list] = {}
+    if window:
+        for st in steps + (load_cached_probsevere(nxt, cache_dir=PS_V2) or []):
+            tv = dm.parse_probsevere_valid_time(st.get("valid_time", ""))
+            if tv is None:
+                continue
+            for s_ in st.get("storms", []):
+                tracks.setdefault(str(s_.get("id")), []).append((tv.timestamp(), s_))
     step_min = dm.probsevere_step_minutes(steps)
     idx = dm.index_storms_by_id(steps)
     X, Y, EF, LEAD, T, LAT, LON, SID, STEP, AH = [], [], [], [], [], [], [], [], [], []
@@ -122,7 +135,7 @@ def build_day(d: str) -> str:
                 c80=a80[2] if a80 else None,
                 fields9=an9.get(h9) if h9 is not None else None,
             ))
-            lab, ef, lead = sf.labels(storm, tsec, window)
+            lab, ef, lead = sf.labels(storm, tsec, window, track=tracks.get(str(storm.get("id"))))
             Y.append(lab)
             EF.append(ef)
             LEAD.append(lead)
@@ -139,7 +152,8 @@ def build_day(d: str) -> str:
     np.savez_compressed(
         str(tmp),
         X=np.stack(X).astype(np.float32), Y=np.stack(Y).astype(np.int8),
-        ef=np.asarray(EF, np.float32), lead_min=np.asarray(LEAD, np.float32),
+        ef_family=np.asarray(EF, np.float32), lead_family=np.asarray(LEAD, np.float32),
+        ef=np.asarray(EF, np.float32)[:, PRIMARY], lead_min=np.asarray(LEAD, np.float32)[:, PRIMARY],
         t=np.asarray(T, np.int64), lat=np.asarray(LAT, np.float32), lon=np.asarray(LON, np.float32),
         sid=np.asarray(SID), step=np.asarray(STEP, np.int16), analysis=np.asarray(AH, np.int16),
         hours80=np.asarray(sorted(an80), np.int16), hours9=np.asarray(sorted(an9), np.int16),
@@ -148,7 +162,9 @@ def build_day(d: str) -> str:
     )
     os.replace(tmp, out)
     ys = np.stack(Y)
-    return (f"{d} {why} n={len(X)} storm60={int(ys[:, 1].sum())} nbhd60={int(ys[:, 4].sum())} "
+    li = {n: i for i, n in enumerate(sf.LABEL_NAMES)}
+    return (f"{d} {why} n={len(X)} storm60={int(ys[:, li['storm_60']].sum())} "
+            f"centroid60={int(ys[:, li['centroid_60']].sum())} nbhd60={int(ys[:, li['nbhd_60']].sum())} "
             f"an80={len(an80)} an9={len(an9)} {time.time() - t0:.0f}s (analyses {t_an:.0f}s)")
 
 
@@ -166,6 +182,7 @@ def main() -> int:
             print(f"[{i}/{len(days)} {time.time() - t0:6.0f}s] {msg}", flush=True)
     names = STORE / "feature_names.json"
     names.write_text(json.dumps({"features": list(sf.FEATURE_NAMES), "labels": list(sf.LABEL_NAMES),
+                                 "label_families": list(sf.LABEL_FAMILIES), "primary_family": sf.PRIMARY_FAMILY,
                                  "blocks": sf.BLOCKS}, indent=1), encoding="utf-8")
     return 0
 

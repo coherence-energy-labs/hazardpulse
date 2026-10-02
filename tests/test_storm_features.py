@@ -27,28 +27,70 @@ def _rep(lat, lon, minutes_after, t0, mag=1):
 T0 = dt.datetime(2024, 4, 27, 22, 0, tzinfo=UTC).timestamp()
 
 
+FAM = {f: i for i, f in enumerate(sf.LABEL_FAMILIES)}
+
+
 def test_per_storm_label_follows_the_storm_motion():
-    s = _storm(me=15.0, ms=0.0)  # 15 m/s eastward
-    # a report 45 min later, 40.5 km east (where the storm will be): storm label yes
+    s = _square_storm(half_deg=0.05, me=15.0, ms=0.0)  # 15 m/s eastward
+    # a report 45 min later, 40.5 km east (where the storm will be): every storm family yes
     lat, lon = 35.0, -97.0 + 40.5 / (111.32 * math.cos(math.radians(35.0)))
     lab, ef, lead = sf.labels(s, T0, [_rep(lat, lon, 45, T0, mag=3)])
     names = dict(zip(sf.LABEL_NAMES, lab))
-    assert names["storm_60"] == 1 and names["storm_90"] == 1 and names["storm_30"] == 0
+    for fam in ("storm", "centroid", "poly5", "track10"):
+        assert names[f"{fam}_60"] == 1 and names[f"{fam}_90"] == 1 and names[f"{fam}_30"] == 0, fam
     assert names["nbhd_60"] == 0  # 40.5 km from where the storm IS now
-    assert ef == 3.0 and lead == pytest.approx(45.0)
+    assert ef[FAM["centroid"]] == 3.0 and lead[FAM["centroid"]] == pytest.approx(45.0)
+    assert ef[FAM["nbhd"]] == -1.0 and not np.isfinite(lead[FAM["nbhd"]])
+
+
+def test_storm_alias_is_the_declared_primary_family():
+    assert sf.PRIMARY_FAMILY == "track10"
+    s = _square_storm(half_deg=0.05, me=0.0, ms=0.0)
+    for minutes in (10, 50, 80):
+        lab, _, _ = sf.labels(s, T0, [_rep(35.0, -97.0 + 0.11, minutes, T0)])
+        names = dict(zip(sf.LABEL_NAMES, lab))
+        for h in sf.HORIZONS_MIN:
+            assert names[f"storm_{h}"] == names[f"track10_{h}"]
 
 
 def test_neighbour_tornado_is_not_this_storms_label():
-    s = _storm(me=0.0, ms=0.0, size=100.0)
+    s = _square_storm(half_deg=0.05, me=0.0, ms=0.0)
     lab, _, _ = sf.labels(s, T0, [_rep(35.25, -97.0, 20, T0)])  # ~28 km north, storm not moving
     names = dict(zip(sf.LABEL_NAMES, lab))
-    assert names["nbhd_60"] == 1 and names["storm_60"] == 0
+    assert names["nbhd_60"] == 1
+    assert names["storm_60"] == 0 and names["centroid_60"] == 0 and names["poly10_60"] == 0
+
+
+def test_tracked_label_uses_where_the_storm_went_not_where_its_motion_said():
+    # The observation claims eastward motion; the archived track went NORTH. A tornado under the
+    # real track at +40 min is this storm's (track) but not its advected guess (centroid/poly).
+    s0 = _square_storm(half_deg=0.05, me=15.0, ms=0.0)
+    north = _square_storm(half_deg=0.05, lat=35.36, me=15.0, ms=0.0)     # 40 km north at +40 min
+    track = [(T0, s0), (T0 + 2400.0, north)]
+    lab, ef, lead = sf.labels(s0, T0, [_rep(35.36, -97.0, 40, T0, mag=2)], track=track)
+    names = dict(zip(sf.LABEL_NAMES, lab))
+    assert names["track5_60"] == 1 and names["track10_60"] == 1 and names["storm_60"] == 1
+    assert names["centroid_60"] == 0 and names["poly10_60"] == 0
+    assert ef[FAM["track10"]] == 2.0 and lead[FAM["track10"]] == pytest.approx(40.0)
+    # without the track only the advected fallback is known, and it misses
+    lab_nt, _, _ = sf.labels(s0, T0, [_rep(35.36, -97.0, 40, T0, mag=2)])
+    assert dict(zip(sf.LABEL_NAMES, lab_nt))["track10_60"] == 0
+
+
+def test_tracked_distance_falls_back_to_the_last_slot_when_the_track_ends():
+    s0 = _square_storm(half_deg=0.05, me=10.0, ms=0.0)
+    ring = sf.polygon_ring_km(s0)
+    lon_far = -97.0 + 30.0 / (111.32 * math.cos(math.radians(35.0)))
+    # no slot within 15 min of the report: advect the last slot before it (30 km in 50 min)
+    d = sf.tracked_distance_km([(T0, s0)], 35.0, lon_far, T0 + 3000.0)
+    assert d == sf.advected_polygon_distance_km(s0, ring, 35.0, lon_far, 3000.0) == 0.0
+    assert sf.tracked_distance_km([(T0 + 4000.0, s0)], 35.0, -97.0, T0) == float("inf")  # track starts after
 
 
 def test_past_and_late_reports_never_label():
-    s = _storm(me=0.0, ms=0.0)
+    s = _square_storm(half_deg=0.05, me=0.0, ms=0.0)
     lab, ef, lead = sf.labels(s, T0, [_rep(35.0, -97.0, -5, T0), _rep(35.0, -97.0, 95, T0)])
-    assert lab.sum() == 0 and ef == -1.0 and not np.isfinite(lead)
+    assert lab.sum() == 0 and (ef == -1.0).all() and not np.isfinite(lead).any()
 
 
 def _square_storm(half_deg=0.1, lat=35.0, lon=-97.0, me=0.0, ms=0.0):
