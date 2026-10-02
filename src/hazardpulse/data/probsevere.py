@@ -343,14 +343,31 @@ def _parse_storms(data: dict) -> list[dict] | None:
                 return _float(primary)
             return _float(fallback)
 
+        # ProbSevere v3 publishes its hazard models OUTSIDE ``properties``, as
+        # feature["models"][<model>]["PROB"] (0-100). Until 2026-10-02 the
+        # parser looked only in ``properties`` (PROBTOR / PS_TOR), found
+        # nothing, and stored 0.0: NOAA's ProbTor, ProbHail and ProbWind were
+        # zero for every storm in the cache and on the live site.
+        models = feat.get("models") or {}
+
+        def _model_prob(name: str, legacy_primary: str, legacy_fallback: str) -> float:
+            m = models.get(name) if isinstance(models, dict) else None
+            if isinstance(m, dict) and m.get("PROB") not in (None, "N/A"):
+                try:
+                    return float(m["PROB"])
+                except (ValueError, TypeError):
+                    pass
+            return _float_fallback(legacy_primary, legacy_fallback)
+
         storm: dict = {
             "id": props.get("ID", 0),
             "lat": lat,
             "lon": lon,
             "ps": _float("PS"),
-            "ps_tor": _float_fallback("PROBTOR", "PS_TOR"),
-            "ps_hail": _float_fallback("PROBHAIL", "PS_HAIL"),
-            "ps_wind": _float_fallback("PROBWIND", "PS_WIND"),
+            "ps_tor": _model_prob("probtor", "PROBTOR", "PS_TOR"),
+            "ps_hail": _model_prob("probhail", "PROBHAIL", "PS_HAIL"),
+            "ps_wind": _model_prob("probwind", "PROBWIND", "PS_WIND"),
+            "ps_severe": _model_prob("probsevere", "PROBSEVERE", "PS"),
             "mucape": _float("MUCAPE"),
             "mlcape": _float("MLCAPE"),
             "mlcin": _float("MLCIN"),

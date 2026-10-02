@@ -47,6 +47,26 @@ def test_a_non_empty_day_is_cached(tmp_path, monkeypatch):
     assert ps.load_cached_probsevere("20210515", cache_dir=tmp_path) == out
 
 
+def test_noaa_hazard_probabilities_are_read_from_the_models_object():
+    """ProbSevere v3 puts ProbTor/Hail/Wind in feature["models"], not in
+    properties; the old parser stored 0.0 for every storm (MEASURED on the
+    2024 test year: 1,004,531 storms, ProbTor max 0)."""
+    feature = {
+        "type": "Feature",
+        "geometry": {"type": "Polygon", "coordinates": [[[-97.0, 35.0], [-96.9, 35.0], [-96.9, 35.1]]]},
+        "properties": {"ID": "7", "PS": "16", "MAXLLAZ": "0.012"},
+        "models": {"probsevere": {"PROB": "61"}, "probtor": {"PROB": "88"},
+                   "probhail": {"PROB": "40"}, "probwind": {"PROB": "12"}},
+    }
+    (s,) = ps._parse_storms({"features": [feature]})
+    assert (s["ps_tor"], s["ps_hail"], s["ps_wind"], s["ps_severe"]) == (88.0, 40.0, 12.0, 61.0)
+    assert s["ps"] == 16.0
+    # pre-v3 files that carried the value in properties still parse
+    legacy = dict(feature, models=None, properties={"ID": "8", "PROBTOR": "33"})
+    (s2,) = ps._parse_storms({"features": [legacy]})
+    assert s2["ps_tor"] == 33.0
+
+
 def _raiser(code):
     def _open(*a, **k):
         _open.n += 1
