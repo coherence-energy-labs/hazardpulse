@@ -71,7 +71,10 @@ def fit_one(dataset_path: Path, out_path: Path, *, model_version: str,
     payload = {
         "schema_version": 1,
         "hazard": data.get("hazard"),
-        "model_version": model_version,
+        # The dataset names the model whose raw scores it pooled (tornado since
+        # 2026-10-01); the calibrator is only valid for that model. The
+        # per-hazard constant is the fallback for datasets that predate it.
+        "model_version": data.get("model_version") or model_version,
         "fitted_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "n_calibration": int(np.sum(total)),
         "n_groups": int(scores.size),

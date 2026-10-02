@@ -124,10 +124,17 @@ from hazardpulse.tornado.tornado_npe import (  # noqa: E402
 )
 from hazardpulse.tornado.definitive_model import (  # noqa: E402
     ALL_FEATURE_NAMES_FULL as DEFINITIVE_FEATURE_NAMES,
+    LEGACY_MODEL_VERSION as DEFINITIVE_LEGACY_MODEL_VERSION,
+    MAX_ANALYSIS_AGE_H as DEFINITIVE_MAX_ANALYSIS_AGE_H,
+    build_storm_history as definitive_extract_history,
+    model_version_of_payload as definitive_model_version,
     extract_block_c as definitive_extract_c,
     extract_block_e as definitive_extract_e,
     extract_block_h as definitive_extract_h,
     extract_block_p as definitive_extract_p,
+    index_storms_by_id as definitive_index_storms,
+    predict_proba_from_payload,
+    probsevere_step_minutes as definitive_step_minutes,
 )
 
 # ---------------------------------------------------------------------------
@@ -138,7 +145,15 @@ DIST = Path(__file__).resolve().parents[1] / "dist"
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 LEDGER_PATH = DIST / "data" / "tornado-ledger.jsonl"
 
-MODEL_VERSION = "tornado_storm_v1_0"
+# Identity of the served model, bound to its exact weights (see
+# definitive_model.model_version_of_payload): every forecast, the prospective
+# calibration data and the trust-layer calibrator carry it, and a calibrator
+# is only ever applied to forecasts from the model it was fitted on.
+_SERVED_WEIGHTS = RESULTS / "models" / "tornado_gbt_v1.json"
+MODEL_VERSION = (
+    definitive_model_version(_SERVED_WEIGHTS)
+    if _SERVED_WEIGHTS.exists() else DEFINITIVE_LEGACY_MODEL_VERSION
+)
 PRIMARY_DOMAIN = "https://hazardpulse.com"
 SITE_PUBLISHER_NAME = "HazardPulse"
 SITE_CONTACT_EMAIL = "josh@coherenceenergylabs.com"
@@ -164,6 +179,50 @@ def _risk_band(prob: float) -> str:
     if prob >= 0.05:
         return "low"
     return "minimal"
+
+
+def definitive_benchmark() -> dict:
+    """The storm-object model's published test metrics, read from the results
+    file its training run wrote -- never typed into a page. (The pages used
+    to hard-code "AUC 0.894" and "BSS 0.176": a 5:1-downsampled test split,
+    labels on the wrong clock, features read ~280 km from the storm.)"""
+    path = RESULTS / "definitive" / "definitive_results.json"
+    try:
+        d = json.loads(path.read_text(encoding="utf-8"))
+        full = d["full"]
+        ci = full.get("bootstrap_ci", {})
+        return {
+            "auc": float(full["auc"]),
+            "ci_lo": ci.get("ci_lo"),
+            "ci_hi": ci.get("ci_hi"),
+            "bss": full.get("bss"),
+            "base_rate": full.get("base_rate"),
+            "model": d.get("model", "?"),
+        }
+    except Exception:
+        return {"auc": None, "ci_lo": None, "ci_hi": None, "bss": None, "base_rate": None, "model": "?"}
+
+
+def _benchmark_auc_text() -> str:
+    b = definitive_benchmark()
+    if b["auc"] is None:
+        return "AUC unavailable"
+    ci = (f" [{b['ci_lo']:.3f}, {b['ci_hi']:.3f}]"
+          if b["ci_lo"] is not None and b["ci_hi"] is not None else "")
+    return f"AUC {b['auc']:.3f}{ci}"
+
+
+def refresh_risk_bands(scored: list[dict]) -> list[dict]:
+    """Re-derive each storm's band from the probability it is PUBLISHED with.
+
+    The band was computed from the pre-calibration score and never refreshed,
+    so the trust layer's calibrated probability shipped under a stale band
+    (live 2026-10-01: 0.57% labelled "high"; 77% of calibrated storms carried
+    a band that contradicted their own probability).
+    """
+    for s in scored:
+        s["risk_band"] = _risk_band(float(s.get("tornado_probability", 0.0)))
+    return scored
 
 
 # ---------------------------------------------------------------------------
@@ -267,16 +326,19 @@ def build_coherence_from_probsevere(
 
     # Spatial derivatives
     from hazardpulse.tornado.coherence_engine import (
+        TORSION_SINGULARITY_THRESHOLD,
         _gradient_2d,
-        compute_curl_2d,
     )
 
     grad_y, grad_x = _gradient_2d(tau)
     grad_tau = np.sqrt(grad_x ** 2 + grad_y ** 2).astype(np.float32)
 
-    # Torsion: shear * curl(tau) / 25
-    curl_tau = compute_curl_2d(tau)
-    torsion = (shear_field * curl_tau / 25.0).astype(np.float32)
+    # Torsion is the tilting coupling (S_01 x grad tau).k and needs the shear
+    # VECTOR; ProbSevere carries only the effective-shear MAGNITUDE, so on this
+    # fallback path torsion is undefined and is reported as exactly zero (the
+    # old shear * curl(tau) was zero too, but by accident -- the curl of a
+    # gradient vanishes identically).
+    torsion = np.zeros_like(tau, dtype=np.float32)
 
     # Alignment: use SRH as proxy for shear direction alignment
     grad_mag_safe = grad_tau + 1e-6
@@ -298,7 +360,7 @@ def build_coherence_from_probsevere(
     # Singularity count
     cond1 = (S_over_Gamma > 1.0).astype(np.float32)
     cond2 = (grad_tau > 0.5).astype(np.float32)
-    cond3 = (np.abs(torsion) > 0.1).astype(np.float32)
+    cond3 = (np.abs(torsion) > TORSION_SINGULARITY_THRESHOLD).astype(np.float32)
     cond4 = (alignment > 0).astype(np.float32)
     cond5 = (Da > 10.0).astype(np.float32)
     singularity_count = (cond1 + cond2 + cond3 + cond4 + cond5).astype(
@@ -317,6 +379,22 @@ def build_coherence_from_probsevere(
         "E_coh": E_coh,
         "singularity_count": singularity_count,
     }
+
+
+def live_analysis_candidates(now: dt.datetime) -> list[tuple[str, int]]:
+    """HRRR analyses a live run may use, newest first: whole hours at most
+    ``MAX_ANALYSIS_AGE_H`` before ``now`` (the same bound training applies to
+    every storm -- definitive_model.select_analysis_hour)."""
+    base = now.replace(minute=0, second=0, microsecond=0)
+    out: list[tuple[str, int]] = []
+    back = 0
+    while True:
+        t = base - dt.timedelta(hours=back)
+        if (now - t).total_seconds() > DEFINITIVE_MAX_ANALYSIS_AGE_H * 3600.0:
+            break
+        out.append((t.strftime("%Y%m%d"), t.hour))
+        back += 1
+    return out
 
 
 def load_pretrained_model() -> dict | None:
@@ -387,41 +465,24 @@ def predict_with_pretrained(
     Returns
     -------
     float
-        Predicted tornado probability in [0, 1].
+        Predicted tornado probability in [0, 1] -- calibrated to the real
+        storm-object base rate when the payload carries a calibration (see
+        ``definitive_model.predict_proba_from_payload``, the one scoring path
+        shared with training-time evaluation). Use
+        ``pretrained_is_calibrated`` to tell the two apart.
     """
-    import math as _math
-
-    feature_names = gbt_data["feature_names"]
-    means = gbt_data["normalization"]["means"]
-    stds = gbt_data["normalization"]["stds"]
-
-    # Build normalized feature vector in correct order
-    x = []
-    for i, name in enumerate(feature_names):
-        raw = raw_features.get(name, 0.0)
-        x.append((raw - means[i]) / stds[i])
-
-    # Walk each tree and accumulate predictions
-    F = gbt_data["init_pred"]
-    lr = gbt_data["learning_rate"]
-    for tree in gbt_data["trees"]:
-        node = tree
-        while not node.get("leaf", False):
-            feat_idx = node["feat"]
-            if feat_idx < len(x) and x[feat_idx] <= node["thresh"]:
-                node = node["left"]
-            else:
-                node = node["right"]
-        F += lr * node["val"]
-
-    # Numerically stable sigmoid
-    F = max(-88.0, min(88.0, F))
-    if F >= 0:
-        prob = 1.0 / (1.0 + _math.exp(-F))
-    else:
-        ef = _math.exp(F)
-        prob = ef / (1.0 + ef)
+    prob, _calibrated = predict_proba_from_payload(gbt_data, raw_features)
     return prob
+
+
+def pretrained_is_calibrated(gbt_data: dict) -> bool:
+    """True when the payload's probabilities are mapped to the real base rate.
+
+    Payloads saved before 2026-10-01 have no calibration: they were trained
+    with class-balanced weights on 5:1 downsampled data, so their sigmoid is a
+    probability at a 50/50 prior and overstates the real-world odds ~50-100x.
+    """
+    return gbt_data.get("calibration") is not None
 
 
 def score_storm_analytic(
@@ -496,6 +557,11 @@ def score_storms(
 
     # Build tracks for history
     tracks = build_storm_tracks(time_steps)
+    # Block E must see exactly what training saw: the bounded lookback of
+    # definitive_extract_history and the day's real step cadence (train==serve).
+    latest_idx = len(time_steps) - 1
+    id_index = definitive_index_storms(time_steps)
+    step_minutes = definitive_step_minutes(time_steps)
 
     # Pre-compute derived HRRR grids once (needed for Block H feature extraction)
     derived_hrrr: dict[str, np.ndarray] = {}
@@ -553,7 +619,11 @@ def score_storms(
             # Tier 1 (pre-trained GBT): build 41-feature vector then score.
             try:
                 f_p = definitive_extract_p(storm)
-                f_e = definitive_extract_e(storm, history)
+                f_e = definitive_extract_e(
+                    storm,
+                    definitive_extract_history(time_steps, sid, latest_idx, id_index=id_index),
+                    step_minutes,
+                )
                 f_h = definitive_extract_h(storm, hrrr, derived_hrrr)
                 f_c = definitive_extract_c(storm, coherence_fields, hrrr)
                 full_vec = np.concatenate([f_p, f_e, f_h, f_c])
@@ -565,7 +635,10 @@ def score_storms(
                 prob = round(min(max(prob, 0.0), 0.99), 4)
                 risk = _risk_band(prob)
                 # Surface top 5 features by importance * value magnitude
-                model_scores = {"gbt_prob": prob}
+                model_scores = {
+                    "gbt_prob": prob,
+                    "calibrated": pretrained_is_calibrated(pretrained_gbt),
+                }
                 top_features = [
                     {"name": name, "value": round(raw_features[name], 4)}
                     for name in ("srh01", "hrrr_pwat", "alignment", "tau", "maxllaz")
@@ -1461,7 +1534,7 @@ def _render_storm_rows(storms: list[dict]) -> str:
 
             lines.append(f'              <div class="kv"><span>Coherence amplitude (tau)</span><strong>{tau:.4f} ({tau_label})</strong></div>')
             lines.append(f'              <div class="kv"><span>Coherence gradient (|grad tau|)</span><strong>{grad:.4f}</strong></div>')
-            lines.append(f'              <div class="kv"><span>Torsion (SRH x curl tau)</span><strong>{torsion:.4f}</strong></div>')
+            lines.append(f'              <div class="kv"><span>Torsion (low-level shear tilting grad tau)</span><strong>{torsion:.4f}</strong></div>')
             lines.append(f'              <div class="kv"><span>Alignment (shear dot grad tau)</span><strong>{alignment:.4f}</strong></div>')
             lines.append(f'              <div class="kv"><span>S / Gamma ratio</span><strong>{sg:.2f} ({sg_label})</strong></div>')
             lines.append(f'              <div class="kv"><span>Damkohler number</span><strong>{da:.2f}</strong></div>')
@@ -1540,8 +1613,13 @@ def _render_storm_rows(storms: list[dict]) -> str:
         coh_source_desc = {"hrrr": "HRRR 80 km grid", "probsevere": "ProbSevere atmospheric fallback", "none": "Unavailable"}.get(coh_source, coh_source)
         lines.append(f'              <div class="kv"><span>Atmospheric data</span><strong>ProbSevere v3 via NOAA MRMS (2-minute update cycle)</strong></div>')
         lines.append(f'              <div class="kv"><span>Coherence field</span><strong>Helmholtz PDE solved on {_esc(coh_source_desc)}</strong></div>')
-        lines.append(f'              <div class="kv"><span>Model</span><strong>hp-tornado-coherence-v1 (GBT, 41 features, AUC 0.894 on 2024 test data)</strong></div>')
-        lines.append(f'              <div class="kv"><span>New tier (research)</span><strong>hp-tornado-hrrr-env-v1 -- HRRR atmospheric-environment forest (26 features incl. STP/SRH/shear), AUC 0.88 on a 2022-2024 multi-year out-of-sample holdout; calibrated (ECE 0.008) and 0-ULP-signed. Not yet the live tier.</strong></div>')
+        lines.append(f'              <div class="kv"><span>Model</span><strong>hp-tornado-coherence (GBT, 41 features, {_esc(_benchmark_auc_text())} on 2024 test storms)</strong></div>')
+        # Re-measured 2026-10-01 on a storm-vs-storm benchmark (both classes
+        # refc >= 40 dBZ, shear and CAPE floors; reports timed in UTC; true
+        # grid geometry). The published 0.88 compared tornadic cells with
+        # random no-storm cells, and the shipped v1 forest scores 0.625 when
+        # both classes are storms -- below STP alone.
+        lines.append('              <div class="kv"><span>Research tier (not live)</span><strong>hp-tornado-hrrr-env -- HRRR environment model. On a storm-vs-storm benchmark (2022-2024, 88 test tornadic storms) a retrained model scores AUC 0.888 [0.835, 0.926] against 0.873 for the Significant Tornado Parameter alone: no significant gain over STP yet. The earlier "0.88" compared storms with storm-free cells.</strong></div>')
 
         # --- WHY THIS PROBABILITY ---
         lines.append(_hr)
@@ -2445,9 +2523,9 @@ def _legacy_render_homepage_cards(
           <div class="grid">
             <div class="card col-4">
               <h3>Tornado</h3>
-              <div class="metric mono">0.894</div>
-              <div class="metric-label">AUC <span class="tooltip" title="Area Under ROC Curve. 1.0 = perfect, 0.5 = random chance. Higher is better.">(?)</span> on 2024 test data</div>
-              <div class="metric-ci mono">BSS: <strong class="mono">0.176</strong> <span class="muted">(&gt;0 beats climatology)</span></div>
+              <div class="metric mono">{_esc(f"{definitive_benchmark()['auc']:.3f}" if definitive_benchmark()['auc'] is not None else "--")}</div>
+              <div class="metric-label">AUC <span class="tooltip" title="Area Under ROC Curve. 1.0 = perfect, 0.5 = random chance. Higher is better.">(?)</span> on 2024 test storms</div>
+              <div class="metric-ci mono">BSS: <strong class="mono">{_esc(f"{definitive_benchmark()['bss']:.3f}" if definitive_benchmark()['bss'] is not None else "--")}</strong> <span class="muted">(&gt;0 beats climatology)</span></div>
             </div>
             <div class="card col-4">
               <h3>Earthquake</h3>
@@ -2481,7 +2559,7 @@ def _legacy_render_homepage_cards(
             </div>
             <div class="card col-4">
               <h3>2. Analyze</h3>
-              <p class="muted">Helmholtz PDE solved on HRRR grid. Coherence amplitude (tau), gradient, torsion, alignment, singularity conditions extracted. GBT ensemble (41 features) produces calibrated probabilities.</p>
+              <p class="muted">Helmholtz PDE solved on HRRR grid. Coherence amplitude (tau), gradient, torsion, alignment, singularity conditions extracted. Gradient-boosted trees (41 features), Platt-calibrated on a held-out year, produce the storm probability.</p>
             </div>
             <div class="card col-4">
               <h3>3. Predict</h3>
@@ -3693,6 +3771,7 @@ def compute_day_ahead_susceptibility(
     hrrr: dict[str, np.ndarray] | None,
     coherence_fields: dict[str, np.ndarray] | None,
     now: dt.datetime,
+    analysis_label: str | None = None,
 ) -> list[dict]:
     """Compute day-ahead tornado susceptibility on the 80km HRRR grid.
 
@@ -3715,16 +3794,23 @@ def compute_day_ahead_susceptibility(
     """
     cells: list[dict] = []
 
+    # The HRRR dict's keys are srh_01 / ushear_06 / ... ; STP and the 0-6 km
+    # shear magnitude are DERIVED fields. The old lookups ("srh01", "shear06",
+    # "stp") never existed, so every cell read 0, every probability was
+    # sigmoid(-2) = 0.1192, and the published "top 10" were simply the first
+    # ten cells in grid order -- Pacific Ocean off Baja California.
+    derived = compute_derived_hrrr(hrrr) if hrrr is not None else None
+
     for i in range(HRRR_N_LAT):
         for j in range(HRRR_N_LON):
             lat = float(GRID_LATS[i])
             lon = float(GRID_LONS[j])
 
             if hrrr is not None:
-                cape = float(hrrr.get("cape", np.zeros((HRRR_N_LAT, HRRR_N_LON)))[i, j])
-                srh01 = float(hrrr.get("srh01", np.zeros((HRRR_N_LAT, HRRR_N_LON)))[i, j])
-                shear06 = float(hrrr.get("shear06", np.zeros((HRRR_N_LAT, HRRR_N_LON)))[i, j])
-                stp = float(hrrr.get("stp", np.zeros((HRRR_N_LAT, HRRR_N_LON)))[i, j])
+                cape = float(hrrr["mlcape"][i, j])
+                srh01 = float(hrrr["srh_01"][i, j])
+                shear06 = float(derived["shear_06"][i, j])
+                stp = float(derived["stp_eff"][i, j])
             else:
                 # Climatological fallback
                 stp = _climatological_stp(lat, lon, now.month)
@@ -3778,7 +3864,14 @@ def compute_day_ahead_susceptibility(
         "updated_at": now.isoformat() + "Z",
         "model": "hp-tornado-susceptibility-v1",
         "forecast_period": "next 24 hours",
-        "data_source": "HRRR 18Z analysis" if hrrr is not None else "climatological estimates",
+        "data_source": (
+            f"HRRR analysis {analysis_label}" if hrrr is not None and analysis_label
+            else "HRRR analysis" if hrrr is not None else "climatological estimates"
+        ),
+        "probability_kind": (
+            "uncalibrated index: sigmoid(2 * (STP - 1)); ranks environments, "
+            "not a verified probability"
+        ),
         "top_cells": top_cells,
     }
 
@@ -3871,47 +3964,32 @@ def main() -> None:
     hrrr_hour_used: int | None = None
     hrrr_date_used: str | None = None
 
-    current_hour = now.hour
-    today_hours = sorted(
-        set([current_hour - 2, current_hour - 1, 18, 15, 12, 9, 6, 0]),
-        reverse=True,
-    )
-    today_hours = [h for h in today_hours if 0 <= h <= 23 and h <= current_hour - 1]
-
-    yesterday = (now - dt.timedelta(days=1)).strftime("%Y%m%d")
-    yesterday_hours = [23, 21, 18, 15, 12, 6]
-
-    # Try cache first (today, then yesterday) at all candidate hours.
-    candidates: list[tuple[str, int]] = []
-    candidates += [(date_str, h) for h in today_hours]
-    candidates += [(yesterday, h) for h in yesterday_hours]
-
+    # Newest analysis first, each tried in the cache and then on AWS, and
+    # nothing older than the model was trained to see (MAX_ANALYSIS_AGE_H).
+    # The old order tried EVERY candidate in the cache before fetching any,
+    # so a cached analysis from yesterday beat a fetchable one from an hour
+    # ago, and the window reached back 24 h while training never saw an
+    # analysis more than 3 h old.
+    candidates = live_analysis_candidates(now)
     for cand_date, cand_hour in candidates:
-        cached = load_cached_hrrr(cand_date, hour=cand_hour)
-        if cached is not None:
-            hrrr = cached
-            hrrr_hour_used = cand_hour
-            hrrr_date_used = cand_date
-            print(f"  Loaded HRRR {cand_date} {cand_hour:02d}Z from local cache")
-            break
-
-    # If cache miss, fetch from AWS — try every candidate, not just the first 3.
-    if hrrr is None:
-        for cand_date, cand_hour in candidates:
+        grid = load_cached_hrrr(cand_date, hour=cand_hour)
+        source = "local cache"
+        if grid is None:
             try:
-                fetched = fetch_hrrr_grid(cand_date, hour=cand_hour)
+                grid = fetch_hrrr_grid(cand_date, hour=cand_hour)
             except Exception as e:
                 print(f"  HRRR fetch error for {cand_date} {cand_hour:02d}Z: {e}")
-                fetched = None
-            if fetched is not None:
-                hrrr = fetched
-                hrrr_hour_used = cand_hour
-                hrrr_date_used = cand_date
-                print(f"  Fetched HRRR {cand_date} {cand_hour:02d}Z from AWS")
-                break
+                grid = None
+            source = "AWS"
+        if grid is not None:
+            hrrr = grid
+            hrrr_hour_used = cand_hour
+            hrrr_date_used = cand_date
+            print(f"  HRRR {cand_date} {cand_hour:02d}Z from {source}")
+            break
 
     if hrrr is None:
-        print("  Warning: No HRRR analysis available within 24h window. "
+        print(f"  Warning: No HRRR analysis within {DEFINITIVE_MAX_ANALYSIS_AGE_H:g} h. "
               "Proceeding without HRRR (ProbSevere fallback mode).")
     else:
         # Sanity-check the data isn't all-NaN (defends against silent partial pulls)
@@ -4037,6 +4115,15 @@ def main() -> None:
 
         _signer = load_signer()
         _forecaster = load_forecaster("tornado", signer=_signer)
+        if _forecaster is not None and _forecaster.model_version != MODEL_VERSION:
+            # A calibrator maps ONE model's raw scores to probabilities; applied
+            # to another model's scores it is a different, wrong curve.
+            print(
+                f"  Trust layer: calibrator was fitted for {_forecaster.model_version}, "
+                f"serving {MODEL_VERSION} -- not applied; the model's own "
+                "validation-fitted calibration stands until a matching one is fitted."
+            )
+            _forecaster = None
         if _forecaster is not None and scored:
             enrich_cells(scored, _forecaster, prob_key="tornado_probability",
                          issued_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
@@ -4052,6 +4139,8 @@ def main() -> None:
     except Exception as exc:  # never let the trust layer break a live forecast
         print(f"  Trust layer: skipped ({exc})")
 
+    refresh_risk_bands(scored)
+
     for s in scored[:10]:
         print(
             f"  Storm {s['storm_id']}: P(tornado) = {s['tornado_probability']:.1%} "
@@ -4063,7 +4152,11 @@ def main() -> None:
     print()
     print("Step 5b: Computing day-ahead susceptibility...")
     try:
-        top_cells = compute_day_ahead_susceptibility(hrrr, coherence_fields, now)
+        top_cells = compute_day_ahead_susceptibility(
+            hrrr, coherence_fields, now,
+            analysis_label=(f"{hrrr_date_used} {hrrr_hour_used:02d}Z"
+                            if hrrr_hour_used is not None else None),
+        )
         if top_cells:
             best = top_cells[0]
             print(f"  Top cell: ({best['lat']}, {best['lon']}) "

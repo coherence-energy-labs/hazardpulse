@@ -120,28 +120,40 @@ def main() -> int:
     tornado_path = MODELS_DIR / "tornado_gbt_v1.json"
     if tornado_path.exists():
         bench_path = PROJECT_ROOT / "results" / "definitive" / "definitive_results.json"
-        bench = _read_json(bench_path).get("full", {})
+        bench_all = _read_json(bench_path)
+        bench = bench_all.get("full", {})
+        summary = bench_all.get("data_summary", {})
+        weights = _read_json(tornado_path)
+        calibrated = weights.get("calibration") is not None
+        n_test = (bench.get("n_positive") or 0) + (bench.get("n_negative") or 0)
+        base_rate = bench.get("base_rate")
+        # Every number in the description comes from the results file the
+        # benchmark block reads -- the old text hard-coded "5,310 events,
+        # 16.7% positive base rate", which described a 5:1 downsampled test
+        # split, not the population the model is served on.
         entries.append(_make_entry(
             record_id="weights_hazardpulse_tornado_gbt_v1",
             name="HazardPulse Tornado GBT v1 (definitive)",
             description=(
-                "Gradient-boosted tree ensemble for storm-object tornado "
-                "probability over CONUS. 41 features (Block P ProbSevere + "
+                "Gradient-boosted trees for storm-object tornado probability "
+                "over CONUS: P(tornado report within 40 km in the next 60 min "
+                "| ProbSevere storm object). 41 features (Block P ProbSevere + "
                 "Block E evolution + Block H HRRR atm + Block C coherence "
-                "field theory). Trained on SPC reports 2021-2023 / tested "
-                "on 2024 holdout (5,310 events, 16.7% positive base rate)."
+                "field theory). Train 2021-2022, validation/calibration 2023, "
+                f"test 2024 ({n_test:,} storm objects, base rate "
+                f"{(base_rate or 0):.4f}). Labels on absolute UTC instants."
             ),
             weights_path=tornado_path,
             benchmark={
                 "test_auc": bench.get("auc"),
+                "test_auc_ci": bench.get("bootstrap_ci"),
                 "test_brier": bench.get("brier"),
                 "test_bss": bench.get("bss"),
                 "test_pr_auc": bench.get("pr_auc"),
+                "test_base_rate": base_rate,
                 "test_window": "2024 SPC tornado reports",
-                "n_test_samples": 5310,
-                "n_train_samples": (
-                    _read_json(bench_path).get("data_summary", {}).get("n_train")
-                ),
+                "n_test_samples": n_test,
+                "n_train_samples": summary.get("n_train"),
             },
             framework="hazardpulse_gbt_v1",
             input_schema={
@@ -151,9 +163,13 @@ def main() -> int:
                 "feature_names_path": "src/hazardpulse/tornado/definitive_model.py",
             },
             output_schema={
-                "outputs": ["tornado_probability_24h"],
+                "outputs": ["tornado_probability_60min_40km"],
                 "domain": "[0, 1]",
-                "calibration": "logit-link via boosted trees, no Platt",
+                "calibration": (
+                    "Platt (sigmoid(a*F + b)) fitted on the full 2023 validation population"
+                    if calibrated else
+                    "NONE -- class-balanced training: probabilities are at a 50/50 prior"
+                ),
             },
             paper_url="https://github.com/coherence-energy-labs/hazardpulse",
         ))
