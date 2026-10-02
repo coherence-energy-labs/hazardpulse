@@ -118,6 +118,25 @@ def test_nws_bar_matches_the_false_alarm_rate_and_scores_hits(lab, tmp_path, mon
     assert r["delta_pod"] > 0.3 and r["delta_pod_ci"][0] > 0          # the skilful model wins, provably
 
 
+def test_final_refit_rows_skip_a_split_wholly_inside_the_held_out_year(lab):
+    """LOYO holding out 2023 excludes every row of the validation split (all 2023); that split
+    must be skipped, not divide by zero (the first final run crashed here before reading 2025)."""
+    rng = np.random.RandomState(0)
+
+    def part(days, n=4000):
+        X = rng.randn(n, len(lab.NAMES)).astype(np.float32)
+        Y = np.zeros((n, len(lab.LIDX)), np.int8)
+        Y[rng.rand(n) < 0.05, lab.LIDX["storm_60"]] = 1
+        W = np.full((n, 2), np.nan, np.float32)
+        return X, Y, {"day": rng.choice(days, size=n)}, W
+    parts = {"train": part([20210501, 20220601]), "val": part([20230501]), "dev": part([20240501])}
+    cols = lab.cols_for(["P"])
+    Xc, yc, wc = lab._rows_for(parts, {2021, 2022, 2024}, 30, 0, cols, False, lab.LIDX["storm_60"])
+    n_pos_expected = sum(int(p[1][:, lab.LIDX["storm_60"]].sum()) for k, p in parts.items() if k != "val")
+    assert int(yc.sum()) == n_pos_expected and Xc.shape[1] == len(cols)
+    assert wc[yc == 1].sum() == pytest.approx(wc[yc == 0].sum())
+
+
 def test_block_w_is_appended_after_the_store_columns_and_only_when_asked(lab):
     X = np.arange(40, dtype=np.float32).reshape(10, 4)
     W = np.full((10, 2), np.nan, np.float32)

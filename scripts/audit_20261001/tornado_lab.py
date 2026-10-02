@@ -507,6 +507,8 @@ def _rows_for(parts: dict, years_in: set[int], neg_per_pos: int, seed: int, cols
         yrs = np.maximum(np.asarray(meta["day"], np.int64) // 10000, 2021)
         y_all = np.array(Y[:, label_idx], np.int8)
         y_all[~np.isin(yrs, list(years_in))] = -1
+        if not (y_all == 1).any() or not (y_all == 0).any():
+            continue        # e.g. the held-out year is this whole split (val = 2023): nothing to draw
         # a fixed offset per source split (str hash() is salted per process -- not reproducible)
         rows, _ = train_sample(None, y_all, neg_per_pos, seed + 101 * FINAL_SOURCES.index(k))
         Xs.append(matrix(X, W, rows, cols, use_w))
