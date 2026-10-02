@@ -89,6 +89,18 @@ in later slots. Added candidates:
 Tie rule refined: candidates within 2 coverage points are ordered by lower ambiguity, then
 by smaller buffer. The measurement and the rule are otherwise those of amendment 1.
 
+## Amendment 3 (2026-10-02, before any experiment): human forecasters as an input
+
+"Any combination" includes the NWS. Whether a storm sits inside an active tornado warning
+polygon at the observation time, and for how long it has been warned, is known live (the
+warning is public the moment it is issued) and causal (only warnings issued at or before
+the observation count). Block W = (active_now, minutes_since_issue), from the IEM storm-based
+warning archive (`hazardpulse.verification.nws_warnings`). Added to the declared search as
+`best + W` against `best`, decided on validation like every block. NWS warnings also stay a
+bar: their POD at their own false-alarm rate against every model's ROC curve. A model that
+uses W is reported separately from one that does not, because it is no longer independent
+of the warnings it is compared with.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-

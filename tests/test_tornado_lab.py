@@ -46,6 +46,18 @@ def test_out_of_fold_calibration_never_sees_its_own_day(lab):
         assert not np.array_equal(base[~target], moved[~target])  # ...while other folds' calibrators do
 
 
+def test_block_w_is_appended_after_the_store_columns_and_only_when_asked(lab):
+    X = np.arange(40, dtype=np.float32).reshape(10, 4)
+    W = np.full((10, 2), np.nan, np.float32)
+    W[3] = [1.0, 12.5]
+    cols = lab.cols_for(["W", "p_ps_tor"])
+    assert cols == [lab.FIDX["p_ps_tor"]]
+    rows = np.array([2, 3])
+    with_w = lab.matrix(np.zeros((10, len(lab.NAMES)), np.float32), W, rows, cols, True)
+    assert with_w.shape == (2, 1 + len(lab.W_NAMES)) and with_w[1, 1:].tolist() == [1.0, 12.5]
+    assert lab.matrix(X, W, rows, [0, 2], False).tolist() == [[8.0, 10.0], [12.0, 14.0]]
+
+
 def test_compare_is_zero_for_identical_forecasts_and_signed_for_a_better_one(lab, tmp_path, monkeypatch):
     monkeypatch.setattr(lab, "LAB", tmp_path)
     monkeypatch.setattr(lab, "OUT", tmp_path)

@@ -39,6 +39,7 @@ SPLITS = {
     "final": ("20250101", "20251231"),
 }
 NAMES = list(sf.FEATURE_NAMES)
+W_NAMES = ["w_tor_warning_active", "w_minutes_since_issue"]   # amendment 3
 FIDX = {n: i for i, n in enumerate(NAMES)}
 LIDX = {n: i for i, n in enumerate(sf.LABEL_NAMES)}
 
@@ -56,6 +57,7 @@ def assemble(split: str) -> None:
             n += z["Y"].shape[0]
     LAB.mkdir(parents=True, exist_ok=True)
     X = np.lib.format.open_memmap(LAB / f"{split}_X.npy", mode="w+", dtype=np.float32, shape=(n, len(NAMES)))
+    W = np.lib.format.open_memmap(LAB / f"{split}_W.npy", mode="w+", dtype=np.float32, shape=(n, len(W_NAMES)))
     Y = np.lib.format.open_memmap(LAB / f"{split}_Y.npy", mode="w+", dtype=np.int8, shape=(n, len(sf.LABEL_NAMES)))
     meta = {k: [] for k in ("day", "t", "lat", "lon", "ef", "lead_min", "analysis", "v2")}
     i = 0
@@ -70,11 +72,29 @@ def assemble(split: str) -> None:
             # the served v2 model's probability (score_v2_on_store.py), NaN where absent
             v2 = STORE / "_v2" / f"{p.stem}.npy"
             meta["v2"].append(np.load(v2) if v2.exists() else np.full(m, np.nan, np.float32))
+            # block W: NWS tornado-warning state (warning_state_on_store.py), NaN where absent
+            nws = STORE / "_nws" / f"{p.stem}.npz"
+            if nws.exists():
+                with np.load(nws) as w:
+                    W[i:i + m] = np.column_stack([w["active_now"].astype(np.float32), w["minutes_since_issue"]])
+            else:
+                W[i:i + m] = np.nan
             i += m
+    W.flush()
     X.flush()
     Y.flush()
     np.savez(LAB / f"{split}_meta.npz", **{k: np.concatenate(v) for k, v in meta.items()})
     print(f"{split}: {len(days)} days, {n} rows, positives storm_60={int(Y[:, LIDX['storm_60']].sum())}", flush=True)
+
+
+def load_w(split: str):
+    return np.load(LAB / f"{split}_W.npy", mmap_mode="r")
+
+
+def matrix(X, W, rows, cols, use_w: bool) -> np.ndarray:
+    """Model input for ``rows`` (index array or slice): the chosen store columns, then block W."""
+    a = np.asarray(X[rows][:, cols], np.float32)
+    return np.hstack([a, np.asarray(W[rows], np.float32)]) if use_w else a
 
 
 def load(split: str):
@@ -103,6 +123,8 @@ def metrics(y, p, groups, n_boot=1000) -> dict:
 def cols_for(blocks: list[str], drop: list[str] | None = None) -> list[int]:
     idx: list[int] = []
     for b in blocks:
+        if b == "W":          # block W lives outside the store matrix (see matrix())
+            continue
         if b in sf.BLOCKS:
             lo, hi = sf.BLOCKS[b]
             idx += list(range(lo, hi))
@@ -130,10 +152,10 @@ def train_sample(X, y, neg_per_pos: int, seed: int):
     return rows, w
 
 
-def predict_stream(model_fn, X, cols, chunk=200_000):
+def predict_stream(model_fn, X, cols, chunk=200_000, W=None):
     out = np.empty(X.shape[0], np.float64)
     for s in range(0, X.shape[0], chunk):
-        out[s:s + chunk] = model_fn(np.asarray(X[s:s + chunk][:, cols], dtype=np.float32))
+        out[s:s + chunk] = model_fn(matrix(X, W, slice(s, s + chunk), cols, W is not None))
     return out
 
 
@@ -229,6 +251,7 @@ def run(exp: dict) -> dict:
     lab = LIDX[exp.get("label", "storm_60")]                  # the label the model is TRAINED on
     ev = LIDX[exp.get("eval_label", exp.get("label", "storm_60"))]   # the label it is calibrated and SCORED on
     cols = cols_for(exp["blocks"], exp.get("drop"))
+    use_w = "W" in exp["blocks"]
     seed = int(exp.get("seed", 0))
     Xt, Yt, mt = load("train")
     y_tr_all = np.asarray(Yt[:, lab], np.int8)
@@ -238,21 +261,22 @@ def run(exp: dict) -> dict:
         keep_days = np.random.RandomState(seed + 7).choice(ud, size=max(1, int(round(frac * len(ud)))), replace=False)
         y_tr_all = np.where(np.isin(mt["day"], keep_days), y_tr_all, -1).astype(np.int8)
     rows, w = train_sample(None, y_tr_all, int(exp.get("neg_per_pos", 30)), seed)
-    Xtr = np.asarray(Xt[rows][:, cols], np.float32)
+    Xtr = matrix(Xt, load_w("train"), rows, cols, use_w)
     ytr = y_tr_all[rows]
     Xv, Yv, mv = load("val")
     yv_train = np.asarray(Yv[:, lab], np.int8)
     yv = np.asarray(Yv[:, ev], np.int8)
     # early-stopping set: a fixed weighted sample of VAL (model selection data), on the training label
     es_rows, es_w = train_sample(None, yv_train, 30, seed + 1)
-    Xes = np.asarray(Xv[es_rows][:, cols], np.float32)
+    Wv = load_w("val") if use_w else None
+    Xes = matrix(Xv, Wv, es_rows, cols, use_w)
     score_fn, info, model = fit_model(exp["model"], dict(exp.get("params", {})), Xtr, ytr, w,
                                       Xes, yv_train[es_rows], es_w, seed)
-    s_val = predict_stream(score_fn, Xv, cols)
+    s_val = predict_stream(score_fn, Xv, cols, W=Wv)
     cal_kind = exp.get("calibration", "platt")
     cal = fit_calibrator(cal_kind, s_val, yv)                # all of val: what dev/final see
     p_val = out_of_fold_calibrated(cal_kind, s_val, yv, mv["day"])
-    res = {"exp": exp, "n_features": len(cols), "train_rows": int(len(rows)),
+    res = {"exp": exp, "n_features": len(cols) + (len(W_NAMES) if use_w else 0), "train_rows": int(len(rows)),
            "train_pos": int(ytr.sum()), "fit": info,
            "val": metrics(yv, p_val, mv["day"], n_boot=int(exp.get("n_boot_val", 200)))}
     res["val"]["auc_raw_score"] = dm.compute_auc(yv.astype(np.float64), s_val)
@@ -262,7 +286,7 @@ def run(exp: dict) -> dict:
     if exp.get("eval_dev", True):
         Xd, Yd, md = load("dev")
         yd = np.asarray(Yd[:, ev], np.int8)
-        p_dev = cal(predict_stream(score_fn, Xd, cols))
+        p_dev = cal(predict_stream(score_fn, Xd, cols, W=load_w("dev") if use_w else None))
         res["dev"] = metrics(yd, p_dev, md["day"], n_boot=int(exp.get("n_boot_dev", 1000)))
         if exp.get("save_preds"):
             np.save(LAB / "preds" / f"{exp['name']}_dev.npy", p_dev.astype(np.float32))
