@@ -1,18 +1,18 @@
 {
-  "generated_at": "2026-10-01T22:51:27Z",
+  "generated_at": "2026-10-02T02:17:43Z",
   "score_as_of": "2026-10-01T22:00:00Z",
   "system": {
     "frozen_forecasts": 2508,
-    "matured_forecasts": 2388,
-    "scored_forecasts": 600,
-    "matured_unscored_backlog": 1788,
+    "matured_forecasts": 2390,
+    "scored_forecasts": 2389,
+    "matured_unscored_backlog": 1,
     "raw_chain_rows": 2533,
     "hash_chain_mismatches": 0,
     "exact_model_benchmarks": 1,
     "alerts": [
-      "1788 matured forecast windows are waiting for scoring.",
-      "Tornado: no exact benchmark is attached to the current live model version."
-    ]
+      "1 matured forecast windows are waiting for scoring."
+    ],
+    "rollup_violations": []
   },
   "hazards": [
     {
@@ -72,9 +72,9 @@
       "key": "hu",
       "hazard": "hurricane",
       "model_version": "hurricane_ri_v8_1",
-      "verification_status": "matured_unscored_no_evaluator",
-      "status_badge": "Backlog",
-      "verification_status_label": "Matured hurricane forecasts exist, but no live advisory-to-outcome scorer is wired yet.",
+      "verification_status": "prospective_scored",
+      "status_badge": "Scored",
+      "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 14 storm forecasts scored against NHC best track; 0 rapid-intensification events observed.",
       "metric_source": "retrospective_holdout_exact_model",
       "metric_source_label": "Exact-model retrospective benchmark is available.",
       "auc": 0.938,
@@ -83,9 +83,9 @@
       "homepage_line": "AUC 0.938 retrospective holdout",
       "forecast_storage": {
         "n_replay_artifacts": 52,
-        "n_matured_forecasts": 51,
-        "n_scored_forecasts": 0,
-        "n_backlog": 51,
+        "n_matured_forecasts": 52,
+        "n_scored_forecasts": 52,
+        "n_backlog": 0,
         "first_issued_at": "2026-03-13T03:00:00Z",
         "last_issued_at": "2026-05-26T12:50:43Z",
         "last_forecast_id": "hu_fcst_20260526_1250",
@@ -100,10 +100,16 @@
         "prev_hash_mismatches": 0
       },
       "prospective": {
-        "summary_path": null,
-        "status": "evaluator_missing",
-        "scored_as_of": null,
-        "message": "Live hurricane forecasts are stored, but the repo does not yet score them against realized 24-hour intensity change."
+        "summary_path": "results/hurricane_prospective/prospective_summary.json",
+        "status": "ok",
+        "scored_as_of": "2026-10-01T20:51:27Z",
+        "n_scored_forecasts": 52,
+        "stale": false,
+        "message": null,
+        "mean_brier": 0.0014,
+        "mean_auc": null,
+        "total_storms_scored": 14,
+        "total_ri_events": 0
       },
       "exact_model_benchmark": {
         "availability": "exact_model_benchmark",
@@ -117,25 +123,27 @@
         "n_cases": 9714
       },
       "related_benchmark": null,
-      "recommended_action": "Implement an advisory-to-outcome scorer that joins frozen hurricane forecasts to realized 24-hour intensity change before using the model for calibration or promotion decisions."
+      "recommended_action": "Keep scoring matured hurricane forecasts against NHC best track; live AUC stays undefined until at least one rapid-intensification event is observed, so promotion decisions still rest on the retrospective benchmark."
     },
     {
       "key": "to",
       "hazard": "tornado",
       "model_version": "tornado_storm_v1_0",
-      "verification_status": "matured_unscored_no_evaluator",
-      "status_badge": "Backlog",
-      "verification_status_label": "Matured tornado storm-object forecasts exist, but no live outcome scorer is wired yet.",
-      "metric_source": "no_exact_model_benchmark",
-      "metric_source_label": "No exact benchmark is currently bound to the live tornado storm-object model version in this repo.",
-      "auc": null,
-      "brier": null,
-      "homepage_line": "1741 frozen forecasts \u00b7 1736 matured backlog",
+      "verification_status": "prospective_scored",
+      "status_badge": "Scored",
+      "verification_status_label": "Prospective live scoring is active for matured tornado forecasts.",
+      "metric_source": "prospective_live",
+      "metric_source_label": "Pooled over 234675 storm forecasts from 1737 matured live forecasts against SPC reports; base rate 0.00270, mean forecast 0.07562. BSS reference: base rate of outcomes that had matured before each forecast was issued. Served-probability split: raw model: BSS -13.334 over 92634 storm forecasts; calibrated: BSS 0.002 over 142041 storm forecasts.",
+      "auc": 0.742,
+      "brier": 0.0256002,
+      "brier_skill_score": -8.4849,
+      "brier_skill_score_reference": "causal_climatology",
+      "homepage_line": "1737 matured forecasts scored \u00b7 BSS -8.48 vs climatology",
       "forecast_storage": {
         "n_replay_artifacts": 1741,
-        "n_matured_forecasts": 1736,
-        "n_scored_forecasts": 0,
-        "n_backlog": 1736,
+        "n_matured_forecasts": 1737,
+        "n_scored_forecasts": 1737,
+        "n_backlog": 0,
         "first_issued_at": "2026-03-13T03:00:00Z",
         "last_issued_at": "2026-10-01T22:17:40Z",
         "last_forecast_id": "to_fcst_20261001_2217",
@@ -150,17 +158,66 @@
         "prev_hash_mismatches": 0
       },
       "prospective": {
-        "summary_path": null,
-        "status": "evaluator_missing",
-        "scored_as_of": null,
-        "message": "Live tornado storm-object forecasts are stored, but the repo does not yet score them against matched outcomes."
+        "summary_path": "results/tornado_prospective/prospective_summary.json",
+        "status": "ok",
+        "scored_as_of": "2026-10-01T20:50:34Z",
+        "n_scored_forecasts": 1737,
+        "stale": false,
+        "message": null,
+        "outcome_time_convention": "SPC daily files are convective days (12 UTC to 12 UTC); HHMM is UTC; rows before 1200 are placed on the next UTC date",
+        "pooled": {
+          "n_storm_forecasts": 234675,
+          "n_positive": 634,
+          "base_rate": 0.00270161,
+          "mean_forecast_probability": 0.07562337,
+          "brier": 0.0256002,
+          "auc": 0.742,
+          "ece": 0.072922,
+          "brier_sample_climatology": 0.00269431,
+          "bss_vs_sample_climatology": -8.5016,
+          "n_with_causal_reference": 232994,
+          "brier_causal_climatology": 0.00268052,
+          "bss_vs_causal_climatology": -8.4849
+        },
+        "pooled_by_served_mode": {
+          "raw_model_probability": {
+            "n_storm_forecasts": 92634,
+            "n_positive": 407,
+            "base_rate": 0.00439364,
+            "mean_forecast_probability": 0.18796128,
+            "brier": 0.06240774,
+            "auc": 0.7452,
+            "ece": 0.183568,
+            "brier_sample_climatology": 0.00437433,
+            "bss_vs_sample_climatology": -13.2668,
+            "n_with_causal_reference": 90953,
+            "brier_causal_climatology": 0.00436979,
+            "bss_vs_causal_climatology": -13.3343
+          },
+          "calibrated_probability": {
+            "n_storm_forecasts": 142041,
+            "n_positive": 227,
+            "base_rate": 0.00159813,
+            "mean_forecast_probability": 0.00236066,
+            "brier": 0.00159566,
+            "auc": 0.7582,
+            "ece": 0.000762,
+            "brier_sample_climatology": 0.00159558,
+            "bss_vs_sample_climatology": -0.0001,
+            "n_with_causal_reference": 142041,
+            "brier_causal_climatology": 0.00159884,
+            "bss_vs_causal_climatology": 0.002
+          }
+        },
+        "skill_reference": "bss_vs_causal_climatology: reference = base rate of all storm-forecasts whose 24 h window matured before the forecast was issued (no outcome leak). bss_vs_sample_climatology: reference = pooled base rate of the scored set itself (in-sample, shown for comparison)."
       },
       "exact_model_benchmark": null,
       "related_benchmark": {
         "availability": "related_research_benchmark",
-        "label": "A historical 2024 holdout benchmark exists for a related tornado GBT family, but not yet as an exact score for the live storm-object model.",
+        "label": "A historical 2024 holdout benchmark exists for a related tornado GBT family, but not yet as an exact score for the live storm-object model. Its Brier/BSS were measured at a downsampled base rate of 0.167 and are not comparable to live skill at the natural base rate.",
         "model_version": "hazardpulse_tornado_definitive_v1",
         "source_updated_at": "2026-03-31T04:07:24Z",
+        "evaluated_base_rate": 0.16666666666666666,
         "auc": 0.8942990839158551,
         "brier": 0.1143939459213997,
         "brier_skill_score": 0.17636358936592222,
@@ -168,7 +225,7 @@
           "results/definitive/definitive_results.json"
         ]
       },
-      "recommended_action": "Bind each frozen tornado storm-object forecast to a matched outcome definition and write a 24-hour scorer before using the live model for calibration or threshold changes."
+      "recommended_action": "Judge the live tornado model on the pooled BSS against causal climatology (and its served-probability split), not on per-forecast means or the downsampled research holdout."
     }
   ]
 }
