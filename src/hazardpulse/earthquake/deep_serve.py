@@ -20,6 +20,12 @@ import numpy as np
 
 SEC_DAY = 86400.0
 EARTH_KM = 6371.0
+# Every served sequence reads the events of the 5 years before the reference time,
+# exactly as training did (scripts/deep_sequence_earthquake.py::_seq_one and
+# scripts/deep_operational_earthquake.py::_build_one: ``t0 = ref - 5 * 365 * SEC_DAY``).
+# The catalog handed to these scorers must therefore cover at least this many days,
+# or each sequence is silently cut short relative to what the weights were fit on.
+SEQUENCE_LOOKBACK_DAYS = 5 * 365
 
 
 def _sigmoid(x):
@@ -105,7 +111,7 @@ class DeepEQScorer:
         (attributes times/lats/lons/mags/depths as numpy arrays). Mirrors training _seq_one."""
         K, R = self.K, self.radius_km
         X = np.zeros((K, 6), np.float64); m = np.zeros(K, np.float64)
-        t0 = ref_epoch - 5 * 365 * SEC_DAY
+        t0 = ref_epoch - SEQUENCE_LOOKBACK_DAYS * SEC_DAY
         sel = ((cat.times >= t0) & (cat.times < ref_epoch)
                & (np.abs(cat.lats - lat) < 6) & (np.abs(cat.lons - lon) < 6))
         idx = np.where(sel)[0]
@@ -141,7 +147,7 @@ class OperationalEQScorer(DeepEQScorer):
             return self._build_multiscale(cat, lat, lon, ref_epoch)
         K, R = self.K, self.radius_km
         X = np.zeros((K, 9), np.float64); m = np.zeros(K, np.float64)
-        t0 = ref_epoch - 5 * 365 * SEC_DAY
+        t0 = ref_epoch - SEQUENCE_LOOKBACK_DAYS * SEC_DAY
         sel = ((cat.times >= t0) & (cat.times < ref_epoch)
                & (np.abs(cat.lats - lat) < 6) & (np.abs(cat.lons - lon) < 6))
         idx = np.where(sel)[0]
@@ -188,7 +194,7 @@ class OperationalEQScorer(DeepEQScorer):
             ctx.append(max(0.0, 1 - bdays[big][nb] / 730.0))
         else:
             ctx.append(0.0); ctx.append(0.0)
-        t0 = ref - 5 * 365 * SEC_DAY
+        t0 = ref - SEQUENCE_LOOKBACK_DAYS * SEC_DAY
         sel = ((cat.times >= t0) & (cat.times < ref)
                & (np.abs(cat.lats - lat) < 6) & (np.abs(cat.lons - lon) < 6))
         idx = np.where(sel)[0]

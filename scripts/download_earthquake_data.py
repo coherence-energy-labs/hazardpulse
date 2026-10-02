@@ -61,54 +61,163 @@ def _fetch_text(url: str, *, timeout: int = 120) -> str:
     return _fetch(url, timeout=timeout).decode("utf-8", errors="replace")
 
 
+def _fetch_text_with_retry(url: str, *, timeout: int = 180, attempts: int = 4) -> str:
+    """Fetch with exponential back-off; the last failure propagates (never swallowed)."""
+    for attempt in range(attempts):
+        try:
+            return _fetch_text(url, timeout=timeout)
+        except Exception:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(5.0 * (attempt + 1))
+    raise AssertionError("unreachable")
+
+
 # ===================================================================
 # 1.  USGS Global Earthquake Catalog
 # ===================================================================
 
 USGS_API = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+USGS_MIN_MAGNITUDE = 2.5
+USGS_REQUEST_PAUSE_SECONDS = 0.5      # politeness between FDSN requests
+# A current-year file older than this is re-pulled so new events flow in.
+USGS_CURRENT_YEAR_MAX_AGE = dt.timedelta(days=1)
+
+# The shared limit-aware fetcher lives in the package (also used by the live scorer).
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+from hazardpulse.data import usgs_fdsn  # noqa: E402
 
 
-def download_usgs_year(year: int) -> Path:
-    """Download USGS M2.5+ events for a single calendar year."""
-    dest = USGS_DIR / f"usgs_catalog_{year}.csv"
-    if dest.exists():
-        print(f"  [USGS] {year} -- cached ({dest.stat().st_size:,} bytes)")
+def usgs_year_path(year: int, usgs_dir: Path | None = None) -> Path:
+    return (usgs_dir or USGS_DIR) / f"usgs_catalog_{year}.csv"
+
+
+def usgs_manifest_path(csv_path: Path) -> Path:
+    return usgs_fdsn.manifest_path_for(csv_path)
+
+
+def _year_period(year: int, now: dt.datetime) -> tuple[dt.datetime, dt.datetime]:
+    start = dt.datetime(year, 1, 1, tzinfo=dt.timezone.utc)
+    end = dt.datetime(year + 1, 1, 1, tzinfo=dt.timezone.utc)
+    return start, min(end, now)
+
+
+def audit_usgs_year_file(path: Path, year: int, *, now: dt.datetime | None = None) -> list[str]:
+    """Problems with a cached year file ([] = complete as far as can be checked).
+
+    Uses the fetch manifest when present (written only after a limit-aware pull
+    finished); legacy files without one are judged from their contents alone.
+    """
+    if not path.exists():
+        return ["missing"]
+    with path.open("r", encoding="utf-8", errors="replace") as fh:
+        times = [row.get("time", "") for row in csv.DictReader(fh)]
+    return usgs_fdsn.audit_year_catalog(times, year, manifest=usgs_fdsn.read_manifest(path),
+                                        now=now)
+
+
+def _usgs_year_is_current(path: Path, year: int, now: dt.datetime) -> bool:
+    """A cached file is reusable only if it is complete and, for the running year,
+    was pulled recently enough."""
+    if audit_usgs_year_file(path, year, now=now):
+        return False
+    if year == now.year:
+        try:
+            pulled = usgs_fdsn.parse_event_time(usgs_fdsn.read_manifest(path)["coverage_end"])
+        except (ValueError, KeyError):
+            return False
+        return now - pulled <= USGS_CURRENT_YEAR_MAX_AGE
+    return True
+
+
+def download_usgs_year(
+    year: int,
+    *,
+    usgs_dir: Path | None = None,
+    fetch_text=None,
+    now: dt.datetime | None = None,
+    pause_seconds: float = USGS_REQUEST_PAUSE_SECONDS,
+    force: bool = False,
+) -> Path:
+    """Download every USGS M2.5+ event of one calendar year (to ``now`` for the running year).
+
+    Pages month by month and bisects any window whose response reaches the FDSN
+    row limit, so the file is complete; the old single-request-per-year pull kept
+    only the first 20,000 rows. Writes atomically with a fetch manifest, and RAISES
+    on any failure -- no partial year is ever written or kept.
+    """
+    now = now or dt.datetime.now(dt.timezone.utc)
+    dest = usgs_year_path(year, usgs_dir)
+    if not force and _usgs_year_is_current(dest, year, now):
+        print(f"  [USGS] {year} -- cached, complete ({dest.stat().st_size:,} bytes)")
         return dest
+    start, end = _year_period(year, now)
+    if start >= end:
+        raise ValueError(f"year {year} has not started yet")
 
-    start = f"{year}-01-01"
-    end = f"{year + 1}-01-01"
-    url = (
-        f"{USGS_API}?format=csv&starttime={start}&endtime={end}"
-        f"&minmagnitude=2.5&orderby=time-asc&limit=20000"
+    fetch_text = fetch_text or _fetch_text_with_retry
+    stats: dict = {}
+    print(f"  [USGS] {year} -- downloading month by month ...")
+    fieldnames, rows = usgs_fdsn.fetch_catalog(
+        start, end, min_magnitude=USGS_MIN_MAGNITUDE, fetch_text=fetch_text,
+        pause_seconds=pause_seconds, stats=stats,
     )
-
-    print(f"  [USGS] {year} -- downloading ...")
-    try:
-        text = _fetch_text(url, timeout=180)
-    except Exception as exc:
-        print(f"  [USGS] {year} FAILED: {exc}")
-        return dest
+    if not rows:
+        raise usgs_fdsn.USGSCatalogIncompleteError(f"USGS returned no events for {year}")
+    problems = usgs_fdsn.audit_event_times(
+        (r.get("time", "") for r in rows), period_start=start, period_end=end,
+        proven_unclipped=stats.get("max_rows_per_response", 0) < usgs_fdsn.USGS_FDSN_ROW_LIMIT,
+    )
+    if problems:
+        raise usgs_fdsn.USGSCatalogIncompleteError(f"USGS {year}: {'; '.join(problems)}")
 
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(text, encoding="utf-8")
-    n_lines = text.count("\n") - 1  # minus header
-    print(f"  [USGS] {year} -- {n_lines:,} events")
+    tmp = dest.with_suffix(".csv.partial")
+    with tmp.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+    manifest = {
+        "year": year,
+        "min_magnitude": USGS_MIN_MAGNITUDE,
+        "coverage_start": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "coverage_end": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "n_events": len(rows),
+        "row_limit": usgs_fdsn.USGS_FDSN_ROW_LIMIT,
+        "requests": stats.get("requests", 0),
+        "bisections": stats.get("splits", 0),
+        "max_rows_per_response": stats.get("max_rows_per_response", 0),
+        "fetched_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "fetcher": "hazardpulse.data.usgs_fdsn.fetch_catalog (monthly, bisect-on-limit)",
+    }
+    tmp.replace(dest)
+    usgs_manifest_path(dest).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    print(f"  [USGS] {year} -- {len(rows):,} events ({manifest['requests']} requests, "
+          f"{manifest['bisections']} bisections, max {manifest['max_rows_per_response']} rows/response)")
     return dest
 
 
 def download_usgs_catalog(
     min_year: int = 2000,
     max_year: int = 2025,
+    *,
+    usgs_dir: Path | None = None,
+    force: bool = False,
 ) -> list[Path]:
-    """Download USGS catalog year by year to stay under the 20K-event API limit."""
+    """Download (or repair) the USGS catalog year by year; raises if any year fails."""
     print("\n=== USGS Global Earthquake Catalog (M2.5+) ===")
-    USGS_DIR.mkdir(parents=True, exist_ok=True)
+    (usgs_dir or USGS_DIR).mkdir(parents=True, exist_ok=True)
+    now = dt.datetime.now(dt.timezone.utc)
     paths: list[Path] = []
-    for year in range(min_year, max_year + 1):
-        p = download_usgs_year(year)
-        paths.append(p)
-        # Be polite -- 0.5 s between requests
-        time.sleep(0.5)
+    failures: list[str] = []
+    for year in range(min_year, min(max_year, now.year) + 1):
+        try:
+            paths.append(download_usgs_year(year, usgs_dir=usgs_dir, now=now, force=force))
+        except Exception as exc:
+            failures.append(f"{year}: {exc}")
+            print(f"  [USGS] {year} FAILED: {exc}")
+    if failures:
+        raise RuntimeError("USGS catalog download incomplete -- " + " | ".join(failures))
     return paths
 
 
@@ -469,14 +578,15 @@ def note_tec_status() -> None:
 # Summary
 # ===================================================================
 
-def print_summary() -> None:
+def print_summary(usgs_dir: Path | None = None) -> None:
     """Print cache summary statistics."""
     print("\n" + "=" * 60)
     print("DOWNLOAD SUMMARY")
     print("=" * 60)
 
     # USGS
-    usgs_files = sorted(USGS_DIR.glob("usgs_catalog_*.csv")) if USGS_DIR.exists() else []
+    usgs_root = usgs_dir or USGS_DIR
+    usgs_files = sorted(usgs_root.glob("usgs_catalog_*.csv")) if usgs_root.exists() else []
     total_events = 0
     for f in usgs_files:
         lines = f.read_text(encoding="utf-8", errors="replace").count("\n") - 1
@@ -549,7 +659,34 @@ def main() -> None:
         default=10,
         help="Thread pool workers for GNSS downloads (default: 10)",
     )
+    parser.add_argument(
+        "--usgs-dir",
+        type=Path,
+        default=None,
+        help="Write the USGS year files here instead of the default cache "
+        "(e.g. build a staging copy, audit it, then swap it in)",
+    )
+    parser.add_argument(
+        "--force-usgs",
+        action="store_true",
+        help="Re-pull every requested USGS year even if the cached file audits complete",
+    )
+    parser.add_argument(
+        "--audit-usgs",
+        action="store_true",
+        help="Only audit the cached USGS year files and exit non-zero if any is incomplete",
+    )
     args = parser.parse_args()
+    usgs_kw = {"usgs_dir": args.usgs_dir, "force": args.force_usgs}
+
+    if args.audit_usgs:
+        bad = 0
+        for year in range(args.min_year, args.max_year + 1):
+            problems = audit_usgs_year_file(usgs_year_path(year, args.usgs_dir), year)
+            status = "ok" if not problems else "INCOMPLETE: " + "; ".join(problems)
+            bad += bool(problems)
+            print(f"  {year}: {status}")
+        raise SystemExit(1 if bad else 0)
 
     t0 = time.time()
     print("HazardPulse Earthquake Data Downloader")
@@ -558,25 +695,25 @@ def main() -> None:
     if args.test:
         # Quick smoke test
         print("\n*** TEST MODE: limited download ***")
-        download_usgs_catalog(min_year=2024, max_year=2024)
+        download_usgs_catalog(min_year=2024, max_year=2024, **usgs_kw)
         download_plate_boundaries()
         test_stations = ALL_CURATED_STATIONS[:5]
         download_gnss_stations(stations=test_stations, max_workers=3)
         note_tec_status()
 
     elif args.usgs_only:
-        download_usgs_catalog(min_year=args.min_year, max_year=args.max_year)
+        download_usgs_catalog(min_year=args.min_year, max_year=args.max_year, **usgs_kw)
 
     else:
         # Full download
-        download_usgs_catalog(min_year=args.min_year, max_year=args.max_year)
+        download_usgs_catalog(min_year=args.min_year, max_year=args.max_year, **usgs_kw)
         download_gcmt_catalog()
         download_plate_boundaries()
         download_gnss_stations(max_workers=args.gnss_workers)
         note_tec_status()
 
     elapsed = time.time() - t0
-    print_summary()
+    print_summary(args.usgs_dir)
     print(f"\nCompleted in {elapsed:.0f}s")
 
 

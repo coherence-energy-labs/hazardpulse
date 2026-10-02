@@ -64,6 +64,20 @@ jobs:
             tests/test_tornado_hrrr_env.py \
             tests/test_eq_forest_wiring.py
 
+      # Each of these failed on the code it guards before 2026-10: order-dependent AUC on
+      # tied cells, the 20,000-row USGS truncation, risk bands contradicting calibrated
+      # probabilities, the 400-day serving window, invented "no RI" hurricane outcomes,
+      # and publish gates fed inputs that could not fail.
+      - name: Verification-truth regression tests
+        run: |
+          python -m pytest -q \
+            tests/test_ranking_metrics.py \
+            tests/test_usgs_catalog_completeness.py \
+            tests/test_risk_band_truth.py \
+            tests/test_eq_history_window.py \
+            tests/test_hurricane_verification.py \
+            tests/test_gate_inputs.py
+
       - name: Determinism gate — identical training regardless of global RNG
         run: python -m pytest -q tests/test_determinism.py
 

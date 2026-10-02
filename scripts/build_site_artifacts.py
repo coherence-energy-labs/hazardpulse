@@ -489,14 +489,42 @@ _GATE_CELL_DEG = {"earthquake": 2.0, "tornado": 2.0, "hurricane": None}
 
 
 def _load_calibration_metrics() -> dict:
-    """Per-hazard deployed-model calibration (results/models/<hazard>_calibration.json)."""
+    """Per-hazard OUT-OF-SAMPLE calibration of the deployed calibrator.
+
+    Reads ``metrics_after_heldout`` (fit_calibration's cross-fit). ``metrics_after`` is
+    measured on the histogram the calibrator was fit to (ECE ~0 by construction), so
+    a hazard without a held-out measurement counts as calibration-not-yet-measured.
+    """
     metrics: dict[str, dict] = {}
     for name in ("earthquake", "tornado", "hurricane"):
         rec = _read_json(ROOT / "results" / "calibration" / f"{name}_calibration.json", {})
-        after = rec.get("metrics_after") if isinstance(rec, dict) else None
-        if after:
-            metrics[name] = after
+        heldout = rec.get("metrics_after_heldout") if isinstance(rec, dict) else None
+        if heldout:
+            metrics[name] = heldout
     return metrics
+
+
+def _live_data_age_seconds(entries: list[dict], now: dt.datetime) -> dict[str, float]:
+    """How old each forecast's inputs had become while it was the public forecast.
+
+    A forecast stays live until the next forecast of its hazard is issued (or until
+    ``now`` for the current one); its inputs are at least as old as its issue time,
+    so (live_until - issued_at) is a lower bound on the source-data age the public
+    saw. This replaced a hard-coded 0.0 under which G1_SOURCE_FRESHNESS could not fail
+    -- not even for a hurricane forecast left live for four months.
+    """
+    by_hazard: dict[str, list[tuple[dt.datetime, str]]] = {}
+    for entry in entries:
+        issued = _parse_utc(entry.get("issued_at"))
+        if issued is not None:
+            by_hazard.setdefault(str(entry.get("hazard")), []).append((issued, entry["forecast_id"]))
+    ages: dict[str, float] = {}
+    for items in by_hazard.values():
+        items.sort()
+        for i, (issued, fid) in enumerate(items):
+            live_until = items[i + 1][0] if i + 1 < len(items) else now
+            ages[fid] = max(0.0, (live_until - issued).total_seconds())
+    return ages
 
 
 def _gate_top_object(artifact: dict) -> dict:
@@ -509,7 +537,8 @@ def _gate_top_object(artifact: dict) -> dict:
     return {}
 
 
-def _build_gate_decisions(entries: list[dict], pulse: dict) -> list[dict]:
+def _build_gate_decisions(entries: list[dict], pulse: dict,
+                          now: dt.datetime | None = None) -> list[dict]:
     """Evaluate the real publish-gate spine per forecast (was: hardcoded 'pass').
 
     Each forecast is gated on its own replay artifact's trust fields — calibrated
@@ -521,6 +550,7 @@ def _build_gate_decisions(entries: list[dict], pulse: dict) -> list[dict]:
 
     engine = GateEngine()
     calib = _load_calibration_metrics()
+    data_ages = _live_data_age_seconds(entries, now or dt.datetime.now(dt.timezone.utc))
     hazard_map = {hazard.get("key"): hazard for hazard in pulse.get("hazards", [])}
     key_for_name = {"earthquake": "eq", "hurricane": "hu", "tornado": "to"}
     decisions: list[dict] = []
@@ -554,7 +584,7 @@ def _build_gate_decisions(entries: list[dict], pulse: dict) -> list[dict]:
             lat=top.get("lat"),
             lon=top.get("lon"),
             cell_size_deg=_GATE_CELL_DEG.get(hazard_name),
-            data_age_seconds=0.0,  # source data was fresh at issue time
+            data_age_seconds=data_ages.get(entry["forecast_id"]),
             ece=(m or {}).get("ece"),
             brier_skill_score=(m or {}).get("brier_skill_score"),
             calibration_known=m is not None,

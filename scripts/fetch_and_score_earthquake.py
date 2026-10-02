@@ -1565,7 +1565,30 @@ def append_ledger(
 
 REPLAY_DIR = DIST / "data" / "replay"
 REPLAY_INDEX_PATH = DIST / "data" / "evidence" / "replay-index.json"
-FEATURE_HISTORY_DAYS = 400
+
+def required_history_days() -> int:
+    """Days of catalog every served tier needs before the issue time.
+
+    The deep GRU tiers read 5 x 365 d (deep_serve.SEQUENCE_LOOKBACK_DAYS, mirroring the
+    training builders) and the forest/GBT Block S reads 5 x 365.25 d
+    (definitive_model.BLOCK_S_LOOKBACK_DAYS). The coherence features and field read
+    365 d. Serving 400 d (the pre-2026-10 value) silently cut short the sequences of
+    93% of active cells for the short-term model and 52% for the operational one
+    (snapshot eq_fcst_20261001_2200).
+    """
+    from hazardpulse.earthquake.deep_serve import SEQUENCE_LOOKBACK_DAYS
+
+    needs = [float(SEQUENCE_LOOKBACK_DAYS), 365.0]
+    if HAS_EQ_ML:
+        from hazardpulse.earthquake.definitive_model import BLOCK_S_LOOKBACK_DAYS
+
+        needs.append(float(BLOCK_S_LOOKBACK_DAYS))
+    else:
+        needs.append(5.0 * 365.25)
+    return int(math.ceil(max(needs)))
+
+
+FEATURE_HISTORY_DAYS = required_history_days()  # 1827
 RECENT_ACTIVITY_DAYS = 30
 FORECAST_HORIZON_DAYS = 30
 TARGET_MAGNITUDE = 6.0
@@ -2048,6 +2071,31 @@ def append_ledger(
     print(f"  Appended to {ledger_path}")
 
 
+class RiskBandContradiction(RuntimeError):
+    """A published cell's risk band disagrees with its published probability."""
+
+
+def apply_trust_layer(scored: list[dict], forecaster, *, issued_at: str) -> list[dict]:
+    """Calibrate every scored cell in place and keep its risk band truthful.
+
+    The band is first computed from the RAW score in score_grid_cells; the trust
+    layer then replaces ``probability`` with the calibrated value. Re-deriving the
+    band from the published probability (band_fn) is what stops a 4.54% cell from
+    being labelled "critical". Raises if any contradiction survives.
+    """
+    from hazardpulse.trust.scoring import band_contradictions, enrich_cells
+
+    enrich_cells(scored, forecaster, issued_at=issued_at, band_fn=_risk_band)
+    bad = band_contradictions(scored, _risk_band)
+    if bad:
+        raise RiskBandContradiction(
+            f"{len(bad)} earthquake cells carry a risk band that contradicts their "
+            f"published probability (first: {scored[bad[0]].get('probability')} -> "
+            f"{scored[bad[0]].get('risk_band')})"
+        )
+    return scored
+
+
 def build_arg_parser():
     """Build the CLI argument parser for the replay-aware forecast runner."""
     parser = argparse.ArgumentParser(
@@ -2180,12 +2228,12 @@ def run_pipeline(
     # bands + Ed25519-signed re-runnable receipts. Fails safe — if no calibrator
     # has been produced yet, forecasts stay raw (uncalibrated) and honest.
     try:
-        from hazardpulse.trust.scoring import enrich_cells, load_forecaster, load_signer
+        from hazardpulse.trust.scoring import load_forecaster, load_signer
 
         _signer = load_signer()
         _forecaster = load_forecaster("earthquake", signer=_signer)
         if _forecaster is not None:
-            enrich_cells(scored, _forecaster, issued_at=format_utc_z(now))
+            apply_trust_layer(scored, _forecaster, issued_at=format_utc_z(now))
             print(
                 f"  Trust layer: calibrated {len(scored)} cells "
                 f"(model {_forecaster.model_version}, signed={_signer is not None})"
@@ -2195,6 +2243,8 @@ def run_pipeline(
                 "  Trust layer: no calibrator yet "
                 "(results/models/earthquake_calibration.json); emitting raw forecasts."
             )
+    except RiskBandContradiction:
+        raise  # never publish a label that contradicts its own probability
     except Exception as exc:  # never let the trust layer break a live forecast
         print(f"  Trust layer: skipped ({exc})")
 

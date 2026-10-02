@@ -28,8 +28,20 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def cat_and_catalog():
+    import hazardpulse.data.earthquake as eq_data
     import hazardpulse.earthquake.definitive_model as dm
-    catalog = dm.load_usgs_catalog(min_year=2000, max_year=2024, min_mag=2.5)
+    from hazardpulse.data.usgs_fdsn import USGSCatalogIncompleteError
+
+    # A unit test never downloads: with no downloader, load_usgs_catalog cannot repair
+    # an incomplete cache (it refuses instead), so skip rather than hit the network.
+    mp = pytest.MonkeyPatch()
+    mp.setattr(eq_data, "_load_download_module", lambda: None)
+    try:
+        catalog = dm.load_usgs_catalog(min_year=2000, max_year=2024, min_mag=2.5)
+    except USGSCatalogIncompleteError as exc:
+        pytest.skip(f"USGS catalog cache incomplete (rebuild with the downloader): {exc}")
+    finally:
+        mp.undo()
     return dm, dm.CatalogArrays(catalog, verbose=False), catalog
 
 

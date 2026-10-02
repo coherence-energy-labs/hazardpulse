@@ -64,14 +64,16 @@ def test_load_usgs_catalog_bootstraps_missing_years(monkeypatch, tmp_path):
     monkeypatch.setattr(earthquake_data, "USGS_DIR", tmp_path)
 
     class DummyDownloader:
-        def download_usgs_year(self, year: int):
-            payload = "\n".join(
-                [
-                    "time,latitude,longitude,depth,mag,magType,place,type,id",
-                    f"{year}-01-15T00:00:00.000Z,10.0,20.0,5.0,4.2,mb,Test,event,evt-{year}",
-                ]
-            )
-            (tmp_path / f"usgs_catalog_{year}.csv").write_text(payload + "\n", encoding="utf-8")
+        def download_usgs_year(self, year: int, **_kw):
+            # A complete-looking year (the loader now audits completeness): one
+            # sub-threshold event every day plus the M4.2 event under test.
+            day = dt.date(year, 1, 1)
+            lines = ["time,latitude,longitude,depth,mag,magType,place,type,id"]
+            while day.year == year:
+                lines.append(f"{day.isoformat()}T06:00:00.000Z,10.0,20.0,5.0,2.0,mb,Test,event,bg-{day}")
+                day += dt.timedelta(days=1)
+            lines.append(f"{year}-01-15T00:00:00.000Z,10.0,20.0,5.0,4.2,mb,Test,event,evt-{year}")
+            (tmp_path / f"usgs_catalog_{year}.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     monkeypatch.setattr(earthquake_data, "_load_download_module", lambda: DummyDownloader())
 

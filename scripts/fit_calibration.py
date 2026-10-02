@@ -51,6 +51,43 @@ def _metrics(probs, pos, total) -> dict:
     }
 
 
+HELDOUT_METHOD = "2-fold cell-level cross-fit (hypergeometric split of each score group, seed 0)"
+
+
+def heldout_metrics(scores, pos, total, *, min_calibration: int = 200,
+                    max_groups: int = 512, seed: int = 0) -> dict | None:
+    """Calibration of the CALIBRATED probabilities on cells the calibrator never saw.
+
+    ``metrics_after`` is measured on the very histogram the calibrator was fit to, so
+    its ECE is ~0 by construction (earthquake 2e-6, tornado 1.2e-4) and the
+    G4_CALIBRATION_FLOOR ECE check could never fire. Here every score group's
+    (pos, total) is split at random into two halves of individual cells; the
+    calibrator is fit on one half and scored on the other, both ways, and pooled.
+    Cells of one forecast can land in both halves (the histogram carries no forecast
+    id), so this is still optimistic versus a forecast-level temporal split -- but it
+    is out-of-sample. Returns None when a half is too small to fit.
+    """
+    rng = np.random.default_rng(seed)
+    tot = np.asarray(total, dtype=np.int64)
+    npos = np.asarray(pos, dtype=np.int64)
+    s = np.asarray(scores, dtype=np.float64)
+    n_a = rng.binomial(tot, 0.5)
+    pos_a = rng.hypergeometric(npos, tot - npos, n_a)
+    halves = ((pos_a, n_a), (npos - pos_a, tot - n_a))
+    preds, poss, tots = [], [], []
+    for (fit_pos, fit_tot), (ev_pos, ev_tot) in ((halves[0], halves[1]), (halves[1], halves[0])):
+        f, e = fit_tot > 0, ev_tot > 0
+        cal = VennAbersCalibrator(min_calibration=min_calibration, max_groups=max_groups)
+        cal.fit_grouped(s[f], fit_pos[f].astype(np.float64), fit_tot[f].astype(np.float64))
+        if cal.inflated:
+            return None
+        cp, _, _ = cal.predict(s[e])
+        preds.append(cp)
+        poss.append(ev_pos[e].astype(np.float64))
+        tots.append(ev_tot[e].astype(np.float64))
+    return _metrics(np.concatenate(preds), np.concatenate(poss), np.concatenate(tots))
+
+
 def fit_one(dataset_path: Path, out_path: Path, *, model_version: str,
             min_calibration: int = 200, max_groups: int = 512) -> dict:
     data = json.loads(dataset_path.read_text(encoding="utf-8"))
@@ -64,9 +101,12 @@ def fit_one(dataset_path: Path, out_path: Path, *, model_version: str,
     before = _metrics(scores, pos, total)
     if cal.inflated:
         after = before
+        after_heldout = None
     else:
         cal_probs, _, _ = cal.predict(scores)
         after = _metrics(cal_probs, pos, total)
+        after_heldout = heldout_metrics(scores, pos, total, min_calibration=min_calibration,
+                                        max_groups=max_groups)
 
     payload = {
         "schema_version": 1,
@@ -80,7 +120,9 @@ def fit_one(dataset_path: Path, out_path: Path, *, model_version: str,
         "n_groups": int(scores.size),
         "inflated": bool(cal.inflated),
         "metrics_before": before,
-        "metrics_after": after,
+        "metrics_after": after,                 # in-sample: ~0 ECE by construction
+        "metrics_after_heldout": after_heldout,  # what G4_CALIBRATION_FLOOR gates on
+        "heldout_method": HELDOUT_METHOD if after_heldout is not None else None,
         "calibrator": cal.to_dict(),
         "source_dataset": str(dataset_path),
     }

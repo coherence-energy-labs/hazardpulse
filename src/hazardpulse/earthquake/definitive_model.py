@@ -95,6 +95,9 @@ CONTROL_OFFSET_RANGE: tuple[float, float] = (1.5, 4.5)  # years
 # Time constants
 SEC_PER_DAY: float = 86400.0
 SEC_PER_YEAR: float = 365.25 * SEC_PER_DAY
+# Block S reads the 5 years (of 365.25 d) before the reference time; a live scorer
+# must hand it a catalog at least this long or the features differ from training.
+BLOCK_S_LOOKBACK_DAYS: float = 5.0 * 365.25
 
 
 # ===================================================================
@@ -1167,7 +1170,7 @@ def compute_block_s(
     # cat.times is sorted -> binary-search the [t_start, ev_time) window (O(log N))
     # instead of an O(N) boolean mask over all ~0.5M events, then spatial-mask the
     # (much smaller) slice. Identical event set, just faster.
-    t_start = ev_time - 5.0 * SEC_PER_YEAR
+    t_start = ev_time - BLOCK_S_LOOKBACK_DAYS * SEC_PER_DAY
     i0 = int(np.searchsorted(cat.times, t_start, side="left"))
     i1 = int(np.searchsorted(cat.times, ev_time, side="left"))
     box_deg = 4.5
