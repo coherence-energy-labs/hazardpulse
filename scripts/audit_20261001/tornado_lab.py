@@ -42,6 +42,14 @@ NAMES = list(sf.FEATURE_NAMES)
 W_NAMES = ["w_tor_warning_active", "w_minutes_since_issue"]   # amendment 3
 FIDX = {n: i for i, n in enumerate(NAMES)}
 LIDX = {n: i for i, n in enumerate(sf.LABEL_NAMES)}
+DERIVED_LABELS = ("storm_60_ef2",)   # amendment 7: storm_60 AND the matched report is EF2+
+
+
+def get_y(Y, meta, name: str) -> np.ndarray:
+    """The label column NAME as an int8 copy; derived labels are built from stored columns."""
+    if name == "storm_60_ef2":
+        return ((np.asarray(Y[:, LIDX["storm_60"]]) == 1) & (np.asarray(meta["ef"]) >= 2)).astype(np.int8)
+    return np.array(Y[:, LIDX[name]], np.int8)
 
 
 # ---------------------------------------------------------------------------
@@ -296,13 +304,13 @@ def resolve_blocks(exp: dict) -> dict:
 def run(exp: dict) -> dict:
     t0 = time.time()
     exp = resolve_blocks(exp)
-    lab = LIDX[exp.get("label", "storm_60")]                  # the label the model is TRAINED on
-    ev = LIDX[exp.get("eval_label", exp.get("label", "storm_60"))]   # the label it is calibrated and SCORED on
+    lab = exp.get("label", "storm_60")                        # the label the model is TRAINED on
+    ev = exp.get("eval_label", lab)                           # the label it is calibrated and SCORED on
     cols = cols_for(exp["blocks"], exp.get("drop"))
     use_w = "W" in exp["blocks"]
     seed = int(exp.get("seed", 0))
     Xt, Yt, mt = load("train")
-    y_tr_all = np.array(Yt[:, lab], np.int8)              # a copy: the memmap is read-only
+    y_tr_all = get_y(Yt, mt, lab)                         # a copy: the memmap is read-only
     frac = float(exp.get("train_day_fraction", 1.0))       # learning curve: a fixed random subset of DAYS
     if frac < 1.0:
         ud = np.unique(mt["day"])
@@ -319,8 +327,8 @@ def run(exp: dict) -> dict:
     ytr = y_tr_all[rows]
     w = balanced_weights(ytr)                                  # amendment 5
     Xv, Yv, mv = load("val")
-    yv_train = np.asarray(Yv[:, lab], np.int8)
-    yv = np.asarray(Yv[:, ev], np.int8)
+    yv_train = get_y(Yv, mv, lab)
+    yv = get_y(Yv, mv, ev)
     # early-stopping set: a fixed weighted sample of VAL (model selection data), on the training label
     es_rows, _ = train_sample(None, yv_train, 30, seed + 1)
     es_w = balanced_weights(yv_train[es_rows])                 # AUC is unchanged by class-constant weights
@@ -341,7 +349,7 @@ def run(exp: dict) -> dict:
         np.save(LAB / "preds" / f"{exp['name']}_val.npy", p_val.astype(np.float32))
     if exp.get("eval_dev", True):
         Xd, Yd, md = load("dev")
-        yd = np.asarray(Yd[:, ev], np.int8)
+        yd = get_y(Yd, md, ev)
         p_dev = cal(predict_stream(score_fn, Xd, cols, W=load_w("dev") if use_w else None))
         res["dev"] = metrics(yd, p_dev, md["day"], n_boot=int(exp.get("n_boot_dev", 1000)))
         if exp.get("save_preds"):
@@ -365,13 +373,13 @@ def baselines(splits=("val", "dev"), label: str = "storm_60") -> dict:
     and Platt-calibrated on validation (fitted on val, out-of-fold on val itself), plus v2."""
     out: dict = {}
     val_X, val_Y, val_m = load("val")
-    y_val = np.asarray(val_Y[:, LIDX[label]], np.int8)
+    y_val = get_y(val_Y, val_m, label)
     (LAB / "preds").mkdir(parents=True, exist_ok=True)
     cols = {name: (FIDX[c], scale) for name, (c, scale) in BASELINE_COLUMNS.items()}
     sources = {name: (lambda X, j=j: np.asarray(X[:, j], np.float64)) for name, (j, _) in cols.items()}
     for split in splits:
         X, Y, m = load(split)
-        y = np.asarray(Y[:, LIDX[label]], np.int8)
+        y = get_y(Y, m, label)
         res = {}
         for name, (j, scale) in cols.items():
             raw = np.nan_to_num(np.asarray(X[:, j], np.float64), nan=-1.0)
@@ -431,7 +439,7 @@ def stress_groups(X, meta) -> dict[str, np.ndarray]:
 def stress(name: str, split: str, label: str = "storm_60", others=("v2", "probtor_platt"), n_boot: int = 300) -> dict:
     """AUC (day-clustered CI) of one experiment's saved predictions per stratum, beside the bars."""
     X, Y, meta = load(split)
-    y = np.asarray(Y[:, LIDX[label]], np.int8)
+    y = get_y(Y, meta, label)
     preds = {name: np.load(LAB / "preds" / f"{name}_{split}.npy").astype(np.float64)}
     for o in others:
         f = LAB / "preds" / f"{o}_{split}.npy"
@@ -466,7 +474,7 @@ def ensemble(name: str, members: list[str], splits=("val", "dev"), label: str = 
         return np.log(p / (1 - p))
     out = {"name": name, "members": members}
     _, Yv, mv = load("val")
-    yv = np.asarray(Yv[:, LIDX[label]], np.int8)
+    yv = get_y(Yv, mv, label)
     s_val = np.mean([logit(np.load(LAB / "preds" / f"{m}_val.npy")) for m in members], axis=0)
     cal = fit_calibrator("platt", s_val, yv)
     for split in splits:
@@ -477,7 +485,7 @@ def ensemble(name: str, members: list[str], splits=("val", "dev"), label: str = 
         p = out_of_fold_calibrated("platt", s, yv, mv["day"]) if split == "val" else cal(s)
         np.save(LAB / "preds" / f"{name}_{split}.npy", p.astype(np.float32))
         _, Y, m = load(split)
-        out[split] = metrics(np.asarray(Y[:, LIDX[label]], np.int8), p, m["day"], n_boot=300)
+        out[split] = metrics(get_y(Y, m, label), p, m["day"], n_boot=300)
     (OUT / f"{name}.json").write_text(json.dumps(out, indent=1, default=float), encoding="utf-8")
     return out
 
@@ -499,13 +507,13 @@ def fit_fixed_rounds(exp: dict, X, y, w, n_rounds: int):
     return lgb.train(p, lgb.Dataset(X, y, weight=w, free_raw_data=True), int(n_rounds))
 
 
-def _rows_for(parts: dict, years_in: set[int], neg_per_pos: int, seed: int, cols, use_w, label_idx):
+def _rows_for(parts: dict, years_in: set[int], neg_per_pos: int, seed: int, cols, use_w, label: str):
     """All positives + neg_per_pos negatives per positive from the given calendar years of every
     source split; returns (X, y, balanced weights). 2020 (Oct-Dec) counts as part of 2021."""
     Xs, ys = [], []
     for k, (X, Y, meta, W) in parts.items():
         yrs = np.maximum(np.asarray(meta["day"], np.int64) // 10000, 2021)
-        y_all = np.array(Y[:, label_idx], np.int8)
+        y_all = get_y(Y, meta, label)
         y_all[~np.isin(yrs, list(years_in))] = -1
         if not (y_all == 1).any() or not (y_all == 0).any():
             continue        # e.g. the held-out year is this whole split (val = 2023): nothing to draw
@@ -517,27 +525,18 @@ def _rows_for(parts: dict, years_in: set[int], neg_per_pos: int, seed: int, cols
     return Xc, yc, balanced_weights(yc)
 
 
-def final_pipeline(which: str = "primary") -> dict:
-    """Protocol 'Final pipeline': refit on 2020-10..2024 with the validation-chosen rounds,
-    Platt-calibrate on leave-one-year-out scores, score 2025 ONCE. Refuses a second run."""
-    chosen = json.loads((EXPERIMENTS / "chosen_on_validation.json").read_text(encoding="utf-8"))
-    exp = dict(chosen["primary"])
-    if which == "plus_W":
-        exp.update(chosen["secondary_with_warnings"]["same_as_primary_except"])
-        exp["name"] = chosen["secondary_with_warnings"]["name"]
-    out_path = OUT / f"final_{exp['name']}.json"
-    if out_path.exists():
-        raise SystemExit(f"{out_path} exists: 2025 is read once")
-    rounds = int(json.loads((OUT / "c_platt.json").read_text(encoding="utf-8"))["fit"]["best_iteration"])
+LOYO_YEARS = (2021, 2022, 2023, 2024)
+
+
+def _loyo_scores(exp: dict, rounds: int, parts: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Leave-one-year-out raw scores for every row of 2020-10..2024 (each year scored by a model
+    that never saw it), with their labels and days. Never touches 2025."""
     cols = cols_for(exp["blocks"])
     use_w = "W" in exp["blocks"]
-    lab = LIDX[exp["label"]]
-    parts = {k: (*load(k), load_w(k)) for k in FINAL_SOURCES}
-    years = [2021, 2022, 2023, 2024]
-    # leave-one-year-out scores for every row of 2020-10..2024
     oof_s, oof_y, oof_day = [], [], []
-    for yr in years:
-        Xc, yc, wc = _rows_for(parts, set(years) - {yr}, exp["neg_per_pos"], exp["seed"], cols, use_w, lab)
+    for yr in LOYO_YEARS:
+        Xc, yc, wc = _rows_for(parts, set(LOYO_YEARS) - {yr}, exp["neg_per_pos"], exp["seed"], cols, use_w,
+                               exp["label"])
         bst = fit_fixed_rounds(exp, Xc, yc, wc, rounds)
         for k, (X, Y, meta, W) in parts.items():
             yrs = np.maximum(np.asarray(meta["day"], np.int64) // 10000, 2021)
@@ -547,25 +546,44 @@ def final_pipeline(which: str = "primary") -> dict:
             s = np.concatenate([bst.predict(matrix(X, W, idx[i:i + 200_000], cols, use_w), raw_score=True)
                                 for i in range(0, len(idx), 200_000)])
             oof_s.append(s)
-            oof_y.append(np.asarray(Y[idx, lab], np.int8))
+            oof_y.append(get_y(Y, meta, exp["label"])[idx])
             oof_day.append(np.asarray(meta["day"])[idx])
         print(f"  LOYO {yr}: fitted on {len(yc)} rows ({int(yc.sum())} positives)", flush=True)
-    s_oof, y_oof, d_oof = np.concatenate(oof_s), np.concatenate(oof_y), np.concatenate(oof_day)
+    return np.concatenate(oof_s), np.concatenate(oof_y), np.concatenate(oof_day)
+
+
+def _save_oof(name: str, s, y, d) -> None:
+    LAB.joinpath("oof").mkdir(parents=True, exist_ok=True)
+    np.savez(LAB / "oof" / f"{name}.npz", score=np.asarray(s, np.float64), y=np.asarray(y, np.int8),
+             day=np.asarray(d, np.int64))
+
+
+def _final_core(exp: dict, rounds: int) -> dict:
+    """LOYO Platt, refit on every season, score 2025 ONCE. Refuses a second run."""
+    out_path = OUT / f"final_{exp['name']}.json"
+    if out_path.exists():
+        raise SystemExit(f"{out_path} exists: 2025 is read once")
+    cols = cols_for(exp["blocks"])
+    use_w = "W" in exp["blocks"]
+    parts = {k: (*load(k), load_w(k)) for k in FINAL_SOURCES}
+    s_oof, y_oof, d_oof = _loyo_scores(exp, rounds, parts)
+    _save_oof(exp["name"], s_oof, y_oof, d_oof)
     cal = dm.fit_platt(s_oof, y_oof)
     # the served model: every season, the same rounds
-    Xc, yc, wc = _rows_for(parts, set(years), exp["neg_per_pos"], exp["seed"], cols, use_w, lab)
+    Xc, yc, wc = _rows_for(parts, set(LOYO_YEARS), exp["neg_per_pos"], exp["seed"], cols, use_w, exp["label"])
     bst = fit_fixed_rounds(exp, Xc, yc, wc, rounds)
     LAB.joinpath("models").mkdir(parents=True, exist_ok=True)
     model_path = LAB / "models" / f"{exp['name']}.lgbm.txt"
     bst.save_model(str(model_path))
     # 2025, once
-    assemble("final")
+    if not (LAB / "final_X.npy").exists():
+        assemble("final")
     Xf, Yf, mf = load("final")
     Wf = load_w("final") if use_w else None
     sf_ = predict_stream(lambda A: bst.predict(A, raw_score=True), Xf, cols, W=Wf)
     pf = dm.apply_calibration(sf_, cal)
     np.save(LAB / "preds" / f"{exp['name']}_final.npy", pf.astype(np.float32))
-    yf = np.asarray(Yf[:, LIDX[exp["label"]]], np.int8)
+    yf = get_y(Yf, mf, exp["label"])
     res = {"exp": exp, "rounds": rounds, "calibration": cal, "model_file": str(model_path),
            "refit_rows": int(len(yc)), "refit_positives": int(yc.sum()),
            "oof_2021_2024": metrics(y_oof, dm.apply_calibration(s_oof, cal), d_oof, n_boot=300),
@@ -574,12 +592,52 @@ def final_pipeline(which: str = "primary") -> dict:
     return res
 
 
+def _chosen_exp(which: str) -> dict:
+    chosen = json.loads((EXPERIMENTS / "chosen_on_validation.json").read_text(encoding="utf-8"))
+    exp = dict(chosen["primary"])
+    if which == "plus_W":
+        exp.update(chosen["secondary_with_warnings"]["same_as_primary_except"])
+        exp["name"] = chosen["secondary_with_warnings"]["name"]
+    return exp
+
+
+def final_pipeline(which: str = "primary") -> dict:
+    """Protocol 'Final pipeline': refit on 2020-10..2024 with the validation-chosen rounds,
+    Platt-calibrate on leave-one-year-out scores, score 2025 ONCE. Refuses a second run."""
+    rounds = int(json.loads((OUT / "c_platt.json").read_text(encoding="utf-8"))["fit"]["best_iteration"])
+    return _final_core(_chosen_exp(which), rounds)
+
+
+def final_product(product: str) -> dict:
+    """Amendment 7: the served (+W) configuration on another label; its rounds are the ones its
+    own dev run chose by early stopping on validation (results/lab/p_<product>.json)."""
+    dev = json.loads((OUT / f"p_{product}.json").read_text(encoding="utf-8"))
+    exp = {**_chosen_exp("plus_W"), "name": f"v3_plus_W_{product}", "label": dev["exp"]["label"]}
+    return _final_core(exp, int(dev["fit"]["best_iteration"]))
+
+
+def oof_only(which: str = "plus_W") -> dict:
+    """Recompute an already-final model's LOYO scores (no 2025) for its Venn-Abers interval, and
+    check they reproduce the final run's Platt calibration exactly (same seeds, same rows)."""
+    exp = _chosen_exp(which)
+    final = json.loads((OUT / f"final_{exp['name']}.json").read_text(encoding="utf-8"))
+    parts = {k: (*load(k), load_w(k)) for k in FINAL_SOURCES}
+    s, y, d = _loyo_scores(exp, int(final["rounds"]), parts)
+    cal = dm.fit_platt(s, y)
+    for k in ("a", "b"):
+        if abs(float(cal[k]) - float(final["calibration"][k])) > 1e-9:
+            raise SystemExit(f"LOYO scores do not reproduce the final calibration ({k}: {cal[k]} vs "
+                             f"{final['calibration'][k]})")
+    _save_oof(exp["name"], s, y, d)
+    return {"name": exp["name"], "rows": int(len(s)), "positives": int(y.sum()), "calibration": cal}
+
+
 def nws_bar(name: str, split: str, label: str = "storm_60", n_boot: int = 2000, seed: int = 42) -> dict:
     """NWS tornado warnings as a bar: their POD at their own false-alarm rate (POFD = share of
     negative storm observations inside an active warning), against the model's POD at the SAME
     POFD (threshold fixed on the whole split). Paired whole-day bootstrap of POD(model) - POD(NWS)."""
     _, Y, meta = load(split)
-    y = np.asarray(Y[:, LIDX[label]], np.int8)
+    y = get_y(Y, meta, label)
     W = load_w(split)
     warned = np.asarray(W[:, 0], np.float64)
     p = np.load(LAB / "preds" / f"{name}_{split}.npy").astype(np.float64)
@@ -643,7 +701,7 @@ def compare(name_a: str, name_b: str, split: str, label: str = "storm_60", n_boo
     pa = np.load(LAB / "preds" / f"{name_a}_{split}.npy").astype(np.float64)
     pb = np.load(LAB / "preds" / f"{name_b}_{split}.npy").astype(np.float64)
     _, Y, meta = load(split)
-    y = np.asarray(Y[:, LIDX[label]], np.float64)
+    y = get_y(Y, meta, label).astype(np.float64)
     if not (len(pa) == len(pb) == len(y)):
         raise ValueError(f"row counts differ: {len(pa)} {len(pb)} {len(y)}")
     ok = np.isfinite(pa) & np.isfinite(pb)          # e.g. v2 cannot score a row with no analysis
@@ -693,9 +751,12 @@ def main() -> int:
               f"{r['model_pod_at_nws_pofd']:.3f} | delta {r['delta_pod']:+.3f} "
               f"[{r['delta_pod_ci'][0]:+.3f}, {r['delta_pod_ci'][1]:+.3f}]", flush=True)
         return 0
-    if cmd == "final":
+    if cmd == "oof_only":
+        print(json.dumps(oof_only(sys.argv[2] if len(sys.argv) > 2 else "plus_W"), indent=1, default=float))
+        return 0
+    if cmd in ("final", "final_product"):
         which = sys.argv[2] if len(sys.argv) > 2 else "primary"
-        r = final_pipeline(which)
+        r = final_pipeline(which) if cmd == "final" else final_product(which)
         f = r["final_2025"]
         print(f"FINAL 2025 {r['exp']['name']}: AUC {f['auc']:.4f} {[round(x, 4) for x in f['auc_ci']]} "
               f"BSS {f['bss']:+.4f} n={f['n']} pos={f['pos']}", flush=True)

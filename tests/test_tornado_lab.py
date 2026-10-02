@@ -118,6 +118,17 @@ def test_nws_bar_matches_the_false_alarm_rate_and_scores_hits(lab, tmp_path, mon
     assert r["delta_pod"] > 0.3 and r["delta_pod_ci"][0] > 0          # the skilful model wins, provably
 
 
+def test_ef2_label_is_a_strong_tornado_from_this_storm_within_60_min(lab):
+    Y = np.zeros((5, len(lab.LIDX)), np.int8)
+    Y[[0, 1, 2], lab.LIDX["storm_60"]] = 1
+    meta = {"ef": np.array([3.0, 1.0, -1.0, 4.0, 2.0], np.float32)}   # row 3/4: EF but no storm_60 match
+    assert lab.get_y(Y, meta, "storm_60_ef2").tolist() == [1, 0, 0, 0, 0]
+    assert lab.get_y(Y, meta, "storm_60").tolist() == [1, 1, 1, 0, 0]
+    out = lab.get_y(Y, meta, "storm_60")
+    out[0] = 0
+    assert Y[0, lab.LIDX["storm_60"]] == 1          # a copy, never a view of the read-only store
+
+
 def test_final_refit_rows_skip_a_split_wholly_inside_the_held_out_year(lab):
     """LOYO holding out 2023 excludes every row of the validation split (all 2023); that split
     must be skipped, not divide by zero (the first final run crashed here before reading 2025)."""
@@ -131,7 +142,7 @@ def test_final_refit_rows_skip_a_split_wholly_inside_the_held_out_year(lab):
         return X, Y, {"day": rng.choice(days, size=n)}, W
     parts = {"train": part([20210501, 20220601]), "val": part([20230501]), "dev": part([20240501])}
     cols = lab.cols_for(["P"])
-    Xc, yc, wc = lab._rows_for(parts, {2021, 2022, 2024}, 30, 0, cols, False, lab.LIDX["storm_60"])
+    Xc, yc, wc = lab._rows_for(parts, {2021, 2022, 2024}, 30, 0, cols, False, "storm_60")
     n_pos_expected = sum(int(p[1][:, lab.LIDX["storm_60"]].sum()) for k, p in parts.items() if k != "val")
     assert int(yc.sum()) == n_pos_expected and Xc.shape[1] == len(cols)
     assert wc[yc == 1].sum() == pytest.approx(wc[yc == 0].sum())
