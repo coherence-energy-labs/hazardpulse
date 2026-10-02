@@ -205,46 +205,104 @@ def fit_calibrator(kind: str, s_val, y_val):
     raise ValueError(kind)
 
 
+CAL_FOLDS = 5
+
+
+def out_of_fold_calibrated(kind: str, s_val, y_val, days) -> np.ndarray:
+    """Validation probabilities whose calibrator never saw their own day: whole UTC days are dealt
+    to CAL_FOLDS folds by a fixed hash, each fold calibrated on the other four. Validation metrics
+    use these, so a flexible calibrator (Venn-Abers) cannot flatter itself on the rows it fitted."""
+    s_val = np.asarray(s_val, np.float64)
+    fold = (np.asarray(days, np.int64) * 2654435761 % 2 ** 32) % CAL_FOLDS
+    out = np.empty_like(s_val)
+    for k in range(CAL_FOLDS):
+        te = fold == k
+        out[te] = fit_calibrator(kind, s_val[~te], y_val[~te])(s_val[te])
+    return out
+
+
 def run(exp: dict) -> dict:
     t0 = time.time()
-    lab = LIDX[exp.get("label", "storm_60")]
+    lab = LIDX[exp.get("label", "storm_60")]                  # the label the model is TRAINED on
+    ev = LIDX[exp.get("eval_label", exp.get("label", "storm_60"))]   # the label it is calibrated and SCORED on
     cols = cols_for(exp["blocks"], exp.get("drop"))
     seed = int(exp.get("seed", 0))
     Xt, Yt, mt = load("train")
     y_tr_all = np.asarray(Yt[:, lab], np.int8)
+    frac = float(exp.get("train_day_fraction", 1.0))       # learning curve: a fixed random subset of DAYS
+    if frac < 1.0:
+        ud = np.unique(mt["day"])
+        keep_days = np.random.RandomState(seed + 7).choice(ud, size=max(1, int(round(frac * len(ud)))), replace=False)
+        y_tr_all = np.where(np.isin(mt["day"], keep_days), y_tr_all, -1).astype(np.int8)
     rows, w = train_sample(None, y_tr_all, int(exp.get("neg_per_pos", 30)), seed)
     Xtr = np.asarray(Xt[rows][:, cols], np.float32)
     ytr = y_tr_all[rows]
     Xv, Yv, mv = load("val")
-    yv = np.asarray(Yv[:, lab], np.int8)
-    # early-stopping set: a fixed weighted sample of VAL (model selection data)
-    es_rows, es_w = train_sample(None, yv, 30, seed + 1)
+    yv_train = np.asarray(Yv[:, lab], np.int8)
+    yv = np.asarray(Yv[:, ev], np.int8)
+    # early-stopping set: a fixed weighted sample of VAL (model selection data), on the training label
+    es_rows, es_w = train_sample(None, yv_train, 30, seed + 1)
     Xes = np.asarray(Xv[es_rows][:, cols], np.float32)
     score_fn, info, model = fit_model(exp["model"], dict(exp.get("params", {})), Xtr, ytr, w,
-                                      Xes, yv[es_rows], es_w, seed)
+                                      Xes, yv_train[es_rows], es_w, seed)
     s_val = predict_stream(score_fn, Xv, cols)
-    cal = fit_calibrator(exp.get("calibration", "platt"), s_val, yv)
-    p_val = cal(s_val)
+    cal_kind = exp.get("calibration", "platt")
+    cal = fit_calibrator(cal_kind, s_val, yv)                # all of val: what dev/final see
+    p_val = out_of_fold_calibrated(cal_kind, s_val, yv, mv["day"])
     res = {"exp": exp, "n_features": len(cols), "train_rows": int(len(rows)),
            "train_pos": int(ytr.sum()), "fit": info,
            "val": metrics(yv, p_val, mv["day"], n_boot=int(exp.get("n_boot_val", 200)))}
+    res["val"]["auc_raw_score"] = dm.compute_auc(yv.astype(np.float64), s_val)
+    if exp.get("save_preds"):
+        LAB.joinpath("preds").mkdir(exist_ok=True)
+        np.save(LAB / "preds" / f"{exp['name']}_val.npy", p_val.astype(np.float32))
     if exp.get("eval_dev", True):
         Xd, Yd, md = load("dev")
-        yd = np.asarray(Yd[:, lab], np.int8)
+        yd = np.asarray(Yd[:, ev], np.int8)
         p_dev = cal(predict_stream(score_fn, Xd, cols))
         res["dev"] = metrics(yd, p_dev, md["day"], n_boot=int(exp.get("n_boot_dev", 1000)))
         if exp.get("save_preds"):
-            LAB.joinpath("preds").mkdir(exist_ok=True)
             np.save(LAB / "preds" / f"{exp['name']}_dev.npy", p_dev.astype(np.float32))
-            np.save(LAB / "preds" / f"{exp['name']}_val.npy", p_val.astype(np.float32))
     res["seconds"] = round(time.time() - t0, 1)
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / f"{exp['name']}.json").write_text(json.dumps(res, indent=1, default=float), encoding="utf-8")
     return res
 
 
+def compare(name_a: str, name_b: str, split: str, label: str = "storm_60", n_boot: int = 1000, seed: int = 42) -> dict:
+    """B minus A on one split, paired, whole UTC days resampled: AUC and Brier deltas with 95% intervals.
+    Both experiments must have been run with save_preds on the same split rows."""
+    pa = np.load(LAB / "preds" / f"{name_a}_{split}.npy").astype(np.float64)
+    pb = np.load(LAB / "preds" / f"{name_b}_{split}.npy").astype(np.float64)
+    _, Y, meta = load(split)
+    y = np.asarray(Y[:, LIDX[label]], np.float64)
+    if not (len(pa) == len(pb) == len(y)):
+        raise ValueError(f"row counts differ: {len(pa)} {len(pb)} {len(y)}")
+    clusters = dm._cluster_index(meta["day"])
+    rng = np.random.RandomState(seed)
+    d_auc = np.empty(n_boot)
+    d_bri = np.empty(n_boot)
+    for i in range(n_boot):
+        idx = np.concatenate([clusters[c] for c in rng.randint(0, len(clusters), size=len(clusters))])
+        yy = y[idx]
+        d_auc[i] = dm.compute_auc(yy, pb[idx]) - dm.compute_auc(yy, pa[idx])
+        d_bri[i] = np.mean((pb[idx] - yy) ** 2) - np.mean((pa[idx] - yy) ** 2)
+    out = {"a": name_a, "b": name_b, "split": split, "label": label, "n_days": len(clusters), "n_boot": n_boot,
+           "delta_auc": dm.compute_auc(y, pb) - dm.compute_auc(y, pa),
+           "delta_auc_ci": [float(np.percentile(d_auc, 2.5)), float(np.percentile(d_auc, 97.5))],
+           "delta_brier": float(np.mean((pb - y) ** 2) - np.mean((pa - y) ** 2)),
+           "delta_brier_ci": [float(np.percentile(d_bri, 2.5)), float(np.percentile(d_bri, 97.5))]}
+    (OUT / f"compare_{name_b}_vs_{name_a}_{split}_{label}.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
+    return out
+
+
 def main() -> int:
     cmd = sys.argv[1]
+    if cmd == "compare":
+        a, b, split = sys.argv[2], sys.argv[3], sys.argv[4]
+        label = sys.argv[5] if len(sys.argv) > 5 else "storm_60"
+        print(json.dumps(compare(a, b, split, label), indent=1))
+        return 0
     if cmd == "assemble":
         for split in (sys.argv[2:] or ["train", "val", "dev"]):
             assemble(split)
