@@ -19,6 +19,7 @@ import numpy as np
 _HRRR_FETCH_ATTEMPTS = int(os.environ.get("HAZARDPULSE_HRRR_ATTEMPTS", "3"))
 _HRRR_FETCH_BACKOFF = 1.5  # seconds, multiplied by attempt index
 _HRRR_HTTP_TIMEOUT = float(os.environ.get("HAZARDPULSE_HRRR_TIMEOUT", "30"))  # per-request seconds
+_HRRR_FETCH_THREADS = int(os.environ.get("HAZARDPULSE_HRRR_THREADS", "6"))  # variables read concurrently
 
 from hazardpulse.data.http import fetch_bytes
 
@@ -161,6 +162,144 @@ def load_cached_hrrr(
         return None
 
 
+def fetch_hrrr_natives(
+    date_str: str,
+    hour: int,
+    *,
+    threads: int = _HRRR_FETCH_THREADS,
+) -> dict[str, np.ndarray] | None:
+    """Every HRRR_VARS field of one analysis on the NATIVE 1059 x 1799 grid.
+
+    Float32, fill values verified absent (a chunk that fails to arrive comes
+    back from zarr as its fill value with no error -- retried, then refused),
+    winds rotated to earth-relative. Variables are read concurrently. Returns
+    None if any variable cannot be fetched cleanly; nothing partial escapes.
+    """
+    import zarr
+    import fsspec
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Hard network timeout: the public archive can stall a read indefinitely (no
+    # bytes, no error). A bounded client timeout turns a stall into an exception
+    # the per-variable retry can handle.
+    client_kwargs = {}
+    try:
+        import aiohttp
+        client_kwargs = {"timeout": aiohttp.ClientTimeout(total=_HRRR_HTTP_TIMEOUT)}
+    except Exception:
+        pass
+
+    zarr_root = HRRR_ZARR_ROOT.format(date=date_str, hour=hour)
+    try:
+        store = fsspec.get_mapper(zarr_root, client_kwargs=client_kwargs)
+        root = zarr.open(store, mode="r")
+    except Exception as exc:
+        print(f"  HRRR zarr store unreachable ({zarr_root}): {exc}")
+        return None
+
+    def _one(item: tuple[str, str]) -> tuple[str, np.ndarray | None]:
+        var_name, zarr_path = item
+        for attempt in range(_HRRR_FETCH_ATTEMPTS):
+            try:
+                arr = root[zarr_path]
+                got = _fill_to_nan(np.asarray(arr, dtype=np.float32), getattr(arr, "fill_value", None))
+                n_bad = int(np.isnan(got).sum())
+                if n_bad:
+                    raise ValueError(
+                        f"{n_bad} of {got.size} native points are fill/NaN "
+                        "(a chunk did not arrive)"
+                    )
+                return var_name, got.reshape(NATIVE_NY, NATIVE_NX)
+            except Exception as exc:
+                if attempt == _HRRR_FETCH_ATTEMPTS - 1:
+                    print(f"  HRRR fetch failed for {var_name} after "
+                          f"{_HRRR_FETCH_ATTEMPTS} tries: {exc}")
+                else:
+                    time.sleep(_HRRR_FETCH_BACKOFF * (attempt + 1))
+        return var_name, None
+
+    with ThreadPoolExecutor(max(1, threads)) as ex:
+        results = dict(ex.map(_one, HRRR_VARS.items()))
+    missing = [k for k, v in results.items() if v is None]
+    if missing:
+        # A grid with ANY missing variable is never cached or returned: the old
+        # code cached partial pulls (an all-NaN variable among real ones, or
+        # -10000 fill values pooled as data -- 236 of 279 cached grids carried
+        # fill values by 2026-10-01).
+        print(f"  HRRR pull for {date_str} {hour}z abandoned: {', '.join(missing)} unavailable.")
+        return None
+    natives: dict[str, np.ndarray] = results  # type: ignore[assignment]
+
+    # Winds are published GRID-relative; rotate every vector to EARTH-relative
+    # (up to 17-20 degrees at the CONUS edges, ~0 at 97.5 W).
+    for u_name, v_name in WIND_PAIRS:
+        natives[u_name], natives[v_name] = rotate_grid_winds_to_earth(
+            natives[u_name], natives[v_name]
+        )
+    return natives
+
+
+# ---------------------------------------------------------------------------
+# Storm-scale grid: native Lambert blocks (k x k native 3 km points)
+# ---------------------------------------------------------------------------
+#
+# The 80 km lat/lon grid is too coarse for a storm: a mesocyclone is 2-10 km.
+# The storm-scale product keeps the NATIVE projection and pools k x k native
+# points (k = 3 -> 9 km), so there is no regridding at all and a storm's block
+# is found exactly through native_index_of_latlon. MAX for _HRRR_MAX_FIELDS,
+# MEAN otherwise, as for the 80 km grid. Stored float16 (relative precision
+# ~1e-3, below HRRR's own analysis error for every field kept).
+LCC_BLOCK_VARS: tuple[str, ...] = (
+    "mlcape", "mucape", "mlcin", "srh_01", "srh_03", "refc",
+    "ushear_01", "vshear_01", "ushear_06", "vshear_06", "ustorm", "vstorm",
+    "t2m", "td2m", "pwat",
+)
+CACHE_ROOT_LCC = Path(os.environ.get(
+    "HAZARDPULSE_HRRR_LCC_CACHE",
+    str(PROJECT_ROOT / ".cache" / "hrrr_lcc"),
+))
+
+
+def pool_lcc_blocks(full2d: np.ndarray, var_name: str, k: int = 3) -> np.ndarray:
+    """Pool a native field into k x k native blocks (trailing rows/cols dropped)."""
+    ny, nx = (NATIVE_NY // k) * k, (NATIVE_NX // k) * k
+    b = np.asarray(full2d[:ny, :nx], dtype=np.float32).reshape(ny // k, k, nx // k, k)
+    return b.max(axis=(1, 3)) if var_name in _HRRR_MAX_FIELDS else b.mean(axis=(1, 3))
+
+
+def lcc_block_of_latlon(lat, lon, k: int = 3):
+    """(row, col) of the k x k native block containing a lat/lon point (vectorised)."""
+    r, c = native_index_of_latlon(lat, lon)
+    return np.floor(np.asarray(r) + 0.5).astype(np.int64) // k, np.floor(np.asarray(c) + 0.5).astype(np.int64) // k
+
+
+def _lcc_path(date_str: str, hour: int, k: int, cache_dir: Path | None = None) -> Path:
+    return (cache_dir or CACHE_ROOT_LCC) / f"{date_str}_{hour:02d}z.lcc{k}-{GEOMETRY_VERSION}.npz"
+
+
+def save_lcc_blocks(natives: dict[str, np.ndarray], date_str: str, hour: int, k: int = 3,
+                    cache_dir: Path | None = None) -> Path:
+    out = _lcc_path(date_str, hour, k, cache_dir)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    blocks = {v: pool_lcc_blocks(natives[v], v, k).astype(np.float16) for v in LCC_BLOCK_VARS}
+    tmp = out.with_suffix(".tmp.npz")
+    np.savez_compressed(str(tmp), **blocks)
+    os.replace(tmp, out)
+    return out
+
+
+def load_lcc_blocks(date_str: str, hour: int, k: int = 3,
+                    cache_dir: Path | None = None) -> dict[str, np.ndarray] | None:
+    path = _lcc_path(date_str, hour, k, cache_dir)
+    if not path.exists():
+        return None
+    try:
+        with np.load(path) as z:
+            return {key: z[key].astype(np.float32) for key in z.files}
+    except Exception:
+        return None
+
+
 def fetch_hrrr_grid(
     date_str: str,
     hour: int = 18,
@@ -200,72 +339,9 @@ def fetch_hrrr_grid(
         if n_nan / max(len(cached), 1) < 0.9:
             return cached
 
-    import zarr
-    import fsspec
-
-    # Hard network timeout: the public archive can stall a read indefinitely (no
-    # bytes, no error), which would hang the whole fetch. A bounded client timeout
-    # turns a stall into an exception the per-variable retry can handle.
-    client_kwargs = {}
-    try:
-        import aiohttp
-        client_kwargs = {"timeout": aiohttp.ClientTimeout(total=_HRRR_HTTP_TIMEOUT)}
-    except Exception:
-        pass
-
-    zarr_root = HRRR_ZARR_ROOT.format(date=date_str, hour=hour)
-    try:
-        store = fsspec.get_mapper(zarr_root, client_kwargs=client_kwargs)
-        root = zarr.open(store, mode="r")
-    except Exception as exc:
-        # Don't return an all-NaN dict silently — callers cannot distinguish
-        # that from "store populated but every variable is nan". Callers get
-        # None and must decide to fallback or fail.
-        print(f"  HRRR zarr store unreachable ({zarr_root}): {exc}")
+    natives = fetch_hrrr_natives(date_str, hour)
+    if natives is None:
         return None  # type: ignore[return-value]
-
-    natives: dict[str, np.ndarray] = {}
-    for var_name, zarr_path in HRRR_VARS.items():
-        full = None
-        # The public archive throws transient "Server disconnected" mid-read --
-        # and, worse, a chunk that fails to arrive is returned by zarr as its
-        # FILL VALUE (-10000), with no error. Both are retried; a variable is
-        # accepted only when every native point is real data.
-        for attempt in range(_HRRR_FETCH_ATTEMPTS):
-            try:
-                arr = root[zarr_path]
-                got = _fill_to_nan(np.asarray(arr, dtype=np.float32), getattr(arr, "fill_value", None))
-                n_bad = int(np.isnan(got).sum())
-                if n_bad:
-                    raise ValueError(
-                        f"{n_bad} of {got.size} native points are fill/NaN "
-                        "(a chunk did not arrive)"
-                    )
-                full = got.reshape(NATIVE_NY, NATIVE_NX)
-                break
-            except Exception as exc:
-                if attempt == _HRRR_FETCH_ATTEMPTS - 1:
-                    print(f"  HRRR fetch failed for {var_name} after "
-                          f"{_HRRR_FETCH_ATTEMPTS} tries: {exc}")
-                else:
-                    time.sleep(_HRRR_FETCH_BACKOFF * (attempt + 1))
-        if full is None:
-            # A grid with ANY missing variable is never cached or returned: the
-            # old code cached partial pulls (an all-NaN variable among real ones,
-            # or -10000 fill values pooled as data -- 236 of 279 cached grids
-            # carried fill values by 2026-10-01), which fed features from
-            # nowhere into training and live scoring.
-            print(f"  HRRR pull for {date_str} {hour}z abandoned: {var_name} unavailable.")
-            return None  # type: ignore[return-value]
-        natives[var_name] = full
-
-    # Winds are published GRID-relative; the grid is a true lat/lon grid now,
-    # so rotate every vector to EARTH-relative before pooling (up to 17-20
-    # degrees at the CONUS edges, ~0 at 97.5 W).
-    for u_name, v_name in WIND_PAIRS:
-        natives[u_name], natives[v_name] = rotate_grid_winds_to_earth(
-            natives[u_name], natives[v_name]
-        )
     grids = {k: _subsample_to_grid(v.ravel(), k) for k, v in natives.items()}
 
     out_path = _npz_path(date_str, hour, cache_dir=cache_dir)

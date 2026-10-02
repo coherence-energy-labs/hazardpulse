@@ -38,6 +38,8 @@ CACHE_ROOT = Path(os.environ.get(
 # ProbSevere is available via NOAA MRMS on AWS Open Data
 # Bucket: noaa-mrms-pds, prefix: ProbSevere/{YYYYMMDD}/
 PS_S3_BUCKET = "https://noaa-mrms-pds.s3.amazonaws.com"
+PS_FETCH_THREADS = int(os.environ.get("HAZARDPULSE_PS_THREADS", "8"))  # slot files fetched concurrently
+_re_nonword = __import__("re").compile("[^0-9a-z]+")
 PS_S3_PREFIX = "ProbSevere/{date_str}/"
 
 # Convective hours to scan (12 Z to 06 Z next day, every 15 min)
@@ -157,8 +159,12 @@ def fetch_probsevere_day(
     s3_files, s3_listing_ok = _list_s3_files(date_str)
     if s3_files:
         print(f"  ProbSevere: {len(s3_files)} files found in S3 for {date_str}")
-        # Pick files at ~15min intervals
+        # One file per 30-minute slot (the first in each), downloaded
+        # concurrently; time steps keep slot order.
         import re as _re
+        from concurrent.futures import ThreadPoolExecutor
+
+        picked: list[tuple[str, str]] = []
         seen_slots: set[str] = set()
         for key in s3_files:
             m = _re.search(r"_(\d{8})_(\d{6})\.json", key)
@@ -169,16 +175,23 @@ def fetch_probsevere_day(
             if slot in seen_slots:
                 continue
             seen_slots.add(slot)
-            url = f"{PS_S3_BUCKET}/{key}"
+            picked.append((key, hhmm))
+
+        def _get(item: tuple[str, str]) -> dict | None:
+            key, hhmm = item
             try:
-                raw = fetch_bytes(url, namespace="probsevere", timeout=30, use_cache=False)
+                raw = fetch_bytes(f"{PS_S3_BUCKET}/{key}", namespace="probsevere", timeout=30, use_cache=False)
                 data = json.loads(raw.decode("utf-8", errors="replace"))
-                valid_time = data.get("validTime", f"{year}-{month}-{day}T{hhmm[:2]}:{hhmm[2:]}:00Z")
-                storms = _parse_storms(data)
-                if storms is not None:
-                    time_steps.append({"valid_time": valid_time, "storms": storms})
             except Exception:
-                continue
+                return None
+            storms = _parse_storms(data)
+            if storms is None:
+                return None
+            valid_time = data.get("validTime", f"{year}-{month}-{day}T{hhmm[:2]}:{hhmm[2:]}:00Z")
+            return {"valid_time": valid_time, "storms": storms}
+
+        with ThreadPoolExecutor(PS_FETCH_THREADS) as ex:
+            time_steps = [ts for ts in ex.map(_get, picked) if ts is not None]
     elif s3_listing_ok:
         # The bucket answered and holds NO files under this day's prefix. That
         # is authoritative -- the archive has gaps (e.g. 2021-05-15/16) -- so
@@ -385,6 +398,18 @@ def _parse_storms(data: dict) -> list[dict] | None:
             "motion_east": _float("MOTION_EAST"),
             "motion_south": _float("MOTION_SOUTH"),
         }
+        # Keep every other numeric attribute NOAA publishes (PWAT, CAPE_M10M30,
+        # MAXRC_EMISS, MAXRC_ICECF, MEANWIND_1-3kmAGL, WETBULB_0C_HGT, ...) under
+        # a sanitised lowercase name, so a model can use them and the live
+        # scorer -- which parses with this same function -- will have them too.
+        for key, raw in props.items():
+            name = _re_nonword.sub("_", str(key).lower()).strip("_")
+            if not name or name in storm or name == "id":
+                continue
+            try:
+                storm[name] = float(raw)
+            except (TypeError, ValueError):
+                continue
         if geom:
             storm["geometry"] = geom
         storms.append(storm)
