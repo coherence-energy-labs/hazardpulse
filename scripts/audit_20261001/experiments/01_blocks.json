@@ -1,0 +1,14 @@
+[
+ {"name": "b_P",          "model": "lgbm", "blocks": ["P"],                                "calibration": "platt", "neg_per_pos": 30, "save_preds": true},
+ {"name": "b_PE",         "model": "lgbm", "blocks": ["P", "E"],                           "calibration": "platt", "neg_per_pos": 30, "save_preds": true},
+ {"name": "b_PE_H80",     "model": "lgbm", "blocks": ["P", "E", "H80"],                    "calibration": "platt", "neg_per_pos": 30, "save_preds": true},
+ {"name": "b_PE_H80_C80", "model": "lgbm", "blocks": ["P", "E", "H80", "C80"],             "calibration": "platt", "neg_per_pos": 30, "save_preds": true},
+ {"name": "b_PE_H9",      "model": "lgbm", "blocks": ["P", "E", "H9"],                     "calibration": "platt", "neg_per_pos": 30, "save_preds": true},
+ {"name": "b_PE_H9_C9",   "model": "lgbm", "blocks": ["P", "E", "H9", "C9"],               "calibration": "platt", "neg_per_pos": 30, "save_preds": true},
+ {"name": "b_all",        "model": "lgbm", "blocks": ["P", "E", "H80", "C80", "H9", "C9"], "calibration": "platt", "neg_per_pos": 30, "save_preds": true},
+ {"name": "b_all_noC9",   "model": "lgbm", "blocks": ["P", "E", "H80", "C80", "H9"],       "calibration": "platt", "neg_per_pos": 30, "save_preds": true},
+ {"name": "b_all_C9pde",  "model": "lgbm", "blocks": ["P", "E", "H80", "C80", "H9", "C9"], "drop": ["c9_gauss_*", "c9_tau27_max27"], "calibration": "platt", "neg_per_pos": 30, "save_preds": true},
+ {"name": "b_all_C9gauss","model": "lgbm", "blocks": ["P", "E", "H80", "C80", "H9", "C9"], "drop": ["c9_pde_*", "c9_tau27_max27"],   "calibration": "platt", "neg_per_pos": 30, "save_preds": true},
+ {"name": "b_all_noNOAA3","model": "lgbm", "blocks": ["P", "E", "H80", "C80", "H9", "C9"], "drop": ["p_ps_tor", "p_ps_hail", "p_ps_wind", "e_ps_tor_*"], "calibration": "platt", "neg_per_pos": 30, "save_preds": true},
+ {"name": "b_all_noNOAA", "model": "lgbm", "blocks": ["P", "E", "H80", "C80", "H9", "C9"], "drop": ["p_ps", "p_ps_tor", "p_ps_hail", "p_ps_wind", "p_ps_severe", "e_ps_*"], "calibration": "platt", "neg_per_pos": 30, "save_preds": true}
+]
