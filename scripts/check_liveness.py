@@ -23,7 +23,7 @@ REPLAY_DIR = ROOT / "dist" / "data" / "replay"
 # Max acceptable age per hazard (hours) -- the scheduled cadence plus slack.
 MAX_AGE_HOURS = {
     "eq": 12,   # earthquake scorer runs every 6h
-    "hu": 36,   # hurricane scorer runs daily
+    "hu": 14,   # hurricane scorer runs every NHC cycle (6h): one skipped run + 2h of cron delay
     "to": 6,    # tornado scorer runs every 2h
 }
 
