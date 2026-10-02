@@ -7,12 +7,18 @@ Every storm observation of the day with its full feature vector
 (storm_features.FEATURE_NAMES), all labels (storm_features.LABEL_NAMES), and
 metadata. Inputs: ProbSevere v2 cache, the 80 km g3 HRRR grids and the 9 km
 native blocks of the day's 3-hourly analyses, SPC 1950-2025 (UTC instants).
-A day is (re)built only when its output is missing; inputs missing for a day
-are recorded in the file, never silently filled.
+A day is (re)built when its output is missing OR its fingerprint differs: the
+fingerprint names every input file of the day with its size (so a retry round
+that later fetches a missing analysis rebuilds the day instead of freezing the
+hole) and the sha256 of every producer module (so a feature-code change can
+never leave old vectors under a new name). Inputs missing for a day are
+recorded in the file, never silently filled.
 """
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import json
 import os
 import sys
 import time
@@ -22,6 +28,7 @@ from pathlib import Path
 import numpy as np
 
 from hazardpulse.data import hrrr as H
+from hazardpulse.data.probsevere import _cache_path as _ps_path
 from hazardpulse.data.probsevere import load_cached_probsevere
 from hazardpulse.tornado import definitive_model as dm
 from hazardpulse.tornado import storm_features as sf
@@ -43,10 +50,42 @@ def _reports():
     return _REPORTS
 
 
+_PRODUCERS = (sf.__file__, dm.__file__, H.__file__, Path(__file__),
+              Path(sf.__file__).with_name("coherence_engine.py"))
+_PRODUCER_SHA = None
+
+
+def producer_sha() -> dict[str, str]:
+    global _PRODUCER_SHA
+    if _PRODUCER_SHA is None:
+        _PRODUCER_SHA = {Path(p).name: hashlib.sha256(Path(p).read_bytes()).hexdigest()[:16] for p in _PRODUCERS}
+    return _PRODUCER_SHA
+
+
+def input_fingerprint(d: str) -> dict:
+    """Every input file of day ``d`` that exists now, with its size, plus the producers' hashes."""
+    files = [_ps_path(d, cache_dir=PS_V2)] + [H._npz_path(d, h) for h in HOURS] + \
+            [H._lcc_path(d, h, sf.LCC_K) for h in HOURS] + [SPC]
+    return {"inputs": {p.name: p.stat().st_size for p in files if p.exists()}, "producers": producer_sha()}
+
+
+def stored_fingerprint(out: Path) -> dict | None:
+    try:
+        with np.load(out) as z:
+            return json.loads(str(z["fingerprint"])) if "fingerprint" in z.files else None
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 def build_day(d: str) -> str:
     out = STORE / f"{d}.npz"
+    fp = input_fingerprint(d)
     if out.exists():
-        return f"{d} cached"
+        if stored_fingerprint(out) == fp:
+            return f"{d} cached"
+        why = "stale"
+    else:
+        why = "new"
     t0 = time.time()
     steps = load_cached_probsevere(d, cache_dir=PS_V2)
     if steps is None:
@@ -105,10 +144,11 @@ def build_day(d: str) -> str:
         sid=np.asarray(SID), step=np.asarray(STEP, np.int16), analysis=np.asarray(AH, np.int16),
         hours80=np.asarray(sorted(an80), np.int16), hours9=np.asarray(sorted(an9), np.int16),
         step_minutes=np.float32(step_min), schema=np.asarray(len(sf.FEATURE_NAMES)),
+        fingerprint=np.asarray(json.dumps(fp, sort_keys=True)),
     )
     os.replace(tmp, out)
     ys = np.stack(Y)
-    return (f"{d} n={len(X)} storm60={int(ys[:, 1].sum())} nbhd60={int(ys[:, 4].sum())} "
+    return (f"{d} {why} n={len(X)} storm60={int(ys[:, 1].sum())} nbhd60={int(ys[:, 4].sum())} "
             f"an80={len(an80)} an9={len(an9)} {time.time() - t0:.0f}s (analyses {t_an:.0f}s)")
 
 
@@ -124,8 +164,6 @@ def main() -> int:
     with Pool(procs, maxtasksperchild=20) as pool:
         for i, msg in enumerate(pool.imap_unordered(build_day, days), 1):
             print(f"[{i}/{len(days)} {time.time() - t0:6.0f}s] {msg}", flush=True)
-    import json
-
     names = STORE / "feature_names.json"
     names.write_text(json.dumps({"features": list(sf.FEATURE_NAMES), "labels": list(sf.LABEL_NAMES),
                                  "blocks": sf.BLOCKS}, indent=1), encoding="utf-8")

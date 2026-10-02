@@ -51,6 +51,34 @@ def test_past_and_late_reports_never_label():
     assert lab.sum() == 0 and ef == -1.0 and not np.isfinite(lead)
 
 
+def _square_storm(half_deg=0.1, lat=35.0, lon=-97.0, me=0.0, ms=0.0):
+    ring = [[lon - half_deg, lat - half_deg], [lon + half_deg, lat - half_deg],
+            [lon + half_deg, lat + half_deg], [lon - half_deg, lat + half_deg], [lon - half_deg, lat - half_deg]]
+    return _storm(lat=lat, lon=lon, me=me, ms=ms, geometry={"type": "Polygon", "coordinates": [ring]})
+
+
+def test_polygon_distance_is_zero_inside_and_euclidean_outside():
+    s = _square_storm()
+    ring = sf.polygon_ring_km(s)
+    half_y = 0.1 * 111.32
+    assert sf.point_polygon_distance_km(ring, 0.0, 0.0) == 0.0
+    assert sf.point_polygon_distance_km(ring, 0.0, half_y - 0.5) == 0.0
+    assert sf.point_polygon_distance_km(ring, 0.0, half_y + 3.0) == pytest.approx(3.0, abs=1e-9)
+    # beyond a corner: distance to the corner itself
+    half_x = 0.1 * 111.32 * math.cos(math.radians(35.0))
+    assert sf.point_polygon_distance_km(ring, half_x + 3.0, half_y + 4.0) == pytest.approx(5.0, abs=1e-9)
+
+
+def test_polygon_label_geometry_advects_with_the_storm():
+    s = _square_storm(me=10.0, ms=0.0)          # 10 m/s east = 36 km/h
+    ring = sf.polygon_ring_km(s)
+    half_x = 0.1 * 111.32 * math.cos(math.radians(35.0))
+    lon_far = -97.0 + (half_x + 30.0) / (111.32 * math.cos(math.radians(35.0)))   # 30 km east of the east edge
+    assert sf.advected_polygon_distance_km(s, ring, 35.0, lon_far, 0.0) == pytest.approx(30.0, abs=0.05)
+    assert sf.advected_polygon_distance_km(s, ring, 35.0, lon_far, 3600.0) == 0.0    # 36 km in 60 min: 6 km inside
+    assert sf.polygon_ring_km(_storm()) is None                                       # no polygon -> None, not a guess
+
+
 def test_garbage_motion_is_clipped():
     ue, vn = sf.storm_motion(_storm(me=0.0, ms=-240.0))
     assert math.hypot(ue, vn) == pytest.approx(sf.MAX_MOTION_MS)

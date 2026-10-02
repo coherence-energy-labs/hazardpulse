@@ -354,6 +354,48 @@ def storm_radius_km(storm: dict) -> float:
     return float(min(max(math.sqrt(max(size, 0.0) / math.pi) + 5.0, 8.0), 25.0))
 
 
+def polygon_ring_km(storm: dict) -> np.ndarray | None:
+    """The object's outer ring as (n, 2) east/north km from its centroid (local
+    equirectangular), closed; None when the observation has no usable polygon."""
+    geom = storm.get("geometry") or {}
+    coords = geom.get("coordinates") if isinstance(geom, dict) else None
+    if not coords:
+        return None
+    ring = coords[0] if geom.get("type") == "Polygon" else (coords[0][0] if geom.get("type") == "MultiPolygon" else None)
+    if ring is None or len(ring) < 3:
+        return None
+    a = np.asarray(ring, dtype=np.float64)
+    lat0, lon0 = float(storm.get("lat", 0.0)), float(storm.get("lon", 0.0))
+    x = (a[:, 0] - lon0) * 111.32 * math.cos(math.radians(lat0))
+    y = (a[:, 1] - lat0) * 111.32
+    xy = np.column_stack([x, y])
+    if not np.array_equal(xy[0], xy[-1]):
+        xy = np.vstack([xy, xy[:1]])
+    return xy
+
+
+def point_polygon_distance_km(ring: np.ndarray, px: float, py: float) -> float:
+    """0 inside the closed ring, else the distance to its nearest edge (same km frame)."""
+    x0, y0, x1, y1 = ring[:-1, 0], ring[:-1, 1], ring[1:, 0], ring[1:, 1]
+    crosses = ((y0 > py) != (y1 > py)) & (px < (x1 - x0) * (py - y0) / np.where(y1 == y0, 1e-12, y1 - y0) + x0)
+    if np.count_nonzero(crosses) % 2 == 1:
+        return 0.0
+    dx, dy = x1 - x0, y1 - y0
+    L2 = dx * dx + dy * dy
+    t = np.clip(((px - x0) * dx + (py - y0) * dy) / np.where(L2 == 0, 1.0, L2), 0.0, 1.0)
+    return float(np.sqrt(np.min((x0 + t * dx - px) ** 2 + (y0 + t * dy - py) ** 2)))
+
+
+def advected_polygon_distance_km(storm: dict, ring: np.ndarray, rep_lat: float, rep_lon: float,
+                                 dt_s: float) -> float:
+    """Distance from a report to the storm's polygon advected by its own motion for dt_s seconds."""
+    ue, vn = storm_motion(storm)
+    lat0, lon0 = float(storm.get("lat", 0.0)), float(storm.get("lon", 0.0))
+    px = (rep_lon - lon0) * 111.32 * math.cos(math.radians(lat0)) - ue * dt_s / 1000.0
+    py = (rep_lat - lat0) * 111.32 - vn * dt_s / 1000.0
+    return point_polygon_distance_km(ring, px, py)
+
+
 def labels(storm: dict, t_storm: float, reports: list[dict]) -> tuple[np.ndarray, float, float]:
     """(labels[LABEL_NAMES], max EF of storm_60 matches (-1 none), minutes to first storm_90 match (nan))."""
     lab = np.zeros(len(LABEL_NAMES), dtype=np.int8)

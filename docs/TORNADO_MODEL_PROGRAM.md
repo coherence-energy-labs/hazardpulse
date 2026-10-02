@@ -75,6 +75,20 @@ within 2 coverage points of each other are a tie and the smaller buffer wins (L0
 the smallest). The chosen label becomes `storm_30/60/90`; the others stay in the store as
 secondary labels so the choice can be audited.
 
+## Amendment 2 (2026-10-02, after a one-day smoke test of amendment 1, before the full-year measurement)
+
+The one-day smoke test (2021-03-25, 10 reports) put the median report 4.7 km OUTSIDE its
+storm's advected polygon: advecting a polygon with ProbSevere's motion for up to 60 min
+moves it by the motion error times the lead (5 m/s for 60 min is 18 km). A label may use
+the future, and the archive knows where the storm actually went: the same storm id appears
+in later slots. Added candidates:
+- T5: the report lies within 5 km of the polygon of the SAME storm id at that id's slot
+  nearest the report time (within 15 min); if the id has no slot within 15 min (track
+  ended), the polygon of its last slot before the report, advected by the residual time;
+- T10: the same with 10 km.
+Tie rule refined: candidates within 2 coverage points are ordered by lower ambiguity, then
+by smaller buffer. The measurement and the rule are otherwise those of amendment 1.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-
