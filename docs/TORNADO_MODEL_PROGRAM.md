@@ -107,3 +107,13 @@ The configuration chosen on validation is refitted on 2020-10..2024 with the val
 chosen rounds, calibrated by a calibrator fitted on out-of-fold (leave-one-year-out) scores,
 and scored ONCE on 2025. That model is the one served. An independent adversary attacks
 the final claim before it is reported.
+
+## Data record (facts measured while building the store, not choices)
+
+- NOAA's `noaa-mrms-pds` bucket holds NO ProbSevere objects for 2021-05-15 .. 2021-05-24
+  (10 days; S3 listing of `ProbSevere/2021051*` and `2021052*` checked 2026-10-02) nor for
+  2020-11-04. Those days have no storm observations and are absent from every split; their
+  tornadoes are unobservable to a storm-object model.
+- A day whose HRRR analyses fail to arrive is built with what exists and recorded per row
+  (`analysis`); its store file carries an input fingerprint, so a later fetch that fills
+  the hole rebuilds it. 2022-01-06 got 0 of 8 analyses in the first pass (retried).
