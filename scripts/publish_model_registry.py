@@ -192,15 +192,22 @@ def main() -> int:
                 "73 features = Block S (61 seismicity) + Block C (12 "
                 "coherence field theory). Trained on declustered USGS "
                 "catalog 2005-2017, validated 2018-2019, tested 2020-2024 "
-                "(plus_cft variant of trained_models_v3)."
+                "(plus_cft variant of trained_models_v3). The benchmark below "
+                "is a CASE-CONTROL NOWCAST (positives scored at the mainshock "
+                "setting against controls); as an operational forecaster on a "
+                "gridded forward test this model scored AUC 0.509 -- no skill "
+                "(docs/earthquake_nowcast_validation.md)."
             ),
             weights_path=eq_path,
             benchmark={
+                "benchmark_type": "case-control nowcast, not an operational forecast",
                 "test_auc_global_baseline": gb.get("auc"),
                 "test_auc_regional_ensemble": gc.get("auc"),
                 "test_brier": gb.get("brier"),
                 "test_bss": gb.get("bss"),
                 "test_window": "USGS M6+ events 2020-2024",
+                "operational_auc_pooled": 0.509,
+                "operational_source": "docs/earthquake_nowcast_validation.md (backtest_operational_grid.py)",
             },
             framework="hazardpulse_gbt_v1",
             input_schema={
@@ -216,47 +223,52 @@ def main() -> int:
             paper_url="https://github.com/coherence-energy-labs/hazardpulse",
         ))
 
-    # ----- Hurricane RI v8.1 -----
-    hu_training_path = PROJECT_ROOT / "results" / "hurricane_operational_ri_2000_2024_al_sst.jsonl"
-    if hu_training_path.exists():
-        # The RI model trains in-process every scoring run, so the
-        # "weights" are the training corpus + config. Hash the corpus
-        # to give it a versionable identity.
+    # ----- Hurricane RI (the served, pinned model) -----
+    # Everything below is read from the served model file and the held-out
+    # evaluation report. The old entry described a model "trained in-process
+    # per scoring run" and quoted AUC 0.967 -- measured on v8.1's own label,
+    # which spanned 12 h, not the 24 h it was named for.
+    hu_model_path = MODELS_DIR / "hurricane_ri_v8_2.json"
+    hu_eval_path = PROJECT_ROOT / "results" / "calibration" / "hurricane_ri_evaluation.json"
+    if hu_model_path.exists():
+        hu_model = _read_json(hu_model_path)
+        hu_eval = _read_json(hu_eval_path)
+        served = (hu_eval.get("results") or {}).get("C_v8_2_heldout_newton", {})
+        ci = served.get("ci95") or {}
+        cal = hu_model.get("calibration") or {}
         entries.append(_make_entry(
-            record_id="weights_hazardpulse_hurricane_ri_v8_1",
-            name="HazardPulse Hurricane RI v8.1 (ensemble)",
+            record_id=f"weights_hazardpulse_{hu_model.get('model_version', 'hurricane_ri_v8_2')}",
+            name="HazardPulse Hurricane RI v8.2 (ensemble, pinned)",
             description=(
-                "Rapid intensification ensemble: histogram-GBT depth-3 + "
-                "depth-4 + L2 logistic + 50-bagged logistic, Platt-"
-                "calibrated. Trained in-process per scoring run from "
-                "IBTrACS 2000-2024 (133,882 6-hour observations across 6 "
-                "global basins, 1,512 RI events). Ablation study reports "
-                "AUC 0.967 on retrospective post-season holdout."
+                "Rapid-intensification ensemble (histogram-GBT depth 3 + depth 4 + "
+                "L2 logistic + bagged logistic) predicting a >= 30 kt wind increase "
+                "in the next 24 h, on true synoptic timestamps. Served from a pinned "
+                "file bound to its training-data hash; calibrated by a converged "
+                "Newton logistic fit on seasons the members never trained on. "
+                f"Held-out test: {hu_eval.get('n_test_storms')} storms first seen "
+                f"2022-2024, {hu_eval.get('n_test_events')} RI events."
             ),
-            weights_path=hu_training_path,
+            weights_path=hu_model_path,
             benchmark={
-                "test_auc_full": 0.967,
-                "test_auc_climatology": 0.940,
-                "n_train_samples": 133882,
-                "n_ri_events": 1512,
-                "ri_threshold_kt_24h": 30,
-                "test_window": "IBTrACS 2000-2024 retrospective ablation",
+                "test_auc": served.get("auc"),
+                "test_auc_ci95": ci.get("auc"),
+                "test_brier": served.get("brier"),
+                "test_bss_vs_climatology": served.get("bss_vs_climatology"),
+                "test_bss_ci95": ci.get("bss_vs_climatology"),
+                "calibration_slope": served.get("calibration_slope"),
+                "persistence_auc": ((hu_eval.get("results") or {}).get("P_persistence_dv24") or {}).get("auc"),
+                "n_test_rows": hu_eval.get("n_test_rows"),
+                "test_window": "storms first seen 2022-2024 (bootstrap by storm)",
             },
-            framework="hazardpulse_ri_ensemble_v8_1",
+            framework="hazardpulse_ri_ensemble_v8_2",
             input_schema={
-                "n_features_select": 25,
-                "feature_categories": [
-                    "ATCF advisories (12/24/36/48/72h)",
-                    "Climatological SST proxy (lat/lon/season)",
-                    "Cross-aid consensus deltas",
-                    "Interaction terms",
-                ],
+                "n_features_select": len(hu_model.get("selected_features") or []),
                 "feature_names_path": "src/hazardpulse/hurricane/operational_ri.py",
             },
             output_schema={
                 "outputs": ["ri_probability_24h"],
                 "domain": "[0, 1]",
-                "calibration": "Platt scaling (a, b fit on training)",
+                "calibration": f"{cal.get('method', '?')} fitted on held-out seasons",
             },
             paper_url="https://github.com/coherence-energy-labs/hazardpulse",
         ))

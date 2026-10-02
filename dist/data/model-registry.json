@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "publisher": "HazardPulse / Coherence Energy Labs",
-  "generated_at": "2026-10-02T05:40:04.187433Z",
+  "generated_at": "2026-10-02T05:43:40.368383Z",
   "n_entries": 3,
   "entries": [
     {
@@ -55,7 +55,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:40:03.891609Z",
+      "release_utc": "2026-10-02T05:43:40.360837Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -63,7 +63,7 @@
     {
       "record_id": "weights_hazardpulse_earthquake_gbt_v1",
       "name": "HazardPulse Earthquake GBT v1 (plus_cft)",
-      "description": "Gradient-boosted tree ensemble for global M6+ earthquake probability per 2-degree grid cell, 30-day forward window. 73 features = Block S (61 seismicity) + Block C (12 coherence field theory). Trained on declustered USGS catalog 2005-2017, validated 2018-2019, tested 2020-2024 (plus_cft variant of trained_models_v3).",
+      "description": "Gradient-boosted tree ensemble for global M6+ earthquake probability per 2-degree grid cell, 30-day forward window. 73 features = Block S (61 seismicity) + Block C (12 coherence field theory). Trained on declustered USGS catalog 2005-2017, validated 2018-2019, tested 2020-2024 (plus_cft variant of trained_models_v3). The benchmark below is a CASE-CONTROL NOWCAST (positives scored at the mainshock setting against controls); as an operational forecaster on a gridded forward test this model scored AUC 0.509 -- no skill (docs/earthquake_nowcast_validation.md).",
       "weights_uri": "hazardpulse://results/models/earthquake_gbt_v1.json",
       "weights_path": "results\\models\\earthquake_gbt_v1.json",
       "size_bytes": 495610,
@@ -87,41 +87,38 @@
         "calibration": "logit-link via boosted trees"
       },
       "benchmark": {
+        "benchmark_type": "case-control nowcast, not an operational forecast",
         "test_auc_global_baseline": 0.9074433326526443,
         "test_auc_regional_ensemble": 0.8984718535157553,
         "test_brier": 0.11605939643081976,
         "test_bss": 0.3416581890180549,
-        "test_window": "USGS M6+ events 2020-2024"
+        "test_window": "USGS M6+ events 2020-2024",
+        "operational_auc_pooled": 0.509,
+        "operational_source": "docs/earthquake_nowcast_validation.md (backtest_operational_grid.py)"
       },
       "paper_doi": null,
       "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:40:04.062658Z",
+      "release_utc": "2026-10-02T05:43:40.362266Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
     },
     {
-      "record_id": "weights_hazardpulse_hurricane_ri_v8_1",
-      "name": "HazardPulse Hurricane RI v8.1 (ensemble)",
-      "description": "Rapid intensification ensemble: histogram-GBT depth-3 + depth-4 + L2 logistic + 50-bagged logistic, Platt-calibrated. Trained in-process per scoring run from IBTrACS 2000-2024 (133,882 6-hour observations across 6 global basins, 1,512 RI events). Ablation study reports AUC 0.967 on retrospective post-season holdout.",
-      "weights_uri": "hazardpulse://results/models/hurricane_operational_ri_2000_2024_al_sst.jsonl",
-      "weights_path": "results\\hurricane_operational_ri_2000_2024_al_sst.jsonl",
-      "size_bytes": 86130293,
-      "blake3": "b859a08b033c1efcf5205ac8cd3f434f7d7f990460a670542826c4861bf8454f",
-      "sha256": "feace170830ca32f27d1ddc03ae9f18e279080c4891d84b9c97f4ee86105d38d",
-      "framework": "hazardpulse_ri_ensemble_v8_1",
-      "format": "jsonl",
+      "record_id": "weights_hazardpulse_hurricane_ri_v8_2",
+      "name": "HazardPulse Hurricane RI v8.2 (ensemble, pinned)",
+      "description": "Rapid-intensification ensemble (histogram-GBT depth 3 + depth 4 + L2 logistic + bagged logistic) predicting a >= 30 kt wind increase in the next 24 h, on true synoptic timestamps. Served from a pinned file bound to its training-data hash; calibrated by a converged Newton logistic fit on seasons the members never trained on. Held-out test: 298 storms first seen 2022-2024, 507 RI events.",
+      "weights_uri": "hazardpulse://results/models/hurricane_ri_v8_2.json",
+      "weights_path": "results\\models\\hurricane_ri_v8_2.json",
+      "size_bytes": 514965,
+      "blake3": "8fbe07a45a2b605d83722b89a1a9070f13b03e2bb9fb925621988ce802032c14",
+      "sha256": "8a75f23994653973832d3b13248da77489a4a3e6151a1be6d893fe7c7c772190",
+      "framework": "hazardpulse_ri_ensemble_v8_2",
+      "format": "json",
       "input_schema": {
-        "n_features_select": 25,
-        "feature_categories": [
-          "ATCF advisories (12/24/36/48/72h)",
-          "Climatological SST proxy (lat/lon/season)",
-          "Cross-aid consensus deltas",
-          "Interaction terms"
-        ],
+        "n_features_select": 17,
         "feature_names_path": "src/hazardpulse/hurricane/operational_ri.py"
       },
       "output_schema": {
@@ -129,22 +126,31 @@
           "ri_probability_24h"
         ],
         "domain": "[0, 1]",
-        "calibration": "Platt scaling (a, b fit on training)"
+        "calibration": "logistic_on_logit_newton fitted on held-out seasons"
       },
       "benchmark": {
-        "test_auc_full": 0.967,
-        "test_auc_climatology": 0.94,
-        "n_train_samples": 133882,
-        "n_ri_events": 1512,
-        "ri_threshold_kt_24h": 30,
-        "test_window": "IBTrACS 2000-2024 retrospective ablation"
+        "test_auc": 0.8474428424590938,
+        "test_auc_ci95": [
+          0.820925948197543,
+          0.8740213279606002
+        ],
+        "test_brier": 0.04892222915271466,
+        "test_bss_vs_climatology": 0.14538319828600288,
+        "test_bss_ci95": [
+          0.10035063975313893,
+          0.18781644388079763
+        ],
+        "calibration_slope": 0.8794374712589407,
+        "persistence_auc": 0.768276775589885,
+        "n_test_rows": 8317,
+        "test_window": "storms first seen 2022-2024 (bootstrap by storm)"
       },
       "paper_doi": null,
       "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:40:04.187370Z",
+      "release_utc": "2026-10-02T05:43:40.368342Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -202,7 +208,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:40:03.891609Z",
+      "release_utc": "2026-10-02T05:43:40.360837Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -210,7 +216,7 @@
     {
       "record_id": "weights_hazardpulse_earthquake_gbt_v1",
       "name": "HazardPulse Earthquake GBT v1 (plus_cft)",
-      "description": "Gradient-boosted tree ensemble for global M6+ earthquake probability per 2-degree grid cell, 30-day forward window. 73 features = Block S (61 seismicity) + Block C (12 coherence field theory). Trained on declustered USGS catalog 2005-2017, validated 2018-2019, tested 2020-2024 (plus_cft variant of trained_models_v3).",
+      "description": "Gradient-boosted tree ensemble for global M6+ earthquake probability per 2-degree grid cell, 30-day forward window. 73 features = Block S (61 seismicity) + Block C (12 coherence field theory). Trained on declustered USGS catalog 2005-2017, validated 2018-2019, tested 2020-2024 (plus_cft variant of trained_models_v3). The benchmark below is a CASE-CONTROL NOWCAST (positives scored at the mainshock setting against controls); as an operational forecaster on a gridded forward test this model scored AUC 0.509 -- no skill (docs/earthquake_nowcast_validation.md).",
       "weights_uri": "hazardpulse://results/models/earthquake_gbt_v1.json",
       "weights_path": "results\\models\\earthquake_gbt_v1.json",
       "size_bytes": 495610,
@@ -234,41 +240,38 @@
         "calibration": "logit-link via boosted trees"
       },
       "benchmark": {
+        "benchmark_type": "case-control nowcast, not an operational forecast",
         "test_auc_global_baseline": 0.9074433326526443,
         "test_auc_regional_ensemble": 0.8984718535157553,
         "test_brier": 0.11605939643081976,
         "test_bss": 0.3416581890180549,
-        "test_window": "USGS M6+ events 2020-2024"
+        "test_window": "USGS M6+ events 2020-2024",
+        "operational_auc_pooled": 0.509,
+        "operational_source": "docs/earthquake_nowcast_validation.md (backtest_operational_grid.py)"
       },
       "paper_doi": null,
       "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:40:04.062658Z",
+      "release_utc": "2026-10-02T05:43:40.362266Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
     },
     {
-      "record_id": "weights_hazardpulse_hurricane_ri_v8_1",
-      "name": "HazardPulse Hurricane RI v8.1 (ensemble)",
-      "description": "Rapid intensification ensemble: histogram-GBT depth-3 + depth-4 + L2 logistic + 50-bagged logistic, Platt-calibrated. Trained in-process per scoring run from IBTrACS 2000-2024 (133,882 6-hour observations across 6 global basins, 1,512 RI events). Ablation study reports AUC 0.967 on retrospective post-season holdout.",
-      "weights_uri": "hazardpulse://results/models/hurricane_operational_ri_2000_2024_al_sst.jsonl",
-      "weights_path": "results\\hurricane_operational_ri_2000_2024_al_sst.jsonl",
-      "size_bytes": 86130293,
-      "blake3": "b859a08b033c1efcf5205ac8cd3f434f7d7f990460a670542826c4861bf8454f",
-      "sha256": "feace170830ca32f27d1ddc03ae9f18e279080c4891d84b9c97f4ee86105d38d",
-      "framework": "hazardpulse_ri_ensemble_v8_1",
-      "format": "jsonl",
+      "record_id": "weights_hazardpulse_hurricane_ri_v8_2",
+      "name": "HazardPulse Hurricane RI v8.2 (ensemble, pinned)",
+      "description": "Rapid-intensification ensemble (histogram-GBT depth 3 + depth 4 + L2 logistic + bagged logistic) predicting a >= 30 kt wind increase in the next 24 h, on true synoptic timestamps. Served from a pinned file bound to its training-data hash; calibrated by a converged Newton logistic fit on seasons the members never trained on. Held-out test: 298 storms first seen 2022-2024, 507 RI events.",
+      "weights_uri": "hazardpulse://results/models/hurricane_ri_v8_2.json",
+      "weights_path": "results\\models\\hurricane_ri_v8_2.json",
+      "size_bytes": 514965,
+      "blake3": "8fbe07a45a2b605d83722b89a1a9070f13b03e2bb9fb925621988ce802032c14",
+      "sha256": "8a75f23994653973832d3b13248da77489a4a3e6151a1be6d893fe7c7c772190",
+      "framework": "hazardpulse_ri_ensemble_v8_2",
+      "format": "json",
       "input_schema": {
-        "n_features_select": 25,
-        "feature_categories": [
-          "ATCF advisories (12/24/36/48/72h)",
-          "Climatological SST proxy (lat/lon/season)",
-          "Cross-aid consensus deltas",
-          "Interaction terms"
-        ],
+        "n_features_select": 17,
         "feature_names_path": "src/hazardpulse/hurricane/operational_ri.py"
       },
       "output_schema": {
@@ -276,22 +279,31 @@
           "ri_probability_24h"
         ],
         "domain": "[0, 1]",
-        "calibration": "Platt scaling (a, b fit on training)"
+        "calibration": "logistic_on_logit_newton fitted on held-out seasons"
       },
       "benchmark": {
-        "test_auc_full": 0.967,
-        "test_auc_climatology": 0.94,
-        "n_train_samples": 133882,
-        "n_ri_events": 1512,
-        "ri_threshold_kt_24h": 30,
-        "test_window": "IBTrACS 2000-2024 retrospective ablation"
+        "test_auc": 0.8474428424590938,
+        "test_auc_ci95": [
+          0.820925948197543,
+          0.8740213279606002
+        ],
+        "test_brier": 0.04892222915271466,
+        "test_bss_vs_climatology": 0.14538319828600288,
+        "test_bss_ci95": [
+          0.10035063975313893,
+          0.18781644388079763
+        ],
+        "calibration_slope": 0.8794374712589407,
+        "persistence_auc": 0.768276775589885,
+        "n_test_rows": 8317,
+        "test_window": "storms first seen 2022-2024 (bootstrap by storm)"
       },
       "paper_doi": null,
       "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:40:04.187370Z",
+      "release_utc": "2026-10-02T05:43:40.368342Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
