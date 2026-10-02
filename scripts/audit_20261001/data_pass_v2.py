@@ -30,7 +30,10 @@ def run(d):
     if cp.returncode != 0 or not lines:
         tail = (cp.stderr or "").strip().splitlines()[-1:] or ["?"]
         return d, f"ERR rc={cp.returncode} {tail[0][:200]}"
-    return d, lines[-1][7:]
+    # keep the first fetch error, so a NONE says WHY (timeouts under link saturation looked
+    # exactly like archive holes until a failing hour was re-run by hand: 30.7 s, then fine)
+    why = [l.strip() for l in cp.stdout.splitlines() if "HRRR fetch failed" in l or "unreachable" in l]
+    return d, lines[-1][7:] + (f" WHY: {why[0][:160]}" if why and "NONE" in lines[-1] else "")
 
 
 t0 = time.time()
