@@ -4,8 +4,9 @@
 Fetches the day's HRRR analysis, builds the 26-feature environment vector for every
 CONUS cell (the SAME features the model trained on, via tornado.hrrr_env), and scores
 each convective cell with the deployed, 0-ULP-signed VerifiableForest -> a calibrated
-P(tornado-in-cell). This is the data-rich path that measured 0.81-0.85 AUC, versus the
-~0.64 data-starved live tier. Standalone -- does not touch the ProbSevere scorer.
+P(tornado-in-cell). Its published 0.81-0.85 AUC compared storms with storm-free cells;
+storm-vs-storm (2026-10-01) a retrained model does not beat STP alone. Research only;
+standalone -- does not touch the ProbSevere scorer.
 
     python scripts/score_tornado_hrrr_env.py --date 20240526 --hour 20 --top 15
 """
@@ -25,9 +26,14 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 from hazardpulse.data.hrrr import (  # noqa: E402
-    HRRR_N_LON, GRID_LATS, GRID_LONS, fetch_hrrr_grid, load_cached_hrrr,
+    GEOMETRY_VERSION, HRRR_N_LON, GRID_LATS, GRID_LONS, fetch_hrrr_grid, load_cached_hrrr,
 )
-from hazardpulse.tornado.hrrr_env import grid_feature_matrix, FEATURE_NAMES  # noqa: E402
+from hazardpulse.tornado.hrrr_env import (  # noqa: E402
+    FEATURE_NAMES,
+    grid_feature_matrix,
+    sanitize_grids,
+    storm_population_mask,
+)
 from hazardpulse.trust.forest_serve import load_forest_scorer  # noqa: E402
 from hazardpulse.trust.venn_abers import VennAbersCalibrator  # noqa: E402
 
@@ -68,6 +74,20 @@ def main(argv: list[str] | None = None) -> int:
     if scorer is None:
         print("No tornado_forest_fp.json deployed yet (run train_tornado_hrrr.py --deploy).")
         return 1
+    # A model may only score grids built the way its training grids were. The
+    # sidecar records the feature spec and the HRRR grid geometry; a model
+    # without a geometry was trained on g1 grids (index-space pooling read as
+    # lat/lon -- every cell ~280 km from its label), which no longer exist.
+    sidecar_path = _FP_DIR / "tornado_forest_features.json"
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8")) if sidecar_path.exists() else {}
+    model_spec = sidecar.get("spec", "hazardpulse/tornado/hrrr-env/v1")
+    model_geometry = sidecar.get("geometry", "hrrr-g1")
+    if model_geometry != f"hrrr-{GEOMETRY_VERSION}":
+        print(f"Refusing: the deployed forest was trained on {model_geometry} grids; "
+              f"this build serves hrrr-{GEOMETRY_VERSION}. Retrain on the current grids "
+              "(scripts/build_tornado_hrrr_dataset.py + train_tornado_hrrr.py).")
+        return 1
+    spec_v2 = model_spec.endswith("/v2")
     # the served feature space must match what the forest references
     feat_idx = [int(f) for f in scorer.constants.get("feat", []) if int(f) >= 0]
     if feat_idx and max(feat_idx) >= len(FEATURE_NAMES):
@@ -80,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"No HRRR for {args.date} {args.hour}z.")
         return 1
 
-    X, cape = grid_feature_matrix(grids)
+    X, cape = grid_feature_matrix(grids, sanitize=spec_v2)
     raw = scorer.raw_proba(X)                        # raw (overconfident) forest score
     cal = _load_calibrator()
     if cal is not None:
@@ -89,7 +109,13 @@ def main(argv: list[str] | None = None) -> int:
         proba, lo, hi = raw, raw, raw
         print("  WARNING: no calibrator -> emitting RAW (overconfident) probabilities.")
     cape_flat = np.asarray(cape, float).ravel()
-    convective = np.isfinite(cape_flat) & (cape_flat >= args.min_cape)
+    if spec_v2:
+        # Score exactly the population the model was trained and benchmarked
+        # on: storm cells (refc, shear and CAPE gates), not every warm cell --
+        # a v1 forest put 83.5% of its probability mass on cells with no storm.
+        convective = storm_population_mask(sanitize_grids(grids)).ravel()
+    else:
+        convective = np.isfinite(cape_flat) & (cape_flat >= args.min_cape)
 
     cells = []
     for flat in np.where(convective)[0]:
