@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """Build historical RI training dataset from IBTrACS best-track data.
 
-Downloads IBTrACS CSV for multiple basins, extracts 6-hourly observations,
+Downloads IBTrACS CSV for multiple basins, extracts synoptic (6-hourly) observations,
 labels each with RI (rapid intensification = 30+ kt in 24h), and writes
-a JSONL file that the operational scoring pipeline uses for training.
+a JSONL file that the operational RI models are trained on.
 
-Run once (or periodically to update with latest seasons):
-  python scripts/build_hurricane_training_data.py
+  python scripts/build_hurricane_training_data.py                  # v8.2 (true clock)
+  python scripts/build_hurricane_training_data.py --recipe v8.1    # reproduce the v8.1 file
+
+v8.2 takes every time offset from real timestamps. The v8.1 recipe is kept, unchanged and
+labelled LEGACY, only so the pinned v8.1 model stays reproducible for comparison.
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
+import datetime as dt
 import hashlib
 import io
 import json
@@ -25,8 +30,20 @@ from pathlib import Path
 import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+# The ONE definition of the derived features, shared with the live scorer so a served value
+# can never drift from the trained one (tests re-derive committed rows from them).
+from hazardpulse.hurricane.operational_ri import (  # noqa: E402
+    climatological_mpi_features,
+    translation_speed_kmh,
+)
 CACHE_DIR = PROJECT_ROOT / ".cache" / "ibtracs"
-OUTPUT_PATH = PROJECT_ROOT / "results" / "hurricane_operational_ri_2000_2024_al_sst.jsonl"
+OUTPUT_PATHS = {
+    "v8.2": PROJECT_ROOT / "results" / "hurricane_operational_ri_v8_2_2000_2024.jsonl",
+    "v8.1": PROJECT_ROOT / "results" / "hurricane_operational_ri_2000_2024_al_sst.jsonl",
+}
+OUTPUT_PATH = OUTPUT_PATHS["v8.2"]
 
 BASINS = {
     "NA": "Atlantic",
@@ -43,7 +60,8 @@ IBTRACS_URL = (
 )
 
 RI_THRESHOLD_KT = 30
-RI_WINDOW_STEPS = 4  # 4 x 6h = 24h
+RI_WINDOW_HOURS = 24
+RI_WINDOW_STEPS = 4  # LEGACY v8.1 only: "4 x 6h = 24h", but the rows are mostly 3-hourly
 MIN_YEAR = 2000
 MAX_YEAR = 2024
 
@@ -119,8 +137,99 @@ def parse_ibtracs(text: str) -> dict[str, dict]:
     return storms
 
 
+def _parse_track_time(time_str: str) -> dt.datetime | None:
+    try:
+        return dt.datetime.strptime(time_str.strip(), "%Y-%m-%d %H:%M:%S")
+    except (ValueError, AttributeError):
+        return None
+
+
 def extract_ri_cases(storms: dict[str, dict]) -> list[dict]:
-    """Extract RI training cases from parsed IBTrACS storms."""
+    """v8.2: RI training cases whose every time offset is a REAL time offset.
+
+    One case per storm per synoptic hour (00/06/12/18 UTC -- the cycles the live scorer
+    runs on; IBTrACS' 3-hourly intermediate fixes are largely interpolated). Every
+    "N hours ago / later" quantity is an exact timestamp lookup, never an index step:
+
+    * ``ri_label_30kt``: wind(t + 24 h) - wind(t) >= 30 kt; no row without the t+24 h fix;
+    * ``analysis_dv/dp_{6,12,24}h``: true 6/12/24-hour changes (None when that fix is absent);
+    * ``translation_speed_kmh``: displacement since t - 6 h over 6 h;
+    * ``storm_age_h``: hours since the track's first fix;
+
+    which is exactly what scripts/fetch_and_score.py computes from a live a-deck.
+    """
+    cases: list[dict] = []
+    for sid, sdata in storms.items():
+        by_time: dict[dt.datetime, dict] = {}
+        for e in sdata["entries"]:
+            t = _parse_track_time(e["time_str"])
+            if t is not None and t not in by_time:
+                by_time[t] = e
+        if not by_time:
+            continue
+        first_fix = min(by_time)
+        for t in sorted(by_time):
+            if t.hour % 6 or t.minute or t.second:
+                continue
+            e = by_time[t]
+            w_now = e["wind"]
+            if w_now <= 0 or e["year"] < MIN_YEAR or e["year"] > MAX_YEAR:
+                continue
+            future = by_time.get(t + dt.timedelta(hours=RI_WINDOW_HOURS))
+            if future is None or future["wind"] <= 0:
+                continue
+            lat, lon = e["lat"], e["lon"]
+            if lat == -999 or lon == -999:
+                continue
+
+            case: dict = {
+                "storm_id": sid,
+                "season_year": e["year"],
+                "issue_time": e["time_str"],
+                "basin": sdata["basin"],
+                "storm_name": sdata["name"],
+                "analysis_model": "BEST",
+                "analysis_lat": lat,
+                "analysis_lon": lon,
+                "analysis_vmax_kt": w_now,
+                "analysis_mslp_hpa": e["pres"] if e["pres"] > 800 else None,
+                "ri_label_30kt": 1 if future["wind"] - w_now >= RI_THRESHOLD_KT else 0,
+            }
+            for hours in (6, 12, 24):
+                prev = by_time.get(t - dt.timedelta(hours=hours))
+                case[f"analysis_dv_{hours}h"] = (
+                    w_now - prev["wind"] if prev is not None and prev["wind"] > 0 else None
+                )
+                case[f"analysis_dp_{hours}h"] = (
+                    e["pres"] - prev["pres"]
+                    if prev is not None and e["pres"] > 800 and prev["pres"] > 800 else None
+                )
+            case["abs_lat"] = abs(lat)
+            case["issue_month_sin"] = float(np.sin(2 * np.pi * e["month"] / 12.0))
+            case["issue_month_cos"] = float(np.cos(2 * np.pi * e["month"] / 12.0))
+            mpi = climatological_mpi_features(lat, w_now, e["month"])
+            case["mpi_deficit"] = mpi["mpi_deficit"]
+            case["intensity_frac_mpi"] = mpi["intensity_frac_mpi"]
+            prev6 = by_time.get(t - dt.timedelta(hours=6))
+            case["translation_speed_kmh"] = (
+                translation_speed_kmh(prev6["lat"], prev6["lon"], lat, lon, 6.0)
+                if prev6 is not None and prev6["lat"] != -999 and prev6["lon"] != -999 else None
+            )
+            case["storm_age_h"] = (t - first_fix).total_seconds() / 3600.0
+            cases.append(case)
+    return cases
+
+
+def extract_ri_cases_v81(storms: dict[str, dict]) -> list[dict]:
+    """LEGACY (v8.1) extraction -- kept only to reproduce the pinned v8.1 training file.
+
+    It steps through IBTrACS rows as if they were 6-hourly, but 94.1% of consecutive rows
+    are 3 h apart, so its "24 h" RI label spans 12 h, its dv/dp_6/12/24h are 3/6/12-h
+    changes, translation speed is halved and storm age doubled. Do not train new models
+    on it; ``extract_ri_cases`` is the corrected builder. Reproduces
+    results/hurricane_operational_ri_2000_2024_al_sst.jsonl byte for byte (LF sha256
+    98c2b6b0..., verified 2026-10-02 from the 2026-04-13 IBTrACS cache).
+    """
     cases: list[dict] = []
 
     for sid, sdata in storms.items():
@@ -183,16 +292,10 @@ def extract_ri_cases(storms: dict[str, dict]) -> list[dict]:
             case["issue_month_sin"] = float(np.sin(2 * np.pi * e["month"] / 12.0))
             case["issue_month_cos"] = float(np.cos(2 * np.pi * e["month"] / 12.0))
 
-            # MPI estimate
-            abs_lat = abs(lat)
-            sst_est = 30.0 - 0.5 * max(0, abs_lat - 10)
-            if lat >= 0:
-                sst_est += 2.0 * np.exp(-((e["month"] - 9) ** 2) / 8.0)
-            else:
-                sst_est += 2.0 * np.exp(-((e["month"] - 3) ** 2) / 8.0)
-            mpi = min(30.0 * max(sst_est - 26.0, 0) + 40.0, 185.0)
-            case["mpi_deficit"] = mpi - w_now
-            case["intensity_frac_mpi"] = w_now / mpi if mpi > 0 else None
+            # MPI estimate (latitude/season SST proxy) -- shared definition, see import.
+            mpi = climatological_mpi_features(lat, w_now, e["month"])
+            case["mpi_deficit"] = mpi["mpi_deficit"]
+            case["intensity_frac_mpi"] = mpi["intensity_frac_mpi"]
 
             # Translation speed
             if i >= 1 and entries[i - 1]["lat"] != -999:
@@ -215,8 +318,15 @@ def extract_ri_cases(storms: dict[str, dict]) -> list[dict]:
     return cases
 
 
-def main() -> int:
-    print("Building hurricane RI training dataset from IBTrACS")
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--recipe", choices=sorted(OUTPUT_PATHS), default="v8.2")
+    parser.add_argument("--out", type=Path, default=None)
+    args = parser.parse_args(argv)
+    extract = extract_ri_cases if args.recipe == "v8.2" else extract_ri_cases_v81
+    out_path = args.out or (OUTPUT_PATH if args.recipe == "v8.2" else OUTPUT_PATHS[args.recipe])
+
+    print(f"Building hurricane RI training dataset from IBTrACS (recipe {args.recipe})")
     print(f"  Years: {MIN_YEAR}-{MAX_YEAR}")
     print(f"  RI threshold: {RI_THRESHOLD_KT} kt / 24h")
     print()
@@ -232,7 +342,7 @@ def main() -> int:
             continue
         text = data.decode("utf-8", errors="replace")
         storms = parse_ibtracs(text)
-        cases = extract_ri_cases(storms)
+        cases = extract(storms)
         elapsed = time.time() - t0
         n_pos = sum(1 for c in cases if c["ri_label_30kt"] == 1)
         print(f"    {len(storms)} storms, {len(cases)} cases ({n_pos} RI+) in {elapsed:.1f}s")
@@ -243,12 +353,13 @@ def main() -> int:
     print()
     print(f"  Total: {len(all_cases)} cases ({n_pos} RI+, {n_neg} RI-, rate={n_pos / max(len(all_cases), 1):.1%})")
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with OUTPUT_PATH.open("w", encoding="utf-8") as fh:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    # newline="\n": identical bytes on every OS (the model artifacts pin this file's sha256).
+    with out_path.open("w", encoding="utf-8", newline="\n") as fh:
         for case in all_cases:
             fh.write(json.dumps(case) + "\n")
 
-    print(f"  Wrote {OUTPUT_PATH} ({OUTPUT_PATH.stat().st_size / 1024:.0f} KB)")
+    print(f"  Wrote {out_path} ({out_path.stat().st_size / 1024:.0f} KB)")
     return 0
 
 
