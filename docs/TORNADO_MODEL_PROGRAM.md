@@ -150,6 +150,34 @@ Each probability is evaluated like the main model: trained 2020-10..2022, calibr
 2023, scored on dev 2024; then refitted 2020-10..2024 with LOYO calibration and scored on
 2025 once. The 60-min model's 2025 read does not choose anything about these.
 
+## Amendment 8 (2026-10-02, after the independent adversary pass): HRRR publication latency
+
+The adversary found that the store gave every row the latest analysis VALID at or before the
+observation, but an analysis is published later. Measured on the eight most recent 00/06/12/18Z
+HRRR-Zarr analyses: 100.6-100.7 min after valid time, every time. So ~56% of rows read an
+analysis that did not exist yet -- a leak the "every input <= observation time" check could not
+see, because it compared valid times. Fix at the root, one rule for training, evaluation and the
+live scorer (`hazardpulse.data.hrrr_availability`): an analysis is usable iff valid + 100 min <= t;
+the newest usable 3-hourly one is taken if at most 4 h 40 min old (the previous day's 21Z covers the
+early hours). The live scorer is held to the same 3-hourly cadence.
+
+`rebuild_h80_available.py` recomputes every row's H80 block through
+`definitive_model.extract_block_h` under the new rule, after reproducing the stored H80 bit for bit
+under the old rule on every row. v2 is rescored under the same rule. Then the affected steps are
+rerun on corrected inputs, with the choices unchanged except where the declared rules say otherwise:
+- the block decision P vs P+E vs P+E+H80 (amendment 4's rule; H80 is what moved);
+- the validation run of the chosen configuration (its early-stopped rounds feed the final);
+- dev 2024 (primary and +W), the finals (primary and +W, 2025 read a second time as a bug-fix
+  rerun, recorded here) and the amendment-7 products.
+The leaky results stay in results/lab/ for comparison; the corrected ones are in results/lab_avail/.
+
+Reporting fixes adopted from the same pass:
+- ProbTor is compared both as published and with its integer/zero ties broken by ProbSevere's own
+  any-severe probability (published ProbTor is 0 for 93% of storms);
+- v2 is compared on its own 40 km neighbourhood label as well as on the per-storm label;
+- the NWS-warnings bar re-estimates the matched threshold inside every bootstrap replicate and
+  resamples multi-day events (consecutive tornado days), not single UTC days.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-

@@ -31,7 +31,11 @@ from hazardpulse.tornado import storm_features as sf
 ROOT = Path(__file__).resolve().parents[2]
 STORE = Path(os.environ.get("HAZARDPULSE_FEATURE_STORE", str(ROOT / ".cache" / "feature_store_v3")))
 LAB = Path(os.environ.get("HAZARDPULSE_LAB_DIR", str(STORE / "_lab")))
-OUT = ROOT / "results" / "lab"
+OUT = Path(os.environ.get("HAZARDPULSE_LAB_OUT", str(ROOT / "results" / "lab")))
+# amendment 8: "available" = the 80 km HRRR block recomputed from the analysis a forecast could have
+# used (published before the observation; rebuild_h80_available.py), and v2 rescored by the same rule
+H80_SOURCE = os.environ.get("HAZARDPULSE_H80_SOURCE", "store")
+V2_DIR = os.environ.get("HAZARDPULSE_V2_DIR", "_v2")
 SPLITS = {
     "train": ("20201015", "20221231"),
     "val": ("20230101", "20231231"),
@@ -73,12 +77,23 @@ def assemble(split: str) -> None:
         with np.load(p) as z:
             m = z["Y"].shape[0]
             X[i:i + m] = z["X"]
+            if H80_SOURCE == "available":
+                f = STORE / "_h80avail" / f"{p.stem}.npz"
+                if not f.exists():
+                    raise SystemExit(f"{f} missing: run rebuild_h80_available.py first")
+                lo, hi = sf.BLOCKS["H80"]
+                with np.load(f) as a:
+                    if a["H80"].shape != (m, hi - lo):
+                        raise SystemExit(f"{f}: shape {a['H80'].shape} for {m} rows")
+                    X[i:i + m, lo:hi] = a["H80"]
+            elif H80_SOURCE != "store":
+                raise SystemExit(f"unknown HAZARDPULSE_H80_SOURCE {H80_SOURCE!r}")
             Y[i:i + m] = z["Y"]
             meta["day"].append(np.full(m, int(p.stem), np.int64))
             for k in ("t", "lat", "lon", "ef", "lead_min", "analysis"):
                 meta[k].append(z[k])
             # the served v2 model's probability (score_v2_on_store.py), NaN where absent
-            v2 = STORE / "_v2" / f"{p.stem}.npy"
+            v2 = STORE / V2_DIR / f"{p.stem}.npy"
             meta["v2"].append(np.load(v2) if v2.exists() else np.full(m, np.nan, np.float32))
             # block W: NWS tornado-warning state (warning_state_on_store.py), NaN where absent
             nws = STORE / "_nws" / f"{p.stem}.npz"

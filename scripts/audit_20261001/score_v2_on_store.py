@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from hazardpulse.data import hrrr as H
+from hazardpulse.data import hrrr_availability as ha
 from hazardpulse.data.probsevere import load_cached_probsevere
 from hazardpulse.tornado import definitive_model as dm
 from hazardpulse.tornado.coherence_engine import compute_coherence_fields, compute_derived_hrrr
@@ -30,7 +31,10 @@ ROOT = H.PROJECT_ROOT
 PS_V2 = Path(os.environ.get("HAZARDPULSE_PROBSEVERE_V2_CACHE", str(ROOT / ".cache" / "probsevere_v2")))
 STORE = Path(os.environ.get("HAZARDPULSE_FEATURE_STORE", str(ROOT / ".cache" / "feature_store_v3")))
 PAYLOAD = Path(__file__).resolve().parents[2] / "results" / "models" / "tornado_gbt_v1.json"
-OUT = STORE / "_v2"
+# HAZARDPULSE_HRRR_RULE=available: v2 reads the analysis a forecast could have used (published
+# before the observation, hazardpulse.data.hrrr_availability) -- the same rule as the corrected v3
+RULE = os.environ.get("HAZARDPULSE_HRRR_RULE", "valid")
+OUT = STORE / ("_v2avail" if RULE == "available" else "_v2")
 
 
 def batch_scores(payload: dict, X: np.ndarray) -> np.ndarray:
@@ -65,12 +69,14 @@ def score_day(d: str, payload: dict) -> str:
     if out.exists():
         return f"{d} cached"
     steps = load_cached_probsevere(d, cache_dir=PS_V2)
-    month = int(d[4:6])
     an80 = {}
-    for h in dm.HRRR_ANALYSIS_HOURS:
-        g = H.load_cached_hrrr(d, hour=h)
-        if g is not None:
-            an80[h] = (g, compute_derived_hrrr(g), compute_coherence_fields(g, month=month))
+    prev = (dt.datetime.strptime(d, "%Y%m%d") - dt.timedelta(days=1)).strftime("%Y%m%d")
+    days_needed = (prev, d) if RULE == "available" else (d,)
+    for dd in days_needed:
+        for h in dm.HRRR_ANALYSIS_HOURS:
+            g = H.load_cached_hrrr(dd, hour=h)
+            if g is not None:
+                an80[(dd, h)] = (g, compute_derived_hrrr(g), compute_coherence_fields(g, month=int(dd[4:6])))
     step_min = dm.probsevere_step_minutes(steps)
     idx = dm.index_storms_by_id(steps)
     rows, feats, sids, ts = [], [], [], []
@@ -78,8 +84,12 @@ def score_day(d: str, payload: dict) -> str:
         t = dm.parse_probsevere_valid_time(st.get("valid_time", ""))
         if t is None:
             continue
-        h80 = dm.select_analysis_hour(t, sorted(an80))
-        a = an80.get(h80) if h80 is not None else None
+        if RULE == "available":
+            key = ha.usable_analysis(t.astimezone(dt.timezone.utc).replace(tzinfo=None), list(an80))
+        else:
+            h80 = dm.select_analysis_hour(t, sorted(h for dd, h in an80 if dd == d))
+            key = (d, h80) if h80 is not None else None
+        a = an80.get(key) if key is not None else None
         for storm in st.get("storms", []):
             sids.append(str(storm.get("id", "")))
             ts.append(int(t.timestamp()))

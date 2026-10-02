@@ -202,11 +202,11 @@
           </div>
           <div class="card col-4 hazard-hu">
             <h3>Hurricane</h3>
-            <p class="muted">Combines ocean temperature, wind patterns, and historical hurricane behavior to estimate the chance of rapid intensification (30+ knot increase in 24 hours). AUC: 0.938.</p>
+            <p class="muted">Chance of rapid intensification (a 30+ knot wind increase in 24 hours). For storms the National Hurricane Center tracks we serve NOAA&rsquo;s own DTOPS guidance, which beat our model head to head (2025: AUC 0.928 vs 0.849); everywhere else, our v8.2 model (AUC 0.845 on 2022&ndash;2024 cases). Each storm says which.</p>
           </div>
           <div class="card col-4 hazard-to">
             <h3>Tornado</h3>
-            <p class="muted">Scores individual thunderstorms using radar rotation, atmospheric instability, and wind shear to estimate tornado probability. AUC: 0.940 on every 2024 storm object (storm-object model).</p>
+            <p class="muted">Scores every thunderstorm NOAA&rsquo;s ProbSevere tracks: the chance that this storm produces a tornado within the next hour, from radar, lightning, the HRRR environment, the storm&rsquo;s own history and live NWS warnings. On every storm of 2025, scored once after training: AUC 0.971 (NOAA ProbTor 0.879).</p>
           </div>
         </div>
       </div>
@@ -228,13 +228,19 @@
           </div>
 
           <div class="card col-4 hazard-hu">
-            <h3>Hurricane RI (hp-hurricane-ri-v8.1)</h3>
-            <div class="kv"><span>Architecture</span><strong>50-bag logistic + histogram GBT (d3+d4) + Platt calibration</strong></div>
-            <div class="kv"><span>Features</span><strong>65</strong></div>
-            <div class="kv"><span>Key inputs</span><strong>Shear, SST (real NOAA), OHC, outflow, SHIPS predictors, satellite estimates</strong></div>
-            <div class="kv"><span>Training cutoff</span><strong>2026-03-13</strong></div>
-            <div class="kv"><span>Calibration method</span><strong>Platt scaling on holdout</strong></div>
-            <div class="kv"><span>AUC</span><strong>0.938 (advisory-time eval, 5 holdouts)</strong></div>
+            <h3>Hurricane RI, NHC basins (NOAA aid stack v1)</h3>
+            <div class="kv"><span>What is served</span><strong>NOAA DTOPS as issued (SHIPS-RII where DTOPS is missing), read from NHC&rsquo;s SHIPS text for the same cycle</strong></div>
+            <div class="kv"><span>How it was chosen</span><strong>Pre-registered comparison of NOAA&rsquo;s aids and logistic pools of them on 2020&ndash;2024; the pools did not beat DTOPS significantly, so DTOPS is served</strong></div>
+            <div class="kv"><span>Final test (2025, read once)</span><strong>AUC 0.928 [0.890, 0.966], Brier skill +0.311; beats SHIPS-RII, the RI consensus and our v8.2 (paired intervals exclude zero)</strong></div>
+            <div class="kv"><span>Limits</span><strong>NOAA&rsquo;s archive lacks Hurricane Melissa&rsquo;s RI period (9 of 53 events of 2025)</strong></div>
+          </div>
+
+          <div class="card col-4 hazard-hu">
+            <h3>Hurricane RI, other basins (hp-hurricane-ri-v8.2)</h3>
+            <div class="kv"><span>Architecture</span><strong>Histogram-GBT (depth 3 + 4) + L2 logistic + bagged logistic ensemble, Newton-calibrated</strong></div>
+            <div class="kv"><span>Key inputs</span><strong>Analysis intensity and pressure (CARQ) and their 6&ndash;24 h tendencies, aid-model intensity forecasts, climatological potential intensity, motion, storm age</strong></div>
+            <div class="kv"><span>AUC</span><strong>0.845 on held-out 2022&ndash;2024 NHC cases (NOAA&rsquo;s SHIPS-RII 0.882, DTOPS 0.906 on the same cases)</strong></div>
+            <div class="kv"><span>Used for</span><strong>West Pacific, Indian Ocean and Southern Hemisphere storms (no public RI guidance), and NHC cycles without SHIPS text</strong></div>
           </div>
 
           <div class="card col-4 hazard-to">
@@ -248,16 +254,15 @@
           </div>
 
           <div class="card col-4 hazard-to">
-            <h3>Tornado storm-object (hp-tornado-coherence v2)</h3>
-            <div class="kv"><span>Architecture</span><strong>Gradient-boosted trees on ProbSevere storm objects, HRRR environment and coherence-field diagnostics</strong></div>
-            <div class="kv"><span>Features</span><strong>41</strong></div>
-            <div class="kv"><span>Target</span><strong>Tornado report within 40 km in the next 60 minutes (absolute UTC times)</strong></div>
-            <div class="kv"><span>Key inputs</span><strong>ProbSevere attributes, CAPE, SRH, MaxLLAz, latest HRRR analysis at most 3 h old, coherence field diagnostics</strong></div>
-            <div class="kv"><span>Data split</span><strong>Train 2021-2022, calibrate 2023, test 2024 (evaluated once)</strong></div>
-            <div class="kv"><span>Calibration method</span><strong>Platt scaling fitted on the full 2023 validation population</strong></div>
-            <div class="kv"><span>AUC</span><strong>0.940 [0.930, 0.947] on every 2024 storm object (1,004,531; base rate 0.32%), interval resampled by day</strong></div>
-            <div class="kv"><span>Brier skill</span><strong>+0.056 against climatology on the same population</strong></div>
-            <div class="kv"><span>Status</span><strong>Accumulating</strong></div>
+            <h3>Tornado storm-object (hp-tornado-v3)</h3>
+            <div class="kv"><span>Target</span><strong>A tornado report starts within 10 km of THIS storm&rsquo;s tracked radar polygon within 60 minutes (also served: 30 and 90 minutes, and EF2+)</strong></div>
+            <div class="kv"><span>Architecture</span><strong>LightGBM (460 trees), exported to a JSON payload scored in pure NumPy; Platt calibration on leave-one-year-out scores; Venn&ndash;Abers band per storm</strong></div>
+            <div class="kv"><span>Inputs (75)</span><strong>28 ProbSevere attributes incl. NOAA ProbTor, 33 storm-track trends, 12 HRRR environment fields at the storm, and the live NWS tornado-warning state</strong></div>
+            <div class="kv"><span>How it was chosen</span><strong>Pre-registered program: every choice on 2023; dev test 2024; refit 2020&ndash;2024; final test 2025 read once (docs/TORNADO_MODEL_PROGRAM.md)</strong></div>
+            <div class="kv"><span>Final test 2025</span><strong>AUC 0.971 [0.964, 0.977] on all 1,469,977 storm observations (1,579 tornadic); Brier skill +0.113. 2024: 0.972</strong></div>
+            <div class="kv"><span>Against NOAA</span><strong>ProbTor 0.879 on the same storms (+0.09); at the NWS warnings&rsquo; own false-alarm rate it catches 30.7% of tornadic storms vs the warnings&rsquo; 22.7%</strong></div>
+            <div class="kv"><span>Coherence field</span><strong>Tested fairly at 80 km and 9 km against a Gaussian-smoothing control: no measurable lift, so not used</strong></div>
+            <div class="kv"><span>Status</span><strong>Live</strong></div>
           </div>
         </div>
       </div>
