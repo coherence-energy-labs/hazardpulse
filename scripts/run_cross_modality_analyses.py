@@ -167,6 +167,10 @@ def main(argv: list[str] | None = None) -> int:
             issued = rec.get("issued_at")
             if not issued:
                 continue
+            # A no-storm forecast or one whose storms have no verifiable best track is
+            # NOT a "no RI" observation (score_hurricane_prospective: n_verified).
+            if rec.get("null_forecast") or not rec.get("n_verified", 0):
+                continue
             t = dt.datetime.fromisoformat(issued.replace("Z", "+00:00")).replace(tzinfo=None)
             if rec.get("n_ri_events", 0) > 0:
                 ri_times.append(t)
