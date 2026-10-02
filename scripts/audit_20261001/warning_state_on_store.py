@@ -21,13 +21,18 @@ from hazardpulse.verification import nws_warnings as nw
 ROOT = Path(__file__).resolve().parents[2]
 STORE = Path(os.environ.get("HAZARDPULSE_FEATURE_STORE", str(ROOT / ".cache" / "feature_store_v3")))
 OUT = STORE / "_nws"
-LAST_WARNING_YEAR = 2025          # the program's last season (the final test year)
+FIRST_WARNING_YEAR = 2020         # the program's first season (store starts 2020-10-15)
 
 
 def main() -> int:
     start, end = dt.date.fromisoformat(sys.argv[1]), dt.date.fromisoformat(sys.argv[2])
-    # the following year too: an observation late on 31 Dec queries warnings into the new year
-    warnings = nw.load_tor_warnings(list(range(start.year, min(end.year + 1, LAST_WARNING_YEAR) + 1)))
+    # Only active_now and minutes_since_issue are kept, and both depend only on warnings issued
+    # AT OR BEFORE the observation: the previous year (a 1 Jan observation can sit inside a
+    # warning issued on 31 Dec) through the end year is every such warning. The module's coverage
+    # check also demands the FOLLOWING year for its 60-min look-ahead, which is never used here,
+    # so it is switched off -- loading 2026 instead tripped an IEM integrity refusal (a polygon
+    # outliving its event by 55 min, 202608112236-KJKL) on data outside the program.
+    warnings = nw.load_tor_warnings(list(range(max(start.year - 1, FIRST_WARNING_YEAR), end.year + 1)))
     OUT.mkdir(parents=True, exist_ok=True)
     d = start
     while d <= end:
@@ -41,7 +46,7 @@ def main() -> int:
             continue
         with np.load(src) as z:
             lat, lon, t = z["lat"].astype(np.float64), z["lon"].astype(np.float64), z["t"].astype(np.float64)
-        active, _, since = nw.tor_warning_state(lat, lon, t, warnings=warnings)
+        active, _, since = nw.tor_warning_state(lat, lon, t, warnings=warnings, require_coverage=False)
         tmp = OUT / f"{ds}.tmp.npz"
         np.savez(tmp, active_now=np.asarray(active, np.int8),
                  minutes_since_issue=np.where(np.asarray(active, bool), np.asarray(since, np.float32), np.nan).astype(np.float32))
