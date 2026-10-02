@@ -46,6 +46,29 @@ def test_out_of_fold_calibration_never_sees_its_own_day(lab):
         assert not np.array_equal(base[~target], moved[~target])  # ...while other folds' calibrators do
 
 
+def test_stress_strata_follow_their_declared_definitions(lab):
+    n = 8
+    names = lab.NAMES
+    X = np.zeros((n, len(names)), np.float32)
+    X[:, lab.FIDX["p_size"]] = [10, 20, 30, 40, 50, 60, 70, 80]
+    meta = {"lat": np.array([35, 42, 33, 45, 35, 35, 35, 35], float),
+            "lon": np.array([-100, -88, -86, -120, -100, -100, -100, -100], float),
+            "day": np.array([20240115, 20240415, 20240715, 20241015] * 2),
+            # 23:00 UTC at -100 E is 16:20 solar (day); 08:00 UTC is 01:20 solar (night)
+            "t": np.array([23 * 3600] * 4 + [8 * 3600] * 4),
+            "analysis": np.array([0, 3, 103, -1, 0, 0, 0, 0])}
+    g = lab.stress_groups(X, meta)
+    assert g["region_plains"].tolist() == [True, False, False, False, True, True, True, True]
+    assert g["region_midwest"][1] and g["region_southeast"][2] and g["region_elsewhere"][3]
+    assert g["season_DJF"][0] and g["season_MAM"][1] and g["season_JJA"][2] and g["season_SON"][3]
+    assert g["local_day"][:4].all() and g["local_night"][4:].all()
+    assert g["analysis_9km"][:2].all() and g["analysis_80km_only"][2] and g["analysis_none"][3]
+    assert g["size_small"].sum() + g["size_mid"].sum() + g["size_large"].sum() == n
+    for k in ("region", "season", "local", "size", "analysis"):   # each family partitions the rows
+        fam = [v for name, v in g.items() if name.startswith(k)]
+        assert (np.sum(fam, axis=0) == 1).all(), k
+
+
 def test_block_w_is_appended_after_the_store_columns_and_only_when_asked(lab):
     X = np.arange(40, dtype=np.float32).reshape(10, 4)
     W = np.full((10, 2), np.nan, np.float32)

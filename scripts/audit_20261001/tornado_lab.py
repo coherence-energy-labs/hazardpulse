@@ -254,12 +254,18 @@ def run(exp: dict) -> dict:
     use_w = "W" in exp["blocks"]
     seed = int(exp.get("seed", 0))
     Xt, Yt, mt = load("train")
-    y_tr_all = np.asarray(Yt[:, lab], np.int8)
+    y_tr_all = np.array(Yt[:, lab], np.int8)              # a copy: the memmap is read-only
     frac = float(exp.get("train_day_fraction", 1.0))       # learning curve: a fixed random subset of DAYS
     if frac < 1.0:
         ud = np.unique(mt["day"])
         keep_days = np.random.RandomState(seed + 7).choice(ud, size=max(1, int(round(frac * len(ud)))), replace=False)
         y_tr_all = np.where(np.isin(mt["day"], keep_days), y_tr_all, -1).astype(np.int8)
+    if exp.get("shuffle_train_labels"):
+        # the null: training labels permuted WITHIN each day (same daily base rates, no storm
+        # information); a sound pipeline must then score AUC ~0.5 on the true held-out labels
+        rng = np.random.RandomState(seed + 99)
+        for idx in dm._cluster_index(mt["day"]):
+            y_tr_all[idx] = y_tr_all[idx][rng.permutation(len(idx))]
     rows, w = train_sample(None, y_tr_all, int(exp.get("neg_per_pos", 30)), seed)
     Xtr = matrix(Xt, load_w("train"), rows, cols, use_w)
     ytr = y_tr_all[rows]
@@ -339,6 +345,59 @@ def baselines(splits=("val", "dev"), label: str = "storm_60") -> dict:
     return out
 
 
+def stress_groups(X, meta) -> dict[str, np.ndarray]:
+    """The protocol's stress strata, defined here before any result (boolean masks over rows).
+    Positive-only strata (lead, EF2+) keep EVERY negative: the question is whether those events
+    rank above the whole population."""
+    lat, lon = np.asarray(meta["lat"], np.float64), np.asarray(meta["lon"], np.float64)
+    month = (np.asarray(meta["day"], np.int64) // 100) % 100
+    solar_h = ((np.asarray(meta["t"], np.int64) % 86400) / 3600.0 + lon / 15.0) % 24.0
+    size = np.asarray(X[:, FIDX["p_size"]], np.float64)
+    q1, q2 = np.nanquantile(size, [1 / 3, 2 / 3])
+    an = np.asarray(meta["analysis"], np.int64)
+    g = {
+        "region_plains": (lon >= -105) & (lon < -94) & (lat >= 30),
+        "region_midwest": (lon >= -94) & (lon < -80) & (lat >= 37),
+        "region_southeast": (lon >= -94) & (lon < -75) & (lat < 37),
+        "season_DJF": np.isin(month, (12, 1, 2)), "season_MAM": np.isin(month, (3, 4, 5)),
+        "season_JJA": np.isin(month, (6, 7, 8)), "season_SON": np.isin(month, (9, 10, 11)),
+        "local_night": (solar_h >= 20) | (solar_h < 6), "local_day": (solar_h >= 6) & (solar_h < 20),
+        "size_small": size <= q1, "size_mid": (size > q1) & (size <= q2), "size_large": size > q2,
+        "analysis_9km": (an >= 0) & (an < 100), "analysis_80km_only": an >= 100, "analysis_none": an < 0,
+    }
+    g["region_elsewhere"] = ~(g["region_plains"] | g["region_midwest"] | g["region_southeast"])
+    return g
+
+
+def stress(name: str, split: str, label: str = "storm_60", others=("v2", "probtor_platt"), n_boot: int = 300) -> dict:
+    """AUC (day-clustered CI) of one experiment's saved predictions per stratum, beside the bars."""
+    X, Y, meta = load(split)
+    y = np.asarray(Y[:, LIDX[label]], np.int8)
+    preds = {name: np.load(LAB / "preds" / f"{name}_{split}.npy").astype(np.float64)}
+    for o in others:
+        f = LAB / "preds" / f"{o}_{split}.npy"
+        if f.exists():
+            preds[o] = np.load(f).astype(np.float64)
+    lead, ef = np.asarray(meta["lead_min"], np.float64), np.asarray(meta["ef"], np.float64)
+    neg = y == 0
+    strata = {k: v for k, v in stress_groups(X, meta).items()}
+    strata.update({"lead_0_15": neg | ((y == 1) & (lead <= 15)), "lead_15_30": neg | ((y == 1) & (lead > 15) & (lead <= 30)),
+                   "lead_30_60": neg | ((y == 1) & (lead > 30)), "ef2plus": neg | ((y == 1) & (ef >= 2)),
+                   "ef0_1": neg | ((y == 1) & (ef >= 0) & (ef < 2))})
+    out = {}
+    for sname, m in strata.items():
+        row = {"n": int(m.sum()), "pos": int(y[m].sum())}
+        if row["pos"] >= 10 and (y[m] == 0).sum() >= 10:
+            for pn, p in preds.items():
+                ok = m & np.isfinite(p)
+                ci = dm.cluster_bootstrap_auc_ci(y[ok].astype(np.float64), p[ok], meta["day"][ok], n_boot=n_boot)
+                row[pn] = {"auc": dm.compute_auc(y[ok].astype(np.float64), p[ok]), "ci": [ci["ci_lo"], ci["ci_hi"]]}
+        out[sname] = row
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / f"stress_{name}_{split}_{label}.json").write_text(json.dumps(out, indent=1, default=float), encoding="utf-8")
+    return out
+
+
 def compare(name_a: str, name_b: str, split: str, label: str = "storm_60", n_boot: int = 1000, seed: int = 42) -> dict:
     """B minus A on one split, paired, whole UTC days resampled: AUC and Brier deltas with 95% intervals.
     Both experiments must have been run with save_preds on the same split rows."""
@@ -378,6 +437,13 @@ def main() -> int:
             for name, r in res.items():
                 print(f"{split:4s} {name:22s} AUC {r['auc']:.4f} {[round(x, 4) for x in r['auc_ci']]} "
                       f"BSS {r['bss']:+.4f} pos {r['pos']}", flush=True)
+        return 0
+    if cmd == "stress":
+        name, split = sys.argv[2], sys.argv[3]
+        label = sys.argv[4] if len(sys.argv) > 4 else "storm_60"
+        for s, r in stress(name, split, label).items():
+            cells = "  ".join(f"{k} {v['auc']:.3f}" for k, v in r.items() if isinstance(v, dict))
+            print(f"{s:20s} n={r['n']:8d} pos={r['pos']:5d}  {cells}", flush=True)
         return 0
     if cmd == "compare":
         a, b, split = sys.argv[2], sys.argv[3], sys.argv[4]
