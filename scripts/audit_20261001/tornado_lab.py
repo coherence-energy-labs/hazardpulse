@@ -482,6 +482,96 @@ def ensemble(name: str, members: list[str], splits=("val", "dev"), label: str = 
     return out
 
 
+FINAL_SOURCES = ("train", "val", "dev")          # 2020-10-15 .. 2024-12-31, the refit population
+
+
+def fit_fixed_rounds(exp: dict, X, y, w, n_rounds: int):
+    """The chosen LightGBM configuration with a FIXED number of trees (no early stopping: in the
+    final refit every season is training data, so there is nothing honest left to stop on)."""
+    import lightgbm as lgb
+    if exp["model"] != "lgbm":
+        raise ValueError("the final pipeline is written for the chosen LightGBM configuration")
+    p = dict(objective="binary", learning_rate=0.03, num_leaves=63, min_child_samples=50,
+             feature_fraction=0.7, bagging_fraction=0.8, bagging_freq=1, lambda_l2=1.0,
+             verbose=-1, seed=int(exp.get("seed", 0)), num_threads=4, deterministic=True, force_row_wise=True)
+    p.update(exp.get("params", {}))
+    p.pop("n_rounds", None)
+    return lgb.train(p, lgb.Dataset(X, y, weight=w, free_raw_data=True), int(n_rounds))
+
+
+def _rows_for(parts: dict, years_in: set[int], neg_per_pos: int, seed: int, cols, use_w, label_idx):
+    """All positives + neg_per_pos negatives per positive from the given calendar years of every
+    source split; returns (X, y, balanced weights). 2020 (Oct-Dec) counts as part of 2021."""
+    Xs, ys = [], []
+    for k, (X, Y, meta, W) in parts.items():
+        yrs = np.maximum(np.asarray(meta["day"], np.int64) // 10000, 2021)
+        y_all = np.array(Y[:, label_idx], np.int8)
+        y_all[~np.isin(yrs, list(years_in))] = -1
+        # a fixed offset per source split (str hash() is salted per process -- not reproducible)
+        rows, _ = train_sample(None, y_all, neg_per_pos, seed + 101 * FINAL_SOURCES.index(k))
+        Xs.append(matrix(X, W, rows, cols, use_w))
+        ys.append(y_all[rows])
+    Xc, yc = np.vstack(Xs), np.concatenate(ys)
+    return Xc, yc, balanced_weights(yc)
+
+
+def final_pipeline(which: str = "primary") -> dict:
+    """Protocol 'Final pipeline': refit on 2020-10..2024 with the validation-chosen rounds,
+    Platt-calibrate on leave-one-year-out scores, score 2025 ONCE. Refuses a second run."""
+    chosen = json.loads((EXPERIMENTS / "chosen_on_validation.json").read_text(encoding="utf-8"))
+    exp = dict(chosen["primary"])
+    if which == "plus_W":
+        exp.update(chosen["secondary_with_warnings"]["same_as_primary_except"])
+        exp["name"] = chosen["secondary_with_warnings"]["name"]
+    out_path = OUT / f"final_{exp['name']}.json"
+    if out_path.exists():
+        raise SystemExit(f"{out_path} exists: 2025 is read once")
+    rounds = int(json.loads((OUT / "c_platt.json").read_text(encoding="utf-8"))["fit"]["best_iteration"])
+    cols = cols_for(exp["blocks"])
+    use_w = "W" in exp["blocks"]
+    lab = LIDX[exp["label"]]
+    parts = {k: (*load(k), load_w(k)) for k in FINAL_SOURCES}
+    years = [2021, 2022, 2023, 2024]
+    # leave-one-year-out scores for every row of 2020-10..2024
+    oof_s, oof_y, oof_day = [], [], []
+    for yr in years:
+        Xc, yc, wc = _rows_for(parts, set(years) - {yr}, exp["neg_per_pos"], exp["seed"], cols, use_w, lab)
+        bst = fit_fixed_rounds(exp, Xc, yc, wc, rounds)
+        for k, (X, Y, meta, W) in parts.items():
+            yrs = np.maximum(np.asarray(meta["day"], np.int64) // 10000, 2021)
+            idx = np.flatnonzero(yrs == yr)
+            if len(idx) == 0:
+                continue
+            s = np.concatenate([bst.predict(matrix(X, W, idx[i:i + 200_000], cols, use_w), raw_score=True)
+                                for i in range(0, len(idx), 200_000)])
+            oof_s.append(s)
+            oof_y.append(np.asarray(Y[idx, lab], np.int8))
+            oof_day.append(np.asarray(meta["day"])[idx])
+        print(f"  LOYO {yr}: fitted on {len(yc)} rows ({int(yc.sum())} positives)", flush=True)
+    s_oof, y_oof, d_oof = np.concatenate(oof_s), np.concatenate(oof_y), np.concatenate(oof_day)
+    cal = dm.fit_platt(s_oof, y_oof)
+    # the served model: every season, the same rounds
+    Xc, yc, wc = _rows_for(parts, set(years), exp["neg_per_pos"], exp["seed"], cols, use_w, lab)
+    bst = fit_fixed_rounds(exp, Xc, yc, wc, rounds)
+    LAB.joinpath("models").mkdir(parents=True, exist_ok=True)
+    model_path = LAB / "models" / f"{exp['name']}.lgbm.txt"
+    bst.save_model(str(model_path))
+    # 2025, once
+    assemble("final")
+    Xf, Yf, mf = load("final")
+    Wf = load_w("final") if use_w else None
+    sf_ = predict_stream(lambda A: bst.predict(A, raw_score=True), Xf, cols, W=Wf)
+    pf = dm.apply_calibration(sf_, cal)
+    np.save(LAB / "preds" / f"{exp['name']}_final.npy", pf.astype(np.float32))
+    yf = np.asarray(Yf[:, LIDX[exp["label"]]], np.int8)
+    res = {"exp": exp, "rounds": rounds, "calibration": cal, "model_file": str(model_path),
+           "refit_rows": int(len(yc)), "refit_positives": int(yc.sum()),
+           "oof_2021_2024": metrics(y_oof, dm.apply_calibration(s_oof, cal), d_oof, n_boot=300),
+           "final_2025": metrics(yf, pf, mf["day"], n_boot=2000)}
+    out_path.write_text(json.dumps(res, indent=1, default=float), encoding="utf-8")
+    return res
+
+
 def day_pair_matrix(y, s, day_idx: np.ndarray, n_days: int):
     """``U[d, e]`` = Mann-Whitney pair count between the positives of day d and the negatives of
     day e (ties 1/2), plus per-day positive / negative counts. A day bootstrap with day
@@ -562,6 +652,13 @@ def main() -> int:
         for s, r in stress(name, split, label).items():
             cells = "  ".join(f"{k} {v['auc']:.3f}" for k, v in r.items() if isinstance(v, dict))
             print(f"{s:20s} n={r['n']:8d} pos={r['pos']:5d}  {cells}", flush=True)
+        return 0
+    if cmd == "final":
+        which = sys.argv[2] if len(sys.argv) > 2 else "primary"
+        r = final_pipeline(which)
+        f = r["final_2025"]
+        print(f"FINAL 2025 {r['exp']['name']}: AUC {f['auc']:.4f} {[round(x, 4) for x in f['auc_ci']]} "
+              f"BSS {f['bss']:+.4f} n={f['n']} pos={f['pos']}", flush=True)
         return 0
     if cmd == "ensemble":
         r = ensemble(sys.argv[2], sys.argv[3].split(","))
