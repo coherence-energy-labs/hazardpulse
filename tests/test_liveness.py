@@ -40,10 +40,20 @@ def _pulse(**stamps):
 
 
 def test_all_hazards_fresh_passes(liveness):
+    # hurricane: the 20:10 UTC cycle run (the scorer runs at 02:10/08:10/14:10/20:10)
     lines, failures = liveness.evaluate_freshness(
-        _pulse(eq="2026-10-01T22:00:00Z", hu="2026-10-01T12:50:00Z", to="2026-10-02T00:17:40Z"), NOW)
+        _pulse(eq="2026-10-01T22:00:00Z", hu="2026-10-01T20:20:00Z", to="2026-10-02T00:17:40Z"), NOW)
     assert failures == []
     assert len(lines) == 3 and all(line.rstrip().endswith("OK") for line in lines)
+
+
+def test_hurricane_threshold_allows_one_skipped_cycle_run_but_not_two(liveness):
+    one_skipped = (NOW - dt.timedelta(hours=13, minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    two_skipped = (NOW - dt.timedelta(hours=19)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fresh = dict(eq="2026-10-01T22:00:00Z", to="2026-10-02T00:17:40Z")
+    assert liveness.evaluate_freshness(_pulse(hu=one_skipped, **fresh), NOW)[1] == []
+    _, failures = liveness.evaluate_freshness(_pulse(hu=two_skipped, **fresh), NOW)
+    assert len(failures) == 1 and failures[0].startswith("hu is stale")
 
 
 def test_the_historical_blind_spot_now_fails(liveness):
