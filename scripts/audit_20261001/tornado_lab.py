@@ -471,6 +471,11 @@ def main() -> int:
         exp = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8")) if sys.argv[2].endswith(".json") \
             else json.loads(sys.argv[2])
         exps = exp if isinstance(exp, list) else [exp]
+        if "--no-dev" in sys.argv[3:]:      # validation only: every choice is made there
+            exps = [{**e, "eval_dev": False} for e in exps]
+        only = [a.split("=", 1)[1] for a in sys.argv[3:] if a.startswith("--only=")]
+        if only:
+            exps = [e for e in exps if e["name"] in set(only[0].split(","))]
         for e in exps:
             r = run(e)
             v, d = r["val"], r.get("dev", {})
