@@ -52,6 +52,15 @@ jobs:
         # signed receipts automatically. Prints measured ECE/BSS before -> after.
         run: python scripts/fit_calibration.py
 
+      - name: Rebuild verification rollups from the new summaries
+        # Binds results/verification/** and the served /verification data to the
+        # summaries written above, in the same commit. Until 2026-10-01 nothing
+        # committed results/verification/ and the tornado rollup said "0 scored,
+        # no evaluator" while 1,737 forecasts had been scored (audit finding #4).
+        # Exits 1 -- and so blocks the commit -- if a rollup would contradict its
+        # prospective scorer's summary.
+        run: python scripts/build_site_artifacts.py --verification-only
+
       - name: Show results
         run: |
           echo "=== Earthquake ==="
@@ -66,15 +75,15 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          git diff --quiet results/ dist/data/tornado-recovery.json 2>/dev/null && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+          git diff --quiet results/ dist/data/tornado-recovery.json dist/data/verification/ dist/data/verification-summary.json dist/verification/index.html 2>/dev/null && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Commit and push verification results
         if: steps.changes.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add results/earthquake_prospective/ results/tornado_prospective/ results/hurricane_prospective/ results/calibration/
-          git add -f dist/data/tornado-recovery.json
+          git add results/earthquake_prospective/ results/tornado_prospective/ results/hurricane_prospective/ results/calibration/ results/verification/
+          git add -f dist/data/tornado-recovery.json dist/data/verification/ dist/data/verification-summary.json dist/verification/index.html
           git commit -m "data: verification scoring update $(date -u +%Y-%m-%dT%H:%MZ)
 
           Automated prospective scoring of matured forecast replay artifacts.

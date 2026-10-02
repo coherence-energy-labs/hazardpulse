@@ -230,6 +230,43 @@ def test_verification_rollups_are_written_to_results_storage() -> None:
         assert path.read_text(encoding="utf-8").strip(), rel_path
 
 
+def test_committed_verification_rollups_never_contradict_the_prospective_scorers() -> None:
+    """Audit finding #4: the rollups said "0 scored, no evaluator" for months while
+    results/<hazard>_prospective/prospective_summary.json held scored forecasts.
+
+    Checks every committed copy -- the served dist/data rollups and the
+    results/verification storage -- against the committed scorer summaries.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("bsa_integrity", ROOT / "scripts" / "build_site_artifacts.py")
+    bsa = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bsa)
+    summaries = {
+        key: json.loads((ROOT / "results" / f"{name}_prospective" / "prospective_summary.json").read_text(encoding="utf-8"))
+        for key, name in (("eq", "earthquake"), ("hu", "hurricane"), ("to", "tornado"))
+        if (ROOT / "results" / f"{name}_prospective" / "prospective_summary.json").exists()
+    }
+    copies = {
+        "dist/data/verification-summary.json": json.loads(_read_text("dist/data/verification-summary.json"))["hazards"],
+        "results/verification/system/summary.json": json.loads(
+            _read_text("results/verification/system/summary.json")
+        )["hazards"],
+        "dist/data/verification/*.json": [
+            json.loads(_read_text(f"dist/data/verification/{key}.json")) for key in ("eq", "hu", "to")
+        ],
+        "results/verification/*/live_rollup.json": [
+            json.loads(_read_text(f"results/verification/{name}/live_rollup.json"))
+            for name in ("earthquake", "hurricane", "tornado")
+        ],
+    }
+    problems = {
+        where: bsa._verification_rollup_violations(items, summaries, allow_lag=True)
+        for where, items in copies.items()
+    }
+    assert not any(problems.values()), problems
+
+
 def test_verification_page_uses_explicit_scoring_status_language() -> None:
     text = _read_text("dist/verification/index.html")
     assert "Every metric is computed from resolved outcomes - not cherry-picked examples." not in text

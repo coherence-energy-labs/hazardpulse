@@ -4,6 +4,7 @@ import datetime as dt
 import hashlib
 import html
 import json
+import sys
 from pathlib import Path
 
 
@@ -30,6 +31,23 @@ SITEMAP_PATH = DIST / "sitemap.xml"
 FEED_PATH = DIST / "feed.xml"
 RESULTS_VERIFICATION_DIR = ROOT / "results" / "verification"
 EQ_PROSPECTIVE_DIR = ROOT / "results" / "earthquake_prospective"
+TO_PROSPECTIVE_DIR = ROOT / "results" / "tornado_prospective"
+HU_PROSPECTIVE_DIR = ROOT / "results" / "hurricane_prospective"
+# The verification workflow is scheduled every 4 h; over its last 60 runs (to 2026-10-01)
+# GitHub's scheduler delivered a median gap of 5.7 h and a maximum of 10.9 h. A summary
+# older than a full day means scoring has actually stopped, not that cron jittered.
+PROSPECTIVE_STALE_AFTER = dt.timedelta(hours=24)
+# Statuses that assert "no evaluator exists". Once a prospective scorer has written
+# scored forecasts for a hazard, a rollup carrying one of these is a contradiction.
+NO_EVALUATOR_STATUSES = frozenset({"matured_unscored_no_evaluator", "logging_live_no_evaluator"})
+VERIFICATION_STATUS_BADGES = {
+    "prospective_scored": "Scored",
+    "prospective_stale": "Stale",
+    "matured_unscored": "Backlog",
+    "logging_waiting_maturity": "Waiting",
+    "no_live_artifacts": "Missing",
+    "inconsistent_with_prospective_ledger": "Inconsistent",
+}
 EQ_HONEST_RESULTS_PATH = ROOT / "results" / "earthquake_honest" / "v4_regional_honest_results.json"
 EQ_SAME_LOCATION_PATH = ROOT / "results" / "earthquake_honest" / "same_location_auc.json"
 TO_RETRO_RESULTS_PATH = ROOT / "results" / "definitive" / "definitive_results.json"
@@ -578,7 +596,13 @@ def _artifact_hazard_key(artifact: dict) -> str | None:
     }.get(str(artifact.get("hazard", "")).strip())
 
 
-def _artifact_mature_at(artifact: dict) -> dt.datetime | None:
+def _artifact_mature_at(artifact: dict, default_horizon_hours: int | None = None) -> dt.datetime | None:
+    """Maturity time of a replay artifact.
+
+    ``default_horizon_hours`` applies to artifacts frozen before the horizon field
+    existed; it must be the same default the hazard's prospective scorer uses, or
+    the rollup's matured count and the scorer's scored count describe different sets.
+    """
     issued_at = _parse_utc(artifact.get("issued_at"))
     if issued_at is None:
         return None
@@ -586,7 +610,14 @@ def _artifact_mature_at(artifact: dict) -> dt.datetime | None:
         return issued_at + dt.timedelta(days=int(artifact.get("forecast_horizon_days", 0) or 0))
     if artifact.get("forecast_horizon_hours") is not None:
         return issued_at + dt.timedelta(hours=int(artifact.get("forecast_horizon_hours", 0) or 0))
+    if default_horizon_hours is not None:
+        return issued_at + dt.timedelta(hours=default_horizon_hours)
     return None
+
+
+def _is_matured(artifact: dict, as_of: dt.datetime, default_horizon_hours: int | None = None) -> bool:
+    mature_at = _artifact_mature_at(artifact, default_horizon_hours)
+    return mature_at is not None and mature_at <= as_of
 
 
 def _format_horizon(artifact: dict) -> str:
@@ -674,11 +705,21 @@ def _tornado_related_benchmark() -> dict | None:
     full = payload.get("full", {})
     if not full:
         return None
+    label = "A historical 2024 holdout benchmark exists for a related tornado GBT family, but not yet as an exact score for the live storm-object model."
+    evaluated_base_rate = full.get("base_rate")
+    if evaluated_base_rate is not None:
+        # The holdout was downsampled (5 negatives per positive); Brier and BSS
+        # scale with the base rate, so they do not transfer to the live stream.
+        label += (
+            f" Its Brier/BSS were measured at a downsampled base rate of {_fmt_float(evaluated_base_rate)}"
+            " and are not comparable to live skill at the natural base rate."
+        )
     return {
         "availability": "related_research_benchmark",
-        "label": "A historical 2024 holdout benchmark exists for a related tornado GBT family, but not yet as an exact score for the live storm-object model.",
+        "label": label,
         "model_version": payload.get("model"),
         "source_updated_at": payload.get("timestamp"),
+        "evaluated_base_rate": evaluated_base_rate,
         "auc": full.get("auc"),
         "brier": full.get("brier"),
         "brier_skill_score": full.get("bss"),
@@ -691,9 +732,117 @@ def _tornado_related_benchmark() -> dict | None:
 def _status_chip_class(status: str) -> str:
     if status in {"prospective_scored"}:
         return "good"
-    if status in {"matured_unscored", "matured_unscored_no_evaluator"}:
+    if status in {"matured_unscored", "matured_unscored_no_evaluator", "inconsistent_with_prospective_ledger"}:
         return "bad"
     return "warn"
+
+
+def _prospective_scored_count(summary: dict) -> int:
+    """Forecasts a prospective scorer actually scored (0 when it has not run)."""
+    if not summary:
+        return 0
+    value = summary.get("n_scored_forecasts")
+    if value is None:
+        # Summaries written before n_scored_forecasts existed scored every matured forecast.
+        value = summary.get("n_matured_forecasts", 0) if summary.get("status") == "ok" else 0
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _prospective_binding(
+    summary: dict,
+    *,
+    hazard: str,
+    summary_rel_path: str,
+    n_matured_local: int,
+    has_artifacts: bool,
+    score_as_of: dt.datetime,
+) -> dict:
+    """Bind a hazard's rollup to the summary its prospective scorer wrote.
+
+    The rollup must report what the scorer scored -- never a hardcoded 0 and never
+    "no evaluator" once an evaluator has produced scores. Staleness is explicit.
+    """
+    n_scored = _prospective_scored_count(summary)
+    scored_as_of = _parse_utc(summary.get("scored_as_of")) if summary else None
+    age = (score_as_of - scored_as_of) if scored_as_of is not None else None
+    stale = age is not None and age > PROSPECTIVE_STALE_AFTER
+    if n_scored > 0 and not stale:
+        status = "prospective_scored"
+        label = f"Prospective live scoring is active for matured {hazard} forecasts."
+    elif n_scored > 0:
+        status = "prospective_stale"
+        label = (
+            f"Matured {hazard} forecasts were scored, but the latest scoring run "
+            f"({_format_utc_z(scored_as_of)}) is older than {int(PROSPECTIVE_STALE_AFTER.total_seconds() // 3600)} h."
+        )
+    elif n_matured_local > 0:
+        status = "matured_unscored"
+        label = (
+            f"Matured {hazard} forecasts exist, but the prospective scorer has not scored them yet"
+            + (f" (scorer status: {summary.get('status')})." if summary else " (no scorer summary found).")
+        )
+    elif has_artifacts:
+        status = "logging_waiting_maturity"
+        label = f"{hazard.capitalize()} forecasts are being frozen; no window has matured yet."
+    else:
+        status = "no_live_artifacts"
+        label = f"No live {hazard} replay artifacts are present."
+    return {
+        "status": status,
+        "label": label,
+        "n_scored": n_scored,
+        "n_backlog": max(0, n_matured_local - n_scored),
+        "prospective": {
+            "summary_path": summary_rel_path if summary else None,
+            "status": summary.get("status", "not_run") if summary else "not_run",
+            "scored_as_of": summary.get("scored_as_of") if summary else None,
+            "n_scored_forecasts": n_scored,
+            "stale": bool(stale),
+            "message": summary.get("message") if summary else None,
+        },
+    }
+
+
+def _verification_rollup_violations(
+    hazards: list[dict], summaries: dict[str, dict], *, allow_lag: bool = False
+) -> list[str]:
+    """Contradictions between rollups and the prospective summaries they were built from.
+
+    Returns one message per violation; empty means consistent. A rollup that says
+    0 scored (or "no evaluator") while its scorer's summary holds scored forecasts
+    is exactly the defect this guards: it must surface, never pass silently.
+
+    ``allow_lag`` is for comparing COMMITTED files written by different workflow
+    runs: a rollup built from an older summary may legitimately differ in count
+    (e.g. a later run excluded an SPC-outage day), but it may never read 0.
+    """
+    violations: list[str] = []
+    for item in hazards:
+        key = item.get("key")
+        summary = summaries.get(key) or {}
+        n_ledger = _prospective_scored_count(summary)
+        if n_ledger <= 0:
+            continue
+        n_roll = int((item.get("forecast_storage") or {}).get("n_scored_forecasts", 0) or 0)
+        label = _hazard_label(key)
+        if n_roll == 0:
+            violations.append(
+                f"{label}: rollup reports 0 scored forecasts but the prospective summary scored {n_ledger}."
+            )
+        elif n_roll > n_ledger and not allow_lag:
+            violations.append(
+                f"{label}: rollup reports {n_roll} scored forecasts, more than the {n_ledger} the summary scored."
+            )
+        if item.get("verification_status") in NO_EVALUATOR_STATUSES or (
+            (item.get("prospective") or {}).get("status") == "evaluator_missing"
+        ):
+            violations.append(
+                f"{label}: rollup claims no evaluator although the prospective summary scored {n_ledger} forecasts."
+            )
+    return violations
 
 
 def _build_verification_summary(pulse: dict) -> dict:
@@ -706,6 +855,8 @@ def _build_verification_summary(pulse: dict) -> dict:
     eq_related = _earthquake_related_benchmark()
     to_related = _tornado_related_benchmark()
     eq_prospective_summary = _read_json(EQ_PROSPECTIVE_DIR / "prospective_summary.json", {})
+    to_prospective_summary = _read_json(TO_PROSPECTIVE_DIR / "prospective_summary.json", {})
+    hu_prospective_summary = _read_json(HU_PROSPECTIVE_DIR / "prospective_summary.json", {})
 
     def next_mature_at(artifacts: list[dict]) -> str | None:
         future = []
@@ -801,12 +952,20 @@ def _build_verification_summary(pulse: dict) -> dict:
 
     hu_hazard = live_map.get("hu", {})
     hu_artifacts = replay_groups["hu"]
-    hu_matured = [
-        artifact
-        for artifact in hu_artifacts
-        if _artifact_mature_at(artifact) is not None and _artifact_mature_at(artifact) <= score_as_of
-    ]
-    hu_backlog = len(hu_matured)
+    # The hurricane and tornado scorers treat a horizon-less artifact as 24 h.
+    hu_matured = [artifact for artifact in hu_artifacts if _is_matured(artifact, score_as_of, 24)]
+    hu_binding = _prospective_binding(
+        hu_prospective_summary,
+        hazard="hurricane",
+        summary_rel_path="results/hurricane_prospective/prospective_summary.json",
+        n_matured_local=len(hu_matured),
+        has_artifacts=bool(hu_artifacts),
+        score_as_of=score_as_of,
+    )
+    hu_status = hu_binding["status"]
+    hu_status_label = hu_binding["label"]
+    hu_scored = hu_binding["n_scored"]
+    hu_backlog = hu_binding["n_backlog"]
     hu_exact = _legacy_verification_item(
         legacy_summary,
         "hu",
@@ -817,15 +976,11 @@ def _build_verification_summary(pulse: dict) -> dict:
         if isinstance(hu_exact, dict):
             merged_exact.update({key: value for key, value in hu_exact.items() if value is not None})
         hu_exact = merged_exact
-    if hu_backlog > 0:
-        hu_status = "matured_unscored_no_evaluator"
-        hu_status_label = "Matured hurricane forecasts exist, but no live advisory-to-outcome scorer is wired yet."
-    elif hu_artifacts:
-        hu_status = "logging_live_no_evaluator"
-        hu_status_label = "Hurricane forecasts are being frozen, but live outcome scoring is not wired yet."
-    else:
-        hu_status = "no_live_artifacts"
-        hu_status_label = "No live hurricane replay artifacts are present."
+    if hu_scored > 0:
+        hu_status_label += (
+            f" {int(hu_prospective_summary.get('total_storms_scored', 0) or 0)} storm forecasts scored against NHC best track;"
+            f" {int(hu_prospective_summary.get('total_ri_events', 0) or 0)} rapid-intensification events observed."
+        )
 
     hu_latest = hu_artifacts[-1] if hu_artifacts else {}
     hazards.append(
@@ -834,11 +989,7 @@ def _build_verification_summary(pulse: dict) -> dict:
             "hazard": "hurricane",
             "model_version": hu_hazard.get("model_version"),
             "verification_status": hu_status,
-            "status_badge": {
-                "matured_unscored_no_evaluator": "Backlog",
-                "logging_live_no_evaluator": "Logging",
-                "no_live_artifacts": "Missing",
-            }.get(hu_status, "Status"),
+            "status_badge": VERIFICATION_STATUS_BADGES.get(hu_status, "Status"),
             "verification_status_label": hu_status_label,
             "metric_source": "retrospective_holdout_exact_model" if hu_exact else "unverified_live_model",
             "metric_source_label": (
@@ -852,12 +1003,16 @@ def _build_verification_summary(pulse: dict) -> dict:
             "homepage_line": (
                 f"AUC {_fmt_float(hu_exact.get('auc'))} retrospective holdout"
                 if hu_exact and hu_exact.get("auc") is not None
-                else f"{len(hu_artifacts)} frozen forecasts · scorer pending"
+                else (
+                    f"{hu_scored} matured forecasts scored"
+                    if hu_scored > 0
+                    else f"{len(hu_artifacts)} frozen forecasts · {hu_backlog} matured backlog"
+                )
             ),
             "forecast_storage": {
                 "n_replay_artifacts": len(hu_artifacts),
                 "n_matured_forecasts": len(hu_matured),
-                "n_scored_forecasts": 0,
+                "n_scored_forecasts": hu_scored,
                 "n_backlog": hu_backlog,
                 "first_issued_at": hu_artifacts[0].get("issued_at") if hu_artifacts else None,
                 "last_issued_at": hu_latest.get("issued_at"),
@@ -873,10 +1028,11 @@ def _build_verification_summary(pulse: dict) -> dict:
                 "prev_hash_mismatches": 0,
             },
             "prospective": {
-                "summary_path": None,
-                "status": "evaluator_missing",
-                "scored_as_of": None,
-                "message": "Live hurricane forecasts are stored, but the repo does not yet score them against realized 24-hour intensity change.",
+                **hu_binding["prospective"],
+                "mean_brier": hu_prospective_summary.get("mean_brier") if hu_scored > 0 else None,
+                "mean_auc": hu_prospective_summary.get("mean_auc") if hu_scored > 0 else None,
+                "total_storms_scored": hu_prospective_summary.get("total_storms_scored") if hu_scored > 0 else None,
+                "total_ri_events": hu_prospective_summary.get("total_ri_events") if hu_scored > 0 else None,
             },
             "exact_model_benchmark": (
                 {
@@ -895,28 +1051,66 @@ def _build_verification_summary(pulse: dict) -> dict:
             ),
             "related_benchmark": None,
             "recommended_action": (
-                "Implement an advisory-to-outcome scorer that joins frozen hurricane forecasts to realized 24-hour intensity change before using the model for calibration or promotion decisions."
+                "Keep scoring matured hurricane forecasts against NHC best track; live AUC stays undefined until at least one rapid-intensification event is observed, so promotion decisions still rest on the retrospective benchmark."
+                if hu_scored > 0
+                else "Run scripts/score_hurricane_prospective.py on the matured hurricane forecasts before using the model for calibration or promotion decisions."
             ),
         }
     )
 
     to_hazard = live_map.get("to", {})
     to_artifacts = replay_groups["to"]
-    to_matured = [
-        artifact
-        for artifact in to_artifacts
-        if _artifact_mature_at(artifact) is not None and _artifact_mature_at(artifact) <= score_as_of
-    ]
-    to_backlog = len(to_matured)
-    if to_backlog > 0:
-        to_status = "matured_unscored_no_evaluator"
-        to_status_label = "Matured tornado storm-object forecasts exist, but no live outcome scorer is wired yet."
-    elif to_artifacts:
-        to_status = "logging_live_no_evaluator"
-        to_status_label = "Tornado storm-object forecasts are being frozen, but live outcome scoring is not wired yet."
+    to_matured = [artifact for artifact in to_artifacts if _is_matured(artifact, score_as_of, 24)]
+    to_binding = _prospective_binding(
+        to_prospective_summary,
+        hazard="tornado",
+        summary_rel_path="results/tornado_prospective/prospective_summary.json",
+        n_matured_local=len(to_matured),
+        has_artifacts=bool(to_artifacts),
+        score_as_of=score_as_of,
+    )
+    to_status = to_binding["status"]
+    to_status_label = to_binding["label"]
+    to_scored = to_binding["n_scored"]
+    to_backlog = to_binding["n_backlog"]
+    # Headline skill is the scorer's POOLED storm-level score with a named, causal
+    # reference. Summaries written before pooled scoring existed only carry
+    # per-forecast means; those are shown as AUC/Brier with no BSS rather than
+    # promoting a mean of per-forecast in-sample skill scores to a headline.
+    to_pooled = (to_prospective_summary.get("pooled") or {}) if to_scored > 0 else {}
+    to_served = (to_prospective_summary.get("pooled_by_served_mode") or {}) if to_scored > 0 else {}
+    if to_pooled:
+        to_auc = to_pooled.get("auc")
+        to_brier = to_pooled.get("brier")
+        to_bss = to_pooled.get("bss_vs_causal_climatology")
+        to_bss_reference = "causal_climatology"
+        to_metric_label = (
+            f"Pooled over {int(to_pooled.get('n_storm_forecasts', 0) or 0)} storm forecasts from {to_scored} matured live "
+            f"forecasts against SPC reports; base rate {_fmt_float(to_pooled.get('base_rate'), 5)}, mean forecast "
+            f"{_fmt_float(to_pooled.get('mean_forecast_probability'), 5)}. BSS reference: base rate of outcomes that had "
+            "matured before each forecast was issued."
+        )
+    elif to_scored > 0:
+        to_auc = to_prospective_summary.get("mean_auc")
+        to_brier = to_prospective_summary.get("mean_brier")
+        to_bss = None
+        to_bss_reference = None
+        to_metric_label = (
+            "Per-forecast mean AUC/Brier from a scorer summary that predates pooled skill; "
+            "no Brier skill score is reported until the next scoring run."
+        )
     else:
-        to_status = "no_live_artifacts"
-        to_status_label = "No live tornado replay artifacts are present."
+        to_auc = to_brier = to_bss = to_bss_reference = None
+        to_metric_label = "No matured tornado forecast has been scored yet."
+    to_served_lines = []
+    for mode_key, mode_label in (("raw_model_probability", "raw model"), ("calibrated_probability", "calibrated")):
+        mode = to_served.get(mode_key) or {}
+        if mode.get("n_storm_forecasts"):
+            to_served_lines.append(
+                f"{mode_label}: BSS {_fmt_float(mode.get('bss_vs_causal_climatology'), 3)} over {int(mode['n_storm_forecasts'])} storm forecasts"
+            )
+    if to_served_lines:
+        to_metric_label += " Served-probability split: " + "; ".join(to_served_lines) + "."
 
     to_latest = to_artifacts[-1] if to_artifacts else {}
     hazards.append(
@@ -925,21 +1119,24 @@ def _build_verification_summary(pulse: dict) -> dict:
             "hazard": "tornado",
             "model_version": to_hazard.get("model_version"),
             "verification_status": to_status,
-            "status_badge": {
-                "matured_unscored_no_evaluator": "Backlog",
-                "logging_live_no_evaluator": "Logging",
-                "no_live_artifacts": "Missing",
-            }.get(to_status, "Status"),
+            "status_badge": VERIFICATION_STATUS_BADGES.get(to_status, "Status"),
             "verification_status_label": to_status_label,
-            "metric_source": "no_exact_model_benchmark",
-            "metric_source_label": "No exact benchmark is currently bound to the live tornado storm-object model version in this repo.",
-            "auc": None,
-            "brier": None,
-            "homepage_line": f"{len(to_artifacts)} frozen forecasts · {to_backlog} matured backlog",
+            "metric_source": "prospective_live" if to_scored > 0 else "no_exact_model_benchmark",
+            "metric_source_label": to_metric_label,
+            "auc": to_auc,
+            "brier": to_brier,
+            "brier_skill_score": to_bss,
+            "brier_skill_score_reference": to_bss_reference,
+            "homepage_line": (
+                f"{to_scored} matured forecasts scored"
+                + (f" · BSS {_fmt_float(to_bss, 2)} vs climatology" if to_bss is not None else "")
+                if to_scored > 0
+                else f"{len(to_artifacts)} frozen forecasts · {to_backlog} matured backlog"
+            ),
             "forecast_storage": {
                 "n_replay_artifacts": len(to_artifacts),
                 "n_matured_forecasts": len(to_matured),
-                "n_scored_forecasts": 0,
+                "n_scored_forecasts": to_scored,
                 "n_backlog": to_backlog,
                 "first_issued_at": to_artifacts[0].get("issued_at") if to_artifacts else None,
                 "last_issued_at": to_latest.get("issued_at"),
@@ -955,25 +1152,53 @@ def _build_verification_summary(pulse: dict) -> dict:
                 "prev_hash_mismatches": to_mismatches,
             },
             "prospective": {
-                "summary_path": None,
-                "status": "evaluator_missing",
-                "scored_as_of": None,
-                "message": "Live tornado storm-object forecasts are stored, but the repo does not yet score them against matched outcomes.",
+                **to_binding["prospective"],
+                "outcome_time_convention": to_prospective_summary.get("outcome_time_convention") if to_scored > 0 else None,
+                "pooled": (
+                    {key: value for key, value in to_pooled.items() if key != "reliability"} if to_pooled else None
+                ),
+                "pooled_by_served_mode": (
+                    {
+                        mode_key: {key: value for key, value in mode.items() if key != "reliability"}
+                        for mode_key, mode in to_served.items()
+                    }
+                    if to_served
+                    else None
+                ),
+                "skill_reference": to_prospective_summary.get("skill_reference") if to_scored > 0 else None,
             },
             "exact_model_benchmark": None,
             "related_benchmark": to_related,
             "recommended_action": (
-                "Bind each frozen tornado storm-object forecast to a matched outcome definition and write a 24-hour scorer before using the live model for calibration or threshold changes."
+                "Judge the live tornado model on the pooled BSS against causal climatology (and its served-probability "
+                "split), not on per-forecast means or the downsampled research holdout."
+                if to_scored > 0
+                else "Run scripts/score_tornado_prospective.py on the matured tornado forecasts before using the live model for calibration or threshold changes."
             ),
         }
     )
+
+    # Guard: a rollup that contradicts the scorer summary it was built from is never
+    # published as if it were true. The offending hazard is relabelled explicitly and
+    # the violation is surfaced in the alerts (and fails `--verification-only`).
+    violations = _verification_rollup_violations(
+        hazards,
+        {"eq": eq_prospective_summary, "hu": hu_prospective_summary, "to": to_prospective_summary},
+    )
+    for item in hazards:
+        if any(message.startswith(_hazard_label(item["key"]) + ":") for message in violations):
+            item["verification_status"] = "inconsistent_with_prospective_ledger"
+            item["status_badge"] = VERIFICATION_STATUS_BADGES["inconsistent_with_prospective_ledger"]
+            item["verification_status_label"] = (
+                "This rollup contradicts the prospective scorer's summary; its counts and metrics are not trustworthy."
+            )
 
     total_replays = sum(item["forecast_storage"]["n_replay_artifacts"] for item in hazards)
     total_matured = sum(item["forecast_storage"]["n_matured_forecasts"] for item in hazards)
     total_scored = sum(item["forecast_storage"]["n_scored_forecasts"] for item in hazards)
     total_backlog = sum(item["forecast_storage"]["n_backlog"] for item in hazards)
     total_chain_mismatches = eq_mismatches + to_mismatches
-    alerts: list[str] = []
+    alerts: list[str] = [f"Verification rollup inconsistent: {message}" for message in violations]
     if total_backlog:
         alerts.append(f"{total_backlog} matured forecast windows are waiting for scoring.")
     if total_chain_mismatches:
@@ -996,6 +1221,7 @@ def _build_verification_summary(pulse: dict) -> dict:
             "hash_chain_mismatches": total_chain_mismatches,
             "exact_model_benchmarks": sum(1 for item in hazards if item.get("exact_model_benchmark")),
             "alerts": alerts,
+            "rollup_violations": violations,
         },
         "hazards": hazards,
     }
@@ -1164,9 +1390,15 @@ def _render_verification_page(summary: dict) -> None:
         related_benchmark = item.get("related_benchmark")
         metric_html = ""
         if item.get("auc") is not None or item.get("brier") is not None:
+            bss_html = ""
+            if item.get("brier_skill_score") is not None and item.get("brier_skill_score_reference"):
+                bss_html = (
+                    f' &middot; BSS {_fmt_float(item.get("brier_skill_score"))} vs '
+                    f'{_esc(str(item.get("brier_skill_score_reference")).replace("_", " "))}'
+                )
             metric_html = (
                 f'<div class="kv"><span>Primary metric</span><strong>AUC {_fmt_float(item.get("auc"))} &middot; '
-                f'Brier {_fmt_float(item.get("brier"))}</strong></div>'
+                f'Brier {_fmt_float(item.get("brier"), 4)}{bss_html}</strong></div>'
             )
         if exact_benchmark:
             benchmark_html = (
@@ -1984,12 +2216,57 @@ def sync_homepage_forecast_refs() -> bool:
     return False
 
 
-def main() -> None:
-    build_site_artifacts()
-    if sync_homepage_forecast_refs():
-        print("Synced homepage earthquake forecast references to live-pulse.json.")
-    print("Built HazardPulse evidence, replay, sitemap, and feed artifacts.")
+def build_verification_rollups() -> dict:
+    """Rebuild ONLY the verification rollups (+ the /verification page) from the
+    committed live pulse, replay artifacts and prospective scorer summaries.
+
+    This is what the verification-scoring workflow runs right after the scorers,
+    so results/verification/** is regenerated in the same commit as the
+    summaries it is derived from.
+    """
+    if not LIVE_PULSE_PATH.exists():
+        raise SystemExit(
+            f"{LIVE_PULSE_PATH} is missing; refusing to build verification rollups without the live pulse."
+        )
+    _REPLAY_READ_CACHE.clear()
+    pulse = _read_json(LIVE_PULSE_PATH, {"updated_at": None, "hazards": []})
+    summary = _build_verification_summary(pulse)
+    _render_verification_page(summary)
+    return summary
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Build HazardPulse site artifacts.")
+    parser.add_argument(
+        "--verification-only",
+        action="store_true",
+        help="Rebuild only the verification rollups and page; exit 1 if a rollup contradicts "
+        "its prospective scorer summary.",
+    )
+    args = parser.parse_args(argv)
+
+    if args.verification_only:
+        summary = build_verification_rollups()
+    else:
+        summary = build_site_artifacts()["verification_summary"]
+        if sync_homepage_forecast_refs():
+            print("Synced homepage earthquake forecast references to live-pulse.json.")
+        print("Built HazardPulse evidence, replay, sitemap, and feed artifacts.")
+    for item in summary.get("hazards", []):
+        storage = item.get("forecast_storage", {})
+        print(
+            f"  {_hazard_label(item.get('key'))}: {item.get('verification_status')} -- "
+            f"{storage.get('n_scored_forecasts', 0)} scored / {storage.get('n_matured_forecasts', 0)} matured"
+        )
+    violations = (summary.get("system") or {}).get("rollup_violations") or []
+    if violations:
+        for message in violations:
+            print(f"VERIFICATION ROLLUP INCONSISTENT: {message}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
