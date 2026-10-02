@@ -128,6 +128,28 @@ rows; negatives 1) and early stopping monitors AUC on the validation sample. Pro
 still come only from the calibrator fitted afterwards, so the population is restored there,
 as for v2. The void run's results are kept under results/lab/void_population_weights/.
 
+## Amendment 6 (2026-10-02, after the final): the served model is the +W variant, by the owner's decision
+
+Validation (amendment 4) chose the primary v3 (P+E+H80); the +W secondary (amendment 3) was
+carried to the test years as declared. Both test years: +W over primary +0.0016 [+0.0006,
++0.0026] (2024) and +0.0014 [+0.0004, +0.0025] (2025) AUC with Brier better; +W over the
+served v2 +0.0048 (2024) and +0.0031 [+0.0006, +0.0057] (2025) with Brier better. The owner
+chose to serve the strongest model ("the best one possible"). This is a choice informed by
+the test years and is recorded as such; the primary is kept as the automatic fallback when
+the live NWS warnings feed is unavailable.
+
+## Amendment 7 (2026-10-02, before fitting them): products beyond one probability
+
+Declared before any of them is fitted or scored, with the served configuration (+W, the
+chosen LightGBM parameters, Platt) and no new choices:
+- P(tornado within 30 min) and P(within 90 min): labels `storm_30`, `storm_90`;
+- P(EF2+ tornado within 60 min): positive iff `storm_60` and the matched report's EF >= 2;
+- a per-storm probability interval: Venn-Abers on the leave-one-year-out scores;
+- per-storm contributions: Saabas path attribution of the raw score (exact, additive).
+Each probability is evaluated like the main model: trained 2020-10..2022, calibrated on
+2023, scored on dev 2024; then refitted 2020-10..2024 with LOYO calibration and scored on
+2025 once. The 60-min model's 2025 read does not choose anything about these.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-
