@@ -101,6 +101,18 @@ bar: their POD at their own false-alarm rate against every model's ROC curve. A 
 uses W is reported separately from one that does not, because it is no longer independent
 of the warnings it is compared with.
 
+## Amendment 4 (2026-10-02, before any ladder result): how "best" is read off the ladder
+
+- The block set carried forward (`experiments/best_blocks.json`) is the arm with the highest
+  validation ROC-AUC (out-of-fold Platt probabilities); the NOAA-free arms are ablations and
+  are not eligible. If a smaller arm is within 0.001 AUC of the top one, the smaller arm is
+  carried (fewer live inputs, same skill).
+- Later choices (family, hyper-parameters, calibration, negatives per positive, label,
+  ensembles) are read the same way, calibration by validation Brier instead of AUC.
+- The coherence verdicts of the section above are paired day-bootstrap comparisons
+  (`tornado_lab.py compare`) on validation, then on dev 2024 and final 2025; a block "adds
+  information" only if the interval excludes zero in BOTH test years.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-
