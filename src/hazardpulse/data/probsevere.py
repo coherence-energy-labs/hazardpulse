@@ -179,24 +179,33 @@ def fetch_probsevere_day(
                     time_steps.append({"valid_time": valid_time, "storms": storms})
             except Exception:
                 continue
+    elif s3_listing_ok:
+        # The bucket answered and holds NO files under this day's prefix. That
+        # is authoritative -- the archive has gaps (e.g. 2021-05-15/16) -- so
+        # there is nothing to probe. The old code probed 76 guessed slot names
+        # anyway, each 404 retried with back-off: ~35 minutes per empty day,
+        # ending in the same empty answer.
+        print(
+            f"  ProbSevere: S3 listing OK but empty for {date_str} "
+            "(archive gap, or data not yet posted). Not probing; not caching."
+        )
+        return []
     else:
-        # Distinguish two failure modes: S3 listing failed vs listing returned empty.
-        if not s3_listing_ok:
-            print(
-                f"  ProbSevere: S3 listing FAILED for {date_str} "
-                "(bucket unreachable / auth / path change). Trying known time slots."
-            )
-        else:
-            print(
-                f"  ProbSevere: S3 listing OK but empty for {date_str} "
-                "(no convective activity, or data not yet posted). "
-                "Probing known time slots as fallback."
-            )
+        print(
+            f"  ProbSevere: S3 listing FAILED for {date_str} "
+            "(bucket unreachable / auth / path change). Trying known time slots."
+        )
         for hour in CONVECTIVE_HOURS:
             for minute in SCAN_MINUTES:
                 ts = _fetch_single_timestep(year, month, day, hour, minute)
                 if ts is not None:
                     time_steps.append(ts)
+
+    if not time_steps:
+        # Never cache an empty day: load_cached_probsevere would return [] (not
+        # None) forever after, so a transient failure would become a permanent
+        # hole in the cache.
+        return time_steps
 
     # Persist to cache
     out_path = _cache_path(date_str, cache_dir=cache_dir)
