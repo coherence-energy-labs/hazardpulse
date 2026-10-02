@@ -1,7 +1,8 @@
 // HazardPulse Tornado Scoring Pipeline
 // Written in Coherence Lang — the full pipeline from data to prediction.
 //
-// This is the production scoring module that:
+// UNMAINTAINED research twin -- NOT the served path and missing the 2026-10 audit fixes;
+// see ../README.md before trusting any number it produces. As written, it:
 // 1. Fetches ProbSevere storm objects from NOAA
 // 2. Loads pre-trained GBT model weights
 // 3. Computes coherence field from atmospheric data
