@@ -206,14 +206,28 @@ _CALIB_VERSION_KEY = "__model_version__"
 
 
 def newest_model_version(artifacts: list[dict]) -> str:
-    """The model behind the newest matured forecast that scored a storm -- the
-    one a freshly fitted calibrator will be applied to."""
+    """The model a freshly fitted calibrator is for: one of the models behind the newest
+    matured forecast that scored a storm.
+
+    Since 2026-10 two models serve at once (NOAA's aids in the NHC basins, v8.2 elsewhere), so
+    the newest forecast can name both. Taking its first storm's model made the pool follow
+    whichever storm ranked first that day; instead, among the newest forecast's models, the
+    one with the most matured storm forecasts overall is pooled (ties: by name). A calibrator
+    stays one model's curve either way -- score_single_forecast pools only that model's storms.
+    """
+    counts: dict[str, int] = {}
+    newest: set[str] | None = None
     for artifact in sorted(artifacts, key=lambda a: str(a.get("issued_at", "")), reverse=True):
-        for storm in artifact.get("storms") or []:
-            v = storm.get("model_version") or artifact.get("model_version")
-            if v:
-                return str(v)
-    return LEGACY_HURRICANE_MODEL
+        versions = [str(storm.get("model_version") or artifact.get("model_version"))
+                    for storm in artifact.get("storms") or []
+                    if storm.get("model_version") or artifact.get("model_version")]
+        for v in versions:
+            counts[v] = counts.get(v, 0) + 1
+        if newest is None and versions:
+            newest = set(versions)
+    if not newest:
+        return LEGACY_HURRICANE_MODEL
+    return min(newest, key=lambda v: (-counts[v], v))
 
 
 def _accumulate_calibration(calib_acc: dict, scores: np.ndarray, y_true: np.ndarray) -> None:
@@ -298,6 +312,8 @@ def score_single_forecast(artifact: dict, calib_acc: dict | None = None,
             "storm_id": storm_id,
             "model_version": str(storm.get("model_version") or artifact.get("model_version")
                                  or LEGACY_HURRICANE_MODEL),
+            # which family produced the number (NOAA's aids or v8.2); absent before 2026-10
+            "ri_source": storm.get("ri_source", "v8.2"),
             "storm_name": storm.get("storm_name", storm_id),
             "predicted_ri_probability": round(pred_prob, 4),
             "raw_ri_probability": round(float(storm.get("raw_probability", pred_prob)), 4),

@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 MODELS_DIR = PROJECT_ROOT / "results" / "models"
 OUT_PATH = MODELS_DIR / "model_weights_registry.json"
 # Also publish to the Cloudflare-served path so /api/v1/registry/models picks it up
@@ -107,6 +108,84 @@ def _make_entry(
         "modality": "natural_hazard_prediction",
         "source": "hazardpulse_publish",
     }
+
+
+HU_STACK_PATH = MODELS_DIR / "hurricane_ri_stack_v1.json"
+HU_STACK_FINAL_PATH = PROJECT_ROOT / "results" / "calibration" / "hurricane_ri_stack_final.json"
+
+
+def hurricane_stack_entry(stack_path: Path = HU_STACK_PATH, final_path: Path = HU_STACK_FINAL_PATH) -> dict | None:
+    """The NHC-basin RI model (scripts/hurricane_ri_stack.py) as its own registry entry.
+
+    Identity and inputs come from the artifact (ri_stack.load_artifact refuses a malformed one);
+    the benchmark is the program's read-once final season, and only when the final report names
+    this very artifact -- otherwise the entry says it has none rather than borrow another's.
+    """
+    if not stack_path.exists():
+        return None
+    from hazardpulse.hurricane import ri_stack
+
+    payload, version = ri_stack.load_artifact(stack_path)
+    final = _read_json(final_path)
+    bound = final.get("phase") == "final" and (final.get("artifact") or {}).get("model_version") == version
+    choice = payload["candidate"]
+    all_cases = ((final.get("results") or {}).get("all_cases") or {}) if bound else {}
+    res = (all_cases.get("forecasts") or {}).get(choice) or {}
+    paired = {}
+    for other, d in (all_cases.get("paired_chosen_minus") or {}).items():
+        paired[other] = {"delta_log_loss": d.get("delta_log_loss"), "delta_brier": d.get("delta_brier"),
+                         "delta_auc": d.get("delta_auc"), "ci95": d.get("ci95")}
+    v82_subset = ((final.get("results") or {}).get("v82_subset") or {}) if bound else {}
+    if "v8_2" in (v82_subset.get("paired_chosen_minus") or {}):
+        d = v82_subset["paired_chosen_minus"]["v8_2"]
+        paired["v8_2_on_v82_subset"] = {"n": v82_subset.get("n"), "delta_log_loss": d.get("delta_log_loss"),
+                                        "delta_brier": d.get("delta_brier"), "delta_auc": d.get("delta_auc"),
+                                        "ci95": d.get("ci95")}
+    raw = payload["kind"] == "raw_aid"
+    season = final.get("final_season") if bound else None
+    return _make_entry(
+        record_id=f"weights_hazardpulse_{version}",
+        name=f"HazardPulse Hurricane RI, NHC basins: NOAA aid stack v1 (candidate {choice})",
+        description=(
+            "P(>= 30 kt wind increase in 24 h) for Atlantic, East and Central Pacific storms from NOAA's "
+            f"operational RI guidance: {payload['description']}. Read live from NHC's SHIPS text for "
+            "the storm's cycle; chosen among six pre-registered candidates (DTOPS, SHIPS-RII, RI "
+            "consensus, and three logistic stacks of the NOAA aids, one with HazardPulse v8.2) by "
+            f"forward chaining on {payload['training']['seasons'][0]}-{payload['training']['seasons'][1]} "
+            "under a parsimony rule (docs/HURRICANE_RI_PROGRAM.md)"
+            + (f"; scored once on the {season} season." if bound else "; no final-season score is bound to this file.")
+        ),
+        weights_path=stack_path,
+        benchmark={
+            "benchmark_bound_to_this_artifact": bound,
+            "test_window": f"{season} season, NHC-basin cycles with a SHIPS-RII record, read once" if bound else None,
+            "test_auc": res.get("auc"), "test_auc_ci95": res.get("auc_ci95"),
+            "test_brier": res.get("brier"), "test_brier_ci95": res.get("brier_ci95"),
+            "test_bss_vs_fit_season_climatology": res.get("bss"), "test_bss_ci95": res.get("bss_ci95"),
+            "test_log_loss": res.get("log_loss"), "test_log_loss_ci95": res.get("log_loss_ci95"),
+            "calibration_slope": res.get("calibration_slope"),
+            "n_test_cycles": res.get("n"), "n_test_events": res.get("events"), "n_test_storms": res.get("storms"),
+            "paired_this_minus": paired,
+            "selection_pooled_dev": {k: ((final.get("selection") or {}).get("choice_pooled_dev") or {}).get(k)
+                                     for k in ("log_loss", "auc", "brier", "bss")} if bound else None,
+        },
+        framework="hazardpulse_noaa_ri_aid_stack_v1",
+        input_schema={
+            "source": "NHC SHIPS text 'Matrix of RI probabilities', column 30/24 (ATCF e-deck RI records in training)",
+            "ships_text_rows": payload["ships_text_rows"],
+            "aid": payload.get("aid"), "fallback": payload.get("fallback"), "pool_inputs": payload.get("inputs"),
+            "representation": payload["representation"],
+            "feature_names_path": "src/hazardpulse/hurricane/ri_stack.py",
+        },
+        output_schema={
+            "outputs": ["ri_probability_24h"],
+            "domain": "[0, 1]",
+            "calibration": "none: NOAA's probability as issued" if raw else "per-availability-pattern logistic pool",
+            "model_version": version,
+        },
+        license_id="Apache-2.0",
+        paper_url="https://github.com/coherence-energy-labs/hazardpulse",
+    )
 
 
 def main() -> int:
@@ -246,7 +325,9 @@ def main() -> int:
                 "file bound to its training-data hash; calibrated by a converged "
                 "Newton logistic fit on seasons the members never trained on. "
                 f"Held-out test: {hu_eval.get('n_test_storms')} storms first seen "
-                f"2022-2024, {hu_eval.get('n_test_events')} RI events."
+                f"2022-2024, {hu_eval.get('n_test_events')} RI events. Since 2026-10-02 it "
+                "serves the JTWC basins and any NHC cycle without NOAA's SHIPS text; NHC-basin "
+                "cycles with it are served the NOAA aid entry below."
             ),
             weights_path=hu_model_path,
             benchmark={
@@ -272,6 +353,11 @@ def main() -> int:
             },
             paper_url="https://github.com/coherence-energy-labs/hazardpulse",
         ))
+
+    # ----- Hurricane RI, NHC basins: NOAA's aids as the pre-registered program chose them -----
+    stack_entry = hurricane_stack_entry()
+    if stack_entry is not None:
+        entries.append(stack_entry)
 
     payload = {
         "schema_version": 1,

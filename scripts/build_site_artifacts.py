@@ -98,7 +98,45 @@ _HURRICANE_EVAL_CANDIDATE = {
 }
 
 
+# The NOAA-aid model the NHC basins are served (scripts/hurricane_ri_stack.py): its identity is
+# bound to the artifact's bytes, and its exact-model benchmark is the pre-registered program's
+# read-once 2025 score -- shown only when the final report names this very artifact.
+HURRICANE_STACK_PREFIX = "hurricane_ri_stack_v1-"
+HURRICANE_STACK_FINAL_PATH = ROOT / "results" / "calibration" / "hurricane_ri_stack_final.json"
+
+
+def _hurricane_stack_benchmark(model_version: str) -> dict | None:
+    final = _read_json(HURRICANE_STACK_FINAL_PATH, {})
+    if (final.get("phase") != "final"
+            or (final.get("artifact") or {}).get("model_version") != model_version):
+        return None
+    choice = (final.get("selection") or {}).get("choice")
+    result = (((final.get("results") or {}).get("all_cases") or {}).get("forecasts") or {}).get(choice)
+    if not result:
+        return None
+    season = final.get("final_season")
+    fit = (final.get("fit") or {}).get("seasons") or ["?", "?"]
+    return {
+        "availability": "exact_model_benchmark",
+        "label": (
+            f"Pre-registered program: candidate {choice} chosen on {fit[0]}-{fit[1]} by forward chaining, "
+            f"then scored once on the {season} season ({result['n']} NHC-basin cycles, {result['events']} "
+            "rapid-intensification events, intervals by storm)."
+        ),
+        "model_version": model_version,
+        "source_updated_at": final.get("generated_at"),
+        "auc": round(float(result["auc"]), 4),
+        "auc_ci95": [round(float(x), 4) for x in result.get("auc_ci95", [])],
+        "brier": round(float(result["brier"]), 5),
+        "brier_skill_score": round(float(result["bss"]), 4),
+        "reliability_slope": round(float(result["calibration_slope"]), 3),
+        "n_cases": int(result["n"]),
+    }
+
+
 def _hurricane_heldout_benchmark(model_version: str) -> dict | None:
+    if model_version.startswith(HURRICANE_STACK_PREFIX):
+        return _hurricane_stack_benchmark(model_version)
     report = _read_json(HURRICANE_EVALUATION_PATH, {})
     key = _HURRICANE_EVAL_CANDIDATE.get(model_version)
     result = (report.get("results") or {}).get(key) if key else None
@@ -2003,11 +2041,12 @@ def _render_live_hurricane_page() -> None:
                 f"<td>{_esc(storm.get('category', '--'))}</td>"
                 f"<td>{_esc(storm.get('lat', '--'))}, {_esc(storm.get('lon', '--'))}</td>"
                 f"<td>{_pct(storm.get('ri_probability', 0))}</td>"
+                f"<td>{_esc(storm.get('ri_source_label') or 'HazardPulse v8.2')}</td>"
                 f"<td>{_esc(storm.get('vmax_kt', '--'))} kt</td>"
                 f"</tr>"
             )
         storms_html = (
-            "<table><thead><tr><th>Storm</th><th>Status</th><th>Location</th><th>RI 24h</th><th>Wind</th></tr></thead>"
+            "<table><thead><tr><th>Storm</th><th>Status</th><th>Location</th><th>RI 24h</th><th>Source</th><th>Wind</th></tr></thead>"
             f"<tbody>{''.join(rows)}</tbody></table>"
         )
         top = sorted_storms[0]
@@ -2126,6 +2165,7 @@ def _render_live_hurricane_page() -> None:
         <div class="card col-8">
           <h2 style="margin-top:0;">Active tropical systems</h2>
           {storms_html}
+          <p class="muted" style="margin-top:12px;">Where the RI number comes from: {_esc(storms.get('ri_sources_note') or 'HazardPulse v8.2 in every basin.')}</p>
           <p class="muted" style="margin-top:12px;">Source feed: <a href="/data/live-storms.json">/data/live-storms.json</a>. Always follow official advisories from the National Hurricane Center and local authorities.</p>
         </div>
       </div>

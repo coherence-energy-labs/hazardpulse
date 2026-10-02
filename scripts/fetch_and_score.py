@@ -13,6 +13,10 @@ to its data files' SHA-256 and config, with a calibration fitted to convergence 
 seasons. Training in this job is what kept every run since 2026-05-27 from finishing inside
 the workflow's 10-minute budget; which version is served is decided by
 scripts/evaluate_hurricane_ri.py.
+
+Atlantic / East / Central Pacific storms are served NOAA's own RI guidance instead whenever the
+cycle's SHIPS text carries it (results/models/hurricane_ri_stack_v1.json, chosen by the
+pre-registered program docs/HURRICANE_RI_PROGRAM.md); every storm says which (``ri_source``).
 """
 
 from __future__ import annotations
@@ -48,6 +52,7 @@ from hazardpulse.hurricane.operational_ri import (  # noqa: E402
     translation_speed_kmh,
 )
 from hazardpulse.hurricane import ri_model  # noqa: E402
+from hazardpulse.hurricane import ri_stack, ships_text  # noqa: E402
 
 DIST = Path(__file__).resolve().parents[1] / "dist"
 RESULTS = Path(__file__).resolve().parents[1] / "results"
@@ -57,6 +62,36 @@ HISTORICAL_DATA = RESULTS / "hurricane_operational_ri_2000_2024_al_sst.jsonl"
 SERVED_MODEL_VERSION = "hurricane_ri_v8_2"
 MODEL_ARTIFACT = ri_model.ARTIFACTS[SERVED_MODEL_VERSION]
 PRIMARY_DOMAIN = "https://hazardpulse.com"
+
+# NHC basins (AL/EP/CP) are served NOAA's own RI guidance, as the pre-registered program
+# chose it (docs/HURRICANE_RI_PROGRAM.md, scripts/hurricane_ri_stack.py; the artifact names the
+# candidate -- since 2026-10-02 A: DTOPS as issued, SHIPS-RII where DTOPS is missing), read from
+# the SAME cycle's SHIPS text. v8.2 serves everything else: the JTWC basins (no public RI
+# guidance) and NHC cycles whose SHIPS text is absent, unreadable, or lacks the needed aids.
+# Every scored storm says which (``ri_source``) and carries the inputs it used.
+STACK_ARTIFACT = ri_stack.ARTIFACT_PATH
+RI_SOURCE_STACK = "noaa_aid_stack"
+RI_SOURCE_V82 = "v8.2"
+# What each pre-registered candidate serves, in words for the site (ri_stack.CANDIDATES).
+STACK_PUBLIC = {
+    "A": "DTOPS as issued, and SHIPS-RII where DTOPS is missing",
+    "B": "SHIPS-RII as issued",
+    "C": "NOAA's SHIPS RI consensus as issued (SHIPS-RII where it is missing)",
+    "D": "a logistic pool of SHIPS-RII, its logistic and Bayesian versions, and DTOPS",
+    "E": "a logistic pool of SHIPS-RII, its logistic and Bayesian versions, DTOPS and HazardPulse v8.2",
+    "F": "a logistic pool of SHIPS-RII, its logistic and Bayesian versions, and DTOPS, with an Atlantic term",
+}
+
+
+def ri_sources_note(stack: dict[str, object] | None) -> str:
+    v82_text = ("West Pacific, Indian Ocean, Southern Hemisphere (no public RI guidance) and any NHC cycle "
+                "without a usable SHIPS text: HazardPulse v8.2.")
+    if stack is None:
+        return "Every basin: HazardPulse v8.2."
+    return ("Atlantic, East and Central Pacific: NOAA's rapid-intensification guidance read from NHC's SHIPS "
+            f"text for the same cycle -- {STACK_PUBLIC[stack['payload']['candidate']]} -- chosen by a "
+            "pre-registered comparison on 2020-2024 and scored once on 2025 (docs/HURRICANE_RI_PROGRAM.md). "
+            + v82_text)
 
 # NHC real-time ATCF data URLs
 REALTIME_ADECK_INDEX = f"{ATCF_ROOT}/aid_public/"
@@ -581,14 +616,85 @@ def build_live_case(
     return None
 
 
+def load_stack_model() -> dict[str, object]:
+    """The served NOAA-aid stack artifact, refused unless it validates (ri_stack.load_artifact).
+
+    Loaded on every run, storms or not, like the v8.2 artifact: a missing or corrupt file fails
+    the job the day it happens, not at the first Atlantic storm.
+    """
+    payload, version = ri_stack.load_artifact(STACK_ARTIFACT)
+    if ri_stack.V82 in (payload.get("inputs") or []):
+        # The fitted pool would need v8.2 from the benchmark's model C on live inputs, a model
+        # this scorer does not load: refuse rather than feed it a different v8.2.
+        raise ri_stack.StackArtifactError(
+            f"{STACK_ARTIFACT} pools v8.2 (candidate {payload['candidate']}); this scorer serves no such stack")
+    print(f"  RI stack {version}: candidate {payload['candidate']} -- {payload['description']}; "
+          f"fitted on {payload['training']['seasons']} ({payload['training']['n']} cycles)")
+    return {"payload": payload, "model_version": version}
+
+
+def fetch_ships_ri(storm_id: str, cycle: dt.datetime) -> tuple[ships_text.ShipsRI | None, str]:
+    """``(parsed SHIPS RI matrix, "ok")`` for the storm's cycle, or ``(None, why)``."""
+    name = ships_text.filename_for(storm_id, cycle)
+    try:
+        raw = fetch_text(ships_text.STEXT_ROOT + name, namespace="ships_text", use_cache=False)
+    except Exception as exc:  # 404 (not yet published), network
+        return None, f"absent ({type(exc).__name__})"
+    try:
+        return ships_text.parse_ships_text(raw, filename=name), "ok"
+    except ships_text.ShipsTextError as exc:
+        return None, f"refused ({exc})"
+
+
+def stack_forecast(
+    case: dict[str, object],
+    stack: dict[str, object],
+    ships_fetcher=None,
+) -> tuple[float | None, dict[str, object]]:
+    """``(P(RI), inputs)`` from NOAA's aids at the case's own cycle, or ``(None, {"status": why})``.
+
+    Only an NHC a-deck case qualifies: the JTWC basins publish no RI guidance, and a JTWC
+    warning is never the source of an NHC-basin storm (see _discover_jtwc_storms).
+    """
+    sid = str(case["storm_id"]).upper()
+    if sid[:2] not in NHC_BASINS:
+        return None, {"status": "jtwc_basin: NOAA publishes no RI guidance"}
+    if case.get("analysis_model") == "JTWC":
+        return None, {"status": "jtwc_warning_case"}
+    cycle = dt.datetime.fromisoformat(str(case["issue_time"]))
+    fetcher = ships_fetcher or fetch_ships_ri
+    ri, status = fetcher(sid, cycle)
+    if ri is None:
+        return None, {"status": f"ships_text_{status}", "ships_text": ships_text.filename_for(sid, cycle)}
+    out = ri_stack.predict(stack["payload"], ri.whole_percent, sid[:2], None)
+    if out is None:
+        return None, {"status": "ships_text_lacks_the_needed_aids", "ships_text": ships_text.summary(ri)}
+    prob, info = out
+    return prob, {"status": "ok", "candidate": stack["payload"]["candidate"],
+                  "ships_text": ships_text.summary(ri), "url": ships_text.url_for(sid, cycle), **info}
+
+
+def ri_source_label(storm: dict[str, object]) -> str:
+    """What produced a storm's number, for people: 'NOAA DTOPS', 'NOAA SHIPS-RII', 'HazardPulse v8.2'."""
+    if storm.get("ri_source") != RI_SOURCE_STACK:
+        return "HazardPulse v8.2"
+    used = (storm.get("ri_inputs") or {}).get("used")
+    names = {"DTOP": "DTOPS", "RIOD": "SHIPS-RII", "RIOC": "SHIPS RI consensus"}
+    return f"NOAA {names.get(str(used), 'RI guidance (SHIPS-RII/DTOPS)')}"
+
+
 def score_live_cases(
     model: dict[str, object],
     live_cases: list[dict[str, object]],
+    stack: dict[str, object] | None = None,
+    ships_fetcher=None,
 ) -> list[dict[str, object]]:
-    """Score live cases with the pinned artifact. No training happens here.
+    """Score live cases with the pinned artifacts. No training happens here.
 
-    ``ri_probability`` is the artifact's calibrated probability; every downstream band
-    (pulse risk_band, page) is derived from it, never from a raw member score.
+    v8.2 scores every case. With ``stack`` (load_stack_model), an NHC-basin a-deck case whose
+    cycle's SHIPS text carries the needed aids is served NOAA's guidance instead, and keeps
+    v8.2's number beside it (``v8_2``) for comparison. ``ri_probability`` is what is published;
+    every downstream band (pulse risk_band, page) is derived from it.
     """
 
     if not live_cases:
@@ -598,16 +704,7 @@ def score_live_cases(
 
     scored: list[dict[str, object]] = []
     for i, case in enumerate(live_cases):
-        scored.append({
-            "storm_id": case["storm_id"],
-            "storm_name": case.get("storm_name", case["storm_id"]),
-            "basin": case.get("basin", ""),
-            "lat": case.get("analysis_lat"),
-            "lon": case.get("analysis_lon"),
-            "vmax_kt": case.get("analysis_vmax_kt"),
-            "mslp_hpa": case.get("analysis_mslp_hpa"),
-            "category": classify_storm(case.get("analysis_vmax_kt")),
-            "issue_time": case.get("issue_time"),
+        v82 = {
             "ri_probability": round(float(p["calibrated"][i]), 4),
             "ri_probability_raw": round(float(p["ensemble"][i]), 4),
             "model_scores": {
@@ -619,9 +716,50 @@ def score_live_cases(
             "n_features": n_features,
             "model_version": model["model_version"],
             "calibration": model["calibration"]["method"],
-        })
+        }
+        storm: dict[str, object] = {
+            "storm_id": case["storm_id"],
+            "storm_name": case.get("storm_name", case["storm_id"]),
+            "basin": case.get("basin", ""),
+            "lat": case.get("analysis_lat"),
+            "lon": case.get("analysis_lon"),
+            "vmax_kt": case.get("analysis_vmax_kt"),
+            "mslp_hpa": case.get("analysis_mslp_hpa"),
+            "category": classify_storm(case.get("analysis_vmax_kt")),
+            "issue_time": case.get("issue_time"),
+            **v82,
+            "ri_source": RI_SOURCE_V82,
+            "ri_inputs": {"analysis_model": case.get("analysis_model")},
+        }
+        if stack is not None:
+            prob, inputs = stack_forecast(case, stack, ships_fetcher)
+            if prob is None:
+                storm["ri_inputs"]["noaa_aid_stack"] = inputs
+            else:
+                payload = stack["payload"]
+                storm.update({
+                    "ri_probability": round(float(prob), 4),
+                    "ri_probability_raw": round(float(prob), 4),
+                    "model_scores": {RI_SOURCE_STACK: round(float(prob), 4)},
+                    "n_features": len(inputs.get("inputs") or {}),
+                    "model_version": stack["model_version"],
+                    "calibration": ("none: NOAA's probability as issued" if payload["kind"] == "raw_aid"
+                                    else "logistic pool of NOAA aids fitted 2020-2024"),
+                    "ri_source": RI_SOURCE_STACK,
+                    "ri_inputs": inputs,
+                    "v8_2": {k: v82[k] for k in ("ri_probability", "model_version")},
+                })
+        storm["ri_source_label"] = ri_source_label(storm)
+        scored.append(storm)
 
     return scored
+
+
+def headline_model_version(scored: list[dict[str, object]], default: str) -> str:
+    """The model behind the number the pulse shows (the top storm's), else ``default``."""
+    if not scored:
+        return default
+    return str(max(scored, key=lambda s: s["ri_probability"])["model_version"])
 
 
 def _render_hurricane_geojson(storms: list[dict[str, object]]) -> str:
@@ -639,6 +777,7 @@ def _render_hurricane_geojson(storms: list[dict[str, object]]) -> str:
                 "storm_id": s.get("storm_id", ""),
                 "storm_name": s.get("storm_name", ""),
                 "ri_probability": s.get("ri_probability", 0),
+                "ri_source": s.get("ri_source", RI_SOURCE_V82),
                 "category": s.get("category", ""),
                 "vmax_kt": s.get("vmax_kt"),
                 "mslp_hpa": s.get("mslp_hpa"),
@@ -652,15 +791,28 @@ def write_outputs(
     scored_storms: list[dict[str, object]],
     now: dt.datetime,
     model_version: str = SERVED_MODEL_VERSION,
+    note: str | None = None,
 ) -> None:
-    """Write scored results to dist/data/."""
+    """Write scored results to dist/data/.
+
+    ``model_version`` is the model behind the headline (top-storm) number; each storm carries
+    its own ``model_version`` and ``ri_source``, and ``model_versions`` lists every model that
+    produced a number in this run.
+    """
     forecast_id = f"hu_fcst_{now.strftime('%Y%m%d_%H%M')}"
+    sources: dict[str, int] = {}
+    for s in scored_storms:
+        key = str(s.get("ri_source", RI_SOURCE_V82))
+        sources[key] = sources.get(key, 0) + 1
 
     # Write live-storms.json
     output = {
         "updated_at": now.isoformat() + "Z",
         "forecast_id": forecast_id,
         "model_version": model_version,
+        "model_versions": sorted({str(s.get("model_version")) for s in scored_storms if s.get("model_version")}),
+        "ri_sources": sources,
+        "ri_sources_note": note if note is not None else ri_sources_note(None),
         "n_active_storms": len(scored_storms),
         "storms": scored_storms,
     }
@@ -714,7 +866,9 @@ def write_outputs(
                     hazard["receipt_sha256"] = top.get("receipt_sha256")
                     hazard["risk_band"] = _risk_band(top["ri_probability"])
                     hazard["gate_status"] = "pass"
-                    hazard["model_version"] = model_version
+                    hazard["model_version"] = top.get("model_version", model_version)
+                    hazard["ri_source"] = top.get("ri_source", RI_SOURCE_V82)
+                    hazard["ri_source_label"] = top.get("ri_source_label") or ri_source_label(top)
                     hazard["forecast_id"] = forecast_id
                     hazard["n_active_storms"] = len(scored_storms)
                 else:
@@ -724,6 +878,8 @@ def write_outputs(
                     hazard["risk_band"] = "none"
                     hazard["gate_status"] = "pass"
                     hazard["model_version"] = model_version
+                    hazard.pop("ri_source", None)
+                    hazard.pop("ri_source_label", None)
                     hazard["forecast_id"] = forecast_id
                     hazard["n_active_storms"] = 0
                 break
@@ -775,8 +931,11 @@ def render_hurricane_page(
     scored_storms: list[dict[str, object]],
     now: dt.datetime,
     model_version: str = SERVED_MODEL_VERSION,
+    note: str | None = None,
 ) -> None:
-    """Render an honest hurricane live page from the current saved feed."""
+    """Render an honest hurricane live page from the current saved feed (build_site_artifacts
+    re-renders the same page from live-storms.json; the two show the same columns)."""
+    note = note if note is not None else ri_sources_note(None)
     page_path = DIST / "live" / "hurricane" / "index.html"
     page_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -793,11 +952,12 @@ def render_hurricane_page(
                 f"<td>{_esc(storm.get('category', '--'))}</td>"
                 f"<td>{storm.get('lat', '--')}, {storm.get('lon', '--')}</td>"
                 f"<td>{float(storm.get('ri_probability', 0) or 0) * 100:.1f}%</td>"
+                f"<td>{_esc(storm.get('ri_source_label') or ri_source_label(storm))}</td>"
                 f"<td>{storm.get('vmax_kt', '--')} kt</td>"
                 f"</tr>"
             )
         storms_html = (
-            "<table><thead><tr><th>Storm</th><th>Status</th><th>Location</th><th>RI 24h</th><th>Wind</th></tr></thead>"
+            "<table><thead><tr><th>Storm</th><th>Status</th><th>Location</th><th>RI 24h</th><th>Source</th><th>Wind</th></tr></thead>"
             f"<tbody>{''.join(rows)}</tbody></table>"
         )
         summary_html = (
@@ -928,6 +1088,7 @@ def render_hurricane_page(
         <div class="card col-8">
           <h2 style="margin-top:0;">Active tropical systems</h2>
           {storms_html}
+          <p class="muted" style="margin-top:12px;">Where the RI number comes from: {_esc(note)}</p>
           <p class="muted" style="margin-top:12px;">Source feed: <a href="/data/live-storms.json">/data/live-storms.json</a> &middot; GeoJSON: <a href="/data/hurricane-storms.geojson">/data/hurricane-storms.geojson</a>. Always follow official advisories from the NHC, JTWC, and local authorities.</p>
         </div>
       </div>
@@ -1004,8 +1165,10 @@ def main() -> None:
     print(f"HazardPulse hurricane RI scoring pipeline ({SERVED_MODEL_VERSION}) — {now.isoformat()}Z")
     print()
 
-    print("Step 0: Loading the pinned model artifact...")
+    print("Step 0: Loading the pinned model artifacts...")
     model = load_serving_model()
+    stack = load_stack_model()
+    note = ri_sources_note(stack)
     print()
 
     # Step 1: Check NHC ATCF for active storms
@@ -1104,22 +1267,25 @@ def main() -> None:
     if not live_cases:
         print()
         print("  No active tropical cyclones in any basin.")
-        write_outputs([], now, model["model_version"])
-        render_hurricane_page([], now, model["model_version"])
+        # No number is published; the page names the model that serves the NHC basins.
+        write_outputs([], now, stack["model_version"], note=note)
+        render_hurricane_page([], now, stack["model_version"], note=note)
         build_site_artifacts()
         print("Done. No storms to score.")
         return
 
-    # Steps 3-4: score all storms (NHC + JTWC unified) with the pinned model. The model was
-    # loaded and provenance-checked in step 0; nothing is trained in this job.
+    # Steps 3-4: score all storms (NHC + JTWC unified) with the pinned artifacts. Both were
+    # loaded and checked in step 0; nothing is trained in this job.
     print()
-    print(f"Step 3-4: Scoring {len(live_cases)} active storms with the pinned {model['model_version']} model...")
-    scored = score_live_cases(model, live_cases)
+    print(f"Step 3-4: Scoring {len(live_cases)} active storms: NOAA aids ({stack['model_version']}) where the "
+          f"cycle's SHIPS text has them, else {model['model_version']}...")
+    scored = score_live_cases(model, live_cases, stack=stack)
 
     for s in scored:
         ri = s.get("ri_probability", 0) or 0
-        print(f"  {s.get('storm_name', s['storm_id'])}: P(RI) = {ri:.1%} "
-              f"({s['category']}, {s['vmax_kt']} kt)")
+        why = "" if s["ri_source"] == RI_SOURCE_STACK else f" [{s['ri_inputs'].get('noaa_aid_stack', {}).get('status', '')}]"
+        print(f"  {s.get('storm_name', s['storm_id'])}: P(RI) = {ri:.1%} from {s['ri_source_label']}"
+              f"{why} ({s['category']}, {s['vmax_kt']} kt)")
 
     # Trust layer: recalibrate RI probabilities on live outcomes + attach honest
     # [conf_lo, conf_hi] bands + Ed25519-signed receipts. Fail-safe: the model's
@@ -1130,21 +1296,25 @@ def main() -> None:
         _signer = load_signer()
         _forecaster = load_forecaster("hurricane", signer=_signer)
         trust_version = getattr(_forecaster, "model_version", None)
-        if _forecaster is not None and trust_version != model["model_version"]:
-            # A calibrator fitted on another model's forecasts must not re-map, band or SIGN
-            # this model's probabilities (the receipt would name the wrong model).
-            print(
-                f"  Trust layer: skipped -- its calibrator was fitted for {trust_version}, "
-                f"the served model is {model['model_version']}; emitting model-calibrated forecasts."
-            )
-        elif _forecaster is not None and scored:
-            enrich_cells(scored, _forecaster, prob_key="ri_probability",
+        # A calibrator is one model's curve: it may re-map, band and SIGN only the storms that
+        # model scored (the receipt would otherwise name the wrong model). With two models
+        # serving (NOAA aids in NHC basins, v8.2 elsewhere) that is a per-storm decision.
+        own = [s for s in scored if s.get("model_version") == trust_version]
+        foreign = len(scored) - len(own)
+        if _forecaster is not None and own:
+            enrich_cells(own, _forecaster, prob_key="ri_probability",
                          issued_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+            scored.sort(key=lambda c: (c.get("abstained", False), -float(c.get("ri_probability") or 0.0)))
             print(
-                f"  Trust layer: calibrated {len(scored)} storms "
+                f"  Trust layer: calibrated {len(own)} storms "
                 f"(model {_forecaster.model_version}, signed={_signer is not None})"
             )
-        elif scored:
+        if _forecaster is not None and foreign:
+            print(
+                f"  Trust layer: skipped {foreign} storms -- its calibrator was fitted for {trust_version}, "
+                "they were scored by another model; emitting their model-calibrated forecasts."
+            )
+        elif _forecaster is None and scored:
             print(
                 "  Trust layer: no calibrator yet "
                 "(results/calibration/hurricane_calibration.json); emitting model-calibrated forecasts."
@@ -1155,8 +1325,9 @@ def main() -> None:
     # Step 5: Write outputs
     print()
     print("Step 5: Writing outputs...")
-    write_outputs(scored, now, model["model_version"])
-    render_hurricane_page(scored, now, model["model_version"])
+    headline_version = headline_model_version(scored, stack["model_version"])
+    write_outputs(scored, now, headline_version, note=note)
+    render_hurricane_page(scored, now, headline_version, note=note)
     build_site_artifacts()
 
     # ---- Alert manager evaluation ----

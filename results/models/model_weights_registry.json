@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "publisher": "HazardPulse / Coherence Energy Labs",
-  "generated_at": "2026-10-02T05:43:40.368383Z",
-  "n_entries": 3,
+  "generated_at": "2026-10-02T18:04:55.459220Z",
+  "n_entries": 4,
   "entries": [
     {
       "record_id": "weights_hazardpulse_tornado_gbt_v1",
@@ -55,7 +55,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:43:40.360837Z",
+      "release_utc": "2026-10-02T18:04:55.101942Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -101,7 +101,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:43:40.362266Z",
+      "release_utc": "2026-10-02T18:04:55.307753Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -109,7 +109,7 @@
     {
       "record_id": "weights_hazardpulse_hurricane_ri_v8_2",
       "name": "HazardPulse Hurricane RI v8.2 (ensemble, pinned)",
-      "description": "Rapid-intensification ensemble (histogram-GBT depth 3 + depth 4 + L2 logistic + bagged logistic) predicting a >= 30 kt wind increase in the next 24 h, on true synoptic timestamps. Served from a pinned file bound to its training-data hash; calibrated by a converged Newton logistic fit on seasons the members never trained on. Held-out test: 298 storms first seen 2022-2024, 507 RI events.",
+      "description": "Rapid-intensification ensemble (histogram-GBT depth 3 + depth 4 + L2 logistic + bagged logistic) predicting a >= 30 kt wind increase in the next 24 h, on true synoptic timestamps. Served from a pinned file bound to its training-data hash; calibrated by a converged Newton logistic fit on seasons the members never trained on. Held-out test: 298 storms first seen 2022-2024, 507 RI events. Since 2026-10-02 it serves the JTWC basins and any NHC cycle without NOAA's SHIPS text; NHC-basin cycles with it are served the NOAA aid entry below.",
       "weights_uri": "hazardpulse://results/models/hurricane_ri_v8_2.json",
       "weights_path": "results\\models\\hurricane_ri_v8_2.json",
       "size_bytes": 514965,
@@ -150,7 +150,146 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:43:40.368342Z",
+      "release_utc": "2026-10-02T18:04:55.315430Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_hurricane_ri_stack_v1-35938d6c09b7",
+      "name": "HazardPulse Hurricane RI, NHC basins: NOAA aid stack v1 (candidate A)",
+      "description": "P(>= 30 kt wind increase in 24 h) for Atlantic, East and Central Pacific storms from NOAA's operational RI guidance: DTOPS raw (SHIPS-RII where DTOPS is missing: Amendment 1, item 1). Read live from NHC's SHIPS text for the storm's cycle; chosen among six pre-registered candidates (DTOPS, SHIPS-RII, RI consensus, and three logistic stacks of the NOAA aids, one with HazardPulse v8.2) by forward chaining on 2020-2024 under a parsimony rule (docs/HURRICANE_RI_PROGRAM.md); scored once on the 2025 season.",
+      "weights_uri": "hazardpulse://results/models/hurricane_ri_stack_v1.json",
+      "weights_path": "results\\models\\hurricane_ri_stack_v1.json",
+      "size_bytes": 900,
+      "blake3": "7ed8606d7c555d847253a331c3dd1d3a5b70ab6231298e8f60e4ed8f88412ffb",
+      "sha256": "35938d6c09b7f340317751ba2cc9847ff46a8c8f26da4e6dc71247eae9a17805",
+      "framework": "hazardpulse_noaa_ri_aid_stack_v1",
+      "format": "json",
+      "input_schema": {
+        "source": "NHC SHIPS text 'Matrix of RI probabilities', column 30/24 (ATCF e-deck RI records in training)",
+        "ships_text_rows": {
+          "DTOP": "DTOPS",
+          "RIOB": "Bayesian",
+          "RIOC": "Consensus",
+          "RIOD": "SHIPS-RII",
+          "RIOL": "Logistic",
+          "SDCN": "SDCON"
+        },
+        "aid": "DTOP",
+        "fallback": "RIOD",
+        "pool_inputs": null,
+        "representation": "ATCF e-deck whole percent; live SHIPS text: SHIPS-RII from SHIPS's own whole-percent line, every other row rounded half-up (hazardpulse.hurricane.ships_text)",
+        "feature_names_path": "src/hazardpulse/hurricane/ri_stack.py"
+      },
+      "output_schema": {
+        "outputs": [
+          "ri_probability_24h"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "none: NOAA's probability as issued",
+        "model_version": "hurricane_ri_stack_v1-35938d6c09b7"
+      },
+      "benchmark": {
+        "benchmark_bound_to_this_artifact": true,
+        "test_window": "2025 season, NHC-basin cycles with a SHIPS-RII record, read once",
+        "test_auc": 0.9283907295576954,
+        "test_auc_ci95": [
+          0.8899862208309819,
+          0.9658622420660833
+        ],
+        "test_brier": 0.04691114808652246,
+        "test_brier_ci95": [
+          0.02723118116550418,
+          0.06890315125684501
+        ],
+        "test_bss_vs_fit_season_climatology": 0.31091516449946055,
+        "test_bss_ci95": [
+          0.18304950856631877,
+          0.3977842999673146
+        ],
+        "test_log_loss": 0.15785073493165874,
+        "test_log_loss_ci95": [
+          0.10236097106908831,
+          0.2172195885160013
+        ],
+        "calibration_slope": 1.3084170793435637,
+        "n_test_cycles": 601,
+        "n_test_events": 44,
+        "n_test_storms": 33,
+        "paired_this_minus": {
+          "B": {
+            "delta_log_loss": -0.05887158464310835,
+            "delta_brier": -0.012715307820299504,
+            "delta_auc": 0.06965072629345515,
+            "ci95": {
+              "delta_auc": [
+                0.022731097463278636,
+                0.14239789523677135
+              ],
+              "delta_brier": [
+                -0.01862402709073655,
+                -0.007012795398902491
+              ],
+              "delta_log_loss": [
+                -0.07956028826673069,
+                -0.035770975762275274
+              ]
+            }
+          },
+          "C": {
+            "delta_log_loss": -0.03830918348475151,
+            "delta_brier": -0.009259567387687191,
+            "delta_auc": 0.05418638811816545,
+            "ci95": {
+              "delta_auc": [
+                0.005565432839671055,
+                0.13245588662996327
+              ],
+              "delta_brier": [
+                -0.015885154246891044,
+                -0.002047285531971603
+              ],
+              "delta_log_loss": [
+                -0.058730401522548416,
+                -0.016104979445747722
+              ]
+            }
+          },
+          "v8_2_on_v82_subset": {
+            "n": 601,
+            "delta_log_loss": -0.048420370801767476,
+            "delta_brier": -0.013298275020354959,
+            "delta_auc": 0.07956585604700506,
+            "ci95": {
+              "delta_auc": [
+                0.025140377600702087,
+                0.14479220785084004
+              ],
+              "delta_brier": [
+                -0.022370459913846796,
+                -0.005273356905305748
+              ],
+              "delta_log_loss": [
+                -0.08125669325735518,
+                -0.019074508576535358
+              ]
+            }
+          }
+        },
+        "selection_pooled_dev": {
+          "log_loss": 0.16653508144384657,
+          "auc": 0.8988684582743989,
+          "brier": 0.048325462555066076,
+          "bss": 0.2144389464285663
+        }
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-02T18:04:55.459138Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -208,7 +347,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:43:40.360837Z",
+      "release_utc": "2026-10-02T18:04:55.101942Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -254,7 +393,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:43:40.362266Z",
+      "release_utc": "2026-10-02T18:04:55.307753Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -262,7 +401,7 @@
     {
       "record_id": "weights_hazardpulse_hurricane_ri_v8_2",
       "name": "HazardPulse Hurricane RI v8.2 (ensemble, pinned)",
-      "description": "Rapid-intensification ensemble (histogram-GBT depth 3 + depth 4 + L2 logistic + bagged logistic) predicting a >= 30 kt wind increase in the next 24 h, on true synoptic timestamps. Served from a pinned file bound to its training-data hash; calibrated by a converged Newton logistic fit on seasons the members never trained on. Held-out test: 298 storms first seen 2022-2024, 507 RI events.",
+      "description": "Rapid-intensification ensemble (histogram-GBT depth 3 + depth 4 + L2 logistic + bagged logistic) predicting a >= 30 kt wind increase in the next 24 h, on true synoptic timestamps. Served from a pinned file bound to its training-data hash; calibrated by a converged Newton logistic fit on seasons the members never trained on. Held-out test: 298 storms first seen 2022-2024, 507 RI events. Since 2026-10-02 it serves the JTWC basins and any NHC cycle without NOAA's SHIPS text; NHC-basin cycles with it are served the NOAA aid entry below.",
       "weights_uri": "hazardpulse://results/models/hurricane_ri_v8_2.json",
       "weights_path": "results\\models\\hurricane_ri_v8_2.json",
       "size_bytes": 514965,
@@ -303,7 +442,146 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T05:43:40.368342Z",
+      "release_utc": "2026-10-02T18:04:55.315430Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_hurricane_ri_stack_v1-35938d6c09b7",
+      "name": "HazardPulse Hurricane RI, NHC basins: NOAA aid stack v1 (candidate A)",
+      "description": "P(>= 30 kt wind increase in 24 h) for Atlantic, East and Central Pacific storms from NOAA's operational RI guidance: DTOPS raw (SHIPS-RII where DTOPS is missing: Amendment 1, item 1). Read live from NHC's SHIPS text for the storm's cycle; chosen among six pre-registered candidates (DTOPS, SHIPS-RII, RI consensus, and three logistic stacks of the NOAA aids, one with HazardPulse v8.2) by forward chaining on 2020-2024 under a parsimony rule (docs/HURRICANE_RI_PROGRAM.md); scored once on the 2025 season.",
+      "weights_uri": "hazardpulse://results/models/hurricane_ri_stack_v1.json",
+      "weights_path": "results\\models\\hurricane_ri_stack_v1.json",
+      "size_bytes": 900,
+      "blake3": "7ed8606d7c555d847253a331c3dd1d3a5b70ab6231298e8f60e4ed8f88412ffb",
+      "sha256": "35938d6c09b7f340317751ba2cc9847ff46a8c8f26da4e6dc71247eae9a17805",
+      "framework": "hazardpulse_noaa_ri_aid_stack_v1",
+      "format": "json",
+      "input_schema": {
+        "source": "NHC SHIPS text 'Matrix of RI probabilities', column 30/24 (ATCF e-deck RI records in training)",
+        "ships_text_rows": {
+          "DTOP": "DTOPS",
+          "RIOB": "Bayesian",
+          "RIOC": "Consensus",
+          "RIOD": "SHIPS-RII",
+          "RIOL": "Logistic",
+          "SDCN": "SDCON"
+        },
+        "aid": "DTOP",
+        "fallback": "RIOD",
+        "pool_inputs": null,
+        "representation": "ATCF e-deck whole percent; live SHIPS text: SHIPS-RII from SHIPS's own whole-percent line, every other row rounded half-up (hazardpulse.hurricane.ships_text)",
+        "feature_names_path": "src/hazardpulse/hurricane/ri_stack.py"
+      },
+      "output_schema": {
+        "outputs": [
+          "ri_probability_24h"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "none: NOAA's probability as issued",
+        "model_version": "hurricane_ri_stack_v1-35938d6c09b7"
+      },
+      "benchmark": {
+        "benchmark_bound_to_this_artifact": true,
+        "test_window": "2025 season, NHC-basin cycles with a SHIPS-RII record, read once",
+        "test_auc": 0.9283907295576954,
+        "test_auc_ci95": [
+          0.8899862208309819,
+          0.9658622420660833
+        ],
+        "test_brier": 0.04691114808652246,
+        "test_brier_ci95": [
+          0.02723118116550418,
+          0.06890315125684501
+        ],
+        "test_bss_vs_fit_season_climatology": 0.31091516449946055,
+        "test_bss_ci95": [
+          0.18304950856631877,
+          0.3977842999673146
+        ],
+        "test_log_loss": 0.15785073493165874,
+        "test_log_loss_ci95": [
+          0.10236097106908831,
+          0.2172195885160013
+        ],
+        "calibration_slope": 1.3084170793435637,
+        "n_test_cycles": 601,
+        "n_test_events": 44,
+        "n_test_storms": 33,
+        "paired_this_minus": {
+          "B": {
+            "delta_log_loss": -0.05887158464310835,
+            "delta_brier": -0.012715307820299504,
+            "delta_auc": 0.06965072629345515,
+            "ci95": {
+              "delta_auc": [
+                0.022731097463278636,
+                0.14239789523677135
+              ],
+              "delta_brier": [
+                -0.01862402709073655,
+                -0.007012795398902491
+              ],
+              "delta_log_loss": [
+                -0.07956028826673069,
+                -0.035770975762275274
+              ]
+            }
+          },
+          "C": {
+            "delta_log_loss": -0.03830918348475151,
+            "delta_brier": -0.009259567387687191,
+            "delta_auc": 0.05418638811816545,
+            "ci95": {
+              "delta_auc": [
+                0.005565432839671055,
+                0.13245588662996327
+              ],
+              "delta_brier": [
+                -0.015885154246891044,
+                -0.002047285531971603
+              ],
+              "delta_log_loss": [
+                -0.058730401522548416,
+                -0.016104979445747722
+              ]
+            }
+          },
+          "v8_2_on_v82_subset": {
+            "n": 601,
+            "delta_log_loss": -0.048420370801767476,
+            "delta_brier": -0.013298275020354959,
+            "delta_auc": 0.07956585604700506,
+            "ci95": {
+              "delta_auc": [
+                0.025140377600702087,
+                0.14479220785084004
+              ],
+              "delta_brier": [
+                -0.022370459913846796,
+                -0.005273356905305748
+              ],
+              "delta_log_loss": [
+                -0.08125669325735518,
+                -0.019074508576535358
+              ]
+            }
+          }
+        },
+        "selection_pooled_dev": {
+          "log_loss": 0.16653508144384657,
+          "auc": 0.8988684582743989,
+          "brier": 0.048325462555066076,
+          "bss": 0.2144389464285663
+        }
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-02T18:04:55.459138Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
