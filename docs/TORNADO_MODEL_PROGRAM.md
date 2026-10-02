@@ -144,3 +144,11 @@ the final claim before it is reported.
 - A day whose HRRR analyses fail to arrive is built with what exists and recorded per row
   (`analysis`); its store file carries an input fingerprint, so a later fetch that fills
   the hole rebuilds it. 2022-01-06 got 0 of 8 analyses in the first pass (retried).
+- HRRR fetch failures came in two kinds, told apart since the pass records the child's
+  error: real archive holes ("nothing found at path"; e.g. 2024-11-15/16/18 18-21Z,
+  2025-05-29 18Z, 2025-06-20 06-09Z, 2025-10-20 06-18Z) and read timeouts when 8 parallel
+  dates saturated the link (27% of dates in one stretch; 4 workers fixed it).
+- The train and validation memmaps are FROZEN as every validation choice saw them
+  (assembled 2026-10-02 before the gap retries). Retry-filled 2020-2023 days are not
+  re-assembled into them; dev 2024 and final 2025 are assembled after the retries. The
+  final refit reads the same frozen train/val memmaps plus dev.
