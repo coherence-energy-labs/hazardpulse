@@ -94,6 +94,30 @@ def test_day_bootstrap_auc_by_quadratic_form_equals_resampling_the_rows(lab):
     assert (ones @ U @ ones) / ((ones @ P) * (ones @ N)) == pytest.approx(lab.dm.compute_auc(y.astype(float), s), abs=1e-12)
 
 
+def test_nws_bar_matches_the_false_alarm_rate_and_scores_hits(lab, tmp_path, monkeypatch):
+    monkeypatch.setattr(lab, "LAB", tmp_path)
+    monkeypatch.setattr(lab, "OUT", tmp_path)
+    rng = np.random.RandomState(4)
+    n = 20000
+    days = np.repeat(np.arange(20240101, 20240141), n // 40)
+    y = (rng.rand(n) < 0.02).astype(np.int8)
+    p = np.clip(0.02 + 0.6 * y * rng.rand(n) + 0.05 * rng.rand(n), 0, 1)       # a skilful model
+    warned = ((y == 1) & (rng.rand(n) < 0.4)) | ((y == 0) & (rng.rand(n) < 0.01))
+    np.lib.format.open_memmap(tmp_path / "dev_Y.npy", mode="w+", dtype=np.int8, shape=(n, len(lab.LIDX)))[:] = y[:, None]
+    Wm = np.lib.format.open_memmap(tmp_path / "dev_W.npy", mode="w+", dtype=np.float32, shape=(n, 2))
+    Wm[:, 0] = warned
+    Wm[:, 1] = np.nan
+    Wm.flush()
+    np.lib.format.open_memmap(tmp_path / "dev_X.npy", mode="w+", dtype=np.float32, shape=(n, 1))
+    np.savez(tmp_path / "dev_meta.npz", day=days)
+    (tmp_path / "preds").mkdir()
+    np.save(tmp_path / "preds" / "m_dev.npy", p.astype(np.float32))
+    r = lab.nws_bar("m", "dev", n_boot=100)
+    assert abs(r["model_pofd"] - r["nws_pofd"]) < 2e-4                 # same false-alarm rate
+    assert r["nws_pod"] == pytest.approx(warned[y == 1].mean())
+    assert r["delta_pod"] > 0.3 and r["delta_pod_ci"][0] > 0          # the skilful model wins, provably
+
+
 def test_block_w_is_appended_after_the_store_columns_and_only_when_asked(lab):
     X = np.arange(40, dtype=np.float32).reshape(10, 4)
     W = np.full((10, 2), np.nan, np.float32)

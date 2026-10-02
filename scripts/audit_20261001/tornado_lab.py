@@ -572,6 +572,38 @@ def final_pipeline(which: str = "primary") -> dict:
     return res
 
 
+def nws_bar(name: str, split: str, label: str = "storm_60", n_boot: int = 2000, seed: int = 42) -> dict:
+    """NWS tornado warnings as a bar: their POD at their own false-alarm rate (POFD = share of
+    negative storm observations inside an active warning), against the model's POD at the SAME
+    POFD (threshold fixed on the whole split). Paired whole-day bootstrap of POD(model) - POD(NWS)."""
+    _, Y, meta = load(split)
+    y = np.asarray(Y[:, LIDX[label]], np.int8)
+    W = load_w(split)
+    warned = np.asarray(W[:, 0], np.float64)
+    p = np.load(LAB / "preds" / f"{name}_{split}.npy").astype(np.float64)
+    ok = np.isfinite(warned) & np.isfinite(p)
+    y, warned, p, days = y[ok], warned[ok] > 0.5, p[ok], np.asarray(meta["day"])[ok]
+    neg, pos = y == 0, y == 1
+    pofd = float(warned[neg].mean())
+    thr = float(np.quantile(p[neg], 1.0 - pofd))          # the model alarms on the same share of negatives
+    alarm = p > thr
+    uniq, di = np.unique(days, return_inverse=True)
+    D = len(uniq)
+    hit_m = np.bincount(di, weights=(alarm & pos), minlength=D)
+    hit_w = np.bincount(di, weights=(warned & pos), minlength=D)
+    npos = np.bincount(di, weights=pos, minlength=D)
+    M = day_bootstrap_counts(D, n_boot, seed)
+    d = (M @ hit_m - M @ hit_w) / np.maximum(M @ npos, 1)
+    out = {"model": name, "split": split, "label": label, "n_rows": int(len(y)), "positives": int(pos.sum()),
+           "nws_pofd": pofd, "model_pofd": float(alarm[neg].mean()), "threshold": thr,
+           "nws_pod": float(warned[pos].mean()), "model_pod_at_nws_pofd": float(alarm[pos].mean()),
+           "delta_pod": float(alarm[pos].mean() - warned[pos].mean()),
+           "delta_pod_ci": [float(np.percentile(d, 2.5)), float(np.percentile(d, 97.5))],
+           "rows_without_warning_state": int((~ok).sum())}
+    (OUT / f"nws_bar_{name}_{split}_{label}.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
+    return out
+
+
 def day_pair_matrix(y, s, day_idx: np.ndarray, n_days: int):
     """``U[d, e]`` = Mann-Whitney pair count between the positives of day d and the negatives of
     day e (ties 1/2), plus per-day positive / negative counts. A day bootstrap with day
@@ -652,6 +684,12 @@ def main() -> int:
         for s, r in stress(name, split, label).items():
             cells = "  ".join(f"{k} {v['auc']:.3f}" for k, v in r.items() if isinstance(v, dict))
             print(f"{s:20s} n={r['n']:8d} pos={r['pos']:5d}  {cells}", flush=True)
+        return 0
+    if cmd == "nws_bar":
+        r = nws_bar(sys.argv[2], sys.argv[3])
+        print(f"{r['split']} NWS POD {r['nws_pod']:.3f} at POFD {r['nws_pofd']:.4f} | {r['model']} POD "
+              f"{r['model_pod_at_nws_pofd']:.3f} | delta {r['delta_pod']:+.3f} "
+              f"[{r['delta_pod_ci'][0]:+.3f}, {r['delta_pod_ci'][1]:+.3f}]", flush=True)
         return 0
     if cmd == "final":
         which = sys.argv[2] if len(sys.argv) > 2 else "primary"
