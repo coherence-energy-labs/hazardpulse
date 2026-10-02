@@ -42,6 +42,43 @@ def test_payload_equals_lightgbm_raw_scores(tmp_path, zero_as_missing):
     assert lp.model_version(again) == v
 
 
+def test_contributions_add_up_to_the_raw_score_exactly():
+    X, y = _data()
+    bst = lgb.train({"objective": "binary", "num_leaves": 31, "verbose": -1, "deterministic": True, "seed": 2},
+                    lgb.Dataset(X, y), 40)
+    payload = lp.export_booster(bst, [f"f{i}" for i in range(6)], calibration={"a": 1.0, "b": 0.0}, provenance={})
+    Xt, _ = _data(seed=7, n=2000)
+    Xt[::13, 1] = np.nan
+    bias, contrib = lp.contributions(payload, Xt)
+    raw = lp.predict_raw(payload, Xt)
+    assert np.max(np.abs(bias + contrib.sum(axis=1) - raw)) < 1e-9
+    # f0 drives the label strongly, f4 and f5 not at all: attribution must say so
+    mean_abs = np.abs(contrib).mean(axis=0)
+    assert mean_abs[0] > 5 * mean_abs[4] and mean_abs[0] > 5 * mean_abs[5]
+    # LightGBM's own TreeSHAP has the same bias (expected value) and the same total
+    shap = bst.predict(Xt, pred_contrib=True)
+    assert np.max(np.abs(shap.sum(axis=1) - raw)) < 1e-9
+
+
+def test_interval_band_comes_from_the_stored_venn_abers_calibrator():
+    from hazardpulse.trust.venn_abers import VennAbersCalibrator
+    X, y = _data()
+    bst = lgb.train({"objective": "binary", "verbose": -1, "deterministic": True, "seed": 3}, lgb.Dataset(X, y), 30)
+    payload = lp.export_booster(bst, [f"f{i}" for i in range(6)], calibration={"a": 1.0, "b": 0.0}, provenance={})
+    Xc, yc = _data(seed=11, n=5000)
+    va = VennAbersCalibrator(max_groups=128).fit(lp.predict_raw(payload, Xc), yc)
+    payload["interval"] = va.to_dict()
+    p0, p1 = lp.predict_interval(payload, X[:200])
+    assert np.all(p0 <= p1) and np.all((p0 >= 0) & (p1 <= 1))
+    served = VennAbersCalibrator.from_dict(va.to_dict())           # what the payload carries (rounded 1e-8)
+    _, want0, want1 = served.predict(lp.predict_raw(payload, X[:200]))
+    assert np.array_equal(p0, want0) and np.array_equal(p1, want1)
+    _, raw0, raw1 = va.predict(lp.predict_raw(payload, X[:200]))
+    assert np.max(np.abs(p0 - raw0)) < 1e-7 and np.max(np.abs(p1 - raw1)) < 1e-7
+    no_band = dict(payload, interval=None)
+    assert np.isnan(lp.predict_interval(no_band, X[:3])[0]).all()
+
+
 def test_missing_type_semantics_are_lightgbms():
     # one hand-built stump: x <= 0.5 -> left (value 1), else right (value 2)
     def stump(missing_type, default_left):

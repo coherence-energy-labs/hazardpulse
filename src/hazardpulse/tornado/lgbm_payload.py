@@ -32,7 +32,7 @@ _MISSING = {"None": 0, "Zero": 1, "NaN": 2}
 
 def _flatten(tree: dict) -> dict[str, list]:
     """One tree as parallel node arrays; a leaf is a node whose ``feature`` is -1."""
-    feat, thr, dleft, miss, left, right, value = [], [], [], [], [], [], []
+    feat, thr, dleft, miss, left, right, value, node_value = [], [], [], [], [], [], [], []
 
     def add(node: dict) -> int:
         i = len(feat)
@@ -43,9 +43,11 @@ def _flatten(tree: dict) -> dict[str, list]:
         left.append(-1)
         right.append(-1)
         value.append(0.0)
+        node_value.append(0.0)
         if "leaf_value" in node and "split_feature" not in node:
-            value[i] = float(node["leaf_value"])
+            value[i] = node_value[i] = float(node["leaf_value"])
             return i
+        node_value[i] = float(node["internal_value"])
         if node.get("decision_type", "<=") != "<=":
             raise ValueError(f"unsupported decision type {node.get('decision_type')!r} (categorical splits)")
         feat[i] = int(node["split_feature"])
@@ -58,7 +60,7 @@ def _flatten(tree: dict) -> dict[str, list]:
 
     add(tree["tree_structure"])
     return {"feature": feat, "threshold": thr, "default_left": dleft, "missing_type": miss,
-            "left": left, "right": right, "value": value}
+            "left": left, "right": right, "value": value, "node_value": node_value}
 
 
 def export_booster(booster, feature_names: list[str], *, calibration: dict, provenance: dict) -> dict:
@@ -74,7 +76,9 @@ def export_booster(booster, feature_names: list[str], *, calibration: dict, prov
             "trees": trees, "calibration": calibration, "provenance": provenance}
 
 
-def _tree_predict(tree: dict, X: np.ndarray) -> np.ndarray:
+def _tree_predict(tree: dict, X: np.ndarray, contrib: np.ndarray | None = None) -> np.ndarray:
+    """Leaf value per row. With ``contrib`` (n_rows x n_features), also adds each split's change in
+    node value (child minus parent) to the split feature's column -- Saabas path attribution."""
     feat = np.asarray(tree["feature"], np.int64)
     thr = np.asarray(tree["threshold"], np.float64)
     dleft = np.asarray(tree["default_left"], bool)
@@ -82,6 +86,7 @@ def _tree_predict(tree: dict, X: np.ndarray) -> np.ndarray:
     left = np.asarray(tree["left"], np.int64)
     right = np.asarray(tree["right"], np.int64)
     value = np.asarray(tree["value"], np.float64)
+    nval = np.asarray(tree["node_value"], np.float64) if contrib is not None else None
     node = np.zeros(X.shape[0], np.int64)
     active = feat[node] >= 0
     while active.any():
@@ -93,9 +98,38 @@ def _tree_predict(tree: dict, X: np.ndarray) -> np.ndarray:
         x = np.where(isnan & (mt != 2), 0.0, x)
         go_default = ((mt == 1) & (np.abs(x) <= _ZERO)) | ((mt == 2) & isnan)
         go_left = np.where(go_default, dleft[nd], x <= thr[nd])
-        node[idx] = np.where(go_left, left[nd], right[nd])
+        child = np.where(go_left, left[nd], right[nd])
+        if contrib is not None:
+            np.add.at(contrib, (idx, feat[nd]), nval[child] - nval[nd])
+        node[idx] = child
         active[idx] = feat[node[idx]] >= 0
     return value[node]
+
+
+def contributions(payload: dict, X) -> tuple[np.ndarray, np.ndarray]:
+    """``(bias, contrib)``: per row, the raw score = bias + contrib.sum(axis=1) EXACTLY, with
+    contrib[:, j] the part of the score the path attribution assigns to input j. bias is the sum
+    of the trees' root values (the score before any split)."""
+    X = np.asarray(X, np.float64)
+    if any("node_value" not in t for t in payload["trees"]):
+        raise ValueError("payload has no node values (exported before contributions existed)")
+    contrib = np.zeros_like(X)
+    bias = sum(float(t["node_value"][0]) for t in payload["trees"])
+    for tree in payload["trees"]:
+        _tree_predict(tree, X, contrib)
+    return np.full(X.shape[0], bias), contrib
+
+
+def predict_interval(payload: dict, X) -> tuple[np.ndarray, np.ndarray]:
+    """Venn-Abers band [p0, p1] for each row (payload["interval"] = VennAbersCalibrator.to_dict()
+    fitted on the model's leave-one-year-out raw scores); NaN bands if the payload has none."""
+    if not payload.get("interval"):
+        n = np.asarray(X).shape[0]
+        return np.full(n, np.nan), np.full(n, np.nan)
+    from hazardpulse.trust.venn_abers import VennAbersCalibrator
+    va = VennAbersCalibrator.from_dict(payload["interval"])
+    _, p0, p1 = va.predict(predict_raw(payload, X))
+    return np.asarray(p0, np.float64), np.asarray(p1, np.float64)
 
 
 def predict_raw(payload: dict, X) -> np.ndarray:
