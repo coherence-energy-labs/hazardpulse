@@ -21,18 +21,22 @@ def live():
     return mod
 
 
-def test_live_analyses_are_newest_first_and_never_older_than_training_saw(live):
-    from hazardpulse.tornado.definitive_model import MAX_ANALYSIS_AGE_H
+def test_live_analyses_follow_the_training_availability_rule(live):
+    """The live run may read only what a training row could: a 3-hourly analysis already published
+    (valid + 100 min). The old candidates (22Z, 21Z, 20Z at 22:16) were not published yet or not
+    3-hourly -- amendment 8."""
+    from hazardpulse.data import hrrr_availability as ha
 
     now = dt.datetime(2026, 10, 1, 22, 16)
     c = live.live_analysis_candidates(now)
-    assert c == [("20261001", 22), ("20261001", 21), ("20261001", 20)]
+    assert c == [("20261001", 18)]                       # 21Z publishes at 22:40
     for d, h in c:
         t = dt.datetime.strptime(d, "%Y%m%d") + dt.timedelta(hours=h)
-        assert 0 <= (now - t).total_seconds() <= MAX_ANALYSIS_AGE_H * 3600
-    # across midnight
-    c2 = live.live_analysis_candidates(dt.datetime(2026, 10, 2, 1, 5))
-    assert c2 == [("20261002", 1), ("20261002", 0), ("20261001", 23)]
+        assert h % 3 == 0
+        assert t + dt.timedelta(minutes=ha.HRRR_PUBLICATION_LATENCY_MIN) <= now
+    # across midnight: the previous day's 21Z serves until 00Z is published at 01:40
+    assert live.live_analysis_candidates(dt.datetime(2026, 10, 2, 1, 5)) == [("20261001", 21)]
+    assert live.live_analysis_candidates(dt.datetime(2026, 10, 2, 1, 45)) == [("20261002", 0)]
 
 
 def test_published_band_follows_the_published_probability(live):

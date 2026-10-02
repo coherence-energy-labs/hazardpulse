@@ -135,7 +135,17 @@ from hazardpulse.tornado.definitive_model import (  # noqa: E402
     index_storms_by_id as definitive_index_storms,
     predict_proba_from_payload,
     probsevere_step_minutes as definitive_step_minutes,
+    parse_probsevere_valid_time as definitive_parse_valid_time,
 )
+from hazardpulse.data.hrrr_availability import live_candidates as hrrr_live_candidates  # noqa: E402
+from hazardpulse.tornado import lgbm_payload as v3_payload  # noqa: E402
+from hazardpulse.tornado.v3_serving import V3Suite, storm_history as v3_storm_history  # noqa: E402
+try:
+    from hazardpulse.verification import nws_live  # noqa: E402
+    HAS_NWS_LIVE = True
+except ImportError as _nws_imp_err:  # never silently: the +W model then cannot serve
+    HAS_NWS_LIVE = False
+    print(f"  WARNING: nws_live unavailable ({_nws_imp_err}); v3 serves without NWS warnings.", file=sys.stderr)
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -150,10 +160,17 @@ LEDGER_PATH = DIST / "data" / "tornado-ledger.jsonl"
 # calibration data and the trust-layer calibrator carry it, and a calibrator
 # is only ever applied to forecasts from the model it was fitted on.
 _SERVED_WEIGHTS = RESULTS / "models" / "tornado_gbt_v1.json"
-MODEL_VERSION = (
-    definitive_model_version(_SERVED_WEIGHTS)
-    if _SERVED_WEIGHTS.exists() else DEFINITIVE_LEGACY_MODEL_VERSION
-)
+# The v3 suite (docs/TORNADO_MODEL_PROGRAM.md) is served whenever its payloads are present; v2
+# stays as the legacy path. Each storm carries the identity of the model that scored it; the
+# page-level MODEL_VERSION is the suite's headline model (the +W model, else the fallback).
+V3_SUITE = V3Suite.load(RESULTS / "models")
+if V3_SUITE.available:
+    MODEL_VERSION = v3_payload.model_version(V3_SUITE.main or V3_SUITE.fallback)
+else:
+    MODEL_VERSION = (
+        definitive_model_version(_SERVED_WEIGHTS)
+        if _SERVED_WEIGHTS.exists() else DEFINITIVE_LEGACY_MODEL_VERSION
+    )
 PRIMARY_DOMAIN = "https://hazardpulse.com"
 SITE_PUBLISHER_NAME = "HazardPulse"
 SITE_CONTACT_EMAIL = "josh@coherenceenergylabs.com"
@@ -382,19 +399,11 @@ def build_coherence_from_probsevere(
 
 
 def live_analysis_candidates(now: dt.datetime) -> list[tuple[str, int]]:
-    """HRRR analyses a live run may use, newest first: whole hours at most
-    ``MAX_ANALYSIS_AGE_H`` before ``now`` (the same bound training applies to
-    every storm -- definitive_model.select_analysis_hour)."""
-    base = now.replace(minute=0, second=0, microsecond=0)
-    out: list[tuple[str, int]] = []
-    back = 0
-    while True:
-        t = base - dt.timedelta(hours=back)
-        if (now - t).total_seconds() > DEFINITIVE_MAX_ANALYSIS_AGE_H * 3600.0:
-            break
-        out.append((t.strftime("%Y%m%d"), t.hour))
-        back += 1
-    return out
+    """HRRR analyses a live run may use, newest first -- the ONE availability rule training uses
+    (hazardpulse.data.hrrr_availability): 3-hourly, published (valid + 100 min) before ``now``.
+    Until 2026-10-02 this tried every whole hour back to 3 h, so a live run and a training row
+    could read different analyses, and training read some not yet published (amendment 8)."""
+    return hrrr_live_candidates(now)
 
 
 def load_pretrained_model() -> dict | None:
@@ -534,10 +543,15 @@ def score_storms(
     scoring_tier: str = "tier3_ps_only",
     coherence_source: str = "none",
     pretrained_gbt: dict | None = None,
+    v3_suite: V3Suite | None = None,
+    hrrr_label: str | None = None,
 ) -> list[dict]:
     """Score all active storms from the latest ProbSevere time step.
 
     scoring_tier controls which scoring method is used:
+      - "tier1_v3": the v3 suite (hazardpulse.tornado.v3_serving): 60-min probability from the
+        +W model when the live NWS warnings feed answered (else the no-warnings model), 30/90-min
+        and EF2+ products, a Venn-Abers band and the storm's top drivers
       - "tier1_ml": Full ML model (pre-trained GBT)
       - "tier2_analytic": Analytic coherence probability (no ML)
       - "tier3_ps_only": ProbSevere raw scores only (minimal fallback)
@@ -591,6 +605,34 @@ def score_storms(
                 derived_hrrr = {}
                 hrrr_usable = False
 
+    # v3: the HRRR environment is optional (measured on 2025: AUC 0.958 without it vs 0.971 with
+    # it, ProbTor 0.879), the NWS warning state is fetched once for every storm of the step
+    v3_derived: dict | None = None
+    v3_warnings = None
+    v3_warning_error: str | None = None
+    if scoring_tier == "tier1_v3" and v3_suite is not None:
+        if hrrr is not None:
+            try:
+                v3_derived = compute_derived_hrrr(hrrr)
+            except Exception as exc:
+                print(f"  Warning: compute_derived_hrrr failed ({exc}); v3 scores without HRRR")
+        obs_time = definitive_parse_valid_time(valid_time) if isinstance(valid_time, str) else None
+        if HAS_NWS_LIVE and obs_time is not None and v3_suite.main is not None:
+            live_storms = [s for s in storms if s.get("id", 0) != 0]
+            try:
+                w = nws_live.live_tor_warning_inputs(
+                    np.array([float(s.get("lat", 0)) for s in live_storms]),
+                    np.array([float(s.get("lon", 0)) for s in live_storms]),
+                    [obs_time] * len(live_storms))
+                v3_warnings = {s.get("id"): (float(a), float(m)) for s, (a, m) in zip(live_storms, w.matrix())}
+                print(f"  NWS warnings: {int(sum(a for a, _ in v3_warnings.values()))} of "
+                      f"{len(v3_warnings)} storms inside an active tornado warning")
+            except nws_live.NwsLiveError as exc:
+                v3_warning_error = f"{type(exc).__name__}: {exc}"
+                print(f"  Warning: NWS warnings feed failed ({v3_warning_error}); serving the no-warnings model")
+        elif v3_suite.main is not None:
+            v3_warning_error = "nws_live unavailable" if not HAS_NWS_LIVE else "no observation time"
+
     scored: list[dict] = []
     for storm in storms:
         sid = storm.get("id", 0)
@@ -608,8 +650,23 @@ def score_storms(
         top_features: list = []
         model_scores: dict = {}
         coherence_score: float = 0.0
+        v3_out: dict | None = None
 
-        if (
+        if scoring_tier == "tier1_v3" and v3_suite is not None:
+            v3_out = v3_suite.score_storm(
+                storm,
+                v3_storm_history(time_steps, sid, latest_idx, id_index=id_index),
+                step_minutes,
+                hrrr if v3_derived is not None else None,
+                v3_derived,
+                None if v3_warnings is None else v3_warnings.get(sid),
+            )
+            prob = round(min(max(v3_out["p60"], 0.0), 0.99), 4)
+            risk = _risk_band(prob)
+            model_scores = {"v3_p60": prob, "calibrated": True, "model": v3_out["model"]}
+            top_features = [{"name": d["label"], "value": None if d["value"] is None else round(d["value"], 4),
+                             "log_odds": d["log_odds"]} for d in v3_out.get("drivers", [])]
+        elif (
             scoring_tier == "tier1_ml"
             and pretrained_gbt is not None
             and hrrr is not None
@@ -755,6 +812,22 @@ def score_storms(
             "model_version": MODEL_VERSION,
             "track_length": len(history),
         }
+        if v3_out is not None:
+            entry["model_version"] = v3_out["model_version"]      # the model that scored THIS storm
+            entry["v3"] = {
+                "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+                "probability_60min": v3_out["p60"],
+                "probability_30min": v3_out.get("p30"),
+                "probability_90min": v3_out.get("p90"),
+                "probability_ef2plus_60min": v3_out.get("p_ef2"),
+                "probability_band_60min": v3_out.get("band"),
+                "model": v3_out["model"],
+                "nws_warning": v3_out.get("warning"),
+                "nws_feed_error": v3_warning_error,
+                "hrrr_analysis": hrrr_label if v3_out.get("hrrr_used") else None,
+                "coherence_clipped": v3_out.get("coherence_clipped", []),
+                "drivers": v3_out.get("drivers", []),
+            }
 
         # Include geometry for frontend polygon rendering
         geom = storm.get("geometry")
@@ -882,6 +955,7 @@ def write_outputs(
 
 
 TIER_LABELS = {
+    "tier1_v3": "v3 storm model (LightGBM, NWS warnings, HRRR environment)",
     "tier1_ml": "ML (pre-trained gradient-boosted trees)",
     "tier2_analytic": "Analytic coherence model (physics-only, no ML)",
     "tier3_ps_only": "ProbSevere-only fallback (no ML, no HRRR)",
@@ -3986,7 +4060,13 @@ def main() -> None:
     # so a cached analysis from yesterday beat a fetchable one from an hour
     # ago, and the window reached back 24 h while training never saw an
     # analysis more than 3 h old.
-    candidates = live_analysis_candidates(now)
+    # Anchored to the OBSERVATION time (the latest ProbSevere step), as every training row is: an
+    # analysis published between the observation and this run would be one training never had.
+    obs_time = None
+    if time_steps:
+        _vt = definitive_parse_valid_time(time_steps[-1].get("valid_time", ""))
+        obs_time = _vt.replace(tzinfo=None) if _vt is not None else None
+    candidates = live_analysis_candidates(obs_time or now)
     for cand_date, cand_hour in candidates:
         grid = load_cached_hrrr(cand_date, hour=cand_hour)
         source = "local cache"
@@ -4066,9 +4146,13 @@ def main() -> None:
     pretrained_gbt: dict | None = None
     scoring_tier: str = "tier3_ps_only"
 
+    # Tier 1 v3: the pre-registered v3 suite whenever its payloads are present (it needs neither
+    # coherence fields nor, at a measured cost, HRRR)
+    if V3_SUITE.available:
+        scoring_tier = "tier1_v3"
+        print(f"  -> Tier 1 v3: {', '.join(f'{k} {v}' for k, v in V3_SUITE.versions().items())}")
     # Tier 1: Try loading pre-trained GBT (from definitive_model --save-model)
-    pretrained_gbt = load_pretrained_gbt()
-    if pretrained_gbt is not None:
+    elif (pretrained_gbt := load_pretrained_gbt()) is not None:
         scoring_tier = "tier1_ml"
         print(f"  -> Tier 1: Pre-trained GBT model ({pretrained_gbt['n_trees']} trees, "
               f"{len(pretrained_gbt['feature_names'])} features)")
@@ -4094,6 +4178,8 @@ def main() -> None:
         scoring_tier=scoring_tier,
         coherence_source=coherence_source,
         pretrained_gbt=pretrained_gbt,
+        v3_suite=V3_SUITE if scoring_tier == "tier1_v3" else None,
+        hrrr_label=(f"{hrrr_date_used} {hrrr_hour_used:02d}Z" if hrrr_hour_used is not None else None),
     )
 
     # Step 5a: Block L (lightning) augmentation — score-time multiplier.

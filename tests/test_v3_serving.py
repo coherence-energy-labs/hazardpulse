@@ -37,9 +37,15 @@ PS_V2 = Path(os.environ.get("HAZARDPULSE_PROBSEVERE_V2_CACHE", "C:/Users/Josh/Pr
 DAY = "20250315"
 
 
-@pytest.mark.skipif(not ((STORE / f"{DAY}.npz").exists() and (PS_V2 / f"{DAY}.json.gz").exists()
-                         and (MODELS / vs.FALLBACK_FILE).exists() and (STORE / "_lab" / "final_X.npy").exists()),
-                    reason="needs the local v3 feature store, ProbSevere cache and exported payload")
+def _local_data_ready() -> bool:
+    from hazardpulse.data import hrrr as H
+    return ((STORE / f"{DAY}.npz").exists() and (PS_V2 / f"{DAY}.json.gz").exists()
+            and (MODELS / vs.FALLBACK_FILE).exists() and (STORE / "_lab" / "final_X.npy").exists()
+            and all(H._npz_path(DAY, h).exists() for h in (0, 3, 6, 9, 12, 15, 18, 21)))
+
+
+@pytest.mark.skipif(not _local_data_ready(),
+                    reason="needs the local v3 feature store, ProbSevere and HRRR caches and the exported payload")
 def test_live_path_rebuilds_the_stored_rows_and_the_final_probabilities():
     """Train/serve parity on real 2025 storms: the serving path (raw ProbSevere + HRRR -> features
     -> payload) must equal the feature-store row and the final run's probability for that row."""
