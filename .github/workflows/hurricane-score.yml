@@ -33,11 +33,16 @@ jobs:
           pip install numpy scipy
           pip install -e .
 
+      # Serves the pinned model (results/models/hurricane_ri_v8_1.json); it no longer trains.
+      # Retraining inside this job is what got every run since 2026-05-27 cancelled by the
+      # 10-minute budget with no output. `-u` streams progress live; the step timeout turns a
+      # hang into a FAILED step (which notifies) instead of a silently CANCELLED job.
       - name: Run hurricane scoring pipeline
+        timeout-minutes: 6
         env:
           HAZARDPULSE_SLACK_WEBHOOK_URL: ${{ secrets.HAZARDPULSE_SLACK_WEBHOOK_URL }}
           HAZARDPULSE_ALERT_WEBHOOK_URL: ${{ secrets.HAZARDPULSE_ALERT_WEBHOOK_URL }}
-        run: python scripts/fetch_and_score.py
+        run: python -u scripts/fetch_and_score.py
 
       - name: Check for changes
         id: changes

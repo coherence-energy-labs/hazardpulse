@@ -88,6 +88,46 @@ HURRICANE_RETRO_FALLBACK = {
     "n_cases": 9714,
 }
 
+# Temporal hold-out metrics for the served hurricane recipe, written by
+# scripts/evaluate_hurricane_ri.py (members <= 2018, calibration 2019-2021, test 2022-2024,
+# true 24-h RI). The v8.1 figures above were measured on v8.1's own 12-hour label.
+HURRICANE_EVALUATION_PATH = ROOT / "results" / "calibration" / "hurricane_ri_evaluation.json"
+_HURRICANE_EVAL_CANDIDATE = {
+    "hurricane_ri_v8_2": "C_v8_2_heldout_newton",
+    "hurricane_ri_v8_1_1": "B_v8_1_1_heldout_newton",
+}
+
+
+def _hurricane_heldout_benchmark(model_version: str) -> dict | None:
+    report = _read_json(HURRICANE_EVALUATION_PATH, {})
+    key = _HURRICANE_EVAL_CANDIDATE.get(model_version)
+    result = (report.get("results") or {}).get(key) if key else None
+    if not result:
+        return None
+    origin = report.get("origin", {})
+    ci = result.get("ci95", {})
+
+    def span(name: str) -> str:
+        years = origin.get(name) or ["?", "?"]
+        return f"{years[0]}-{years[1]}"
+
+    return {
+        "availability": "exact_model_benchmark",
+        "label": (
+            f"Temporal hold-out of this recipe: members trained on storms first seen "
+            f"{span('members')}, calibrated on {span('calibration')}, scored once on "
+            f"{span('test')} against the true 24-hour RI outcome."
+        ),
+        "model_version": model_version,
+        "source_updated_at": report.get("generated_at"),
+        "auc": round(float(result["auc"]), 4),
+        "auc_ci95": [round(float(x), 4) for x in ci.get("auc", [])],
+        "brier": round(float(result["brier"]), 5),
+        "brier_skill_score": round(float(result["bss_vs_climatology"]), 4),
+        "reliability_slope": round(float(result["calibration_slope"]), 3),
+        "n_cases": int(result["n"]),
+    }
+
 
 def _read_json(path: Path, default: dict | list | None = None):
     if default is None:
@@ -260,6 +300,17 @@ def _ensure_live_publish_artifacts() -> tuple[dict, dict]:
                 hazard["forecast_id"] = forecast_id
                 break
 
+    def stamp_hazard(key: str, produced_at: dt.datetime | None) -> None:
+        # Per-hazard freshness, taken from the hazard's OWN artifact. The pulse-level
+        # updated_at is rewritten by every scorer, so a liveness check reading it saw the
+        # hurricane product as fresh for four months after its last run (2026-05-26).
+        if produced_at is None:
+            return
+        for hazard in pulse.get("hazards", []):
+            if hazard.get("key") == key:
+                hazard["updated_at"] = _format_utc_z(produced_at)
+                break
+
     storms = _read_json(LIVE_STORMS_PATH, {})
     storms_updated = _parse_utc(storms.get("updated_at"))
     if storms_updated is not None:
@@ -283,6 +334,7 @@ def _ensure_live_publish_artifacts() -> tuple[dict, dict]:
         _write_json(replay_path, artifact)
         _upsert_replay_index_item(replay_index, forecast_id, replay_path)
         update_hazard("hu", forecast_id)
+        stamp_hazard("hu", storms_updated)
         _write_json(LIVE_STORMS_PATH, storms)
 
     tornadoes = _read_json(LIVE_TORNADOES_PATH, {})
@@ -314,6 +366,7 @@ def _ensure_live_publish_artifacts() -> tuple[dict, dict]:
         _write_json(replay_path, artifact)
         _upsert_replay_index_item(replay_index, forecast_id, replay_path)
         update_hazard("to", forecast_id)
+        stamp_hazard("to", tornadoes_updated)
         _write_json(LIVE_TORNADOES_PATH, tornadoes)
 
     eq_hazard = next((item for item in pulse.get("hazards", []) if item.get("key") == "eq"), {})
@@ -322,6 +375,8 @@ def _ensure_live_publish_artifacts() -> tuple[dict, dict]:
         replay_path = REPLAY_DIR / f"{eq_forecast_id}.json"
         if replay_path.exists():
             _upsert_replay_index_item(replay_index, eq_forecast_id, replay_path)
+            # The earthquake scorer's own artifact is the replay its forecast_id names.
+            stamp_hazard("eq", _parse_utc(_read_json(replay_path, {}).get("issued_at")))
 
     _write_json(REPLAY_INDEX_PATH, replay_index)
     _write_json(LIVE_PULSE_PATH, pulse)
@@ -1001,7 +1056,10 @@ def _build_verification_summary(pulse: dict) -> dict:
         "hu",
         str(hu_hazard.get("model_version") or ""),
     )
-    if str(hu_hazard.get("model_version") or "") == HURRICANE_RETRO_FALLBACK["model_version"]:
+    hu_heldout = _hurricane_heldout_benchmark(str(hu_hazard.get("model_version") or ""))
+    if hu_heldout is not None:
+        hu_exact = hu_heldout
+    elif str(hu_hazard.get("model_version") or "") == HURRICANE_RETRO_FALLBACK["model_version"]:
         merged_exact = dict(HURRICANE_RETRO_FALLBACK)
         if isinstance(hu_exact, dict):
             merged_exact.update({key: value for key, value in hu_exact.items() if value is not None})
@@ -1067,10 +1125,12 @@ def _build_verification_summary(pulse: dict) -> dict:
             "exact_model_benchmark": (
                 {
                     "availability": "exact_model_benchmark",
-                    "label": "Retrospective benchmark available for the current live model version.",
+                    "label": hu_exact.get("label")
+                    or "Retrospective benchmark available for the current live model version.",
                     "model_version": hu_exact.get("model_version"),
                     "source_updated_at": hu_exact.get("source_updated_at"),
                     "auc": hu_exact.get("auc"),
+                    "auc_ci95": hu_exact.get("auc_ci95"),
                     "brier": hu_exact.get("brier"),
                     "brier_skill_score": hu_exact.get("brier_skill_score"),
                     "reliability_slope": hu_exact.get("reliability_slope"),
@@ -2056,7 +2116,7 @@ def _render_live_hurricane_page() -> None:
         This page is rendered from the current tropical cyclone feed. When there are no active storms,
         it says so plainly instead of showing synthetic examples.
       </p>
-      <p class="muted">Updated {_esc(_format_utc_z(updated_at))} &middot; Model: hurricane_ri_v8_1 &middot; Independent hazard intelligence platform</p>
+      <p class="muted">Updated {_esc(_format_utc_z(updated_at))} &middot; Model: {_esc(storms.get('model_version') or 'unknown')} &middot; Independent hazard intelligence platform</p>
     </section>
     <section class="section">
       <div class="grid">
@@ -2206,6 +2266,7 @@ def build_site_artifacts() -> dict:
     _render_evidence_page(pulse, entries, envelopes, gate_decisions, replay_index)
     _render_verification_page(verification_summary)
     _write_sitemap_and_feed(pulse)
+    _render_cross_hazard_pages()
     _normalize_html_accessibility_labels()
 
     return {
@@ -2218,32 +2279,32 @@ def build_site_artifacts() -> dict:
     }
 
 
-def sync_homepage_forecast_refs() -> bool:
-    """Rewrite the homepage's earthquake forecast references from live-pulse.json.
+def _render_cross_hazard_pages() -> None:
+    """Re-render the pages that summarise ALL hazards (homepage, /live/) from the artifacts.
 
-    The homepage is fully rendered only by the hurricane scoring cycle, so an
-    earthquake cycle used to advance live-pulse.json (and the replay ledger)
-    while dist/index.html kept pointing at the previous forecast id. Because
-    every scoring workflow runs this builder before committing dist/, doing the
-    sync here makes cross-file forecast identity consistent in EVERY commit,
-    whichever hazard's cycle produced it (guarded by test_site_integrity).
+    Their renderer lives in the tornado scorer, so until 2026-10 only a tornado cycle
+    refreshed them: an earthquake or hurricane cycle advanced live-pulse.json while
+    dist/index.html kept the previous forecast -- aedf08cd1 published
+    eq_fcst_20261001_2200 (4.5%) while the homepage still showed eq_fcst_20261001_1300
+    (4.6%), and test_live_earthquake_forecast_references_existing_replay had failed on
+    every push since 2026-07-31. (The regex id-rewrite added then,
+    sync_homepage_forecast_refs, ran only from this file's __main__, which no workflow
+    calls -- and it would have stamped the new id onto the old numbers.)
+
+    Every scorer calls build_site_artifacts() before committing dist/, after the pulse is
+    final, so rendering here makes every commit's cross-hazard pages agree with its
+    live-pulse.json whichever hazard produced it. The render reads only published
+    artifacts, so it is the same page whichever scorer runs it.
     """
-    import re
+    import sys
 
-    index_path = DIST / "index.html"
-    if not (index_path.exists() and LIVE_PULSE_PATH.exists()):
-        return False
-    pulse = json.loads(LIVE_PULSE_PATH.read_text(encoding="utf-8"))
-    eq = next((h for h in pulse.get("hazards", []) if h.get("key") == "eq"), None)
-    forecast_id = (eq or {}).get("forecast_id")
-    if not forecast_id or not re.fullmatch(r"eq_fcst_\d{8}_\d{4}", forecast_id):
-        return False
-    page = index_path.read_text(encoding="utf-8")
-    synced = re.sub(r"eq_fcst_\d{8}_\d{4}", forecast_id, page)
-    if synced != page:
-        index_path.write_text(synced, encoding="utf-8")
-        return True
-    return False
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    # Lazy import: the renderer's module is the tornado scorer, which imports this module.
+    import fetch_and_score_tornado as site_pages
+
+    site_pages.render_cross_hazard_pages_from_artifacts()
 
 
 def build_verification_rollups() -> dict:
@@ -2281,9 +2342,7 @@ def main(argv: list[str] | None = None) -> int:
         summary = build_verification_rollups()
     else:
         summary = build_site_artifacts()["verification_summary"]
-        if sync_homepage_forecast_refs():
-            print("Synced homepage earthquake forecast references to live-pulse.json.")
-        print("Built HazardPulse evidence, replay, sitemap, and feed artifacts.")
+        print("Built HazardPulse evidence, replay, sitemap, feed, homepage and live overview.")
     for item in summary.get("hazards", []):
         storage = item.get("forecast_storage", {})
         print(

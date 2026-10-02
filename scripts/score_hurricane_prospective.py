@@ -199,6 +199,23 @@ def matured_artifacts(
     return matured
 
 
+# Forecasts made before model identities were recorded per storm.
+LEGACY_HURRICANE_MODEL = "hurricane_ri_v8_1"
+# Reserved key in the calibration accumulator: the model version being pooled.
+_CALIB_VERSION_KEY = "__model_version__"
+
+
+def newest_model_version(artifacts: list[dict]) -> str:
+    """The model behind the newest matured forecast that scored a storm -- the
+    one a freshly fitted calibrator will be applied to."""
+    for artifact in sorted(artifacts, key=lambda a: str(a.get("issued_at", "")), reverse=True):
+        for storm in artifact.get("storms") or []:
+            v = storm.get("model_version") or artifact.get("model_version")
+            if v:
+                return str(v)
+    return LEGACY_HURRICANE_MODEL
+
+
 def _accumulate_calibration(calib_acc: dict, scores: np.ndarray, y_true: np.ndarray) -> None:
     """Pool (storm RI probability -> #positive, #total) into a histogram."""
     rscore = np.round(scores, 6)
@@ -216,12 +233,13 @@ def _accumulate_calibration(calib_acc: dict, scores: np.ndarray, y_true: np.ndar
 
 
 def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "hurricane") -> Path:
-    keys = sorted(calib_acc.keys())
+    keys = sorted(k for k in calib_acc.keys() if k != _CALIB_VERSION_KEY)
     total = [int(calib_acc[k][0]) for k in keys]
     pos = [int(calib_acc[k][1]) for k in keys]
     n = int(sum(total))
     payload = {
         "hazard": hazard,
+        "model_version": calib_acc.get(_CALIB_VERSION_KEY),
         "n": n,
         "n_groups": len(keys),
         "base_rate": (sum(pos) / n) if n else 0.0,
@@ -278,6 +296,8 @@ def score_single_forecast(artifact: dict, calib_acc: dict | None = None,
 
         predictions.append({
             "storm_id": storm_id,
+            "model_version": str(storm.get("model_version") or artifact.get("model_version")
+                                 or LEGACY_HURRICANE_MODEL),
             "storm_name": storm.get("storm_name", storm_id),
             "predicted_ri_probability": round(pred_prob, 4),
             "raw_ri_probability": round(float(storm.get("raw_probability", pred_prob)), 4),
@@ -298,8 +318,14 @@ def score_single_forecast(artifact: dict, calib_acc: dict | None = None,
     y_score = np.array([p["predicted_ri_probability"] for p in verified])
 
     if calib_acc is not None and verified:
-        raw = np.array([p["raw_ri_probability"] for p in verified], dtype=np.float64)
-        _accumulate_calibration(calib_acc, raw, y_true)
+        # Pool only storms of the model the calibrator is for: a calibrator is
+        # one model's curve (v8.1 and v8.2 forecasts must never share one).
+        want = calib_acc.get(_CALIB_VERSION_KEY)
+        keep = [want is None or p["model_version"] == want for p in verified]
+        raw = np.array([p["raw_ri_probability"] for p, k in zip(verified, keep) if k],
+                       dtype=np.float64)
+        if raw.size:
+            _accumulate_calibration(calib_acc, raw, y_true[np.array(keep, dtype=bool)])
 
     return {
         "forecast_id": forecast_id,
@@ -403,7 +429,9 @@ def main(argv: list[str] | None = None) -> int:
         "status": "ok",
     }
 
-    calib_acc: dict | None = {} if args.emit_calibration else None
+    calib_acc: dict | None = None
+    if args.emit_calibration:
+        calib_acc = {_CALIB_VERSION_KEY: newest_model_version(matured)}
 
     per_forecast_path = output_dir / "per_forecast_scores.jsonl"
     per_forecast_results: list[dict] = []
@@ -418,7 +446,10 @@ def main(argv: list[str] | None = None) -> int:
         if calib_acc is not None:
             calib_path = write_calibration_dataset(output_dir, calib_acc, hazard="hurricane")
             summary["calibration_dataset"] = str(calib_path)
-            summary["calibration_n"] = int(sum(slot[0] for slot in calib_acc.values()))
+            summary["calibration_n"] = int(sum(
+                slot[0] for k, slot in calib_acc.items() if k != _CALIB_VERSION_KEY
+            ))
+            summary["calibration_model_version"] = calib_acc.get(_CALIB_VERSION_KEY)
 
         summary.update(summarize_results(per_forecast_results))
     else:

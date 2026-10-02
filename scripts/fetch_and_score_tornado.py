@@ -3577,6 +3577,22 @@ def render_homepage_cards(
     print(f"  Wrote {homepage_path} (static homepage)")
 
 
+def render_cross_hazard_pages_from_artifacts(now: dt.datetime | None = None) -> None:
+    """Render the homepage and /live/ overview from published artifacts alone.
+
+    The tornado-run inputs those renderers take (scored storms, scoring tier) are read
+    back from live-tornadoes.json, which is exactly what a tornado run published, so any
+    scorer -- earthquake and hurricane included, via build_site_artifacts() -- renders the
+    same pages a tornado run would from the same artifacts.
+    """
+    now = now or dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    tornadoes = _read_json(DIST / "data" / "live-tornadoes.json")
+    storms = tornadoes.get("storms") or []
+    scoring_tier = tornadoes.get("scoring_tier") or "tier3_ps_only"
+    render_homepage_cards(storms, now, scoring_tier=scoring_tier)
+    render_live_overview_page(now, scoring_tier=scoring_tier)
+
+
 def append_ledger(
     scored_storms: list[dict],
     now: dt.datetime,

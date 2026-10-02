@@ -392,6 +392,9 @@ def test_worker_api_smoke() -> None:
         capture_output=True,
         text=True,
         check=False,
+        # Never inherit stdin: under pytest in a console-less Windows session the inherited
+        # handle is invalid and CreateProcess fails with WinError 6 before node even starts.
+        stdin=subprocess.DEVNULL,
     )
     assert result.returncode == 0, result.stdout + result.stderr
 

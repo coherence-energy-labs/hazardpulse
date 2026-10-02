@@ -10,6 +10,11 @@ on:
     branches: [main, platform-trust-program]
   pull_request:
     branches: [main]
+  # Daily, against main as the cron jobs leave it. The scorers' data commits are pushed with
+  # GITHUB_TOKEN, which never triggers `push` workflows, so main's dist/ went untested from
+  # 2026-08-01 to 2026-10-01 while test_site_integrity failed on every human push in between.
+  schedule:
+    - cron: "40 5 * * *"
   workflow_dispatch:
 
 jobs:
@@ -81,6 +86,18 @@ jobs:
       - name: Determinism gate — identical training regardless of global RNG
         run: python -m pytest -q tests/test_determinism.py
 
+      # Operational regressions: the hurricane job serves a pinned model and never trains
+      # (it timed out daily from 2026-05-27), ingests only active storms with their true
+      # identity, every scorer re-renders the cross-hazard pages, liveness is per hazard.
+      - name: Ops regression tests (hurricane serving, live ingest, cross-hazard pages, liveness)
+        run: |
+          python -m pytest -q \
+            tests/test_hurricane_ri_serving.py \
+            tests/test_hurricane_training_clock.py \
+            tests/test_hurricane_live_ingest.py \
+            tests/test_cross_hazard_pages.py \
+            tests/test_liveness.py
+
       - name: Smoke-test every documented CLI entry point
         run: |
           hazardpulse --help
@@ -114,6 +131,10 @@ jobs:
             scripts/fetch_and_score_earthquake.py \
             scripts/fetch_and_score_tornado.py \
             scripts/fetch_and_score.py \
+            scripts/train_hurricane_ri.py \
+            scripts/evaluate_hurricane_ri.py \
+            scripts/build_hurricane_training_data.py \
+            scripts/check_liveness.py \
             scripts/score_earthquake_prospective.py \
             scripts/score_tornado_prospective.py \
             scripts/score_hurricane_prospective.py \

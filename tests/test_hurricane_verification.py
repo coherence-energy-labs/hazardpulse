@@ -37,6 +37,28 @@ def _rec(cycle: dt.datetime, vmax: float) -> ATCFRecord:
 ISSUE = dt.datetime(2026, 4, 13, 15, 0)
 
 
+def test_calibration_pools_only_the_served_model(shp):
+    """v8.1 and v8.2 forecasts must never share a calibrator: the dataset pools
+    only the version behind the newest matured forecast, and says which."""
+    old = {"forecast_id": "a", "issued_at": "2026-05-01T12:00:00Z",
+           "storms": [{"storm_id": "AL012026", "ri_probability": 0.2, "model_version": "hurricane_ri_v8_1"}]}
+    new = {"forecast_id": "b", "issued_at": "2026-10-02T04:00:00Z",
+           "storms": [{"storm_id": "EP152026", "ri_probability": 0.006, "model_version": "hurricane_ri_v8_2"},
+                      {"storm_id": "EP192026", "ri_probability": 0.013}]}
+    assert shp.newest_model_version([old, new]) == "hurricane_ri_v8_2"
+    assert shp.newest_model_version([]) == shp.LEGACY_HURRICANE_MODEL
+
+    issue = dt.datetime(2026, 10, 2, 4, 0)
+    track = ([_rec(issue, 60.0), _rec(issue + dt.timedelta(hours=24), 65.0)], "test")
+    acc = {shp._CALIB_VERSION_KEY: "hurricane_ri_v8_2"}
+    shp.score_single_forecast(new, calib_acc=acc, best_track_fetcher=lambda sid: track)
+    pooled = {k: v for k, v in acc.items() if k != shp._CALIB_VERSION_KEY}
+    # EP15 is v8.2; EP19 has no per-storm version and inherits none -> legacy, excluded
+    assert sum(t for t, _ in pooled.values()) == 1
+    shp.score_single_forecast(old, calib_acc=acc, best_track_fetcher=lambda sid: track)
+    assert sum(v[0] for k, v in acc.items() if k != shp._CALIB_VERSION_KEY) == 1
+
+
 def test_no_best_track_is_unverifiable_not_no_ri(shp):
     assert shp.check_ri_occurred([], ISSUE) == (None, None, None)
 
