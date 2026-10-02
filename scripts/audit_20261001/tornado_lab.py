@@ -57,7 +57,7 @@ def assemble(split: str) -> None:
     LAB.mkdir(parents=True, exist_ok=True)
     X = np.lib.format.open_memmap(LAB / f"{split}_X.npy", mode="w+", dtype=np.float32, shape=(n, len(NAMES)))
     Y = np.lib.format.open_memmap(LAB / f"{split}_Y.npy", mode="w+", dtype=np.int8, shape=(n, len(sf.LABEL_NAMES)))
-    meta = {k: [] for k in ("day", "t", "lat", "lon", "ef", "lead_min", "analysis")}
+    meta = {k: [] for k in ("day", "t", "lat", "lon", "ef", "lead_min", "analysis", "v2")}
     i = 0
     for p in days:
         with np.load(p) as z:
@@ -67,6 +67,9 @@ def assemble(split: str) -> None:
             meta["day"].append(np.full(m, int(p.stem), np.int64))
             for k in ("t", "lat", "lon", "ef", "lead_min", "analysis"):
                 meta[k].append(z[k])
+            # the served v2 model's probability (score_v2_on_store.py), NaN where absent
+            v2 = STORE / "_v2" / f"{p.stem}.npy"
+            meta["v2"].append(np.load(v2) if v2.exists() else np.full(m, np.nan, np.float32))
             i += m
     X.flush()
     Y.flush()
@@ -269,6 +272,49 @@ def run(exp: dict) -> dict:
     return res
 
 
+BASELINE_COLUMNS = {
+    "probtor": ("p_ps_tor", 0.01),      # NOAA ProbTor, percent -> probability
+    "probsevere": ("p_ps", 0.01),       # ProbSevere any-severe
+    "stp80": ("h80_hrrr_stp", None),    # Significant Tornado Parameter, 80 km analysis
+    "stp9": ("h9_stp_at", None),        # ... at the storm, 9 km
+}
+
+
+def baselines(splits=("val", "dev"), label: str = "storm_60") -> dict:
+    """The published scores as prediction files, raw (a probability where the product states one)
+    and Platt-calibrated on validation (fitted on val, out-of-fold on val itself), plus v2."""
+    out: dict = {}
+    val_X, val_Y, val_m = load("val")
+    y_val = np.asarray(val_Y[:, LIDX[label]], np.int8)
+    (LAB / "preds").mkdir(parents=True, exist_ok=True)
+    cols = {name: (FIDX[c], scale) for name, (c, scale) in BASELINE_COLUMNS.items()}
+    sources = {name: (lambda X, j=j: np.asarray(X[:, j], np.float64)) for name, (j, _) in cols.items()}
+    for split in splits:
+        X, Y, m = load(split)
+        y = np.asarray(Y[:, LIDX[label]], np.int8)
+        res = {}
+        for name, (j, scale) in cols.items():
+            raw = np.nan_to_num(np.asarray(X[:, j], np.float64), nan=-1.0)
+            s_val = np.nan_to_num(sources[name](val_X), nan=-1.0)
+            if scale is not None:
+                p_raw = np.clip(raw * scale, 0.0, 1.0)
+                np.save(LAB / "preds" / f"{name}_raw_{split}.npy", p_raw.astype(np.float32))
+                res[f"{name}_raw"] = metrics(y, p_raw, m["day"], n_boot=200)
+            # Platt on validation: a monotone recalibration, the fairest probability a raw index gets
+            p_cal = (out_of_fold_calibrated("platt", s_val, y_val, val_m["day"]) if split == "val"
+                     else fit_calibrator("platt", s_val, y_val)(raw))
+            np.save(LAB / "preds" / f"{name}_platt_{split}.npy", p_cal.astype(np.float32))
+            res[f"{name}_platt"] = metrics(y, p_cal, m["day"], n_boot=200)
+        v2 = np.asarray(m["v2"], np.float64)
+        np.save(LAB / "preds" / f"v2_{split}.npy", v2.astype(np.float32))
+        ok = np.isfinite(v2)
+        res["v2_served"] = {**metrics(y[ok], v2[ok], m["day"][ok], n_boot=200), "rows_unscored": int((~ok).sum())}
+        out[split] = res
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / f"baselines_{label}.json").write_text(json.dumps(out, indent=1, default=float), encoding="utf-8")
+    return out
+
+
 def compare(name_a: str, name_b: str, split: str, label: str = "storm_60", n_boot: int = 1000, seed: int = 42) -> dict:
     """B minus A on one split, paired, whole UTC days resampled: AUC and Brier deltas with 95% intervals.
     Both experiments must have been run with save_preds on the same split rows."""
@@ -278,7 +324,10 @@ def compare(name_a: str, name_b: str, split: str, label: str = "storm_60", n_boo
     y = np.asarray(Y[:, LIDX[label]], np.float64)
     if not (len(pa) == len(pb) == len(y)):
         raise ValueError(f"row counts differ: {len(pa)} {len(pb)} {len(y)}")
-    clusters = dm._cluster_index(meta["day"])
+    ok = np.isfinite(pa) & np.isfinite(pb)          # e.g. v2 cannot score a row with no analysis
+    n_masked = int((~ok).sum())
+    pa, pb, y, days = pa[ok], pb[ok], y[ok], np.asarray(meta["day"])[ok]
+    clusters = dm._cluster_index(days)
     rng = np.random.RandomState(seed)
     d_auc = np.empty(n_boot)
     d_bri = np.empty(n_boot)
@@ -288,6 +337,7 @@ def compare(name_a: str, name_b: str, split: str, label: str = "storm_60", n_boo
         d_auc[i] = dm.compute_auc(yy, pb[idx]) - dm.compute_auc(yy, pa[idx])
         d_bri[i] = np.mean((pb[idx] - yy) ** 2) - np.mean((pa[idx] - yy) ** 2)
     out = {"a": name_a, "b": name_b, "split": split, "label": label, "n_days": len(clusters), "n_boot": n_boot,
+           "n_rows": int(len(y)), "n_rows_masked_nonfinite": n_masked,
            "delta_auc": dm.compute_auc(y, pb) - dm.compute_auc(y, pa),
            "delta_auc_ci": [float(np.percentile(d_auc, 2.5)), float(np.percentile(d_auc, 97.5))],
            "delta_brier": float(np.mean((pb - y) ** 2) - np.mean((pa - y) ** 2)),
@@ -298,6 +348,13 @@ def compare(name_a: str, name_b: str, split: str, label: str = "storm_60", n_boo
 
 def main() -> int:
     cmd = sys.argv[1]
+    if cmd == "baselines":
+        label = sys.argv[2] if len(sys.argv) > 2 else "storm_60"
+        for split, res in baselines(label=label).items():
+            for name, r in res.items():
+                print(f"{split:4s} {name:22s} AUC {r['auc']:.4f} {[round(x, 4) for x in r['auc_ci']]} "
+                      f"BSS {r['bss']:+.4f} pos {r['pos']}", flush=True)
+        return 0
     if cmd == "compare":
         a, b, split = sys.argv[2], sys.argv[3], sys.argv[4]
         label = sys.argv[5] if len(sys.argv) > 5 else "storm_60"
