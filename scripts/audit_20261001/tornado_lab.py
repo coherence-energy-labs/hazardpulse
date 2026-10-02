@@ -281,6 +281,12 @@ EXPERIMENTS = Path(__file__).resolve().parent / "experiments"
 def resolve_blocks(exp: dict) -> dict:
     """``blocks_from: "best"`` -> the block set chosen on validation, as committed in
     experiments/best_blocks.json (written once step 1 of the protocol has decided it)."""
+    if exp.get("config_from") == "best":
+        # model family + hyper-parameters chosen by steps 2-3 (experiments/best_config.json);
+        # the experiment's own keys (calibration, neg_per_pos, label, seed, ...) still win
+        cfg = json.loads((EXPERIMENTS / "best_config.json").read_text(encoding="utf-8"))
+        exp = {"model": cfg["model"], "params": cfg.get("params", {}), "blocks_from": "best",
+               **{k: v for k, v in exp.items() if k != "config_from"}}
     if exp.get("blocks_from") != "best":
         return exp
     best = json.loads((EXPERIMENTS / "best_blocks.json").read_text(encoding="utf-8"))
@@ -451,6 +457,31 @@ def stress(name: str, split: str, label: str = "storm_60", others=("v2", "probto
     return out
 
 
+def ensemble(name: str, members: list[str], splits=("val", "dev"), label: str = "storm_60") -> dict:
+    """Equal-weight mean of the members' calibrated LOG-ODDS (declared before any result: no
+    weights are fitted, so validation is not spent on them), re-calibrated by Platt on
+    validation (out-of-fold there), written as preds/<name>_<split>.npy like any experiment."""
+    def logit(p):
+        p = np.clip(np.asarray(p, np.float64), 1e-7, 1 - 1e-7)
+        return np.log(p / (1 - p))
+    out = {"name": name, "members": members}
+    _, Yv, mv = load("val")
+    yv = np.asarray(Yv[:, LIDX[label]], np.int8)
+    s_val = np.mean([logit(np.load(LAB / "preds" / f"{m}_val.npy")) for m in members], axis=0)
+    cal = fit_calibrator("platt", s_val, yv)
+    for split in splits:
+        files = [LAB / "preds" / f"{m}_{split}.npy" for m in members]
+        if not all(f.exists() for f in files):
+            continue
+        s = np.mean([logit(np.load(f)) for f in files], axis=0)
+        p = out_of_fold_calibrated("platt", s, yv, mv["day"]) if split == "val" else cal(s)
+        np.save(LAB / "preds" / f"{name}_{split}.npy", p.astype(np.float32))
+        _, Y, m = load(split)
+        out[split] = metrics(np.asarray(Y[:, LIDX[label]], np.int8), p, m["day"], n_boot=300)
+    (OUT / f"{name}.json").write_text(json.dumps(out, indent=1, default=float), encoding="utf-8")
+    return out
+
+
 def day_pair_matrix(y, s, day_idx: np.ndarray, n_days: int):
     """``U[d, e]`` = Mann-Whitney pair count between the positives of day d and the negatives of
     day e (ties 1/2), plus per-day positive / negative counts. A day bootstrap with day
@@ -531,6 +562,13 @@ def main() -> int:
         for s, r in stress(name, split, label).items():
             cells = "  ".join(f"{k} {v['auc']:.3f}" for k, v in r.items() if isinstance(v, dict))
             print(f"{s:20s} n={r['n']:8d} pos={r['pos']:5d}  {cells}", flush=True)
+        return 0
+    if cmd == "ensemble":
+        r = ensemble(sys.argv[2], sys.argv[3].split(","))
+        for split in ("val", "dev"):
+            if split in r:
+                print(f"{sys.argv[2]} {split} AUC {r[split]['auc']:.4f} {[round(x, 4) for x in r[split]['auc_ci']]} "
+                      f"BSS {r[split]['bss']:+.4f}", flush=True)
         return 0
     if cmd == "compare":
         a, b, split = sys.argv[2], sys.argv[3], sys.argv[4]
