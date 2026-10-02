@@ -16,3 +16,8 @@ differs from the served path in ways that change its numbers:
 
 Bringing it in line means porting those five items and a parity test against the Python
 scorer on archived storms. Until then, treat any number it produces as unverified.
+
+Fixed 2026-10-02: the STP fallback in `scorer.cl` was written across lines that began with
+`*`, which Coherence parses as new statements, so the SRH and shear factors were silently
+discarded (`stp = min(mucape/1500, 2)` alone). Wrapped in parentheses; the language's own
+analyzer reports SEM001 once on the old file and zero times on the new one.

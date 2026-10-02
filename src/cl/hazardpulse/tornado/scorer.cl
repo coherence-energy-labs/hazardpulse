@@ -1,8 +1,8 @@
 // HazardPulse Tornado Scoring Pipeline
 // Written in Coherence Lang — the full pipeline from data to prediction.
 //
-// UNMAINTAINED research twin -- NOT the served path and missing the 2026-10 audit fixes;
-// see ../README.md before trusting any number it produces. As written, it:
+// UNMAINTAINED research twin: NOT the served path, and missing the 2026-10 audit fixes.
+// See ../README.md before trusting any number it produces. As written, it:
 // 1. Fetches ProbSevere storm objects from NOAA
 // 2. Loads pre-trained GBT model weights
 // 3. Computes coherence field from atmospheric data
@@ -224,9 +224,11 @@ fn build_features(storm: &Storm, coherence: &CoherenceDiagnostics) -> Vec[F64] @
     features.push(280.0);          // hrrr_td2m (default)
     features.push(35.0);           // hrrr_refc (default)
     // STP estimate
-    let stp = (storm.mucape / 1500.0).min(2.0)
+    // One expression in parentheses: a continuation line that starts with '*' is a NEW
+    // statement in Coherence, so until 2026-10-02 the SRH and shear factors were dropped.
+    let stp = ((storm.mucape / 1500.0).min(2.0)
             * (storm.srh01.abs() / 150.0).min(2.0)
-            * (storm.ebshear / 20.0).min(2.0);
+            * (storm.ebshear / 20.0).min(2.0));
     features.push(stp);            // hrrr_stp
     let srh05 = storm.srh01 * 0.5; // estimate 0-500m SRH
     features.push(srh05);          // hrrr_srh05_est
