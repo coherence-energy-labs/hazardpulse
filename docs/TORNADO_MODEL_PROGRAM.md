@@ -55,6 +55,26 @@ Region (Plains / Midwest / Southeast / elsewhere), season, local night, storm si
 time, EF2+ tornadoes, analysis missing; a label-shuffle null (must give AUC 0.5); feature
 availability at prediction time (every input <= observation time, asserted in code).
 
+## Amendment 1 (2026-10-02, before any experiment): the storm label is chosen by attribution, not by a model
+
+Reason: the first built day (2021-03-25, an Alabama outbreak) credited only 5 of its 10
+UTC-day tornado reports to any storm under `storm_60`. The misses sit 20-23 km from the
+CENTROID of large objects (448-560 km2, R 17-18 km): a supercell's tornado forms at the
+rear-flank edge of the echo, not at its centre, so a centroid radius drops exactly the big
+storms. ProbSevere ships each object's polygon. Candidates:
+- L0 the current label (advected centroid, R = clip(sqrt(size/pi) + 5, 8, 25) km);
+- L1 the report lies inside, or within 5 km of, the storm's POLYGON advected by the storm's
+  own motion to the report time, report 0-60 min after the observation;
+- L2 the same with 10 km;
+- (reference only) nbhd_60, 40 km of the current centroid.
+Measured on every 2021 day with ProbSevere data (development data; labels only, no model):
+coverage = share of SPC tornado reports credited to at least one storm observation at lead
+0-60 min; ambiguity = mean number of distinct storm ids credited per credited report.
+Rule: the candidate with the highest coverage among those with ambiguity <= 1.3; candidates
+within 2 coverage points of each other are a tie and the smaller buffer wins (L0 counts as
+the smallest). The chosen label becomes `storm_30/60/90`; the others stay in the store as
+secondary labels so the choice can be audited.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-
