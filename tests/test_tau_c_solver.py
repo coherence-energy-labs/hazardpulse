@@ -82,9 +82,19 @@ def test_engine_wrappers_delegate_with_gamma_semantics():
     G = rng.uniform(0.1, 0.8, (20, 30)).astype(np.float32)
     D = rng.uniform(1.0, 1.6, (20, 30)).astype(np.float32)
 
+    # Tornado wrapper, legacy path (tol=None): bit-identical delegation.
     ref32 = solve_helmholtz_2d(S, G, dx=1.0, D=D, n_iter=200, omega=0.7,
                                dtype=np.float32)
-    assert np.array_equal(tor_solve(S, G, dx=1.0, D=D, n_iter=200, omega=0.7), ref32)
+    assert np.array_equal(
+        tor_solve(S, G, dx=1.0, D=D, n_iter=200, omega=0.7, tol=None), ref32
+    )
+    # Tornado wrapper, default path (certified since 2026-10-01): bit-identical
+    # to the shared solver's certified mode at the engine's tolerance -- gamma
+    # still passed straight through.
+    from hazardpulse.tornado.coherence_engine import HELMHOLTZ_TOL
+
+    cert32 = solve_helmholtz_2d(S, G, dx=1.0, D=D, dtype=np.float32, tol=HELMHOLTZ_TOL)
+    assert np.array_equal(tor_solve(S, G, dx=1.0, D=D), cert32)
 
     ref64 = solve_helmholtz_2d(S.astype(np.float64), G.astype(np.float64), dx=1.0,
                                D=D.astype(np.float64), n_iter=300, omega=0.8,

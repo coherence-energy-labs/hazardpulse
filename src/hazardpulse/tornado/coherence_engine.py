@@ -27,8 +27,8 @@ where:
 
 From tau we derive:
   - grad(tau)    -- coherence gradient (front strength)
-  - curl(tau)    -- coherence rotation
-  - torsion      -- shear x curl(tau)  (Form 16 coupling)
+  - torsion      -- (S_01 x grad tau).k: tilting of low-level horizontal
+                    vorticity by the coherence gradient (Form 16 coupling)
   - alignment    -- vorticity-coherence coupling
   - Damkohler Da -- reaction-diffusion regime
   - E_coh        -- coherence energy from KL divergence
@@ -60,6 +60,16 @@ BASE_D: float = 1.0
 HELMHOLTZ_ITERS: int = 200
 GAUSS_SIGMA_CELLS: float = 3.0
 
+# The tornado engine solves to a residual certificate, not to an iteration
+# count (tau_c_solver.solve_helmholtz_2d_certified). Relative residual target.
+HELMHOLTZ_TOL: float = 1e-8
+
+# Shear normalisation for the torsion (tilting) coupling, m/s.
+TORSION_SHEAR_SCALE: float = 25.0
+# Singularity condition 3 threshold on |torsion|. PROVISIONAL until set from
+# the training split (see TORSION_THRESHOLD_PROVENANCE once calibrated).
+TORSION_SINGULARITY_THRESHOLD: float = 0.1
+
 # Mesocyclone rotation threshold (s^-1)
 ROTATION_THRESHOLD: float = 0.003
 
@@ -77,21 +87,27 @@ def solve_helmholtz_2d(
     D: float | np.ndarray = 1.0,
     n_iter: int = HELMHOLTZ_ITERS,
     omega: float = 0.7,
+    tol: float | None = HELMHOLTZ_TOL,
 ) -> np.ndarray:
     """Solve ``D nabla^2 tau - gamma tau + S = 0`` on the CONUS grid.
 
     Tornado-grid wrapper around the shared
-    ``hazardpulse.coherence.tau_c_solver.solve_helmholtz_2d``.
-    Uses float32 (large 34x63 CONUS grid; speed over precision).
-    ``gamma`` is the damping rate Gamma(x) itself — kappa = sqrt(gamma/D)
-    is a derived reporting quantity, never the solver input (FVCS W-2).
+    ``hazardpulse.coherence.tau_c_solver.solve_helmholtz_2d``. Returns
+    float32. ``gamma`` is the damping rate Gamma(x) itself -- kappa =
+    sqrt(gamma/D) is a derived reporting quantity, never the solver input
+    (FVCS W-2).
+
+    By default the solve is CERTIFIED to ``HELMHOLTZ_TOL`` (relative PDE
+    residual) and raises ``HelmholtzNotConverged`` rather than return a
+    field that misses it. ``tol=None`` restores the legacy fixed
+    ``n_iter``-sweep damped Jacobi, kept only to reproduce historical runs.
     """
     from hazardpulse.coherence.tau_c_solver import (
         solve_helmholtz_2d as _shared_solver,
     )
     return _shared_solver(
         source, gamma, dx,
-        D=D, n_iter=n_iter, omega=omega, dtype=np.float32,
+        D=D, n_iter=n_iter, omega=omega, dtype=np.float32, tol=tol,
     )
 
 
@@ -128,24 +144,62 @@ def compute_gradient_magnitude(field: np.ndarray) -> np.ndarray:
     return np.sqrt(gx ** 2 + gy ** 2).astype(np.float32)
 
 
-def compute_curl_2d(field: np.ndarray) -> np.ndarray:
-    """Compute scalar curl of the gradient field.
+def compute_curl_2d(
+    u: np.ndarray,
+    v: np.ndarray,
+    dx: float = 1.0,
+    dy: float = 1.0,
+) -> np.ndarray:
+    """Vertical curl of a 2-D vector field: ``dv/dx - du/dy``.
 
-    Returns ``d(gx)/dy - d(gy)/dx`` on the grid.
+    ``u`` is the x (column, eastward) component and ``v`` the y (row,
+    northward) component. A solid-body rotation ``(u, v) = (-w y, w x)``
+    returns ``2 w`` everywhere.
+
+    Until 2026-10-01 this took ONE scalar field and returned the curl of its
+    own gradient -- identically zero, because the y- and x-difference
+    operators act on separate axes and commute exactly (boundary stencils
+    included). Only float32 round-off survived (max|curl| / max|grad| ~ 1e-8),
+    so every quantity built on it -- ``torsion``, singularity condition 3,
+    the NPE torsion logit term, ``torsion_x_srh`` -- was inert, and the GBT
+    gave both torsion features importance 0.0. A curl needs a genuine vector
+    field; see ``compute_tilting_torsion`` for the one this engine couples.
     """
-    grad_y, grad_x = _gradient_2d(field)
+    gy_v, gx_v = _gradient_2d(np.asarray(v, dtype=np.float32), dx=dx, dy=dy)
+    gy_u, gx_u = _gradient_2d(np.asarray(u, dtype=np.float32), dx=dx, dy=dy)
+    return (gx_v - gy_u).astype(np.float32)
 
-    dgx_dy = np.zeros_like(field, dtype=np.float32)
-    dgx_dy[1:-1, :] = (grad_x[2:, :] - grad_x[:-2, :]) / 2.0
-    dgx_dy[0, :] = grad_x[1, :] - grad_x[0, :]
-    dgx_dy[-1, :] = grad_x[-1, :] - grad_x[-2, :]
 
-    dgy_dx = np.zeros_like(field, dtype=np.float32)
-    dgy_dx[:, 1:-1] = (grad_y[:, 2:] - grad_y[:, :-2]) / 2.0
-    dgy_dx[:, 0] = grad_y[:, 1] - grad_y[:, 0]
-    dgy_dx[:, -1] = grad_y[:, -1] - grad_y[:, -2]
+def compute_tilting_torsion(
+    tau: np.ndarray,
+    ushear: np.ndarray,
+    vshear: np.ndarray,
+) -> np.ndarray:
+    """Torsion: tilting of low-level horizontal vorticity by the coherence gradient.
 
-    return (dgx_dy - dgy_dx).astype(np.float32)
+    A vertical shear vector ``S = (us, vs)`` over a layer of depth ``dz``
+    carries horizontal vorticity ``omega_h = k x S / dz = (-vs, us) / dz``.
+    In the vertical-vorticity equation, an updraft gradient tilts it into the
+    vertical at the rate ``omega_h . grad(w)``. Standing the coherence field
+    ``tau`` in for the updraft-organisation field ``w`` gives the coupling
+
+        torsion = (S x grad tau) . k / SHEAR_SCALE
+                = (us * dtau/dy - vs * dtau/dx) / SHEAR_SCALE
+
+    -- the component of the shear perpendicular to the coherence gradient,
+    i.e. the rotational partner of ``alignment`` (the parallel component,
+    ``S . grad tau / |grad tau|``). Signed: positive means cyclonic
+    (Northern Hemisphere) vertical vorticity is generated where tau rises.
+
+    Units: (m/s per 0-1 km) * (tau per 80 km cell) / (m/s); dimensionless on
+    this grid. HRRR u/v are grid-relative (Lambert conformal); at 80 km the
+    rotation to earth-relative (up to ~15 degrees at the CONUS edges) is
+    ignored here, as it is in ``alignment``.
+    """
+    grad_y, grad_x = _gradient_2d(tau)
+    us = np.asarray(ushear, dtype=np.float32)
+    vs = np.asarray(vshear, dtype=np.float32)
+    return ((us * grad_y - vs * grad_x) / TORSION_SHEAR_SCALE).astype(np.float32)
 
 
 # ---------------------------------------------------------------------------
@@ -333,16 +387,16 @@ def compute_coherence_fields(
     grad_y, grad_x = _gradient_2d(tau)
     grad_tau = np.sqrt(grad_x ** 2 + grad_y ** 2).astype(np.float32)
 
-    # Torsion: shear x curl(tau) -- Form 16 coupling
-    curl_tau = compute_curl_2d(tau)
-    torsion = (shear_06 * curl_tau / 25.0).astype(np.float32)
+    # Torsion: tilting of 0-1 km horizontal vorticity by grad(tau) -- the
+    # shear component PERPENDICULAR to the coherence gradient (Form 16).
+    shear_x = atm_grid["ushear_01"].astype(np.float32)
+    shear_y = atm_grid["vshear_01"].astype(np.float32)
+    torsion = compute_tilting_torsion(tau, shear_x, shear_y)
 
-    # Alignment: shear-coherence coupling (Form 16)
+    # Alignment: the shear component PARALLEL to the coherence gradient
     grad_mag_safe = np.maximum(grad_tau, 1e-6)
     e_x = grad_x / grad_mag_safe
     e_y = grad_y / grad_mag_safe
-    shear_x = atm_grid["ushear_01"].astype(np.float32)
-    shear_y = atm_grid["vshear_01"].astype(np.float32)
     alignment = (shear_x * e_x + shear_y * e_y).astype(np.float32)
 
     # S / Gamma ratio
@@ -387,7 +441,7 @@ def compute_coherence_fields(
     # against a labelled training set for production use.
     cond1 = (S_over_Gamma > 1.0).astype(np.float32)       # source exceeds damping
     cond2 = (grad_tau > 0.5).astype(np.float32)            # steep coherence gradient
-    cond3 = (np.abs(torsion) > 0.1).astype(np.float32)     # significant rotational coupling
+    cond3 = (np.abs(torsion) > TORSION_SINGULARITY_THRESHOLD).astype(np.float32)  # significant tilting
     cond4 = (alignment > 0).astype(np.float32)             # vorticity aligned with gradient
     cond5 = (Da > 10.0).astype(np.float32)                 # decay-dominated regime
     singularity_count = (cond1 + cond2 + cond3 + cond4 + cond5).astype(
@@ -452,14 +506,13 @@ def compute_gaussian_fields(
 
     grad_y, grad_x = _gradient_2d(tau)
     grad_tau = np.sqrt(grad_x ** 2 + grad_y ** 2).astype(np.float32)
-    curl_tau = compute_curl_2d(tau)
-    torsion = (shear_06 * curl_tau / 25.0).astype(np.float32)
+    shear_x = atm_grid["ushear_01"].astype(np.float32)
+    shear_y = atm_grid["vshear_01"].astype(np.float32)
+    torsion = compute_tilting_torsion(tau, shear_x, shear_y)
 
     grad_mag_safe = np.maximum(grad_tau, 1e-6)
     e_x = grad_x / grad_mag_safe
     e_y = grad_y / grad_mag_safe
-    shear_x = atm_grid["ushear_01"].astype(np.float32)
-    shear_y = atm_grid["vshear_01"].astype(np.float32)
     alignment = (shear_x * e_x + shear_y * e_y).astype(np.float32)
 
     S_over_Gamma = (S_field / np.maximum(Gamma_field, 0.01)).astype(
@@ -498,7 +551,7 @@ def compute_gaussian_fields(
     # Same absolute thresholds as Helmholtz for consistent comparison
     cond1 = (S_over_Gamma > 1.0).astype(np.float32)
     cond2 = (grad_tau > 0.5).astype(np.float32)
-    cond3 = (np.abs(torsion) > 0.1).astype(np.float32)
+    cond3 = (np.abs(torsion) > TORSION_SINGULARITY_THRESHOLD).astype(np.float32)
     cond4 = (alignment > 0).astype(np.float32)
     cond5 = (Da > 10.0).astype(np.float32)
     singularity_count = (cond1 + cond2 + cond3 + cond4 + cond5).astype(
@@ -718,7 +771,7 @@ def test_singularity_at_point(
     against a labelled training set for production use):
       1. S / Gamma > 1.0  (source exceeds damping)
       2. |nabla tau| > 0.5  (steep coherence gradient)
-      3. |torsion| > 0.1  (significant rotational coupling)
+      3. |torsion| > TORSION_SINGULARITY_THRESHOLD  (significant tilting)
       4. alignment > 0  (shear aligned with coherence gradient)
       5. Da > 10.0  (decay-dominated regime)
     """
@@ -732,7 +785,7 @@ def test_singularity_at_point(
 
     c1 = sg > 1.0
     c2 = gt_val > 0.5
-    c3 = abs(tors_val) > 0.1
+    c3 = abs(tors_val) > TORSION_SINGULARITY_THRESHOLD
     c4 = align_val > 0
     c5 = da_val > 10.0
 
