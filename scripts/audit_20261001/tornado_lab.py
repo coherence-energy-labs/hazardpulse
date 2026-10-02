@@ -222,6 +222,23 @@ def fit_model(kind: str, params: dict, Xtr, ytr, wtr, Xes, yes, wes, seed: int):
         m = LogisticRegression(C=params.get("C", 1.0), max_iter=2000)
         m.fit(prep(Xtr), ytr, sample_weight=wtr)
         return (lambda X: m.decision_function(prep(X))), {}, m
+    if kind == "numpy_gbt":  # the in-repo pure-NumPy GBT (served v2's trainer); no NaN support
+        med = np.nanmedian(np.asarray(Xtr, np.float64), axis=0)
+        med = np.where(np.isfinite(med), med, 0.0)
+
+        def fill(X):
+            A = np.asarray(X, np.float32).copy()
+            bad = ~np.isfinite(A)
+            A[bad] = np.broadcast_to(med.astype(np.float32), A.shape)[bad]
+            return A
+        norm = dm.FeatureNormalizer()
+        norm.fit(fill(Xtr))
+        gbt = dm.GradientBoostedTrees(**params)
+        info = gbt.fit(norm.transform(fill(Xtr)), np.asarray(ytr, np.float64),
+                       X_val=norm.transform(fill(Xes)), y_val=np.asarray(yes, np.float64))
+        return (lambda X: gbt.decision_function(norm.transform(fill(X)))), \
+            {"n_trees": len(gbt.trees) if hasattr(gbt, "trees") else None,
+             "fit": {k: v for k, v in (info or {}).items() if isinstance(v, (int, float, str))}}, gbt
     if kind == "column":  # a single published score used as-is (baselines)
         j = params["col"]
         return (lambda X: np.nan_to_num(np.asarray(X[:, j], np.float64), nan=-1.0)), {}, None
