@@ -17,6 +17,7 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import re as _re
 from pathlib import Path
 
 from hazardpulse.data.http import fetch_bytes
@@ -317,8 +318,48 @@ def _fetch_single_timestep(
     return {"valid_time": valid_time, "storms": storms}
 
 
+_RATE_RE = _re.compile(r"^\s*(\d{2})(\d{2})Z\s+(-?\d+(?:\.\d+)?)\s*%?/min(?:\s*\((\w+)\))?")
+_KM_RE = _re.compile(r"(-?\d+(?:\.\d+)?)\s*km")
+_RATE_CATEGORY = {"weak": 1.0, "moderate": 2.0, "strong": 3.0}
+
+
+def _valid_minute_of_day(data: dict) -> int | None:
+    m = _re.search(r"_(\d{2})(\d{2})\d{2}", str(data.get("validTime", "")))
+    return int(m.group(1)) * 60 + int(m.group(2)) if m else None
+
+
+def parse_string_attributes(props: dict, valid_minute: int | None) -> dict[str, float]:
+    """NOAA publishes three ProbSevere v3 attributes as strings with units, which a float()
+    filter silently drops (all three were NaN in every stored row until 2026-10-02):
+
+    ``MAXRC_EMISS '2251Z 1.5%/min (weak)'``  peak satellite cloud-top emissivity growth rate
+    ``MAXRC_ICECF '2241Z 0.01/min (weak)'``  peak ice-cloud-fraction (glaciation) rate
+    ``AVG_BEAM_HGT '4.09 kft / 1.25 km'``    radar beam height over the object
+
+    -> ``maxrc_emiss`` / ``maxrc_icecf`` (the rate), ``*_age_min`` (minutes from the peak to the
+    file's valid time, across midnight), ``*_cat`` (weak 1, moderate 2, strong 3), and
+    ``avg_beam_hgt`` (km). An unparseable or 'N/A' value yields nothing, never a guess.
+    """
+    out: dict[str, float] = {}
+    for key, name in (("MAXRC_EMISS", "maxrc_emiss"), ("MAXRC_ICECF", "maxrc_icecf")):
+        m = _RATE_RE.match(str(props.get(key, "")))
+        if not m:
+            continue
+        out[name] = float(m.group(3))
+        if valid_minute is not None:
+            peak = int(m.group(1)) * 60 + int(m.group(2))
+            out[f"{name}_age_min"] = float((valid_minute - peak) % 1440)
+        if m.group(4) and m.group(4).lower() in _RATE_CATEGORY:
+            out[f"{name}_cat"] = _RATE_CATEGORY[m.group(4).lower()]
+    m = _KM_RE.search(str(props.get("AVG_BEAM_HGT", "")))
+    if m:
+        out["avg_beam_hgt"] = float(m.group(1))
+    return out
+
+
 def _parse_storms(data: dict) -> list[dict] | None:
     """Parse ProbSevere GeoJSON features into storm dicts."""
+    valid_minute = _valid_minute_of_day(data)
     features = data.get("features", [])
     if not features:
         return []
@@ -399,9 +440,10 @@ def _parse_storms(data: dict) -> list[dict] | None:
             "motion_south": _float("MOTION_SOUTH"),
         }
         # Keep every other numeric attribute NOAA publishes (PWAT, CAPE_M10M30,
-        # MAXRC_EMISS, MAXRC_ICECF, MEANWIND_1-3kmAGL, WETBULB_0C_HGT, ...) under
-        # a sanitised lowercase name, so a model can use them and the live
-        # scorer -- which parses with this same function -- will have them too.
+        # MEANWIND_1-3kmAGL, WETBULB_0C_HGT, ...) under a sanitised lowercase name,
+        # so a model can use them and the live scorer -- which parses with this same
+        # function -- will have them too. The string-valued ones are parsed first.
+        storm.update(parse_string_attributes(props, valid_minute))
         for key, raw in props.items():
             name = _re_nonword.sub("_", str(key).lower()).strip("_")
             if not name or name in storm or name == "id":
