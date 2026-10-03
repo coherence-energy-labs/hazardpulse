@@ -23,7 +23,11 @@ jobs:
 
     steps:
       - name: Checkout
+        # the branch tip at job start, not the commit that triggered the run: a run that waited in
+        # the scoring concurrency queue otherwise starts stale and its push is rejected
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -91,8 +95,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f dist/
+          MODEL=$(python -c "import json; print(next((h.get('model_version') for h in json.load(open('dist/data/live-pulse.json')).get('hazards', []) if h.get('key') == 'eq'), 'unknown'))")
           git commit -m "data: earthquake scoring update $(date -u +%Y-%m-%dT%H:%MZ)
 
           Automated scoring via fetch_and_score_earthquake.py.
-          Model: eq_coherence_v1_0 | Source: USGS FDSN M2.5+ catalog | CFT Helmholtz PDE"
-          git push
+          Model: ${MODEL} | Source: USGS FDSN catalog"
+          bash scripts/ci/push_with_rebase.sh
