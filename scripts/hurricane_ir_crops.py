@@ -155,7 +155,10 @@ def main(argv=None) -> int:
             for aid, dtg, tag, centre in todo[h]:
                 p = crop_path(aid, dtg, tag)
                 p.parent.mkdir(parents=True, exist_ok=True)
-                np.savez_compressed(p, **crop(counts, lat, lon, centre), key=np.array(key), hour=np.array(f"{h:%Y%m%d%H}"))
+                tmp = p.with_name(p.name + ".part.npz")             # written whole, then renamed:
+                np.savez_compressed(tmp, **crop(counts, lat, lon, centre), key=np.array(key),
+                                    hour=np.array(f"{h:%Y%m%d%H}"))
+                tmp.replace(p)                                        # a killed run leaves no half crop
             done += 1
             if done % 50 == 0:
                 print(f"  {done}/{len(hours)} hours, {time.time() - t0:.0f} s", flush=True)
