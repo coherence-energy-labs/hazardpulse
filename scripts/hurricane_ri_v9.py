@@ -205,8 +205,9 @@ def summary(y, p, quantised) -> dict:
             "event_rate": float(y.mean())}
 
 
-def paired(y, pa, qa, pb, qb, groups, reps=REPS, seed=SEED) -> dict:
-    """Storm-bootstrap 95% intervals of (b - a) in log loss, Brier and AUC."""
+def paired(y, pa, qa, pb, qb, groups, reps=REPS, seed=SEED, level=0.95) -> dict:
+    """Storm-bootstrap ``level`` intervals (default 95%) of (b - a) in log loss, Brier and AUC."""
+    lo_q, hi_q = (1 - level) / 2, 1 - (1 - level) / 2
     lla, llb = _ll_vec(y, pa, qa), _ll_vec(y, pb, qb)
     ba, bb = (pa - y) ** 2, (pb - y) ** 2
     rng = np.random.default_rng(seed)
@@ -222,7 +223,7 @@ def paired(y, pa, qa, pb, qb, groups, reps=REPS, seed=SEED) -> dict:
     def ci(v):
         v = np.asarray(v)
         v = v[np.isfinite(v)]
-        return [float(np.quantile(v, 0.025)), float(np.quantile(v, 0.975))]
+        return [float(np.quantile(v, lo_q)), float(np.quantile(v, hi_q))]
     return {"d_log_loss": float(llb.mean() - lla.mean()), "d_log_loss_ci": ci(d_ll),
             "d_brier": float(bb.mean() - ba.mean()), "d_brier_ci": ci(d_br),
             "d_auc": auc(y, pb) - auc(y, pa), "d_auc_ci": ci(d_auc)}
@@ -431,14 +432,56 @@ def final(_args) -> int:
     return 0
 
 
+MODEL_PATH = ROOT / "results" / "models" / "hurricane_ri_v9.json"
+
+
+def export(_args) -> int:
+    """Amendment 1: freeze the D_gbt the final scored, as a NumPy payload. Refused unless the refit
+    reproduces the final's own 2026 predictions and the payload reproduces the booster."""
+    from hazardpulse.tornado import lgbm_payload as lp
+    fin = json.loads(FINAL_PATH.read_text(encoding="utf-8"))
+    if fin["carried"] != "D_gbt":
+        raise SystemExit(f"the final carried {fin['carried']}, not D_gbt")
+    dev = load_dev()
+    names = list(fx.names_for(GROUPS["D"]))
+    X, y = design(dev, names), np.array([r["y"] for r in dev])
+    m = GBT().fit(X, y, np.array([r["season"] for r in dev]))
+    if m.rounds != fin["fit_info"]["D_gbt"]["rounds"]:
+        raise SystemExit(f"refit chose {m.rounds} trees, the final {fin['fit_info']['D_gbt']['rounds']}")
+    cases = [json.loads(l) for l in (Y26 / "final_cases.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+    for r in cases:
+        r["f"] = {k: (float("nan") if v is None else float(v)) for k, v in r["f"].items()}
+    X26 = design(cases, names)
+    saved = np.load(Y26 / "final_predictions.npz", allow_pickle=True)["D_gbt"]
+    d_refit = float(np.max(np.abs(m.predict(X26) - saved)))
+    if d_refit > 1e-12:
+        raise SystemExit(f"the refit is not the model the final scored (max diff {d_refit:.2e})")
+    payload = lp.export_booster(m.b, names, calibration={"method": "identity", "a": 1.0, "b": 0.0}, provenance={
+        "program": "docs/HURRICANE_RI_V9_PROGRAM.md", "candidate": "D_gbt", "trained": "NHC cycles 2020-2025",
+        "event": "V(t+24 h) - V(t) >= 30 kt", "rounds": m.rounds, "gate_aids": ["DSHP", "IVCN", "NNIC"],
+        "final_2026": {k: fin["results"]["D_gbt"][k] for k in ("n", "events", "log_loss", "brier", "auc")},
+        "final_2026_dtops": {k: fin["results"]["A"][k] for k in ("log_loss", "brier", "auc")},
+        "claim_better_than_dtops": fin["claim_better_than_DTOPS"]})
+    d_payload = float(max(np.max(np.abs(lp.predict_proba(payload, Xs) - m.predict(Xs))) for Xs in (X, X26)))
+    if d_payload > 1e-9:
+        raise SystemExit(f"payload disagrees with the booster by {d_payload:.2e}")
+    version = lp.save(payload, MODEL_PATH)
+    version = lp.model_version(payload, prefix="hurricane_ri_v9")
+    log(f"{MODEL_PATH.name}: {version}, {payload['n_trees']} trees, {len(names)} inputs; refit = final to "
+        f"{d_refit:.1e}, payload = booster to {d_payload:.1e}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=("build-dev", "select", "final"))
+    ap.add_argument("phase", choices=("build-dev", "select", "final", "export"))
     args = ap.parse_args(argv)
     if args.phase == "build-dev":
         return build_dev(args)
     if args.phase == "select":
         return select(args)
+    if args.phase == "export":
+        return export(args)
     return final(args)
 
 

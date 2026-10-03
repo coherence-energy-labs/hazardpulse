@@ -11,7 +11,10 @@ on:
     # the newest analysis was published before its SHIPS text, so NHC storms fell back to v8.2;
     # at +2 h 10 min ~91% of texts are out. Off the hour: the scorers share one queue and the
     # tornado scorer runs on every even hour.
-    - cron: "10 2,8,14,20 * * *"
+    # 2026-10-03: moved to +3 h 30 min, after NHC's advisory for the cycle (issued at +3 h): the v9.1
+    # shadow model (docs/HURRICANE_RI_V9_PROGRAM.md) reads the official forecast as it was trained to,
+    # and more of the SHIPS texts are out than at +2 h 10 min (over 90%: p90 above is 115 min).
+    - cron: "30 3,9,15,21 * * *"
   workflow_dispatch:
 
 concurrency:
