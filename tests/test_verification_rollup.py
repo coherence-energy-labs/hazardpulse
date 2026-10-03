@@ -92,7 +92,8 @@ POOLED = {
 }
 
 
-def _tornado_summary(n: int, *, scored_as_of: dt.datetime = NOW - dt.timedelta(hours=1), pooled: bool = True) -> dict:
+def _tornado_summary(n: int, *, scored_as_of: dt.datetime = NOW - dt.timedelta(hours=1), pooled: bool = True,
+                     version: str = "tornado_storm_v1_0") -> dict:
     payload = {
         "scored_as_of": _z(scored_as_of),
         "n_matured_forecasts": n,
@@ -105,6 +106,9 @@ def _tornado_summary(n: int, *, scored_as_of: dt.datetime = NOW - dt.timedelta(h
     }
     if pooled:
         payload["pooled"] = dict(POOLED)
+        # the live record per model version (score_tornado_prospective.summarize): the homepage
+        # quotes ONLY the live version's own entry, never the pool across versions
+        payload["pooled_by_model_version"] = {version: {**POOLED, "n_forecasts": n}}
         payload["pooled_by_served_mode"] = {
             "raw_model_probability": {**POOLED, "n_storm_forecasts": 400, "bss_vs_causal_climatology": -9.0},
             "calibrated_probability": {**POOLED, "n_storm_forecasts": 500, "bss_vs_causal_climatology": 0.002},
@@ -140,6 +144,19 @@ def test_tornado_rollup_reports_the_scorers_count_and_pooled_skill(tmp_path):
     assert on_disk["forecast_storage"]["n_scored_forecasts"] == 5
     served = json.loads((m.VERIFICATION_DATA_DIR / "to.json").read_text())
     assert served["forecast_storage"]["n_scored_forecasts"] == 5
+
+
+def test_a_live_record_of_another_model_version_is_never_shown_as_the_live_models(tmp_path):
+    # 2026-10: the pooled live record mixed every version that ever served; with v3 live it would
+    # have shown the replaced model's skill beside v3's forecasts
+    m = _load(tmp_path)
+    _write_replays(m, "to", "tornado", 5)
+    _write_summary(m, m.TO_PROSPECTIVE_DIR, _tornado_summary(5, version="tornado_gbt_v2-48637c637e01"))
+    item = _hazard(m._build_verification_summary(json.loads(m.LIVE_PULSE_PATH.read_text())), "to")
+    assert item["forecast_storage"]["n_scored_forecasts"] == 5        # the count stays the scorer's
+    assert item["auc"] is None and item["brier"] is None and item["brier_skill_score"] is None
+    assert item["prospective"]["pooled"] is None
+    assert "No storm forecast of this model version has been scored yet" in item["metric_source_label"]
 
 
 def test_hurricane_rollup_is_bound_to_its_scorer_too(tmp_path):
@@ -186,7 +203,9 @@ def test_a_pre_pooled_summary_never_promotes_a_mean_of_per_forecast_bss(tmp_path
     _write_summary(m, m.TO_PROSPECTIVE_DIR, legacy)
     item = _hazard(m._build_verification_summary(json.loads(m.LIVE_PULSE_PATH.read_text())), "to")
     assert item["forecast_storage"]["n_scored_forecasts"] == 5
-    assert item["auc"] == 0.71 and item["brier"] == 0.031
+    # a summary that predates both pooling and the per-version split cannot say which model its
+    # means belong to: no live skill at all (before 2026-10 its per-forecast mean AUC was shown)
+    assert item["auc"] is None and item["brier"] is None
     assert item["brier_skill_score"] is None
     assert item["brier_skill_score_reference"] is None
 
