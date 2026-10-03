@@ -299,6 +299,9 @@ def out_of_fold_calibrated(kind: str, s_val, y_val, days) -> np.ndarray:
 
 
 EXPERIMENTS = Path(__file__).resolve().parent / "experiments"
+# the files that record CHOICES (best_blocks / best_config / chosen_on_validation); the corrected
+# program (amendment 8) keeps its own in experiments/avail so the original record stays intact
+CHOICES = Path(os.environ.get("HAZARDPULSE_CHOICES_DIR", str(EXPERIMENTS)))
 
 
 def resolve_blocks(exp: dict) -> dict:
@@ -307,12 +310,13 @@ def resolve_blocks(exp: dict) -> dict:
     if exp.get("config_from") == "best":
         # model family + hyper-parameters chosen by steps 2-3 (experiments/best_config.json);
         # the experiment's own keys (calibration, neg_per_pos, label, seed, ...) still win
-        cfg = json.loads((EXPERIMENTS / "best_config.json").read_text(encoding="utf-8"))
-        exp = {"model": cfg["model"], "params": cfg.get("params", {}), "blocks_from": "best",
+        cfg = json.loads((CHOICES / "best_config.json").read_text(encoding="utf-8"))
+        chosen = {k: cfg[k] for k in ("calibration", "neg_per_pos", "label") if k in cfg}
+        exp = {"model": cfg["model"], "params": cfg.get("params", {}), "blocks_from": "best", **chosen,
                **{k: v for k, v in exp.items() if k != "config_from"}}
     if exp.get("blocks_from") != "best":
         return exp
-    best = json.loads((EXPERIMENTS / "best_blocks.json").read_text(encoding="utf-8"))
+    best = json.loads((CHOICES / "best_blocks.json").read_text(encoding="utf-8"))
     return {**exp, "blocks": best["blocks"], "drop": best.get("drop", [])}
 
 
@@ -621,7 +625,7 @@ def _final_core(exp: dict, rounds: int) -> dict:
 
 
 def _chosen_exp(which: str) -> dict:
-    chosen = json.loads((EXPERIMENTS / "chosen_on_validation.json").read_text(encoding="utf-8"))
+    chosen = json.loads((CHOICES / "chosen_on_validation.json").read_text(encoding="utf-8"))
     exp = dict(chosen["primary"])
     if which == "plus_W":
         exp.update(chosen["secondary_with_warnings"]["same_as_primary_except"])
