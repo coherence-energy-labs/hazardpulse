@@ -57,17 +57,23 @@ jobs:
           HAZARDPULSE_ALERT_WEBHOOK_URL: ${{ secrets.HAZARDPULSE_ALERT_WEBHOOK_URL }}
         run: python -u scripts/fetch_and_score.py
 
+      # Keep every SHIPS text NHC lists (the directory holds only the current season); the
+      # forecast is already written, so a failure here must not stop it being published.
+      - name: Archive SHIPS text
+        continue-on-error: true
+        run: python -u scripts/archive_ships_text.py
+
       - name: Check for changes
         id: changes
         run: |
-          git diff --quiet dist/ 2>/dev/null && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+          if git diff --quiet dist/ 2>/dev/null && [ -z "$(git status --porcelain results/hurricane_ships_archive)" ]; then echo "changed=false" >> "$GITHUB_OUTPUT"; else echo "changed=true" >> "$GITHUB_OUTPUT"; fi
 
       - name: Commit and push
         if: steps.changes.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f dist/
+          git add -f dist/ results/hurricane_ships_archive/
           git commit -m "data: hurricane scoring update $(date -u +%Y-%m-%dT%H:%MZ)"
           bash scripts/ci/push_with_rebase.sh
 
