@@ -2443,6 +2443,13 @@ def _render_model_evidence_blocks() -> None:
     were typed by hand until 2026-10 and had drifted to five different superseded models."""
     from hazardpulse.verification import evidence_pages, served_evidence
 
+    present = [rel for rel in evidence_pages.BLOCKS if (DIST / rel).exists()]
+    if not present:                      # a site tree without the evidence pages (e.g. a test build)
+        print("  Model evidence: no evidence pages under this site tree; nothing to re-render")
+        return
+    if len(present) != len(evidence_pages.BLOCKS):
+        missing = sorted(set(evidence_pages.BLOCKS) - set(present))
+        raise FileNotFoundError(f"evidence pages missing under {DIST}: {missing}")
     errors: list[str] = []
     changed = evidence_pages.render_pages(DIST, ev=served_evidence.all_evidence(errors=errors))
     for e in errors:
@@ -2495,6 +2502,10 @@ def build_verification_rollups() -> dict:
     pulse = _read_json(LIVE_PULSE_PATH, {"updated_at": None, "hazards": []})
     summary = _build_verification_summary(pulse)
     _render_verification_page(summary)
+    # the prospective summaries this workflow just rewrote also feed the model-evidence blocks
+    # (e.g. a challenger's error budget and matured count); re-render them in the same commit, or
+    # main stays inconsistent with its own results until some other scorer runs a full build
+    _render_model_evidence_blocks()
     return summary
 
 

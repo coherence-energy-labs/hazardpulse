@@ -199,7 +199,7 @@
 <!-- hp-evidence:methods-simple -->
 <div class="card col-4 hazard-eq">
   <h3>Earthquake</h3>
-  <p class="muted">The chance of a magnitude 6+ earthquake in each 2&deg; cell of the globe over the next 30 days, from where quakes happen in the long run, how they cluster after recent ones, and boosted trees on both. Tested once on 2023&ndash;2025: +2.59 nats of information per quake over a uniform map (the model it replaced: &minus;13.67). Earthquakes cannot be predicted; this ranks where the odds are higher.</p>
+  <p class="muted">The chance of a magnitude 6+ earthquake in each 2&deg; cell of the globe over the next 30 days, from where quakes happen in the long run, how they cluster after recent ones, and boosted trees on both, plus a published global model of where the crust is straining (GEAR1). Scored on 2023&ndash;2025 (a second look at those years): +2.60 nats of information per quake over a uniform map (C0 alone: +2.59). Earthquakes cannot be predicted; this ranks where the odds are higher.</p>
 </div>
 <div class="card col-4 hazard-hu">
   <h3>Hurricane</h3>
@@ -220,14 +220,14 @@
         <div class="grid">
 <!-- hp-evidence:methods-earthquake -->
 <div class="card col-4 hazard-eq">
-  <h3>Earthquake (eq_operational_C0_v1-d28c62a2e35b)</h3>
+  <h3>Earthquake (eq_operational_S1_gear1_v1-d409c534bb4c)</h3>
   <div class="kv"><span>Target</span><strong>P(an M6.0+ epicentre in the 2&deg; cell within 30 days), every one of 11,700 cells, from events before the issue time only</strong></div>
-  <div class="kv"><span>Architecture</span><strong>Gradient-boosted trees on causal seismicity features, with the smoothed-seismicity and aftershock-clustering rates as inputs (156 trees, 21 inputs, scored in NumPy)</strong></div>
-  <div class="kv"><span>How it was chosen</span><strong>Pre-registered comparison of smoothed seismicity, aftershock clustering, two boosted models and the previous model (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/EARTHQUAKE_FORECAST_PROGRAM.md" rel="noopener">docs/EARTHQUAKE_FORECAST_PROGRAM.md</a>)</strong></div>
-  <div class="kv"><span>Final test 2023&ndash;2025</span><strong>+2.59 [2.47, 2.71] nats per quake over a uniform map; AUC 0.968 [0.963, 0.972] over all cells, 0.767 [0.733, 0.798] among recently active cells; Brier skill +0.021</strong></div>
-  <div class="kv"><span>Against the standard reference</span><strong>vs long-term smoothed seismicity (the standard reference forecast): +0.061 [+0.000, +0.120] nats per quake, AUC +0.0013 [+0.0000, +0.0026] (paired, by month)</strong></div>
-  <div class="kv"><span>Replaced</span><strong>The previous model scored &minus;13.67 nats per quake on the same test; 74% of the test&rsquo;s M6+ cell-windows fell outside recently active cells</strong></div>
-  <div class="kv"><span>Limits</span><strong>Forecasts 14% more quakes than occurred in the test period (ratio 1.14 [1.03, 1.26]); live catalogs are preliminary in the first days after a large quake</strong></div>
+  <div class="kv"><span>Architecture</span><strong>C0 plus GEAR1&#x27;s long-term rate (geodetic strain and smoothed seismicity, Bird et al. 2015) as one extra term (156 trees, 22 inputs, scored in NumPy)</strong></div>
+  <div class="kv"><span>How it was chosen</span><strong>Pre-registered comparison of smoothed seismicity, aftershock clustering, two boosted models and the previous model (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/EARTHQUAKE_FORECAST_PROGRAM.md" rel="noopener">docs/EARTHQUAKE_FORECAST_PROGRAM.md</a>); GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights fitted on 2018&ndash;2020, decided on 2021&ndash;2022 against C0 recalibrated on the same years, +0.016 [+0.002, +0.030] nats per quake</strong></div>
+  <div class="kv"><span>Test 2023&ndash;2025 (a second read)</span><strong>+2.60 [2.48, 2.73] nats per quake over a uniform map; AUC 0.969 [0.964, 0.973] over all cells, 0.769 [0.735, 0.799] among recently active cells; Brier skill +0.021</strong></div>
+  <div class="kv"><span>Against the standard reference</span><strong>vs long-term smoothed seismicity (the standard reference forecast): +0.072 [+0.018, +0.125] nats per quake, AUC +0.0019 [+0.0009, +0.0028] (paired, by month)</strong></div>
+  <div class="kv"><span>Replaced</span><strong>C0 alone scored +2.59 nats per quake on the same test; 74% of the test&rsquo;s M6+ cell-windows fell outside recently active cells</strong></div>
+  <div class="kv"><span>Limits</span><strong>Forecasts 13% more quakes than occurred in the test period (ratio 1.13 [1.03, 1.26]); live catalogs are preliminary in the first days after a large quake</strong></div>
 </div>
 <!-- /hp-evidence:methods-earthquake -->
 
@@ -248,7 +248,7 @@
   <div class="kv"><span>Against every RI probability NOAA publishes</span><strong>2022&ndash;2025, as served, each season predicted from earlier ones; 30-kt log loss SHIPS-RII 0.200 (ours 0.144) &middot; RI logistic 0.197 (ours 0.144) &middot; RI Bayesian 0.232 (ours 0.144) &middot; RI consensus 0.183 (ours 0.144) &middot; DTOPS 0.166 (ours 0.148): ours is lower than every one, each paired by storm with its 95% interval below zero</strong></div>
   <div class="kv"><span>Against intensity forecasts as yes/no RI calls</span><strong>at each call&rsquo;s own false-alarm rate (a forecast 24-h rise of 30 kt or more), ours catches more RI events than SHIPS (DSHP) (+19 points [+6, +31]); and is within noise of NHC official forecast &middot; HCCA &middot; IVCN &middot; LGEM &middot; NNIC &middot; GEFS mean &middot; hurricane-model mean &middot; most aggressive hurricane model &middot; global-model mean (gaps &minus;3 to +9 points)</strong></div>
   <div class="kv"><span>2026 so far</span><strong>log loss 0.129 vs DTOPS 0.150, AUC 0.925 (a second look at a season that informed its design, so not a proof)</strong></div>
-  <div class="kv"><span>Challenger in shadow</span><strong>hurricane_ri_v10_2-3e9c1b766454: the same inputs, never lowering the odds when the guidance or NOAA&rsquo;s probability rises. 2022&ndash;2025: log loss 0.1436 vs 0.1443 [&minus;0.0022, +0.0008], four-threshold Brier 0.1544 vs 0.1554; a gain whose interval still includes zero. Scored live from 2026-10-04 with its own prospective test; it replaces the shown model only by the rule written before it scored a cycle</strong></div>
+  <div class="kv"><span>Challenger in shadow</span><strong>hurricane_ri_v10_2-3e9c1b766454: the same inputs, never lowering the odds when the guidance or NOAA&rsquo;s probability rises. 2022&ndash;2025: log loss 0.1436 vs 0.1443 [&minus;0.0022, +0.0008], four-threshold Brier 0.1544 vs 0.1554; a gain whose interval still includes zero. Scored live from 2026-10-04 with its own prospective test at 99.375%; it replaces the shown model only by the rule written before it scored a cycle</strong></div>
   <div class="kv"><span>Status</span><strong>in prospective verification: shown beside NOAA&rsquo;s number, not instead of it, until the pre-registered prospective test on cycles from 2026-10-04 meets its rule (verdicts 2026-12-01 and 2027-12-01); cycles scored so far: 0</strong></div>
 </div>
 

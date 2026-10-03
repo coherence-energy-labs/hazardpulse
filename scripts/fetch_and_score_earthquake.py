@@ -93,6 +93,9 @@ from hazardpulse.earthquake import operational_forecast as eq_operational  # noq
 OPERATIONAL_ARTIFACT_PATH = (
     Path(__file__).resolve().parents[1] / "results" / "models" / "earthquake_operational_v1.json"
 )
+# Amendment E1 (section 10): S1 = the C0 artifact above + GEAR1's long-term rate, a small stack
+# bound to C0's exact model_version. When present it is what is published.
+STACK_PATH = Path(__file__).resolve().parents[1] / "results" / "models" / "earthquake_gear1_stack_v1.json"
 # Cells listed on the page / in the replay beyond the active ones: the highest-probability
 # cells of the full grid, so a high forecast is never hidden for lack of recent M2.5+ events.
 TOP_PROBABILITY_CELLS = 25
@@ -100,6 +103,8 @@ TOP_PROBABILITY_CELLS = 25
 
 def _served_model_version() -> str:
     try:
+        if STACK_PATH.exists():
+            return eq_operational.stack_model_version(STACK_PATH)
         return eq_operational.artifact_model_version(OPERATIONAL_ARTIFACT_PATH)
     except Exception:  # missing at import time; run_pipeline refuses to publish without it
         return "eq_operational_unavailable"
@@ -2355,13 +2360,16 @@ def run_pipeline(
     # FAIL CLOSED: the served probability is the artifact's model; without it nothing is
     # published (the old tiers are case-control nowcasts of other quantities).
     artifact = eq_operational.load_artifact(OPERATIONAL_ARTIFACT_PATH)
-    if artifact.model_version != MODEL_VERSION:
-        raise RuntimeError(
-            f"{OPERATIONAL_ARTIFACT_PATH.name} changed while running: "
-            f"{artifact.model_version} != {MODEL_VERSION}")
-    operational = eq_operational.forecast_from_artifact(artifact, history_events, now)
+    stack = eq_operational.load_stack(STACK_PATH, artifact) if STACK_PATH.exists() else None
+    served_version = stack.model_version if stack is not None else artifact.model_version
+    if served_version != MODEL_VERSION:
+        raise RuntimeError(f"the served earthquake model changed while running: {served_version} != {MODEL_VERSION}")
+    if stack is not None:
+        operational = eq_operational.forecast_with_stack(artifact, stack, history_events, now)
+    else:
+        operational = eq_operational.forecast_from_artifact(artifact, history_events, now)
     print(
-        f"  {artifact.model_version}: {operational['n_input_events']} M5+ inputs since "
+        f"  {served_version} (base {artifact.model_version}): {operational['n_input_events']} M5+ inputs since "
         f"{eq_operational.CATALOG_START[:10]}; expected cells with an M6+ (sum of P) "
         f"{float(np.sum(operational['probability'])):.2f}; max P {float(np.max(operational['probability'])):.4f}"
     )
@@ -2429,8 +2437,10 @@ def run_pipeline(
         update_index=not skip_replay_index,
         probability_grid=operational["probability"],
         operational_meta={
-            "model_version": artifact.model_version,
-            "artifact": "results/models/" + OPERATIONAL_ARTIFACT_PATH.name,
+            "model_version": served_version,
+            "artifact": "results/models/" + (STACK_PATH.name if stack is not None else OPERATIONAL_ARTIFACT_PATH.name),
+            "base_artifact": "results/models/" + OPERATIONAL_ARTIFACT_PATH.name,
+            "base_model_version": artifact.model_version,
             "artifact_sha256_lf": artifact.sha256,
             "n_input_events_m5": operational["n_input_events"],
             # E[number of cells with an M6+ in the window] = sum of the published probabilities

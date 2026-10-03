@@ -32,7 +32,7 @@ Read it before starting model work, and update it when a branch is decided.
 |---|---|---|---|
 | Hurricane RI, NHC basins | NOAA DTOPS | v10.1 shown beside it; **v10.2 challenger** in shadow | `docs/HURRICANE_RI_V9_PROGRAM.md` amendments 2-4 |
 | Tornado | v3 (+NWS warning state) | -- | `docs/TORNADO_MODEL_PROGRAM.md` |
-| Earthquake M6+ | C0 | -- | `docs/EARTHQUAKE_FORECAST_PROGRAM.md` |
+| Earthquake M6+ | **S1 = C0 + GEAR1** (since 2026-10-03) | -- | `docs/EARTHQUAKE_FORECAST_PROGRAM.md` section 10 |
 
 ## Open branches, ranked
 
@@ -66,11 +66,10 @@ The cheap levers on the current inputs are exhausted (amendment 3): monotone con
      2025 files were uploaded 2026-07-24; 2026 EP is empty).
    - Unblocks if: a real-time swath feed is found (ATMS SDR on NOAA's AWS is the candidate, but it
      is coarse) and our own processing reproduces TC-PRIMED's features on overlapping years.
-4. **H4. Archive every cycle's full SHIPS text** (the operational environment predictors).
-   - The replay files keep only the RI values, and NHC's `atcf/stext` holds only the current
-     season.
-   - Cheap. It starts the accrual that lets a future model train on SHIPS predictors in their
-     operational form.
+4. **H4. DONE (2026-10-03, PR #13): every SHIPS text is archived**
+   (`results/hurricane_ships_archive/<year>/`). The 2026 season is backfilled (1,023 texts), then
+   synced by every hurricane run. Once two or more seasons have accrued, a model can train on
+   SHIPS's operational environment predictors (shear, SST, OHC, RH).
 5. **H5. Anytime-valid prospective tests** for new entrants: e-processes or confidence sequences
    for forecast comparison (Henzi and Ziegel 2022; Choe and Ramdas 2023).
    - A challenger could then be judged continuously instead of only at fixed looks, without
@@ -82,12 +81,14 @@ The cheap levers on the current inputs are exhausted (amendment 3): monotone con
 
 ### Earthquake
 
-1. **E1. C0 against GEAR1** (Bird et al. 2015), the best public global long-term M>=5.8 model, on
-   C0's 2023-2025 test cells.
-   - C0 has been compared with smoothed seismicity (+0.061 [+0.000, +0.120] nats) and ETAS-style
-     clustering, but never with the strongest public global forecast. This is the
-     "beats everything available" check it has not had, and it could reverse what we serve, as
-     DTOPS did for hurricanes.
+1. **E1. DONE (2026-10-03): S1 = C0 + GEAR1 is served** (`docs/EARTHQUAKE_FORECAST_PROGRAM.md`
+   section 10).
+   - Gain: DEV S1 - S0 = +0.016 [+0.002, +0.030] nats per target; FINAL (second read) +0.013
+     [+0.000, +0.026].
+   - GEAR1 *alone* loses to our causal smoothed seismicity by 0.2-0.3 nats. The best public global
+     model is a useful input, not a better forecast.
+   - Open from it: GEAR1's strain-rate term only enters as one global weight. A per-region or
+     per-depth weight is the next experiment (pre-register it; fit on CHOOSE).
 2. **E2.** The margin over smoothed seismicity is at the edge of zero.
    - Decide whether this is power (number of M6+ quakes) or a real limit, with a per-year
      breakdown and a power estimate before any new features.
@@ -111,6 +112,7 @@ The cheap levers on the current inputs are exhausted (amendment 3): monotone con
 | Storm-specific guidance errors predict RI (E) | dev: +0.0021 log loss vs v9 | nothing. The interpolated aids absorb the error |
 | Cycle-to-cycle revisions predict RI (R) | dev: -0.0002 [-0.0013, +0.0009] | nothing |
 | TC-PRIMED as a live input | 2025 "preliminary" uploaded 2026-07-24; 2026 EP empty | training data only |
+| GEAR1 as a better long-term earthquake map than ours | AG - A_ch: DEV -0.21 [-0.33, -0.08], FINAL -0.31 [-0.41, -0.21] nats per target | GEAR1 as an added term (S1, served) |
 
 **Blocked, not killed:** CIRA's SHIPS developmental data. `rammb-data.cira.colostate.edu` returns
 403 (nginx) to this machine, even with browser headers. Untested from a US CI runner.
