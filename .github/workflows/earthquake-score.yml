@@ -101,3 +101,14 @@ jobs:
           Automated scoring via fetch_and_score_earthquake.py.
           Model: ${MODEL} | Source: USGS FDSN catalog"
           bash scripts/ci/push_with_rebase.sh
+
+      # a bot push does not trigger deploy.yml: without this the new forecast waits for some other
+      # workflow's deploy (found 2026-10-03, when the S1 switch sat undeployed)
+      - name: Deploy to Cloudflare Workers
+        if: steps.changes.outputs.changed == 'true'
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          command: deploy
