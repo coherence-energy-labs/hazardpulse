@@ -18,10 +18,14 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Callable
 
 from .forecast import TrustedForecaster
 
-__all__ = ["load_signer", "load_forecaster", "enrich_cell", "enrich_cells", "publish_public_key"]
+__all__ = ["load_signer", "load_forecaster", "enrich_cell", "enrich_cells", "publish_public_key",
+           "rederive_band", "band_contradictions"]
+
+BandFn = Callable[[float], str]
 
 _SIGNING_KEY_ENV = "HAZARDPULSE_SIGNING_KEY"   # 32-byte Ed25519 seed, hex-encoded
 
@@ -72,12 +76,41 @@ def load_forecaster(hazard: str, *, models_dir: Path | None = None, signer=None,
         return None
 
 
+def rederive_band(cell: dict, band_fn: BandFn, *, prob_key: str = "probability",
+                  band_key: str = "risk_band") -> dict:
+    """Re-derive a probability-derived label from the probability the cell PUBLISHES.
+
+    A scorer bands a cell from its raw score; when the trust layer then replaces the
+    probability with a calibrated one, that band describes a number nobody sees
+    (e.g. an earthquake cell published at 4.54% still labelled "critical"). The
+    pre-calibration band is kept under ``raw_<band_key>`` for audit. Hazard-agnostic:
+    pass the hazard's own probability->band mapping.
+    """
+    prob = cell.get(prob_key)
+    if prob is None:
+        return cell
+    if band_key in cell and f"raw_{band_key}" not in cell:
+        cell[f"raw_{band_key}"] = cell[band_key]
+    cell[band_key] = band_fn(float(prob))
+    return cell
+
+
+def band_contradictions(cells: list[dict], band_fn: BandFn, *, prob_key: str = "probability",
+                        band_key: str = "risk_band") -> list[int]:
+    """Indices of cells whose label disagrees with band_fn(published probability)."""
+    return [i for i, c in enumerate(cells)
+            if c.get(prob_key) is not None and band_key in c
+            and c[band_key] != band_fn(float(c[prob_key]))]
+
+
 def enrich_cell(cell: dict, forecaster: TrustedForecaster, *, prob_key: str = "probability",
                 feature_key: str | None = None, data_health_key: str = "data_health_ok",
-                issued_at: str | None = None) -> dict:
+                issued_at: str | None = None, band_fn: BandFn | None = None,
+                band_key: str = "risk_band") -> dict:
     """Enrich one cell/storm dict in place with calibrated probability + interval +
     abstention + signed receipt. The raw probability is preserved under
-    ``raw_probability`` for audit."""
+    ``raw_probability`` for audit. If ``band_fn`` is given, ``cell[band_key]`` is
+    re-derived from the probability actually published (see rederive_band)."""
     raw = cell.get(prob_key)
     if raw is None:
         return cell
@@ -98,20 +131,26 @@ def enrich_cell(cell: dict, forecaster: TrustedForecaster, *, prob_key: str = "p
     cell["calibrated"] = True
     cell["receipt"] = res.receipt
     cell["receipt_sha256"] = res.receipt.get("receipt_sha256")
+    if band_fn is not None:
+        rederive_band(cell, band_fn, prob_key=prob_key, band_key=band_key)
     return cell
 
 
 def enrich_cells(cells: list[dict], forecaster: TrustedForecaster | None, *,
                  prob_key: str = "probability", feature_key: str | None = None,
                  data_health_key: str = "data_health_ok", issued_at: str | None = None,
-                 resort: bool = True) -> list[dict]:
+                 resort: bool = True, band_fn: BandFn | None = None,
+                 band_key: str = "risk_band") -> list[dict]:
     """Enrich a list of cells. If ``forecaster`` is None, returns cells untouched
-    (honest no-op until a calibrator has been produced)."""
+    (honest no-op until a calibrator has been produced). Pass the hazard's
+    probability->band mapping as ``band_fn`` whenever the cells carry a band, so the
+    band always describes the probability that is published."""
     if forecaster is None:
         return cells
     for cell in cells:
         enrich_cell(cell, forecaster, prob_key=prob_key, feature_key=feature_key,
-                    data_health_key=data_health_key, issued_at=issued_at)
+                    data_health_key=data_health_key, issued_at=issued_at,
+                    band_fn=band_fn, band_key=band_key)
     if resort:
         cells.sort(key=lambda c: (c.get("abstained", False),
                                   -(c.get(prob_key) if c.get(prob_key) is not None else -1.0)))

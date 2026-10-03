@@ -10,6 +10,7 @@ All algorithms implemented from scratch — no sklearn, no PyTorch.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -134,6 +135,63 @@ def build_feature_matrix(
         years[i] = int(case.get("season_year", 0))
 
     return X, y, years, feature_names
+
+
+def climatological_mpi_features(
+    lat: float | None,
+    vmax_kt: float | None,
+    month: int,
+) -> dict[str, float | None]:
+    """``abs_lat`` / ``mpi_deficit`` / ``intensity_frac_mpi`` exactly as the training set has them.
+
+    The single definition shared by the training-set builder
+    (``scripts/build_hurricane_training_data.py``) and the live case builder
+    (``scripts/fetch_and_score.py``), so a served feature can never drift from the one
+    the model learned. The arithmetic is the builder's, operation for operation; a test
+    re-derives every row of the committed training file from it.
+
+    The MPI is a crude latitude/season SST proxy (no SST data is read), which is what v8.1
+    was trained on.
+    """
+    if lat is None:
+        return {"abs_lat": None, "mpi_deficit": None, "intensity_frac_mpi": None}
+    abs_lat = abs(lat)
+    sst_est = 30.0 - 0.5 * max(0, abs_lat - 10)
+    if lat >= 0:
+        sst_est += 2.0 * np.exp(-((month - 9) ** 2) / 8.0)
+    else:
+        sst_est += 2.0 * np.exp(-((month - 3) ** 2) / 8.0)
+    mpi = min(30.0 * max(sst_est - 26.0, 0) + 40.0, 185.0)
+    if vmax_kt is None:
+        return {"abs_lat": abs_lat, "mpi_deficit": None, "intensity_frac_mpi": None}
+    return {
+        "abs_lat": abs_lat,
+        "mpi_deficit": mpi - vmax_kt,
+        "intensity_frac_mpi": vmax_kt / mpi if mpi > 0 else None,
+    }
+
+
+def translation_speed_kmh(
+    lat_prev: float | None,
+    lon_prev: float | None,
+    lat_now: float | None,
+    lon_now: float | None,
+    hours: float,
+) -> float | None:
+    """Great-circle distance between two fixes divided by the REAL time between them.
+
+    Shared by the v8.2 training-set builder and the live case builder. (v8.1's builder
+    divided a 3-hour displacement by 6 -- see LEGACY notes in that script.)
+    """
+    if None in (lat_prev, lon_prev, lat_now, lon_now) or not hours or hours <= 0:
+        return None
+    dlat = math.radians(lat_now - lat_prev)
+    dlon = math.radians(lon_now - lon_prev)
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(lat_prev)) * math.cos(math.radians(lat_now))
+         * math.sin(dlon / 2) ** 2)
+    dist_km = 6371.0 * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return dist_km / float(hours)
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +365,81 @@ def precompute_bins(
     return X_binned, bin_edges
 
 
+def _pow2_like_scalar(x: np.ndarray) -> np.ndarray:
+    """Element-wise ``x ** 2`` through libm ``pow``, exactly as the scalar scan squared.
+
+    The original split scan squared NumPy *scalars* (``np.float64 ** 2`` goes through C
+    ``pow``). An array ``x ** 2`` instead takes NumPy's ``x * x`` fast path, and on some
+    libms the two differ in the last bit (MSVC CRT: 196 of 400,000 random doubles,
+    measured 2026-10-01). Passing the exponent as an array bypasses the fast path, so the
+    vectorised gains below equal the scalar gains bit for bit on the same platform.
+    """
+    return np.power(x, np.full(x.shape, 2.0))
+
+
+def _best_split_for_feature(
+    col: np.ndarray,
+    g: np.ndarray,
+    h: np.ndarray,
+    G,
+    H,
+    lambda_reg: float,
+    min_samples_leaf: int,
+    min_child_weight: float,
+    gamma: float,
+) -> tuple[float, float]:
+    """Best (gain, threshold) for one feature of one node; ``(-inf, 0.0)`` if none.
+
+    A vectorised twin of the scalar scan that v8.1 was trained with, which ran a Python
+    loop over every sample of every node for every feature (~3.7 s per depth-3 tree on
+    133,882 cases, 798 s for the 200-tree member alone). It reproduces that scan's
+    arithmetic exactly -- the same ``np.argsort`` order, sequential accumulation
+    (``np.cumsum`` is a left-to-right add; ``a + (-b)`` is exactly ``a - b``), the same
+    expression order and ``pow`` for the gain, and the same first-maximum tie rule
+    (the scan replaced its best only on a strictly greater gain) -- so every tree, and
+    therefore every published v8.1 probability, is unchanged.
+
+    Preserved quirk (deliberately, for model identity): the scan started accumulating at
+    position ``min_samples_leaf - 1``, so the "left" statistics it scored omit the first
+    ``min_samples_leaf - 1`` sorted samples (and the "right" ones include them), while the
+    split it then applies sends those samples left. Correcting it changes the trees; that
+    is a model revision to be evaluated, not something to slip into a speed-up.
+    """
+    n_total = col.shape[0]
+    lo = int(min_samples_leaf)
+    hi = n_total - lo
+    if hi <= lo:
+        return -np.inf, 0.0
+    if lo < 1:
+        raise ValueError("min_samples_leaf must be >= 1")
+
+    order = np.argsort(col)
+    sorted_col = col[order]
+    step_g = g[order][lo - 1:hi - 1]
+    step_h = h[order][lo - 1:hi - 1]
+
+    g_left = np.cumsum(step_g)
+    h_left = np.cumsum(step_h)
+    g_right = np.cumsum(np.concatenate(([G], -step_g)))[1:]
+    h_right = np.cumsum(np.concatenate(([H - lambda_reg], -step_h)))[1:]
+
+    distinct = sorted_col[lo:hi] != sorted_col[lo - 1:hi - 1]
+    heavy_enough = ~((h_left < min_child_weight) | (h_right < min_child_weight))
+    gain = (
+        _pow2_like_scalar(g_left) / (h_left + lambda_reg)
+        + _pow2_like_scalar(g_right) / (h_right + lambda_reg)
+        - (G ** 2) / (H)
+    ) / 2.0 - gamma
+    # A NaN gain never won in the scalar scan (``nan > best`` is False).
+    eligible = distinct & heavy_enough & ~np.isnan(gain)
+    if not eligible.any():
+        return -np.inf, 0.0
+    candidates = np.where(eligible, gain, -np.inf)
+    k = int(np.argmax(candidates))  # first maximum == the scan's strict-">" winner
+    threshold = (sorted_col[lo - 1 + k] + sorted_col[lo + k]) / 2.0
+    return candidates[k], threshold
+
+
 def _build_tree_recursive(
     X: np.ndarray,
     gradients: np.ndarray,
@@ -340,42 +473,19 @@ def _build_tree_recursive(
     best_feat = -1
     best_thresh = 0.0
 
+    node_g = gradients[indices]
+    node_h = hessians[indices]
     for j in feature_subset:
-        col = X[indices, j]
-        sorted_idx = np.argsort(col)
-        sorted_g = gradients[indices[sorted_idx]]
-        sorted_h = hessians[indices[sorted_idx]]
-        sorted_col = col[sorted_idx]
-
-        G_left = 0.0
-        H_left = 0.0
-        G_right = G
-        H_right = H - lambda_reg
-
-        n_total = len(sorted_idx)
-
-        for i in range(min_samples_leaf, n_total - min_samples_leaf):
-            G_left += sorted_g[i - 1]
-            H_left += sorted_h[i - 1]
-            G_right -= sorted_g[i - 1]
-            H_right -= sorted_h[i - 1]
-
-            if sorted_col[i] == sorted_col[i - 1]:
-                continue
-
-            if H_left < min_child_weight or H_right < min_child_weight:
-                continue
-
-            gain = (
-                (G_left ** 2) / (H_left + lambda_reg)
-                + (G_right ** 2) / (H_right + lambda_reg)
-                - (G ** 2) / (H)
-            ) / 2.0 - gamma
-
-            if gain > best_gain:
-                best_gain = gain
-                best_feat = j
-                best_thresh = (sorted_col[i - 1] + sorted_col[i]) / 2.0
+        gain, thresh = _best_split_for_feature(
+            X[indices, j], node_g, node_h, G, H, lambda_reg,
+            min_samples_leaf, min_child_weight, gamma,
+        )
+        # Features are visited in order and a later one wins only on a strictly greater
+        # gain -- the scalar scan's cross-feature tie rule.
+        if gain > best_gain:
+            best_gain = gain
+            best_feat = j
+            best_thresh = thresh
 
     if best_gain <= 0 or best_feat < 0:
         return {"leaf": leaf_value}

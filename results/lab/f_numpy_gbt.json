@@ -1,0 +1,61 @@
+{
+ "exp": {
+  "name": "f_numpy_gbt",
+  "model": "numpy_gbt",
+  "blocks_from": "best",
+  "calibration": "platt",
+  "neg_per_pos": 30,
+  "save_preds": true,
+  "eval_dev": false,
+  "blocks": [
+   "P",
+   "E",
+   "H80"
+  ],
+  "drop": []
+ },
+ "n_features": 73,
+ "train_rows": 89125,
+ "train_pos": 2875,
+ "fit": {
+  "n_trees": 134,
+  "fit": {
+   "n_trees_used": 134,
+   "stopped_early": true,
+   "best_val_loss": 0.2482280113526611
+  }
+ },
+ "val": {
+  "auc": 0.9639910720653753,
+  "auc_ci": [
+   0.9552396302857062,
+   0.9704899879916808
+  ],
+  "pr_auc": 0.1178230202596065,
+  "brier": 0.0012107989029887037,
+  "bss": 0.06224879776562664,
+  "base_rate": 0.0012928443077170413,
+  "mean_forecast": 0.0012991118796087703,
+  "n": 1194266,
+  "pos": 1544,
+  "reliability": {
+   "predicted": [
+    0.0010544892975304402,
+    0.12640600470165295,
+    0.2018077214551127
+   ],
+   "observed": [
+    0.0009589441043814433,
+    0.17174753112924002,
+    1.0
+   ],
+   "counts": [
+    1191936,
+    2329,
+    1
+   ]
+  },
+  "auc_raw_score": 0.9641405494575029
+ },
+ "seconds": 509.6
+}

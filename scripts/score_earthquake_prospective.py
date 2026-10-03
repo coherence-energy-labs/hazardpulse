@@ -27,6 +27,7 @@ import numpy as np
 SRC = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC))
 
+from hazardpulse.core.metrics import average_precision, roc_auc  # noqa: E402
 from hazardpulse.earthquake.coherence_engine import grid_cell_to_latlon, latlon_to_grid_cell  # noqa: E402
 from hazardpulse.earthquake.prospective import (  # noqa: E402
     fetch_usgs_catalog_range,
@@ -39,63 +40,21 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPLAY_DIR = PROJECT_ROOT / "dist" / "data" / "replay"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "earthquake_prospective"
 
+# Estimators behind the published numbers (recorded in the summary so a reader can
+# tell these apart from the pre-2026-10 per-sample walk, which credited tied cells
+# by sort order and inflated the mean AUC 0.6564 -> 0.6972).
+AUC_ESTIMATOR = "mann_whitney_ties_half"
+PR_AUC_ESTIMATOR = "average_precision_ties_grouped"
+
 
 def compute_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
-    y_true = np.asarray(y_true, dtype=np.float64)
-    y_score = np.asarray(y_score, dtype=np.float64)
-    pos = np.sum(y_true == 1)
-    neg = np.sum(y_true == 0)
-    if pos == 0 or neg == 0:
-        return float("nan")
-
-    order = np.argsort(-y_score)
-    y_sorted = y_true[order]
-
-    tp = fp = 0.0
-    tp_prev = fp_prev = 0.0
-    auc = 0.0
-
-    for label in y_sorted:
-        if label == 1:
-            tp += 1.0
-        else:
-            fp += 1.0
-        tpr = tp / pos
-        fpr = fp / neg
-        auc += (fpr - fp_prev / neg) * (tpr + tp_prev / pos) / 2.0
-        tp_prev = tp
-        fp_prev = fp
-
-    return float(auc)
+    """Tie-aware ROC-AUC; invariant to row order (see hazardpulse.core.metrics)."""
+    return roc_auc(y_true, y_score)
 
 
 def compute_pr_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
-    y_true = np.asarray(y_true, dtype=np.float64)
-    y_score = np.asarray(y_score, dtype=np.float64)
-    pos = np.sum(y_true == 1)
-    if pos == 0:
-        return float("nan")
-
-    order = np.argsort(-y_score)
-    y_sorted = y_true[order]
-
-    tp = fp = 0.0
-    prev_recall = 0.0
-    prev_precision = 1.0
-    auc = 0.0
-
-    for label in y_sorted:
-        if label == 1:
-            tp += 1.0
-        else:
-            fp += 1.0
-        recall = tp / pos
-        precision = tp / max(tp + fp, 1.0)
-        auc += (recall - prev_recall) * (precision + prev_precision) / 2.0
-        prev_recall = recall
-        prev_precision = precision
-
-    return float(auc)
+    """Tie-aware average precision; invariant to row order."""
+    return average_precision(y_true, y_score)
 
 
 def brier_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
@@ -144,6 +103,24 @@ def matured_artifacts(artifacts: list[dict], score_as_of: dt.datetime) -> list[d
     return matured
 
 
+def forecast_grid(artifact: dict) -> np.ndarray | None:
+    """The full row-major probability grid of an artifact that publishes one, else None.
+
+    Operational-model artifacts (docs/EARTHQUAKE_FORECAST_PROGRAM.md) carry a probability
+    for every cell; older artifacts list active cells and default the rest.
+    """
+    grid = artifact.get("probability_grid")
+    if grid is None:
+        return None
+    domain = artifact["forecast_domain"]
+    if isinstance(grid, str):             # the scorer's compact form: comma-separated values
+        grid = [float(v) for v in grid.split(",")]
+    arr = np.asarray(grid, dtype=np.float64)
+    if arr.size != int(domain["n_lat"]) * int(domain["n_lon"]):
+        raise ValueError(f"{artifact.get('forecast_id')}: probability_grid has {arr.size} cells")
+    return arr
+
+
 def write_forecast_grid_csv(path: Path, artifact: dict) -> None:
     domain = artifact["forecast_domain"]
     n_lat = int(domain["n_lat"])
@@ -153,6 +130,9 @@ def write_forecast_grid_csv(path: Path, artifact: dict) -> None:
         (int(cell["row"]), int(cell["col"])): float(cell["probability"])
         for cell in artifact.get("active_cells", [])
     }
+    grid = forecast_grid(artifact)
+    if grid is not None:
+        active_probs = {divmod(i, n_lon): float(p) for i, p in enumerate(grid)}
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as handle:
@@ -226,13 +206,16 @@ def _accumulate_calibration(calib_acc: dict, y_score: np.ndarray, y_true: np.nda
             slot[1] += int(p)
 
 
-def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "earthquake") -> Path:
+def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "earthquake",
+                              model_version: str | None = None) -> Path:
     keys = sorted(calib_acc.keys())
     total = [int(calib_acc[k][0]) for k in keys]
     pos = [int(calib_acc[k][1]) for k in keys]
     n = int(sum(total))
     payload = {
         "hazard": hazard,
+        # the ONE model whose forecasts were pooled; fit_calibration binds the calibrator to it
+        "model_version": model_version,
         "n": n,
         "n_groups": len(keys),
         "base_rate": (sum(pos) / n) if n else 0.0,
@@ -277,16 +260,25 @@ def score_single_forecast(
     y_true = np.zeros(n_cells, dtype=np.float64)
     y_score = np.full(n_cells, default_probability, dtype=np.float64)
     count_vec = np.zeros(n_cells, dtype=np.int64)
+    active_mask = np.zeros(n_cells, dtype=bool)
 
     for row in range(n_lat):
         for col in range(n_lon):
             flat = row * n_lon + col
             y_score[flat] = cell_probs.get((row, col), default_probability)
+            active_mask[flat] = (row, col) in cell_probs
             count = cell_counts.get((row, col), 0)
             count_vec[flat] = count
             y_true[flat] = 1.0 if count > 0 else 0.0
 
-    if calib_acc is not None:
+    grid = forecast_grid(artifact)
+    if grid is not None:
+        # The operational model publishes every cell; score what it said, not a default.
+        y_score = grid
+
+    if calib_acc is not None and grid is not None:
+        _accumulate_calibration(calib_acc, grid, y_true)
+    elif calib_acc is not None:
         # Pool the RAW model score (not the deployed/calibrated one) so re-fitting
         # the calibrator never double-calibrates. Before any calibrator exists,
         # raw_probability is absent and equals probability.
@@ -341,6 +333,12 @@ def score_single_forecast(
         "n_negative_cells": int(n_cells - np.sum(y_true)),
         "auc": compute_auc(y_true, y_score),
         "pr_auc": compute_pr_auc(y_true, y_score),
+        # The grid AUC mostly measures "active vs inactive" (every inactive cell ties
+        # at default_probability). These two say how the model does where it actually
+        # forecasts: ranking among its own active cells, and how many target events
+        # fall in a cell it scored at all.
+        "auc_active_cells": compute_auc(y_true[active_mask], y_score[active_mask]),
+        "n_events_in_active_cells": int(count_vec[active_mask].sum()),
         "brier": brier_score(y_true, y_score),
         "poisson_log_likelihood": ll_model,
         "uniform_log_likelihood": ll_uniform,
@@ -348,6 +346,33 @@ def score_single_forecast(
         **top_hits,
     }
     return result
+
+
+def live_record_by_version(results: list[dict]) -> dict[str, dict]:
+    """The live record of EACH model version on its own. The pooled means above mix every version
+    that ever served; a page quoting them under the current model would show the replaced model's
+    record (2026-10: 600 matured windows, mean AUC 0.697, information gain -14.6 per event -- all
+    from eq_coherence_v1_0 -- beside the newly served C0)."""
+    groups: dict[str, list[dict]] = {}
+    for r in results:
+        groups.setdefault(str(r.get("model_version") or "unknown"), []).append(r)
+    out: dict[str, dict] = {}
+    for version, rs in groups.items():
+        aucs = [r["auc"] for r in rs if math.isfinite(r["auc"])]
+        active = [r["auc_active_cells"] for r in rs if math.isfinite(r["auc_active_cells"])]
+        n_events = sum(r["n_observed_events"] for r in rs)
+        out[version] = {
+            "n_matured_forecasts": len(rs),
+            "first_issued_at": min(r.get("issued_at", "") for r in rs) or None,
+            "last_issued_at": max(r.get("issued_at", "") for r in rs) or None,
+            "n_observed_events": int(n_events),
+            "mean_auc": float(np.mean(aucs)) if aucs else None,
+            "mean_auc_active_cells": float(np.mean(active)) if active else None,
+            "mean_brier": float(np.mean([r["brier"] for r in rs])),
+            "event_weighted_information_gain_per_event": float(
+                sum(r["poisson_log_likelihood"] - r["uniform_log_likelihood"] for r in rs) / max(1, n_events)),
+        }
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -421,6 +446,9 @@ def main(argv: list[str] | None = None) -> int:
             verbose=False,
         )
 
+        # A calibrator maps one model's scores: pool only the forecasts of the model that
+        # issued the most recent matured forecast (a model change starts a new pool).
+        calib_version = matured[-1].get("model_version")
         with open(per_forecast_path, "w", encoding="utf-8") as handle:
             for artifact in matured:
                 issued_at = parse_utc_datetime(artifact["issued_at"])
@@ -431,20 +459,31 @@ def main(argv: list[str] | None = None) -> int:
                     for event in observed_catalog
                     if issued_at <= parse_utc_datetime(event["time"]) < window_end
                 ]
+                pool = calib_acc if artifact.get("model_version") == calib_version else None
                 result = score_single_forecast(
-                    artifact, observed_events, output_dir, calib_acc=calib_acc)
+                    artifact, observed_events, output_dir, calib_acc=pool)
                 if result is None:
                     continue
+                result["model_version"] = artifact.get("model_version")
                 per_forecast_results.append(result)
                 handle.write(json.dumps(result) + "\n")
 
         if calib_acc is not None:
-            calib_path = write_calibration_dataset(output_dir, calib_acc, hazard="earthquake")
+            calib_path = write_calibration_dataset(output_dir, calib_acc, hazard="earthquake",
+                                                   model_version=calib_version)
             summary["calibration_dataset"] = str(calib_path)
+            summary["calibration_model_version"] = calib_version
             summary["calibration_n"] = int(sum(slot[0] for slot in calib_acc.values()))
 
         aucs = [result["auc"] for result in per_forecast_results if math.isfinite(result["auc"])]
         pr_aucs = [result["pr_auc"] for result in per_forecast_results if math.isfinite(result["pr_auc"])]
+        active_aucs = [
+            result["auc_active_cells"]
+            for result in per_forecast_results
+            if math.isfinite(result["auc_active_cells"])
+        ]
+        n_events_total = sum(result["n_observed_events"] for result in per_forecast_results)
+        n_events_active = sum(result["n_events_in_active_cells"] for result in per_forecast_results)
         briers = [result["brier"] for result in per_forecast_results]
         info_gains = [result["information_gain_per_event"] for result in per_forecast_results]
 
@@ -458,9 +497,16 @@ def main(argv: list[str] | None = None) -> int:
                 "total_observed_events": int(
                     sum(result["n_observed_events"] for result in per_forecast_results)
                 ),
+                "auc_estimator": AUC_ESTIMATOR,
+                "pr_auc_estimator": PR_AUC_ESTIMATOR,
                 "mean_auc": float(np.mean(aucs)) if aucs else None,
                 "median_auc": float(np.median(aucs)) if aucs else None,
                 "mean_pr_auc": float(np.mean(pr_aucs)) if pr_aucs else None,
+                "mean_auc_active_cells": float(np.mean(active_aucs)) if active_aucs else None,
+                "n_forecasts_with_active_cell_auc": len(active_aucs),
+                "fraction_events_in_active_cells": (
+                    float(n_events_active / n_events_total) if n_events_total else None
+                ),
                 "mean_brier": float(np.mean(briers)) if briers else None,
                 "mean_information_gain_per_event": (
                     float(np.mean(info_gains)) if info_gains else None
@@ -494,6 +540,7 @@ def main(argv: list[str] | None = None) -> int:
                 "top_20_hit_rate": float(
                     np.mean([result["top_20_hit"] for result in per_forecast_results])
                 ),
+                "by_model_version": live_record_by_version(per_forecast_results),
             }
         )
     else:

@@ -1,0 +1,93 @@
+{
+ "exp": {
+  "name": "v3_plus_W_ef2",
+  "model": "lgbm",
+  "params": {
+   "learning_rate": 0.03,
+   "num_leaves": 127,
+   "min_child_samples": 500,
+   "feature_fraction": 0.7,
+   "bagging_fraction": 0.6,
+   "lambda_l2": 1.0,
+   "min_split_gain": 0.0,
+   "max_depth": 10
+  },
+  "blocks": [
+   "P",
+   "E",
+   "H80",
+   "W"
+  ],
+  "calibration": "platt",
+  "neg_per_pos": 30,
+  "label": "storm_60_ef2",
+  "seed": 0,
+  "validation_auc": 0.96584,
+  "validation_bss": 0.0722
+ },
+ "rounds": 510,
+ "calibration": {
+  "method": "platt",
+  "a": 3.1273838265313256e+16,
+  "b": -1.0798345177636612e+16
+ },
+ "model_file": "C:\\Users\\Josh\\Projects\\hazardpulse\\.cache\\feature_store_v3\\_lab\\models\\v3_plus_W_ef2.lgbm.txt",
+ "refit_rows": 29822,
+ "refit_positives": 962,
+ "oof_2021_2024": {
+  "auc": 0.9161757826268123,
+  "auc_ci": [
+   0.9021375550667121,
+   0.9300199168735488
+  ],
+  "pr_auc": 0.010465889593298161,
+  "brier": 0.012789162903786037,
+  "bss": -67.90676243143743,
+  "base_rate": 0.0001856354444058508,
+  "mean_forecast": 0.012917293813438308,
+  "n": 5182200,
+  "pos": 962,
+  "reliability": {
+   "predicted": [
+    8.756510762696517e-27,
+    1.0
+   ],
+   "observed": [
+    2.912852914612356e-05,
+    0.012145204660890349
+   ],
+   "counts": [
+    5115260,
+    66940
+   ]
+  }
+ },
+ "final_2025": {
+  "auc": 0.9520796491339674,
+  "auc_ci": [
+   0.9196651045351623,
+   0.9723810217288127
+  ],
+  "pr_auc": 0.010400135840275814,
+  "brier": 0.011347796598178066,
+  "bss": -57.747265482377294,
+  "base_rate": 0.00019320030177342911,
+  "mean_forecast": 0.011508343327820775,
+  "n": 1469977,
+  "pos": 284,
+  "reliability": {
+   "predicted": [
+    8.756510762696519e-27,
+    1.0
+   ],
+   "observed": [
+    1.6516867851293134e-05,
+    0.01536915528758054
+   ],
+   "counts": [
+    1453060,
+    16917
+   ]
+  }
+ }
+}

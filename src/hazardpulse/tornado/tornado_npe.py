@@ -59,6 +59,12 @@ import numpy as np
 # ===================================================================
 
 
+def _engine_torsion_threshold() -> float:
+    from hazardpulse.tornado.coherence_engine import TORSION_SINGULARITY_THRESHOLD
+
+    return float(TORSION_SINGULARITY_THRESHOLD)
+
+
 # Default mode-specific uncertainty multipliers.
 _DEFAULT_MODE_UNCERTAINTY: dict[str, float] = {
     "OPERATIONAL": 1.0,
@@ -104,9 +110,14 @@ class TornadoNPEConfig:
     # grad_tau > 0.3: steep coherence gradient indicates a frontal boundary
     # where vorticity concentrates.
     singularity_grad_threshold: float = 0.3
-    # |torsion| > 0.05: shear-curl coupling exceeds background noise
-    # (Form 16 coupling term).
-    singularity_torsion_threshold: float = 0.05
+    # |torsion| above the coherence engine's condition-3 threshold: tilting
+    # of low-level horizontal vorticity by grad(tau) (Form 16 coupling).
+    # Shared with coherence_engine so the analytic model and the singularity
+    # count can never disagree about what "significant" means. (The old
+    # 0.05 was set against a torsion that was identically ~1e-8.)
+    singularity_torsion_threshold: float = dc_field(
+        default_factory=lambda: _engine_torsion_threshold()
+    )
     # Da > 5.0: Damkohler number indicating reaction-dominated regime
     # where coherence energy release outpaces diffusion.
     singularity_da_threshold: float = 5.0

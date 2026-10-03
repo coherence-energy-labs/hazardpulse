@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import csv
 import datetime as dt
-import io
 from typing import Iterator
-from urllib.parse import urlencode
 
+from hazardpulse.data import usgs_fdsn
 from hazardpulse.data.http import fetch_text
 
 
-USGS_API = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+USGS_API = usgs_fdsn.USGS_FDSN_EVENT_URL
 
 
 def parse_utc_datetime(text: str) -> dt.datetime:
@@ -46,27 +44,7 @@ def iter_monthly_windows(
     end: dt.datetime,
 ) -> Iterator[tuple[dt.datetime, dt.datetime]]:
     """Yield contiguous month-aligned windows spanning [start, end)."""
-    if start >= end:
-        return
-
-    cursor = start
-    while cursor < end:
-        if cursor.month == 12:
-            next_month = dt.datetime(
-                cursor.year + 1,
-                1,
-                1,
-                tzinfo=dt.timezone.utc,
-            )
-        else:
-            next_month = dt.datetime(
-                cursor.year,
-                cursor.month + 1,
-                1,
-                tzinfo=dt.timezone.utc,
-            )
-        yield cursor, min(next_month, end)
-        cursor = next_month
+    yield from usgs_fdsn.iter_monthly_windows(start, end)
 
 
 def fetch_usgs_catalog_range(
@@ -79,8 +57,9 @@ def fetch_usgs_catalog_range(
 ) -> list[dict]:
     """Fetch a USGS earthquake catalog over a time range.
 
-    The USGS CSV endpoint can truncate large queries, so this helper pulls
-    month-by-month and deduplicates by event id.
+    The USGS CSV endpoint silently truncates a query at its row limit, so this
+    pulls month by month and bisects any month whose response reaches the limit
+    (hazardpulse.data.usgs_fdsn.fetch_window); deduplicates by event id.
     """
     if start.tzinfo is None:
         start = start.replace(tzinfo=dt.timezone.utc)
@@ -91,18 +70,10 @@ def fetch_usgs_catalog_range(
 
     events_by_id: dict[str, dict] = {}
 
+    def _get(url: str) -> str:
+        return fetch_text(url, namespace=namespace, use_cache=False, refresh=True)
+
     for window_start, window_end in iter_monthly_windows(start, end):
-        params = urlencode(
-            {
-                "format": "csv",
-                "starttime": format_utc_z(window_start),
-                "endtime": format_utc_z(window_end),
-                "minmagnitude": f"{min_magnitude:.1f}",
-                "orderby": "time-asc",
-                "limit": 20000,
-            }
-        )
-        url = f"{USGS_API}?{params}"
         if verbose:
             print(
                 "  USGS fetch",
@@ -110,14 +81,13 @@ def fetch_usgs_catalog_range(
                 "to",
                 format_utc_z(window_end),
             )
-        raw = fetch_text(
-            url,
-            namespace=namespace,
-            use_cache=False,
-            refresh=True,
+        _, rows = usgs_fdsn.fetch_window(
+            window_start,
+            window_end,
+            min_magnitude=min_magnitude,
+            fetch_text=_get,
         )
-        reader = csv.DictReader(io.StringIO(raw))
-        for row in reader:
+        for row in rows:
             try:
                 event_id = row.get("id", "")
                 event = {

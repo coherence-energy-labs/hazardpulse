@@ -1,0 +1,68 @@
+{
+ "exp": {
+  "model": "lgbm",
+  "params": {
+   "learning_rate": 0.03,
+   "num_leaves": 31,
+   "min_child_samples": 500,
+   "feature_fraction": 0.85,
+   "bagging_fraction": 0.6,
+   "lambda_l2": 20.0,
+   "min_split_gain": 0.01,
+   "max_depth": 6
+  },
+  "blocks_from": "best",
+  "name": "e_seed2",
+  "calibration": "platt",
+  "neg_per_pos": 30,
+  "seed": 2,
+  "save_preds": true,
+  "eval_dev": false,
+  "blocks": [
+   "P"
+  ],
+  "drop": []
+ },
+ "n_features": 28,
+ "train_rows": 89125,
+ "train_pos": 2875,
+ "fit": {
+  "best_iteration": 433
+ },
+ "val": {
+  "auc": 0.961451991084129,
+  "auc_ci": [
+   0.9527182393441621,
+   0.9696132220750089
+  ],
+  "pr_auc": 0.12234964759958826,
+  "brier": 0.0012017011704212742,
+  "bss": 0.06929489735462946,
+  "base_rate": 0.0012928443077170413,
+  "mean_forecast": 0.0012965886278813782,
+  "n": 1194266,
+  "pos": 1544,
+  "reliability": {
+   "predicted": [
+    0.0009916368548420246,
+    0.13674347467125306,
+    0.23051191763230441,
+    0.32550766401209685
+   ],
+   "observed": [
+    0.0009473026208146467,
+    0.1448532836516069,
+    0.32247557003257327,
+    0.7142857142857143
+   ],
+   "counts": [
+    1191805,
+    2147,
+    307,
+    7
+   ]
+  },
+  "auc_raw_score": 0.9615778200832957
+ },
+ "seconds": 47.7
+}

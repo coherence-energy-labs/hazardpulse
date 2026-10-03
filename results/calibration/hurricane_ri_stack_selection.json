@@ -1,0 +1,4836 @@
+{
+ "phase": "select",
+ "generated_at": "2026-10-02T17:45:25Z",
+ "program": {
+  "path": "docs/HURRICANE_RI_PROGRAM.md",
+  "sha256": "1da04e39d5bb0fd3a66e518e0a4d7ee2a9e8eeaaf905048e4f75246d4770ad98",
+  "protocol_commit": "e351265df",
+  "amendments": [
+   "Amendment 1 (2026-10-02)",
+   "Amendment 2 (2026-10-02)"
+  ]
+ },
+ "script": {
+  "path": "scripts/hurricane_ri_stack.py",
+  "sha256": "e5f77cf67e9c2090239a009169fd78c8b1de30f582fa19927abbe4401402de83",
+  "ri_stack_sha256": "f7798ba6ae68805506f81f4d77aaae25b44d68b382d470c8dabd32bebd081faf"
+ },
+ "case_table": {
+  "path": "C:\\Users\\Josh\\Projects\\hazardpulse\\.cache\\hurricane_ri_stack\\cases_2020_2024.jsonl",
+  "sha256": "6d0823f362bdc8490510843ba2519ede45d9d0713c66c477d2e85fa64d3634f2",
+  "n": 4091,
+  "events": 238,
+  "storms": 200,
+  "by_season": {
+   "2020": {
+    "n": 996,
+    "events": 53,
+    "storms": 51
+   },
+   "2021": {
+    "n": 825,
+    "events": 36,
+    "storms": 40
+   },
+   "2022": {
+    "n": 740,
+    "events": 38,
+    "storms": 34
+   },
+   "2023": {
+    "n": 911,
+    "events": 62,
+    "storms": 42
+   },
+   "2024": {
+    "n": 619,
+    "events": 49,
+    "storms": 33
+   }
+  }
+ },
+ "truth": {
+  "definition": "IBTrACS USA_WIND(t+24 h) - USA_WIND(t) >= 30 kt on the SID whose fix at t carries the ATCF id",
+  "mapping": {
+   "2020": {
+    "no_ibtracs_fix_with_this_atcf_id": 241,
+    "case": 996,
+    "no_fix_at_t_plus_24h": 110,
+    "cycle_without_riod": 5
+   },
+   "2021": {
+    "case": 825,
+    "no_fix_at_t_plus_24h": 86,
+    "no_ibtracs_fix_with_this_atcf_id": 278,
+    "cycle_without_riod": 2
+   },
+   "2022": {
+    "no_ibtracs_fix_with_this_atcf_id": 219,
+    "cycle_without_riod": 4,
+    "case": 740,
+    "no_fix_at_t_plus_24h": 59,
+    "case_matched_by_position": 49
+   },
+   "2023": {
+    "case": 911,
+    "cycle_without_riod": 9,
+    "no_fix_at_t_plus_24h": 72,
+    "no_ibtracs_fix_with_this_atcf_id": 313
+   },
+   "2024": {
+    "no_ibtracs_fix_with_this_atcf_id": 185,
+    "case": 619,
+    "no_fix_at_t_plus_24h": 87,
+    "cycle_without_riod": 2
+   }
+  },
+  "agreement_with_v8_2_evaluation_labels": {
+   "2020": {
+    "cases": 996,
+    "overlap_with_v8_2_rows": 996,
+    "agree": 996,
+    "disagree": 0,
+    "events_ours_on_overlap": 53,
+    "events_v8_2_on_overlap": 53,
+    "disagreements": []
+   },
+   "2021": {
+    "cases": 825,
+    "overlap_with_v8_2_rows": 825,
+    "agree": 825,
+    "disagree": 0,
+    "events_ours_on_overlap": 36,
+    "events_v8_2_on_overlap": 36,
+    "disagreements": []
+   },
+   "2022": {
+    "cases": 740,
+    "overlap_with_v8_2_rows": 740,
+    "agree": 740,
+    "disagree": 0,
+    "events_ours_on_overlap": 38,
+    "events_v8_2_on_overlap": 38,
+    "disagreements": []
+   },
+   "2023": {
+    "cases": 911,
+    "overlap_with_v8_2_rows": 911,
+    "agree": 911,
+    "disagree": 0,
+    "events_ours_on_overlap": 62,
+    "events_v8_2_on_overlap": 62,
+    "disagreements": []
+   },
+   "2024": {
+    "cases": 619,
+    "overlap_with_v8_2_rows": 619,
+    "agree": 619,
+    "disagree": 0,
+    "events_ours_on_overlap": 49,
+    "events_v8_2_on_overlap": 49,
+    "disagreements": []
+   }
+  },
+  "edeck_position_vs_ibtracs_fix_km": {
+   "n": 4091,
+   "median": 11.119492664478061,
+   "p99": 100.21572055839265,
+   "max": 204.81382606505255,
+   "n_over_150_km": 7
+  }
+ },
+ "data": {
+  "edeck": {
+   "edeck_files": 204,
+   "edeck_index": {
+    "identical_repeats": 19,
+    "cycles": 5763
+   },
+   "edeck_files_without_ri": []
+  },
+  "ibtracs": {
+   "files": {
+    "NA": {
+     "path": "C:\\Users\\Josh\\Projects\\hazardpulse\\.cache\\ibtracs\\7d9f12b9caeb5cf006ba450df01a778d.csv",
+     "sha256": "c4dddb00bba350ecacc3a470c62e462592efd564e77ef3010e0056692f4b5ce7",
+     "bytes": 57074222
+    },
+    "EP": {
+     "path": "C:\\Users\\Josh\\Projects\\hazardpulse\\.cache\\ibtracs\\6e224209b753f44739fed55f462c3645.csv",
+     "sha256": "a16177c4a83147106fe1a10a7f534b65f8702b244c49788ca7db4f23cf8e8258",
+     "bytes": 45984214
+    }
+   },
+   "storms": 224,
+   "seasons": [
+    2020,
+    2021,
+    2022,
+    2023,
+    2024
+   ],
+   "last_time": "2024-12-31T23:59:59"
+  },
+  "downloads": {
+   "e": {
+    "2020": 52,
+    "2021": 40,
+    "2022": 36,
+    "2023": 42,
+    "2024": 34
+   },
+   "a": {
+    "2020": 52,
+    "2021": 40,
+    "2022": 36,
+    "2023": 42,
+    "2024": 34
+   }
+  },
+  "v82_operational_build": {
+   "built_CARQ": 4062,
+   "no_analysis_at_cycle": 20,
+   "built_AVNO": 9
+  },
+  "final_season_ibtracs_coverage_counts_only": {
+   "NA": {
+    "storms": 13,
+    "rows": 731,
+    "rows_with_nonempty_usa_wind": 731,
+    "atcf_ids": [
+     "AL012025",
+     "AL022025",
+     "AL032025",
+     "AL042025",
+     "AL052025",
+     "AL062025",
+     "AL072025",
+     "AL082025",
+     "AL092025",
+     "AL102025",
+     "AL112025",
+     "AL122025",
+     "AL132025"
+    ],
+    "usa_agency_rows": {
+     "hurdat_atl": 375,
+     "(blank: interpolated row)": 356
+    }
+   },
+   "EP": {
+    "storms": 20,
+    "rows": 975,
+    "rows_with_nonempty_usa_wind": 975,
+    "atcf_ids": [
+     "CP012025",
+     "CP022025",
+     "EP012025",
+     "EP022025",
+     "EP032025",
+     "EP042025",
+     "EP052025",
+     "EP062025",
+     "EP072025",
+     "EP082025",
+     "EP092025",
+     "EP102025",
+     "EP112025",
+     "EP122025",
+     "EP132025",
+     "EP142025",
+     "EP152025",
+     "EP162025",
+     "EP172025",
+     "EP182025"
+    ],
+    "usa_agency_rows": {
+     "hurdat_epa": 499,
+     "(blank: interpolated row)": 476
+    }
+   }
+  }
+ },
+ "model_c": {
+  "members_cache": "C:\\Users\\Josh\\Projects\\hazardpulse\\.cache\\hurricane_vs_ships\\model_c_members_85dec55dcda99f95.json",
+  "members_key": "85dec55dcda99f95a0b6059ab1494171e894af64daf1dad93ce287fce64a4cf8",
+  "reproduces_evaluation_candidate_C": {
+   "auc": 0.8474428424590938,
+   "brier": 0.04892222915271466,
+   "evaluation_auc": 0.8474428424590938,
+   "evaluation_brier": 0.04892222915271466,
+   "reproduces": true
+  },
+  "v82_label_key_conflicts": 0
+ },
+ "availability_patterns": {
+  "2020": {
+   "RIOD+RIOL+RIOB+DTOP+V82": 917,
+   "RIOD+RIOL+RIOB+V82": 79
+  },
+  "2021": {
+   "RIOD+RIOL+RIOB+DTOP+V82": 730,
+   "RIOD+RIOL+RIOB+V82": 95
+  },
+  "2022": {
+   "RIOD+RIOL+RIOB+DTOP+V82": 688,
+   "RIOD+RIOL+RIOB+V82": 32,
+   "RIOD+RIOL+RIOB+DTOP": 18,
+   "RIOD+RIOL+RIOB": 2
+  },
+  "2023": {
+   "RIOD+RIOL+RIOB+DTOP+V82": 874,
+   "RIOD+RIOL+RIOB+V82": 37
+  },
+  "2024": {
+   "RIOD+RIOL+RIOB+DTOP+V82": 580,
+   "RIOD+RIOL+RIOB+V82": 39
+  },
+  "all": {
+   "RIOD+RIOL+RIOB+DTOP+V82": 3789,
+   "RIOD+RIOL+RIOB+V82": 282,
+   "RIOD+RIOL+RIOB+DTOP": 18,
+   "RIOD+RIOL+RIOB": 2
+  }
+ },
+ "folds": [
+  {
+   "test_season": 2022,
+   "fit_seasons": [
+    2020,
+    2021
+   ],
+   "n_fit": 1821,
+   "events_fit": 89,
+   "n_test": 740,
+   "events_test": 38,
+   "storms_test": 34,
+   "fit_seasons_event_rate": 0.04887424492037342
+  },
+  {
+   "test_season": 2023,
+   "fit_seasons": [
+    2020,
+    2022
+   ],
+   "n_fit": 2561,
+   "events_fit": 127,
+   "n_test": 911,
+   "events_test": 62,
+   "storms_test": 42,
+   "fit_seasons_event_rate": 0.04959000390472472
+  },
+  {
+   "test_season": 2024,
+   "fit_seasons": [
+    2020,
+    2023
+   ],
+   "n_fit": 3472,
+   "events_fit": 189,
+   "n_test": 619,
+   "events_test": 49,
+   "storms_test": 33,
+   "fit_seasons_event_rate": 0.05443548387096774
+  }
+ ],
+ "candidates": {
+  "A": {
+   "kind": "raw_aid",
+   "aid": "DTOP",
+   "fallback": "RIOD",
+   "n_params": 0,
+   "description": "DTOPS raw (SHIPS-RII where DTOPS is missing: Amendment 1, item 1)",
+   "inputs": [],
+   "pooled": {
+    "n": 2270,
+    "events": 149,
+    "storms": 109,
+    "observed_rate": 0.06563876651982378,
+    "mean_forecast": 0.06747136563876653,
+    "log_loss": 0.16653508144384657,
+    "log_loss_ci95": [
+     0.13277849115522242,
+     0.20306666664149936
+    ],
+    "auc": 0.8988684582743989,
+    "auc_ci95": [
+     0.8668391435297876,
+     0.9270698045031414
+    ],
+    "brier": 0.048325462555066076,
+    "brier_ci95": [
+     0.037544316747740926,
+     0.05978068151175332
+    ],
+    "bss": 0.2144389464285663,
+    "bss_ci95": [
+     0.08900696456839954,
+     0.31167056800126064
+    ],
+    "bss_reference": "event rate of the case's fit seasons",
+    "brier_reference": 0.061517131399732354,
+    "calibration_intercept": -0.29702841607396185,
+    "calibration_slope": 0.8751618746717105,
+    "calibration_slope_ci95": [
+     0.7460309196583584,
+     1.0427430743311459
+    ],
+    "calibration_intercept_ci95": [
+     -0.7559122894499359,
+     0.1927912526386114
+    ],
+    "calibrated": true,
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 845,
+      "mean_forecast": 0.0,
+      "observed": 0.0035502958579881655,
+      "observed_95ci": [
+       0.0012081179307011167,
+       0.010386035795977687
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 411,
+      "mean_forecast": 0.009999999999999998,
+      "observed": 0.004866180048661801,
+      "observed_95ci": [
+       0.0013354700434012549,
+       0.01756716652920863
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 393,
+      "mean_forecast": 0.026743002544529267,
+      "observed": 0.02544529262086514,
+      "observed_95ci": [
+       0.01387881477096984,
+       0.046199564108663736
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 199,
+      "mean_forecast": 0.06592964824120603,
+      "observed": 0.08542713567839195,
+      "observed_95ci": [
+       0.054018894890678716,
+       0.13253849767573767
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 184,
+      "mean_forecast": 0.1346195652173913,
+      "observed": 0.15217391304347827,
+      "observed_95ci": [
+       0.10743025005566799,
+       0.21114454913684322
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 133,
+      "mean_forecast": 0.27684210526315783,
+      "observed": 0.3082706766917293,
+      "observed_95ci": [
+       0.23609463056882224,
+       0.3912116856391144
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 105,
+      "mean_forecast": 0.6079047619047618,
+      "observed": 0.45714285714285713,
+      "observed_95ci": [
+       0.3650537403603662,
+       0.5522572877759345
+      ],
+      "forecast_inside_ci": false
+     }
+    ],
+    "prob_range": {
+     "min": 0.0,
+     "p01": 0.0,
+     "median": 0.01,
+     "p99": 0.7330999999999994,
+     "max": 0.99
+    },
+    "logit_clip_for_log_loss": [
+     0.005,
+     0.995
+    ]
+   },
+   "per_season": {
+    "2022": {
+     "n": 740,
+     "events": 38,
+     "storms": 34,
+     "observed_rate": 0.051351351351351354,
+     "mean_forecast": 0.07667567567567568,
+     "log_loss": 0.1661443590740196,
+     "log_loss_ci95": [
+      0.11484084020365587,
+      0.2223183996204365
+     ],
+     "auc": 0.8782051282051282,
+     "auc_ci95": [
+      0.823595394792255,
+      0.9234560408714753
+     ],
+     "brier": 0.04982945945945946,
+     "brier_ci95": [
+      0.032216953593828444,
+      0.06902617253097496
+     ],
+     "bss": -0.02276111170619388,
+     "bss_ci95": [
+      -0.46589734184323917,
+      0.20024893012356984
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.04872052612201182,
+     "calibration_intercept": -1.0187119353612044,
+     "calibration_slope": 0.7196244776138656,
+     "calibration_slope_ci95": [
+      0.5719271956356771,
+      0.9271782770937081
+     ],
+     "calibration_intercept_ci95": [
+      -1.8156983131243492,
+      -0.27483259161380946
+     ],
+     "calibrated": false,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 321,
+       "mean_forecast": 0.0,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.011826071537635574
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 102,
+       "mean_forecast": 0.009999999999999998,
+       "observed": 0.00980392156862745,
+       "observed_95ci": [
+        0.0017326897927338984,
+        0.05345921962662484
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 103,
+       "mean_forecast": 0.02796116504854369,
+       "observed": 0.038834951456310676,
+       "observed_95ci": [
+        0.015203743545083998,
+        0.09562948995198081
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 57,
+       "mean_forecast": 0.06456140350877193,
+       "observed": 0.03508771929824561,
+       "observed_95ci": [
+        0.009675461353255768,
+        0.11921003804189491
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 54,
+       "mean_forecast": 0.13296296296296298,
+       "observed": 0.14814814814814814,
+       "observed_95ci": [
+        0.07702971308229412,
+        0.266003674652485
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 62,
+       "mean_forecast": 0.2846774193548387,
+       "observed": 0.24193548387096775,
+       "observed_95ci": [
+        0.15245763680948543,
+        0.3615274425324505
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 41,
+       "mean_forecast": 0.5934146341463415,
+       "observed": 0.1951219512195122,
+       "observed_95ci": [
+        0.10234315749205929,
+        0.34013882352556724
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.01,
+      "p99": 0.6944000000000006,
+      "max": 0.98
+     },
+     "logit_clip_for_log_loss": [
+      0.005,
+      0.995
+     ]
+    },
+    "2023": {
+     "n": 911,
+     "events": 62,
+     "storms": 42,
+     "observed_rate": 0.06805708013172337,
+     "mean_forecast": 0.06332601536772778,
+     "log_loss": 0.15736635661154477,
+     "log_loss_ci95": [
+      0.10148228126603477,
+      0.2189695877291765
+     ],
+     "auc": 0.9090295983889966,
+     "auc_ci95": [
+      0.8536951565552082,
+      0.9578776371132806
+     ],
+     "brier": 0.043662458836443464,
+     "brier_ci95": [
+      0.026570112289755355,
+      0.06125912814092817
+     ],
+     "bss": 0.3152742634201353,
+     "bss_ci95": [
+      0.1578737608315391,
+      0.4465853757900002
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.06376634688004135,
+     "calibration_intercept": 0.04305502989886369,
+     "calibration_slope": 0.9832610405049288,
+     "calibration_slope_ci95": [
+      0.7592716167208069,
+      1.3378223818217283
+     ],
+     "calibration_intercept_ci95": [
+      -0.5896832056951524,
+      0.7112867974277766
+     ],
+     "calibrated": true,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 299,
+       "mean_forecast": 0.0,
+       "observed": 0.006688963210702341,
+       "observed_95ci": [
+        0.0018362372183591338,
+        0.02405716712239194
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 196,
+       "mean_forecast": 0.009999999999999998,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.019223224794036875
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 181,
+       "mean_forecast": 0.026132596685082877,
+       "observed": 0.027624309392265192,
+       "observed_95ci": [
+        0.011855761918908421,
+        0.06302781407264324
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 83,
+       "mean_forecast": 0.06831325301204819,
+       "observed": 0.07228915662650602,
+       "observed_95ci": [
+        0.033549838417288064,
+        0.14886964717487056
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 75,
+       "mean_forecast": 0.13333333333333333,
+       "observed": 0.16,
+       "observed_95ci": [
+        0.09396421323774289,
+        0.25916915797745316
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 38,
+       "mean_forecast": 0.27789473684210525,
+       "observed": 0.34210526315789475,
+       "observed_95ci": [
+        0.21212220026458956,
+        0.5010818837092545
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 39,
+       "mean_forecast": 0.6351282051282052,
+       "observed": 0.6153846153846154,
+       "observed_95ci": [
+        0.45898781310078474,
+        0.7510883745299295
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.01,
+      "p99": 0.7579999999999996,
+      "max": 0.99
+     },
+     "logit_clip_for_log_loss": [
+      0.005,
+      0.995
+     ]
+    },
+    "2024": {
+     "n": 619,
+     "events": 49,
+     "storms": 33,
+     "observed_rate": 0.0791599353796446,
+     "mean_forecast": 0.06256865912762521,
+     "log_loss": 0.18049605539521804,
+     "log_loss_ci95": [
+      0.11637588962633512,
+      0.253749960138842
+     ],
+     "auc": 0.9077157178660938,
+     "auc_ci95": [
+      0.8401676480021995,
+      0.9560577806373954
+     ],
+     "brier": 0.05339014539579967,
+     "brier_ci95": [
+      0.031018366520562956,
+      0.07714090318539726
+     ],
+     "bss": 0.2736522677786335,
+     "bss_ci95": [
+      0.08537663007250032,
+      0.4139631625147113
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.07350493851273998,
+     "calibration_intercept": 0.35923378674352685,
+     "calibration_slope": 1.022270758483024,
+     "calibration_slope_ci95": [
+      0.739978057920944,
+      1.4663271152950708
+     ],
+     "calibration_intercept_ci95": [
+      -0.6198902532418952,
+      1.3278486427636667
+     ],
+     "calibrated": true,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 225,
+       "mean_forecast": 0.0,
+       "observed": 0.0044444444444444444,
+       "observed_95ci": [
+        0.0007849646791219054,
+        0.024741862611021147
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 113,
+       "mean_forecast": 0.009999999999999998,
+       "observed": 0.008849557522123894,
+       "observed_95ci": [
+        0.0015638358136017966,
+        0.04843205606052523
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 109,
+       "mean_forecast": 0.02660550458715596,
+       "observed": 0.009174311926605505,
+       "observed_95ci": [
+        0.0016212895577145392,
+        0.050146852687698494
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 59,
+       "mean_forecast": 0.06389830508474577,
+       "observed": 0.15254237288135594,
+       "observed_95ci": [
+        0.08238371089067363,
+        0.26518223268810226
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 55,
+       "mean_forecast": 0.13800000000000004,
+       "observed": 0.14545454545454545,
+       "observed_95ci": [
+        0.07559199016771778,
+        0.2616116208829674
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 33,
+       "mean_forecast": 0.26090909090909087,
+       "observed": 0.3939393939393939,
+       "observed_95ci": [
+        0.24682882231508207,
+        0.5631685719348962
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 25,
+       "mean_forecast": 0.5892000000000001,
+       "observed": 0.64,
+       "observed_95ci": [
+        0.44518154601046633,
+        0.7975234356826436
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.01,
+      "p99": 0.6782000000000006,
+      "max": 0.98
+     },
+     "logit_clip_for_log_loss": [
+      0.005,
+      0.995
+     ]
+    }
+   },
+   "patterns_by_season": {
+    "2022": {
+     "used": {
+      "DTOP": 706,
+      "RIOD": 34
+     },
+     "fallback_cycles": 34
+    },
+    "2023": {
+     "used": {
+      "RIOD": 37,
+      "DTOP": 874
+     },
+     "fallback_cycles": 37
+    },
+    "2024": {
+     "used": {
+      "DTOP": 580,
+      "RIOD": 39
+     },
+     "fallback_cycles": 39
+    }
+   },
+   "fits_by_fold": {}
+  },
+  "B": {
+   "kind": "raw_aid",
+   "aid": "RIOD",
+   "fallback": null,
+   "n_params": 0,
+   "description": "SHIPS-RII raw",
+   "inputs": [],
+   "pooled": {
+    "n": 2270,
+    "events": 149,
+    "storms": 109,
+    "observed_rate": 0.06563876651982378,
+    "mean_forecast": 0.1123920704845815,
+    "log_loss": 0.1949819021943248,
+    "log_loss_ci95": [
+     0.16871143626802818,
+     0.2235296507655271
+    ],
+    "auc": 0.8805220406987966,
+    "auc_ci95": [
+     0.8420185536535587,
+     0.9112113209645947
+    ],
+    "brier": 0.052935726872246694,
+    "brier_ci95": [
+     0.04252989521322983,
+     0.06418700216660421
+    ],
+    "bss": 0.13949617500407363,
+    "bss_ci95": [
+     -0.015985017307859055,
+     0.2514862935742813
+    ],
+    "bss_reference": "event rate of the case's fit seasons",
+    "brier_reference": 0.061517131399732354,
+    "calibration_intercept": -0.4466896587117008,
+    "calibration_slope": 1.2123602478476987,
+    "calibration_slope_ci95": [
+     0.9541973639706415,
+     1.5624654242878049
+    ],
+    "calibration_intercept_ci95": [
+     -0.9734724002920707,
+     0.1732026227274137
+    ],
+    "calibrated": false,
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 716,
+      "mean_forecast": 0.0,
+      "observed": 0.002793296089385475,
+      "observed_95ci": [
+       0.000766341016118932,
+       0.010127166666682397
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 47,
+      "mean_forecast": 0.030000000000000002,
+      "observed": 0.0,
+      "observed_95ci": [
+       6.938893903907228e-18,
+       0.0755601711983887
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 449,
+      "mean_forecast": 0.07481069042316257,
+      "observed": 0.017817371937639197,
+      "observed_95ci": [
+       0.009055269758731303,
+       0.03476049275072012
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 699,
+      "mean_forecast": 0.132274678111588,
+      "observed": 0.04721030042918455,
+      "observed_95ci": [
+       0.03381111885494423,
+       0.06555920868400625
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 253,
+      "mean_forecast": 0.26956521739130435,
+      "observed": 0.22924901185770752,
+      "observed_95ci": [
+       0.18173098942055643,
+       0.28486632191841665
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 106,
+      "mean_forecast": 0.5610377358490567,
+      "observed": 0.4528301886792453,
+      "observed_95ci": [
+       0.3613756390040924,
+       0.5475841722149721
+      ],
+      "forecast_inside_ci": false
+     }
+    ],
+    "prob_range": {
+     "min": 0.0,
+     "p01": 0.0,
+     "median": 0.09,
+     "p99": 0.6530999999999995,
+     "max": 0.99
+    },
+    "logit_clip_for_log_loss": [
+     0.005,
+     0.995
+    ]
+   },
+   "per_season": {
+    "2022": {
+     "n": 740,
+     "events": 38,
+     "storms": 34,
+     "observed_rate": 0.051351351351351354,
+     "mean_forecast": 0.10905405405405406,
+     "log_loss": 0.18326646974770627,
+     "log_loss_ci95": [
+      0.13953920915082024,
+      0.23277149667331773
+     ],
+     "auc": 0.8526203328834908,
+     "auc_ci95": [
+      0.7420927899806518,
+      0.9184860375870956
+     ],
+     "brier": 0.04989594594594595,
+     "brier_ci95": [
+      0.03327713739227749,
+      0.06828867074793842
+     ],
+     "bss": -0.02412576212725015,
+     "bss_ci95": [
+      -0.5191678313345507,
+      0.1944347148653641
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.04872052612201182,
+     "calibration_intercept": -0.9869260164497637,
+     "calibration_slope": 1.012472133994283,
+     "calibration_slope_ci95": [
+      0.6675502979664173,
+      1.4930100358178102
+     ],
+     "calibration_intercept_ci95": [
+      -1.9174531246750688,
+      -0.10783670724785552
+     ],
+     "calibrated": false,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 260,
+       "mean_forecast": 0.0,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.014560251302296528
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 20,
+       "mean_forecast": 0.030000000000000006,
+       "observed": 0.0,
+       "observed_95ci": [
+        -1.3877787807814457e-17,
+        0.16113012549493322
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 159,
+       "mean_forecast": 0.07534591194968554,
+       "observed": 0.031446540880503145,
+       "observed_95ci": [
+        0.013505186979646953,
+        0.07149520604031848
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 171,
+       "mean_forecast": 0.13596491228070176,
+       "observed": 0.03508771929824561,
+       "observed_95ci": [
+        0.01617817654700624,
+        0.07442726289074769
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 91,
+       "mean_forecast": 0.251978021978022,
+       "observed": 0.18681318681318682,
+       "observed_95ci": [
+        0.12003656211187944,
+        0.27896134597908484
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 39,
+       "mean_forecast": 0.5625641025641025,
+       "observed": 0.2564102564102564,
+       "observed_95ci": [
+        0.14568625843452188,
+        0.410819567678415
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.08,
+      "p99": 0.6461000000000001,
+      "max": 0.9
+     },
+     "logit_clip_for_log_loss": [
+      0.005,
+      0.995
+     ]
+    },
+    "2023": {
+     "n": 911,
+     "events": 62,
+     "storms": 42,
+     "observed_rate": 0.06805708013172337,
+     "mean_forecast": 0.10765093304061472,
+     "log_loss": 0.17642804276539018,
+     "log_loss_ci95": [
+      0.13970179677764355,
+      0.21256614315766728
+     ],
+     "auc": 0.9230688855959573,
+     "auc_ci95": [
+      0.8721167088895021,
+      0.9603083870451654
+     ],
+     "brier": 0.045472338090010986,
+     "brier_ci95": [
+      0.03104596465411859,
+      0.05961928744452841
+     ],
+     "bss": 0.28689127863080277,
+     "bss_ci95": [
+      0.07503634249847917,
+      0.42367813954722483
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.06376634688004135,
+     "calibration_intercept": 0.41943561385810674,
+     "calibration_slope": 1.7423147005229471,
+     "calibration_slope_ci95": [
+      1.3042866656548944,
+      2.3970596554730648
+     ],
+     "calibration_intercept_ci95": [
+      -0.3979659525464585,
+      1.401281680644907
+     ],
+     "calibrated": false,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 271,
+       "mean_forecast": 0.0,
+       "observed": 0.0036900369003690036,
+       "observed_95ci": [
+        0.000651662605302231,
+        0.02060276176131476
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 17,
+       "mean_forecast": 0.033529411764705884,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.18432366037156456
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 201,
+       "mean_forecast": 0.07422885572139304,
+       "observed": 0.004975124378109453,
+       "observed_95ci": [
+        0.0008787495223456909,
+        0.02763889533104346
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 307,
+       "mean_forecast": 0.1306514657980456,
+       "observed": 0.04560260586319218,
+       "observed_95ci": [
+        0.02735574469848909,
+        0.07508099478554395
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 83,
+       "mean_forecast": 0.2730120481927711,
+       "observed": 0.27710843373493976,
+       "observed_95ci": [
+        0.19231794359413656,
+        0.381618971432763
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 32,
+       "mean_forecast": 0.6190625000000001,
+       "observed": 0.71875,
+       "observed_95ci": [
+        0.546251630618882,
+        0.8443559315435214
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.09,
+      "p99": 0.6779999999999996,
+      "max": 0.99
+     },
+     "logit_clip_for_log_loss": [
+      0.005,
+      0.995
+     ]
+    },
+    "2024": {
+     "n": 619,
+     "events": 49,
+     "storms": 33,
+     "observed_rate": 0.0791599353796446,
+     "mean_forecast": 0.12336025848142165,
+     "log_loss": 0.2362936727117031,
+     "log_loss_ci95": [
+      0.17857006370045186,
+      0.3056520418409046
+     ],
+     "auc": 0.8468850698174006,
+     "auc_ci95": [
+      0.7755299926383807,
+      0.9031671571170696
+     ],
+     "brier": 0.06755379644588046,
+     "brier_ci95": [
+      0.044517907322464766,
+      0.09562354161229518
+     ],
+     "bss": 0.08096247935542544,
+     "bss_ci95": [
+      -0.22581570507797438,
+      0.24627321630574117
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.07350493851273998,
+     "calibration_intercept": -0.5917995946129324,
+     "calibration_slope": 1.0021165682533713,
+     "calibration_slope_ci95": [
+      0.6061751731169388,
+      1.8307070248712491
+     ],
+     "calibration_intercept_ci95": [
+      -1.526561910597871,
+      0.6359024678921114
+     ],
+     "calibrated": false,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 185,
+       "mean_forecast": 0.0,
+       "observed": 0.005405405405405406,
+       "observed_95ci": [
+        0.0009548003385717804,
+        0.0299790616918283
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 10,
+       "mean_forecast": 0.024,
+       "observed": 0.0,
+       "observed_95ci": [
+        -2.7755575615628914e-17,
+        0.2775401687666166
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 89,
+       "mean_forecast": 0.07516853932584269,
+       "observed": 0.02247191011235955,
+       "observed_95ci": [
+        0.006184269063094168,
+        0.07827786859933303
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 221,
+       "mean_forecast": 0.1316742081447964,
+       "observed": 0.058823529411764705,
+       "observed_95ci": [
+        0.03469521616064434,
+        0.09802755400288415
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 79,
+       "mean_forecast": 0.2862025316455696,
+       "observed": 0.22784810126582278,
+       "observed_95ci": [
+        0.14926656041627734,
+        0.33167055330436546
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 35,
+       "mean_forecast": 0.5062857142857142,
+       "observed": 0.42857142857142855,
+       "observed_95ci": [
+        0.27984333081678914,
+        0.5914287074102662
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.1,
+      "p99": 0.5528000000000021,
+      "max": 0.91
+     },
+     "logit_clip_for_log_loss": [
+      0.005,
+      0.995
+     ]
+    }
+   },
+   "patterns_by_season": {
+    "2022": {
+     "used": {
+      "RIOD": 740
+     },
+     "fallback_cycles": 0
+    },
+    "2023": {
+     "used": {
+      "RIOD": 911
+     },
+     "fallback_cycles": 0
+    },
+    "2024": {
+     "used": {
+      "RIOD": 619
+     },
+     "fallback_cycles": 0
+    }
+   },
+   "fits_by_fold": {}
+  },
+  "C": {
+   "kind": "raw_aid",
+   "aid": "RIOC",
+   "fallback": "RIOD",
+   "n_params": 0,
+   "description": "RIOC raw, NOAA's RI consensus (SHIPS-RII where RIOC is missing)",
+   "inputs": [],
+   "pooled": {
+    "n": 2270,
+    "events": 149,
+    "storms": 109,
+    "observed_rate": 0.06563876651982378,
+    "mean_forecast": 0.07133920704845814,
+    "log_loss": 0.18007159436837025,
+    "log_loss_ci95": [
+     0.14716671328877895,
+     0.21464895570608183
+    ],
+    "auc": 0.8721130022877648,
+    "auc_ci95": [
+     0.8342967510160101,
+     0.9023576041467394
+    ],
+    "brier": 0.05102176211453745,
+    "brier_ci95": [
+     0.03909199770602493,
+     0.0637370375713849
+    ],
+    "bss": 0.17060888644168104,
+    "bss_ci95": [
+     0.07965977293467255,
+     0.2489025106508766
+    ],
+    "bss_reference": "event rate of the case's fit seasons",
+    "brier_reference": 0.061517131399732354,
+    "calibration_intercept": 0.06124164554921599,
+    "calibration_slope": 1.103951420589654,
+    "calibration_slope_ci95": [
+     0.9179223197864633,
+     1.343440822290133
+    ],
+    "calibration_intercept_ci95": [
+     -0.4826391676388377,
+     0.6833366001797819
+    ],
+    "calibrated": true,
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 594,
+      "mean_forecast": 0.0,
+      "observed": 0.0016835016835016834,
+      "observed_95ci": [
+       0.00029723357878378657,
+       0.009473916505118037
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 106,
+      "mean_forecast": 0.009999999999999998,
+      "observed": 0.0,
+      "observed_95ci": [
+       -3.469446951953614e-18,
+       0.034973998922084165
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 553,
+      "mean_forecast": 0.03074141048824593,
+      "observed": 0.018083182640144666,
+      "observed_95ci": [
+       0.009851416400625338,
+       0.0329643502374994
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 549,
+      "mean_forecast": 0.063224043715847,
+      "observed": 0.04007285974499089,
+      "observed_95ci": [
+       0.026610038432474847,
+       0.05992758825842538
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 251,
+      "mean_forecast": 0.13657370517928288,
+      "observed": 0.17131474103585656,
+      "observed_95ci": [
+       0.12974411801617058,
+       0.22279487090871453
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 166,
+      "mean_forecast": 0.2730120481927711,
+      "observed": 0.2891566265060241,
+      "observed_95ci": [
+       0.22557426005414632,
+       0.3622770084218924
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 51,
+      "mean_forecast": 0.5798039215686275,
+      "observed": 0.49019607843137253,
+      "observed_95ci": [
+       0.35857262142306195,
+       0.623193045515904
+      ],
+      "forecast_inside_ci": true
+     }
+    ],
+    "prob_range": {
+     "min": 0.0,
+     "p01": 0.0,
+     "median": 0.04,
+     "p99": 0.59,
+     "max": 0.84
+    },
+    "logit_clip_for_log_loss": [
+     0.005,
+     0.995
+    ]
+   },
+   "per_season": {
+    "2022": {
+     "n": 740,
+     "events": 38,
+     "storms": 34,
+     "observed_rate": 0.051351351351351354,
+     "mean_forecast": 0.07401351351351351,
+     "log_loss": 0.17327172940718474,
+     "log_loss_ci95": [
+      0.11827754118276619,
+      0.23863508783800128
+     ],
+     "auc": 0.8312902983955616,
+     "auc_ci95": [
+      0.7388152000768998,
+      0.8919274622857711
+     ],
+     "brier": 0.04824094594594595,
+     "brier_ci95": [
+      0.029457579225177263,
+      0.0717606332213988
+     ],
+     "bss": 0.009843493374124268,
+     "bss_ci95": [
+      -0.3115124562053442,
+      0.15064249763070256
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.04872052612201182,
+     "calibration_intercept": -0.8415852354644348,
+     "calibration_slope": 0.8070619006932677,
+     "calibration_slope_ci95": [
+      0.5544197701435248,
+      1.098615971095666
+     ],
+     "calibration_intercept_ci95": [
+      -1.8290681368440396,
+      0.04800712048499726
+     ],
+     "calibrated": true,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 229,
+       "mean_forecast": 0.0,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.016498769979247693
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 30,
+       "mean_forecast": 0.010000000000000002,
+       "observed": 0.0,
+       "observed_95ci": [
+        -1.3877787807814457e-17,
+        0.113517091390478
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 160,
+       "mean_forecast": 0.0311875,
+       "observed": 0.025,
+       "observed_95ci": [
+        0.009763834597428894,
+        0.06251085022010217
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 159,
+       "mean_forecast": 0.06314465408805031,
+       "observed": 0.031446540880503145,
+       "observed_95ci": [
+        0.013505186979646953,
+        0.07149520604031848
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 85,
+       "mean_forecast": 0.1357647058823529,
+       "observed": 0.18823529411764706,
+       "observed_95ci": [
+        0.11932042110303412,
+        0.2841122050540815
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 53,
+       "mean_forecast": 0.26660377358490567,
+       "observed": 0.11320754716981132,
+       "observed_95ci": [
+        0.052929589110686695,
+        0.22576770301339144
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 24,
+       "mean_forecast": 0.57375,
+       "observed": 0.2916666666666667,
+       "observed_95ci": [
+        0.14914460334164278,
+        0.49168063658709704
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.04,
+      "p99": 0.6522000000000003,
+      "max": 0.84
+     },
+     "logit_clip_for_log_loss": [
+      0.005,
+      0.995
+     ]
+    },
+    "2023": {
+     "n": 911,
+     "events": 62,
+     "storms": 42,
+     "observed_rate": 0.06805708013172337,
+     "mean_forecast": 0.06362239297475303,
+     "log_loss": 0.1637397494383607,
+     "log_loss_ci95": [
+      0.11560166856625109,
+      0.2143985980087586
+     ],
+     "auc": 0.9069398533378927,
+     "auc_ci95": [
+      0.8447514355063835,
+      0.9493846892067451
+     ],
+     "brier": 0.04546630076838639,
+     "brier_ci95": [
+      0.028599984322954852,
+      0.06380530208679495
+     ],
+     "bss": 0.2869859574374145,
+     "bss_ci95": [
+      0.1350758192820346,
+      0.40396022179290625
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.06376634688004135,
+     "calibration_intercept": 1.2004480816982732,
+     "calibration_slope": 1.5789712634367414,
+     "calibration_slope_ci95": [
+      1.2413720291232682,
+      1.9811574641196454
+     ],
+     "calibration_intercept_ci95": [
+      0.27945975133550366,
+      1.9883671493880737
+     ],
+     "calibrated": false,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 218,
+       "mean_forecast": 0.0,
+       "observed": 0.0045871559633027525,
+       "observed_95ci": [
+        0.0008101842766654894,
+        0.02552211769014326
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 44,
+       "mean_forecast": 0.010000000000000002,
+       "observed": 0.0,
+       "observed_95ci": [
+        6.938893903907228e-18,
+        0.08029831778201396
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 269,
+       "mean_forecast": 0.03003717472118959,
+       "observed": 0.011152416356877323,
+       "observed_95ci": [
+        0.0037998714958330237,
+        0.032270874314190075
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 222,
+       "mean_forecast": 0.0637837837837838,
+       "observed": 0.04054054054054054,
+       "observed_95ci": [
+        0.021472458952407104,
+        0.07523957284332938
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 89,
+       "mean_forecast": 0.13426966292134832,
+       "observed": 0.15730337078651685,
+       "observed_95ci": [
+        0.09607722097921384,
+        0.24688972487264566
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 55,
+       "mean_forecast": 0.27090909090909093,
+       "observed": 0.4,
+       "observed_95ci": [
+        0.28118303786433585,
+        0.5318743908935498
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 14,
+       "mean_forecast": 0.6021428571428571,
+       "observed": 0.9285714285714286,
+       "observed_95ci": [
+        0.6853073044604219,
+        0.9872781138877085
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.04,
+      "p99": 0.4989999999999998,
+      "max": 0.77
+     },
+     "logit_clip_for_log_loss": [
+      0.005,
+      0.995
+     ]
+    },
+    "2024": {
+     "n": 619,
+     "events": 49,
+     "storms": 33,
+     "observed_rate": 0.0791599353796446,
+     "mean_forecast": 0.07949919224555736,
+     "log_loss": 0.2122367168280083,
+     "log_loss_ci95": [
+      0.144907667185425,
+      0.28004217829816475
+     ],
+     "auc": 0.8600429645542428,
+     "auc_ci95": [
+      0.7875964882757448,
+      0.9113092016273797
+     ],
+     "brier": 0.06252229402261714,
+     "brier_ci95": [
+      0.03730074616857615,
+      0.08891937441817165
+     ],
+     "bss": 0.14941369535625582,
+     "bss_ci95": [
+      0.009213629631484262,
+      0.23412201598941285
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.07350493851273998,
+     "calibration_intercept": 0.08651381707510902,
+     "calibration_slope": 1.0611175464917124,
+     "calibration_slope_ci95": [
+      0.7688738604120765,
+      1.588788883647176
+     ],
+     "calibration_intercept_ci95": [
+      -0.7995795963930784,
+      1.2726732113554877
+     ],
+     "calibrated": true,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 147,
+       "mean_forecast": 0.0,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.025467775467775466
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 32,
+       "mean_forecast": 0.01,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.1071827150573635
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 124,
+       "mean_forecast": 0.03169354838709677,
+       "observed": 0.024193548387096774,
+       "observed_95ci": [
+        0.008261469015465258,
+        0.06872129715767399
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 168,
+       "mean_forecast": 0.06255952380952381,
+       "observed": 0.047619047619047616,
+       "observed_95ci": [
+        0.02432370248475172,
+        0.09114077177526447
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 77,
+       "mean_forecast": 0.14012987012987013,
+       "observed": 0.16883116883116883,
+       "observed_95ci": [
+        0.1014057303066853,
+        0.2677309517975779
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 58,
+       "mean_forecast": 0.28086206896551724,
+       "observed": 0.3448275862068966,
+       "observed_95ci": [
+        0.23560916371859544,
+        0.4733246284213233
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 13,
+       "mean_forecast": 0.566923076923077,
+       "observed": 0.38461538461538464,
+       "observed_95ci": [
+        0.17709446581236818,
+        0.6447751902773146
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.05,
+      "p99": 0.576400000000001,
+      "max": 0.82
+     },
+     "logit_clip_for_log_loss": [
+      0.005,
+      0.995
+     ]
+    }
+   },
+   "patterns_by_season": {
+    "2022": {
+     "used": {
+      "RIOC": 740
+     },
+     "fallback_cycles": 0
+    },
+    "2023": {
+     "used": {
+      "RIOC": 911
+     },
+     "fallback_cycles": 0
+    },
+    "2024": {
+     "used": {
+      "RIOC": 619
+     },
+     "fallback_cycles": 0
+    }
+   },
+   "fits_by_fold": {}
+  },
+  "D": {
+   "kind": "logit_pool",
+   "basin": false,
+   "n_params": 5,
+   "description": "logistic pool of logit RIOD, RIOL, RIOB, DTOP + intercept, per availability pattern",
+   "inputs": [
+    "RIOD",
+    "RIOL",
+    "RIOB",
+    "DTOP"
+   ],
+   "pooled": {
+    "n": 2270,
+    "events": 149,
+    "storms": 109,
+    "observed_rate": 0.06563876651982378,
+    "mean_forecast": 0.061501598894803035,
+    "log_loss": 0.16150167589575942,
+    "log_loss_ci95": [
+     0.12745791279317042,
+     0.19738534161296323
+    ],
+    "auc": 0.9046052735666663,
+    "auc_ci95": [
+     0.8731525139381868,
+     0.9308689279629775
+    ],
+    "brier": 0.04697816577494924,
+    "brier_ci95": [
+     0.03595617743412762,
+     0.058674198070618175
+    ],
+    "bss": 0.23634011037202507,
+    "bss_ci95": [
+     0.1307196739994884,
+     0.32359737072583594
+    ],
+    "bss_reference": "event rate of the case's fit seasons",
+    "brier_reference": 0.061517131399732354,
+    "calibration_intercept": -0.09557808168202775,
+    "calibration_slope": 0.8904309873303,
+    "calibration_slope_ci95": [
+     0.7560282193626235,
+     1.0606835624718232
+    ],
+    "calibration_intercept_ci95": [
+     -0.5515151501614614,
+     0.3780814216167809
+    ],
+    "calibrated": true,
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 1089,
+      "mean_forecast": 0.0033316176165386706,
+      "observed": 0.0036730945821854912,
+      "observed_95ci": [
+       0.001429270623132797,
+       0.009406334463642816
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 308,
+      "mean_forecast": 0.014485688948463036,
+      "observed": 0.01948051948051948,
+      "observed_95ci": [
+       0.008957808041503312,
+       0.041842341778148724
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 342,
+      "mean_forecast": 0.03170290449584643,
+      "observed": 0.03508771929824561,
+      "observed_95ci": [
+       0.020183389099730702,
+       0.060320517891215425
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 180,
+      "mean_forecast": 0.07157898067837962,
+      "observed": 0.08888888888888889,
+      "observed_95ci": [
+       0.05545412412712826,
+       0.1395050146096974
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 132,
+      "mean_forecast": 0.13942395822799022,
+      "observed": 0.20454545454545456,
+      "observed_95ci": [
+       0.14455505203887561,
+       0.28124676419414874
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 136,
+      "mean_forecast": 0.28140935079009327,
+      "observed": 0.3088235294117647,
+      "observed_95ci": [
+       0.23732037486900903,
+       0.3908303327887981
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 83,
+      "mean_forecast": 0.6158633934630175,
+      "observed": 0.5060240963855421,
+      "observed_95ci": [
+       0.4006020980792863,
+       0.6109131204335001
+      ],
+      "forecast_inside_ci": false
+     }
+    ],
+    "prob_range": {
+     "min": 0.0009344907886754945,
+     "p01": 0.0009671100363024154,
+     "median": 0.01127736537282082,
+     "p99": 0.7007457068638479,
+     "max": 0.9796487272445916
+    },
+    "logit_clip_for_log_loss": null
+   },
+   "per_season": {
+    "2022": {
+     "n": 740,
+     "events": 38,
+     "storms": 34,
+     "observed_rate": 0.051351351351351354,
+     "mean_forecast": 0.06755640667892823,
+     "log_loss": 0.15950421348714197,
+     "log_loss_ci95": [
+      0.103167929659421,
+      0.22618340846903429
+     ],
+     "auc": 0.8822349677612835,
+     "auc_ci95": [
+      0.819292858276567,
+      0.926841475406832
+     ],
+     "brier": 0.04661360594250773,
+     "brier_ci95": [
+      0.028791079466415792,
+      0.06675325279453063
+     ],
+     "bss": 0.043245021086752766,
+     "bss_ci95": [
+      -0.3149610412262726,
+      0.2152231622567236
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.04872052612201182,
+     "calibration_intercept": -0.8917350612310811,
+     "calibration_slope": 0.6787030312432959,
+     "calibration_slope_ci95": [
+      0.5225376348689004,
+      0.9072441157404622
+     ],
+     "calibration_intercept_ci95": [
+      -1.6554470241040322,
+      -0.20133614885584897
+     ],
+     "calibrated": false,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 395,
+       "mean_forecast": 0.0027964198362930848,
+       "observed": 0.0,
+       "observed_95ci": [
+        -8.673617379884035e-19,
+        0.009631893964922415
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 90,
+       "mean_forecast": 0.014344166823224732,
+       "observed": 0.05555555555555555,
+       "observed_95ci": [
+        0.023960618284343184,
+        0.12353899809048416
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 83,
+       "mean_forecast": 0.03415658029413388,
+       "observed": 0.012048192771084338,
+       "observed_95ci": [
+        0.0021299225877048286,
+        0.0651373778765888
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 44,
+       "mean_forecast": 0.07241025428679887,
+       "observed": 0.11363636363636363,
+       "observed_95ci": [
+        0.04952707589567494,
+        0.23979435148133582
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 38,
+       "mean_forecast": 0.13203455989131715,
+       "observed": 0.18421052631578946,
+       "observed_95ci": [
+        0.09221648453257492,
+        0.33419168341511346
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 56,
+       "mean_forecast": 0.29098879252960547,
+       "observed": 0.17857142857142858,
+       "observed_95ci": [
+        0.09999749741344179,
+        0.2984143097574895
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 34,
+       "mean_forecast": 0.5959543259535495,
+       "observed": 0.29411764705882354,
+       "observed_95ci": [
+        0.16834452609931952,
+        0.4616922588146376
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "prob_range": {
+      "min": 0.0009344907886754945,
+      "p01": 0.0011141673978442644,
+      "median": 0.007832705411429604,
+      "p99": 0.6774728435050653,
+      "max": 0.9796487272445916
+     },
+     "logit_clip_for_log_loss": null
+    },
+    "2023": {
+     "n": 911,
+     "events": 62,
+     "storms": 42,
+     "observed_rate": 0.06805708013172337,
+     "mean_forecast": 0.05490520492199016,
+     "log_loss": 0.15155273139127862,
+     "log_loss_ci95": [
+      0.0984790641718615,
+      0.20886897242740257
+     ],
+     "auc": 0.9181389870435807,
+     "auc_ci95": [
+      0.8674495975599534,
+      0.957361405046086
+     ],
+     "brier": 0.0426537179409743,
+     "brier_ci95": [
+      0.02594850785439315,
+      0.060037194828556205
+     ],
+     "bss": 0.3310935935970205,
+     "bss_ci95": [
+      0.1866078342910262,
+      0.44682328549816325
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.06376634688004135,
+     "calibration_intercept": 0.44671771943764677,
+     "calibration_slope": 1.052211860541118,
+     "calibration_slope_ci95": [
+      0.8549129227855433,
+      1.3744788682721194
+     ],
+     "calibration_intercept_ci95": [
+      -0.11553690616441387,
+      1.0526296416836012
+     ],
+     "calibrated": true,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 443,
+       "mean_forecast": 0.003794979558648149,
+       "observed": 0.006772009029345372,
+       "observed_95ci": [
+        0.0023056707927084936,
+        0.01971913620825113
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 119,
+       "mean_forecast": 0.01420977842518479,
+       "observed": 0.008403361344537815,
+       "observed_95ci": [
+        0.0014849048183694993,
+        0.04606901828259955
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 152,
+       "mean_forecast": 0.03095323543927417,
+       "observed": 0.039473684210526314,
+       "observed_95ci": [
+        0.018214356323955294,
+        0.083437577434425
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 81,
+       "mean_forecast": 0.0728204282631121,
+       "observed": 0.08641975308641975,
+       "observed_95ci": [
+        0.04249204303723253,
+        0.1678010207427999
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 51,
+       "mean_forecast": 0.14053328597093498,
+       "observed": 0.19607843137254902,
+       "observed_95ci": [
+        0.11015224836299273,
+        0.32458342674495444
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 34,
+       "mean_forecast": 0.26245371740558915,
+       "observed": 0.4117647058823529,
+       "observed_95ci": [
+        0.26365737785688864,
+        0.5777869585348072
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 31,
+       "mean_forecast": 0.6436300533698528,
+       "observed": 0.6774193548387096,
+       "observed_95ci": [
+        0.5014068555995079,
+        0.8143076925268695
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "prob_range": {
+      "min": 0.0011673244898314616,
+      "p01": 0.0014520735323133227,
+      "median": 0.010791608062116492,
+      "p99": 0.7162425134784043,
+      "max": 0.9709105425358977
+     },
+     "logit_clip_for_log_loss": null
+    },
+    "2024": {
+     "n": 619,
+     "events": 49,
+     "storms": 33,
+     "observed_rate": 0.0791599353796446,
+     "mean_forecast": 0.06397131965244422,
+     "log_loss": 0.1785317415273571,
+     "log_loss_ci95": [
+      0.11420401178076241,
+      0.24816841879461488
+     ],
+     "auc": 0.914249910490512,
+     "auc_ci95": [
+      0.8494938932438932,
+      0.9573518895329682
+     ],
+     "brier": 0.0537784020475791,
+     "brier_ci95": [
+      0.03054671078265758,
+      0.07840392018201911
+     ],
+     "bss": 0.26837021925733395,
+     "bss_ci95": [
+      0.10356820110195374,
+      0.3931906807139304
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.07350493851273998,
+     "calibration_intercept": 0.42045214727818625,
+     "calibration_slope": 1.0571531161058112,
+     "calibration_slope_ci95": [
+      0.7519393616190735,
+      1.6089599847442837
+     ],
+     "calibration_intercept_ci95": [
+      -0.5293557038353695,
+      1.440241153608578
+     ],
+     "calibrated": true,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 251,
+       "mean_forecast": 0.003356054998381329,
+       "observed": 0.00398406374501992,
+       "observed_95ci": [
+        0.0007036135096944261,
+        0.02221886068604128
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 99,
+       "mean_forecast": 0.014945995448882827,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.03735453357396229
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 107,
+       "mean_forecast": 0.03086453632146444,
+       "observed": 0.04672897196261682,
+       "observed_95ci": [
+        0.020122360456377365,
+        0.10475494192828685
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 55,
+       "mean_forecast": 0.06908564807594733,
+       "observed": 0.07272727272727272,
+       "observed_95ci": [
+        0.028643596503688543,
+        0.17260178091636796
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 43,
+       "mean_forecast": 0.14463840990016216,
+       "observed": 0.23255813953488372,
+       "observed_95ci": [
+        0.1315353846924483,
+        0.37744808299439414
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 46,
+       "mean_forecast": 0.2837581072609727,
+       "observed": 0.391304347826087,
+       "observed_95ci": [
+        0.2639302235524884,
+        0.5354341628235508
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 18,
+       "mean_forecast": 0.6056490511413521,
+       "observed": 0.6111111111111112,
+       "observed_95ci": [
+        0.3861866858065617,
+        0.7969500807306884
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "prob_range": {
+      "min": 0.0009671100363024154,
+      "p01": 0.0009671100363024154,
+      "median": 0.015531016954111706,
+      "p99": 0.6575098019349082,
+      "max": 0.934375662392841
+     },
+     "logit_clip_for_log_loss": null
+    }
+   },
+   "patterns_by_season": {
+    "2022": {
+     "own_patterns": {
+      "RIOD+RIOL+RIOB+DTOP": 706,
+      "RIOD+RIOL+RIOB": 34
+     },
+     "used_patterns": {
+      "RIOD+RIOL+RIOB+DTOP": 706,
+      "RIOD+RIOL+RIOB": 34
+     },
+     "fallback_cycles": 0,
+     "refused_patterns": {}
+    },
+    "2023": {
+     "own_patterns": {
+      "RIOD+RIOL+RIOB": 37,
+      "RIOD+RIOL+RIOB+DTOP": 874
+     },
+     "used_patterns": {
+      "RIOD+RIOL+RIOB": 37,
+      "RIOD+RIOL+RIOB+DTOP": 874
+     },
+     "fallback_cycles": 0,
+     "refused_patterns": {}
+    },
+    "2024": {
+     "own_patterns": {
+      "RIOD+RIOL+RIOB+DTOP": 580,
+      "RIOD+RIOL+RIOB": 39
+     },
+     "used_patterns": {
+      "RIOD+RIOL+RIOB+DTOP": 580,
+      "RIOD+RIOL+RIOB": 39
+     },
+     "fallback_cycles": 0,
+     "refused_patterns": {}
+    }
+   },
+   "fits_by_fold": {
+    "2022": [
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "intercept"
+      ],
+      "coef": [
+       0.6196123890327642,
+       0.5112085400553694,
+       0.19612640469601753,
+       0.049362863700054285
+      ],
+      "n": 1821,
+      "events": 89,
+      "storms": 91,
+      "iterations": 8,
+      "grad_inf": 2.3756753891806095e-11,
+      "mean_log_loss": 0.12846120547596998
+     },
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "DTOP"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_DTOP",
+       "intercept"
+      ],
+      "coef": [
+       0.17477405581854244,
+       0.626685789529656,
+       -0.07601185122813887,
+       0.6588045911544816,
+       0.5287377954134715
+      ],
+      "n": 1647,
+      "events": 87,
+      "storms": 90,
+      "iterations": 8,
+      "grad_inf": 2.0307915854367403e-12,
+      "mean_log_loss": 0.11990540475775481
+     }
+    ],
+    "2023": [
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "intercept"
+      ],
+      "coef": [
+       0.8141810504871755,
+       0.30614712636417346,
+       0.08300639507294055,
+       -0.3822562079623389
+      ],
+      "n": 2561,
+      "events": 127,
+      "storms": 125,
+      "iterations": 8,
+      "grad_inf": 2.4808943678875344e-12,
+      "mean_log_loss": 0.1403552886153949
+     },
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "DTOP"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_DTOP",
+       "intercept"
+      ],
+      "coef": [
+       0.35523604604426895,
+       0.4088089288497683,
+       -0.14695609089807513,
+       0.6151249734152056,
+       -0.010826036433051722
+      ],
+      "n": 2353,
+      "events": 125,
+      "storms": 123,
+      "iterations": 8,
+      "grad_inf": 1.177417026085981e-13,
+      "mean_log_loss": 0.1314169948559936
+     }
+    ],
+    "2024": [
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "intercept"
+      ],
+      "coef": [
+       0.9890404191869067,
+       0.1685712586030047,
+       0.13331232001158622,
+       -0.10697647366123918
+      ],
+      "n": 3472,
+      "events": 189,
+      "storms": 167,
+      "iterations": 8,
+      "grad_inf": 8.270559516461255e-13,
+      "mean_log_loss": 0.1457815943849268
+     },
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "DTOP"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_DTOP",
+       "intercept"
+      ],
+      "coef": [
+       0.5083344083052472,
+       0.20761846788904004,
+       -0.03497074232254492,
+       0.59876088905021,
+       0.2446657818778925
+      ],
+      "n": 3227,
+      "events": 187,
+      "storms": 164,
+      "iterations": 8,
+      "grad_inf": 1.3099102747127707e-13,
+      "mean_log_loss": 0.13647045318881934
+     }
+    ]
+   }
+  },
+  "E": {
+   "kind": "logit_pool",
+   "basin": false,
+   "n_params": 6,
+   "description": "D + logit(v8.2 on live CARQ inputs), per availability pattern",
+   "inputs": [
+    "RIOD",
+    "RIOL",
+    "RIOB",
+    "DTOP",
+    "V82"
+   ],
+   "pooled": {
+    "n": 2270,
+    "events": 149,
+    "storms": 109,
+    "observed_rate": 0.06563876651982378,
+    "mean_forecast": 0.061488040409768865,
+    "log_loss": 0.161252146289293,
+    "log_loss_ci95": [
+     0.12687659576966365,
+     0.19743352575889098
+    ],
+    "auc": 0.9058409196624361,
+    "auc_ci95": [
+     0.8752682420709542,
+     0.9314092895509752
+    ],
+    "brier": 0.04697530803549519,
+    "brier_ci95": [
+     0.03587195679738301,
+     0.05860469808331107
+    ],
+    "bss": 0.2363865647399227,
+    "bss_ci95": [
+     0.13131231519334016,
+     0.32274210083124766
+    ],
+    "bss_reference": "event rate of the case's fit seasons",
+    "brier_reference": 0.061517131399732354,
+    "calibration_intercept": -0.08986036316924949,
+    "calibration_slope": 0.8935453409006299,
+    "calibration_slope_ci95": [
+     0.7579587134874258,
+     1.0650326337192721
+    ],
+    "calibration_intercept_ci95": [
+     -0.5529802166461566,
+     0.40468373398201
+    ],
+    "calibrated": true,
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 1084,
+      "mean_forecast": 0.0033614592754055736,
+      "observed": 0.0036900369003690036,
+      "observed_95ci": [
+       0.001435867371217597,
+       0.009449540945581467
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 310,
+      "mean_forecast": 0.014365810846516603,
+      "observed": 0.02258064516129032,
+      "observed_95ci": [
+       0.010980056345483064,
+       0.045869003817350665
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 344,
+      "mean_forecast": 0.03150397050506951,
+      "observed": 0.03197674418604651,
+      "observed_95ci": [
+       0.017947221963115344,
+       0.05634406464550192
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 182,
+      "mean_forecast": 0.07136924203892044,
+      "observed": 0.08791208791208792,
+      "observed_95ci": [
+       0.05483643240416924,
+       0.13802458472009144
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 128,
+      "mean_forecast": 0.13844830739803865,
+      "observed": 0.1796875,
+      "observed_95ci": [
+       0.12282372833083033,
+       0.2552178002913951
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 139,
+      "mean_forecast": 0.27858164832877547,
+      "observed": 0.3381294964028777,
+      "observed_95ci": [
+       0.26477956870478303,
+       0.42018615556601757
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 83,
+      "mean_forecast": 0.6169858812498721,
+      "observed": 0.4939759036144578,
+      "observed_95ci": [
+       0.38908687956649984,
+       0.5993979019207136
+      ],
+      "forecast_inside_ci": false
+     }
+    ],
+    "prob_range": {
+     "min": 0.0005325967385417898,
+     "p01": 0.00102073076014027,
+     "median": 0.011195748152205634,
+     "p99": 0.6945865825029819,
+     "max": 0.9804052820388599
+    },
+    "logit_clip_for_log_loss": null
+   },
+   "per_season": {
+    "2022": {
+     "n": 740,
+     "events": 38,
+     "storms": 34,
+     "observed_rate": 0.051351351351351354,
+     "mean_forecast": 0.06768772619175321,
+     "log_loss": 0.15966321716265253,
+     "log_loss_ci95": [
+      0.10318814744272355,
+      0.22676628992451053
+     ],
+     "auc": 0.8824411455990403,
+     "auc_ci95": [
+      0.8194810346735267,
+      0.9269410594077394
+     ],
+     "brier": 0.04675562110886106,
+     "brier_ci95": [
+      0.02879586388525492,
+      0.06682986946683529
+     ],
+     "bss": 0.04033012714661588,
+     "bss_ci95": [
+      -0.3222456096321666,
+      0.21191033347209517
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.04872052612201182,
+     "calibration_intercept": -0.8987948193700005,
+     "calibration_slope": 0.6759158058747029,
+     "calibration_slope_ci95": [
+      0.5222816993206434,
+      0.90043275708968
+     ],
+     "calibration_intercept_ci95": [
+      -1.6607312089402662,
+      -0.20601276648136418
+     ],
+     "calibrated": false,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 394,
+       "mean_forecast": 0.0027742675758708484,
+       "observed": 0.0,
+       "observed_95ci": [
+        8.673617379884035e-19,
+        0.009656104339013316
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 91,
+       "mean_forecast": 0.014160639564893501,
+       "observed": 0.06593406593406594,
+       "observed_95ci": [
+        0.030565869950639868,
+        0.13646631845613524
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 80,
+       "mean_forecast": 0.03287596659164867,
+       "observed": 0.0,
+       "observed_95ci": [
+        -3.469446951953614e-18,
+        0.0458197362645751
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 48,
+       "mean_forecast": 0.07077637921218488,
+       "observed": 0.10416666666666667,
+       "observed_95ci": [
+        0.045321050901178245,
+        0.2216768812614093
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 39,
+       "mean_forecast": 0.1358886406537159,
+       "observed": 0.1794871794871795,
+       "observed_95ci": [
+        0.08977151811469994,
+        0.3266835162444276
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 52,
+       "mean_forecast": 0.2905868730159753,
+       "observed": 0.19230769230769232,
+       "observed_95ci": [
+        0.10795930648521072,
+        0.31899121069194747
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 36,
+       "mean_forecast": 0.5908255512432372,
+       "observed": 0.2777777777777778,
+       "observed_95ci": [
+        0.15848170025813796,
+        0.43992800216345146
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "prob_range": {
+      "min": 0.0007808008629102568,
+      "p01": 0.0010016708975714597,
+      "median": 0.007539020526474722,
+      "p99": 0.685581223509131,
+      "max": 0.9804052820388599
+     },
+     "logit_clip_for_log_loss": null
+    },
+    "2023": {
+     "n": 911,
+     "events": 62,
+     "storms": 42,
+     "observed_rate": 0.06805708013172337,
+     "mean_forecast": 0.054881080708498474,
+     "log_loss": 0.1512569683725484,
+     "log_loss_ci95": [
+      0.09844993817929971,
+      0.20859482719563024
+     ],
+     "auc": 0.9177020403510772,
+     "auc_ci95": [
+      0.865595758857463,
+      0.956942977207656
+     ],
+     "brier": 0.042521549073890545,
+     "brier_ci95": [
+      0.025942394205983352,
+      0.06000713562025057
+     ],
+     "bss": 0.3331662992411496,
+     "bss_ci95": [
+      0.18703352749234792,
+      0.4489410188341473
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.06376634688004135,
+     "calibration_intercept": 0.46602632020438234,
+     "calibration_slope": 1.061793319189689,
+     "calibration_slope_ci95": [
+      0.8584691963642885,
+      1.3971552761532935
+     ],
+     "calibration_intercept_ci95": [
+      -0.11755859231022826,
+      1.1056264473050934
+     ],
+     "calibrated": true,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 443,
+       "mean_forecast": 0.0038928429859639117,
+       "observed": 0.006772009029345372,
+       "observed_95ci": [
+        0.0023056707927084936,
+        0.01971913620825113
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 117,
+       "mean_forecast": 0.014158530119333296,
+       "observed": 0.008547008547008548,
+       "observed_95ci": [
+        0.0015103146975802076,
+        0.04683065397545954
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 155,
+       "mean_forecast": 0.03110028338970649,
+       "observed": 0.03870967741935484,
+       "observed_95ci": [
+        0.017859441234565628,
+        0.08187261888066868
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 79,
+       "mean_forecast": 0.07300656641823886,
+       "observed": 0.08860759493670886,
+       "observed_95ci": [
+        0.04358474184575353,
+        0.1717853137784739
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 49,
+       "mean_forecast": 0.13635534022257845,
+       "observed": 0.14285714285714285,
+       "observed_95ci": [
+        0.07096333720544586,
+        0.2666797318916292
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 38,
+       "mean_forecast": 0.2593229844110752,
+       "observed": 0.4473684210526316,
+       "observed_95ci": [
+        0.3014616531155089,
+        0.6029397082091058
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 30,
+       "mean_forecast": 0.6497279769241839,
+       "observed": 0.7,
+       "observed_95ci": [
+        0.5212387898833981,
+        0.8333543735604105
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "prob_range": {
+      "min": 0.0007429926952236852,
+      "p01": 0.0014166265863738824,
+      "median": 0.010984993611056343,
+      "p99": 0.7137985418270667,
+      "max": 0.9708050603574588
+     },
+     "logit_clip_for_log_loss": null
+    },
+    "2024": {
+     "n": 619,
+     "events": 49,
+     "storms": 33,
+     "observed_rate": 0.0791599353796446,
+     "mean_forecast": 0.06380011279941171,
+     "log_loss": 0.17786186298698,
+     "log_loss_ci95": [
+      0.11315888674021451,
+      0.24694695795812363
+     ],
+     "auc": 0.9184031507339778,
+     "auc_ci95": [
+      0.8594197140991896,
+      0.9578345792865987
+     ],
+     "brier": 0.05379266302698321,
+     "brier_ci95": [
+      0.03052464348659812,
+      0.07845296402530952
+     ],
+     "bss": 0.26817620536258535,
+     "bss_ci95": [
+      0.10428225433770877,
+      0.39208687944557485
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.07350493851273998,
+     "calibration_intercept": 0.44943412491460555,
+     "calibration_slope": 1.0712199278931993,
+     "calibration_slope_ci95": [
+      0.7667601909304904,
+      1.6303983071187544
+     ],
+     "calibration_intercept_ci95": [
+      -0.5099996617124786,
+      1.4996676944782503
+     ],
+     "calibrated": true,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 247,
+       "mean_forecast": 0.0033450647241478303,
+       "observed": 0.004048582995951417,
+       "observed_95ci": [
+        0.0007150137688097524,
+        0.022572989496996237
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 102,
+       "mean_forecast": 0.014786619000518059,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.03629574760774591
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 109,
+       "mean_forecast": 0.03107105138539003,
+       "observed": 0.045871559633027525,
+       "observed_95ci": [
+        0.019750157151731958,
+        0.10291382492579973
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 55,
+       "mean_forecast": 0.06953485639741408,
+       "observed": 0.07272727272727272,
+       "observed_95ci": [
+        0.028643596503688543,
+        0.17260178091636796
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 40,
+       "mean_forecast": 0.14350786726369202,
+       "observed": 0.225,
+       "observed_95ci": [
+        0.1231595325467853,
+        0.3750339640409305
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 49,
+       "mean_forecast": 0.2807767002703717,
+       "observed": 0.40816326530612246,
+       "observed_95ci": [
+        0.2821503460597105,
+        0.5475293002795374
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 17,
+       "mean_forecast": 0.6146040583092537,
+       "observed": 0.5882352941176471,
+       "observed_95ci": [
+        0.36005074385515545,
+        0.7838921396086862
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "prob_range": {
+      "min": 0.0005325967385417898,
+      "p01": 0.0009421818197135534,
+      "median": 0.01598722361880178,
+      "p99": 0.6556008760825847,
+      "max": 0.9352854481958426
+     },
+     "logit_clip_for_log_loss": null
+    }
+   },
+   "patterns_by_season": {
+    "2022": {
+     "own_patterns": {
+      "RIOD+RIOL+RIOB+DTOP+V82": 688,
+      "RIOD+RIOL+RIOB+V82": 32,
+      "RIOD+RIOL+RIOB+DTOP": 18,
+      "RIOD+RIOL+RIOB": 2
+     },
+     "used_patterns": {
+      "RIOD+RIOL+RIOB+DTOP+V82": 688,
+      "RIOD+RIOL+RIOB+V82": 32,
+      "RIOD+RIOL+RIOB+DTOP": 18,
+      "RIOD+RIOL+RIOB": 2
+     },
+     "fallback_cycles": 0,
+     "refused_patterns": {}
+    },
+    "2023": {
+     "own_patterns": {
+      "RIOD+RIOL+RIOB+V82": 37,
+      "RIOD+RIOL+RIOB+DTOP+V82": 874
+     },
+     "used_patterns": {
+      "RIOD+RIOL+RIOB+V82": 37,
+      "RIOD+RIOL+RIOB+DTOP+V82": 874
+     },
+     "fallback_cycles": 0,
+     "refused_patterns": {}
+    },
+    "2024": {
+     "own_patterns": {
+      "RIOD+RIOL+RIOB+DTOP+V82": 580,
+      "RIOD+RIOL+RIOB+V82": 39
+     },
+     "used_patterns": {
+      "RIOD+RIOL+RIOB+DTOP+V82": 580,
+      "RIOD+RIOL+RIOB+V82": 39
+     },
+     "fallback_cycles": 0,
+     "refused_patterns": {}
+    }
+   },
+   "fits_by_fold": {
+    "2022": [
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "intercept"
+      ],
+      "coef": [
+       0.6196123890327642,
+       0.5112085400553694,
+       0.19612640469601753,
+       0.049362863700054285
+      ],
+      "n": 1821,
+      "events": 89,
+      "storms": 91,
+      "iterations": 8,
+      "grad_inf": 2.3756753891806095e-11,
+      "mean_log_loss": 0.12846120547596998
+     },
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "DTOP"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_DTOP",
+       "intercept"
+      ],
+      "coef": [
+       0.17477405581854244,
+       0.626685789529656,
+       -0.07601185122813887,
+       0.6588045911544816,
+       0.5287377954134715
+      ],
+      "n": 1647,
+      "events": 87,
+      "storms": 90,
+      "iterations": 8,
+      "grad_inf": 2.0307915854367403e-12,
+      "mean_log_loss": 0.11990540475775481
+     },
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "DTOP",
+       "V82"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_DTOP",
+       "logit_V82",
+       "intercept"
+      ],
+      "coef": [
+       0.18748439460443972,
+       0.6318254952715417,
+       -0.06899318451151457,
+       0.6709509942238734,
+       -0.042818159346972404,
+       0.5003718746784264
+      ],
+      "n": 1647,
+      "events": 87,
+      "storms": 90,
+      "iterations": 8,
+      "grad_inf": 2.105134802036095e-12,
+      "mean_log_loss": 0.11986666686137054
+     },
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "V82"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_V82",
+       "intercept"
+      ],
+      "coef": [
+       0.435620311231385,
+       0.5148951747649964,
+       0.09949636700546682,
+       0.3105941271370238,
+       0.2872633340930175
+      ],
+      "n": 1821,
+      "events": 89,
+      "storms": 91,
+      "iterations": 8,
+      "grad_inf": 9.055259011411915e-12,
+      "mean_log_loss": 0.12659627578662544
+     }
+    ],
+    "2023": [
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "DTOP",
+       "V82"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_DTOP",
+       "logit_V82",
+       "intercept"
+      ],
+      "coef": [
+       0.3635715585407949,
+       0.4138689979626153,
+       -0.1400883662193933,
+       0.6187687622547279,
+       -0.03348209083963251,
+       -0.035424584076696464
+      ],
+      "n": 2335,
+      "events": 125,
+      "storms": 123,
+      "iterations": 8,
+      "grad_inf": 1.1195506959038759e-13,
+      "mean_log_loss": 0.1321980245705313
+     },
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "V82"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_V82",
+       "intercept"
+      ],
+      "coef": [
+       0.624996717746056,
+       0.31540152475511163,
+       0.019533078599611925,
+       0.2645848338757945,
+       -0.13860516391821653
+      ],
+      "n": 2541,
+      "events": 127,
+      "storms": 125,
+      "iterations": 8,
+      "grad_inf": 1.4985549791645221e-12,
+      "mean_log_loss": 0.13942138822199182
+     }
+    ],
+    "2024": [
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "DTOP",
+       "V82"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_DTOP",
+       "logit_V82",
+       "intercept"
+      ],
+      "coef": [
+       0.5197096972792288,
+       0.21367381788047862,
+       -0.02978412847667804,
+       0.6034212727390916,
+       -0.033582691422030894,
+       0.22099008038428822
+      ],
+      "n": 3209,
+      "events": 187,
+      "storms": 164,
+      "iterations": 8,
+      "grad_inf": 1.601018174766058e-13,
+      "mean_log_loss": 0.13705675389191346
+     },
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "V82"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_V82",
+       "intercept"
+      ],
+      "coef": [
+       0.7973414999859513,
+       0.165253509499378,
+       0.08863618179138769,
+       0.2406557995886844,
+       0.10331676589991601
+      ],
+      "n": 3452,
+      "events": 189,
+      "storms": 167,
+      "iterations": 8,
+      "grad_inf": 8.55369710180204e-13,
+      "mean_log_loss": 0.1448766280617915
+     }
+    ]
+   }
+  },
+  "F": {
+   "kind": "logit_pool",
+   "basin": true,
+   "n_params": 7,
+   "description": "D + Atlantic indicator + indicator x logit(DTOPS), per availability pattern",
+   "inputs": [
+    "RIOD",
+    "RIOL",
+    "RIOB",
+    "DTOP"
+   ],
+   "pooled": {
+    "n": 2270,
+    "events": 149,
+    "storms": 109,
+    "observed_rate": 0.06563876651982378,
+    "mean_forecast": 0.060185697512432794,
+    "log_loss": 0.16480863290868886,
+    "log_loss_ci95": [
+     0.12957749709285765,
+     0.20215216446925233
+    ],
+    "auc": 0.8999332339753631,
+    "auc_ci95": [
+     0.865892058088277,
+     0.928399566445249
+    ],
+    "brier": 0.04763561817421927,
+    "brier_ci95": [
+     0.03667712415951567,
+     0.059376232726288065
+    ],
+    "bss": 0.22565280450598968,
+    "bss_ci95": [
+     0.11803776337258182,
+     0.3145308361127107
+    ],
+    "bss_reference": "event rate of the case's fit seasons",
+    "brier_reference": 0.061517131399732354,
+    "calibration_intercept": -0.13747174699187453,
+    "calibration_slope": 0.851494299472264,
+    "calibration_slope_ci95": [
+     0.7131724763561276,
+     1.0236642396838749
+    ],
+    "calibration_intercept_ci95": [
+     -0.6131893631081615,
+     0.3637170988068613
+    ],
+    "calibrated": true,
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 1112,
+      "mean_forecast": 0.002999709921423919,
+      "observed": 0.00539568345323741,
+      "observed_95ci": [
+       0.002475132575657328,
+       0.011721864560853803
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 289,
+      "mean_forecast": 0.014594678647844883,
+      "observed": 0.01384083044982699,
+      "observed_95ci": [
+       0.005395154890795889,
+       0.03504172292984162
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 337,
+      "mean_forecast": 0.031538524593465525,
+      "observed": 0.04154302670623145,
+      "observed_95ci": [
+       0.024904825379571466,
+       0.06851569605912615
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 197,
+      "mean_forecast": 0.07060096131216843,
+      "observed": 0.08629441624365482,
+      "observed_95ci": [
+       0.05457453067073151,
+       0.13384061838205438
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 121,
+      "mean_forecast": 0.1404606782919362,
+      "observed": 0.19834710743801653,
+      "observed_95ci": [
+       0.13706713532662643,
+       0.27819188089873426
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 129,
+      "mean_forecast": 0.2741264827711223,
+      "observed": 0.32558139534883723,
+      "observed_95ci": [
+       0.25077958524200566,
+       0.41047110731213404
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 85,
+      "mean_forecast": 0.6138007444009146,
+      "observed": 0.49411764705882355,
+      "observed_95ci": [
+       0.39040653316034707,
+       0.5983374786539382
+      ],
+      "forecast_inside_ci": false
+     }
+    ],
+    "prob_range": {
+     "min": 0.0002194272161024756,
+     "p01": 0.0002194272161024756,
+     "median": 0.01060559047693415,
+     "p99": 0.7087339383302156,
+     "max": 0.9834062074184012
+    },
+    "logit_clip_for_log_loss": null
+   },
+   "per_season": {
+    "2022": {
+     "n": 740,
+     "events": 38,
+     "storms": 34,
+     "observed_rate": 0.051351351351351354,
+     "mean_forecast": 0.06474944219843473,
+     "log_loss": 0.16486816347159536,
+     "log_loss_ci95": [
+      0.10516587517029842,
+      0.2354803784572642
+     ],
+     "auc": 0.8735005248163142,
+     "auc_ci95": [
+      0.7992592630165246,
+      0.9240683597597605
+     ],
+     "brier": 0.04797157559847545,
+     "brier_ci95": [
+      0.03009386542068972,
+      0.06844315357572472
+     ],
+     "bss": 0.015372381686945547,
+     "bss_ci95": [
+      -0.37784784488742695,
+      0.20281030192854455
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.04872052612201182,
+     "calibration_intercept": -0.9529237135213047,
+     "calibration_slope": 0.6047103431052968,
+     "calibration_slope_ci95": [
+      0.4442765357278406,
+      0.8208054744325647
+     ],
+     "calibration_intercept_ci95": [
+      -1.783556505388053,
+      -0.22777255659948875
+     ],
+     "calibrated": false,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 424,
+       "mean_forecast": 0.0020728091725505933,
+       "observed": 0.0047169811320754715,
+       "observed_95ci": [
+        0.0012944937889793808,
+        0.01703378471409278
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 74,
+       "mean_forecast": 0.014635004433904563,
+       "observed": 0.02702702702702703,
+       "observed_95ci": [
+        0.007443196562309684,
+        0.09329471221654377
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 71,
+       "mean_forecast": 0.032093089229943875,
+       "observed": 0.04225352112676056,
+       "observed_95ci": [
+        0.014472998249826653,
+        0.11702606109684685
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 52,
+       "mean_forecast": 0.0716708024397606,
+       "observed": 0.1346153846153846,
+       "observed_95ci": [
+        0.06676796994292626,
+        0.2527357692049491
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 34,
+       "mean_forecast": 0.13563391860068008,
+       "observed": 0.11764705882352941,
+       "observed_95ci": [
+        0.04671370973436122,
+        0.26621174796298774
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 48,
+       "mean_forecast": 0.28484925210754297,
+       "observed": 0.20833333333333334,
+       "observed_95ci": [
+        0.11730147795889813,
+        0.3425917352135348
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 37,
+       "mean_forecast": 0.585484254426826,
+       "observed": 0.2702702702702703,
+       "observed_95ci": [
+        0.15397298246990684,
+        0.4297847547392133
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "prob_range": {
+      "min": 0.0002194272161024756,
+      "p01": 0.0002194272161024756,
+      "median": 0.005610560318763275,
+      "p99": 0.6951888757669206,
+      "max": 0.9834062074184012
+     },
+     "logit_clip_for_log_loss": null
+    },
+    "2023": {
+     "n": 911,
+     "events": 62,
+     "storms": 42,
+     "observed_rate": 0.06805708013172337,
+     "mean_forecast": 0.0552166559075181,
+     "log_loss": 0.15542709948297515,
+     "log_loss_ci95": [
+      0.1009673760091292,
+      0.21456392973693802
+     ],
+     "auc": 0.9085356586496447,
+     "auc_ci95": [
+      0.8524678413568206,
+      0.9539924762316643
+     ],
+     "brier": 0.04312110688241628,
+     "brier_ci95": [
+      0.02624855427114804,
+      0.06081398655679432
+     ],
+     "bss": 0.323763881855477,
+     "bss_ci95": [
+      0.17941055689604726,
+      0.43947897863238894
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.06376634688004135,
+     "calibration_intercept": 0.35028614585528933,
+     "calibration_slope": 1.0088384765036278,
+     "calibration_slope_ci95": [
+      0.8087849484957185,
+      1.3406566578358814
+     ],
+     "calibration_intercept_ci95": [
+      -0.2090229013550399,
+      0.9732009817009225
+     ],
+     "calibrated": true,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 437,
+       "mean_forecast": 0.0035753247968289166,
+       "observed": 0.006864988558352402,
+       "observed_95ci": [
+        0.0023373641320203146,
+        0.01998720777770871
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 113,
+       "mean_forecast": 0.014311454294879351,
+       "observed": 0.017699115044247787,
+       "observed_95ci": [
+        0.004867129823876968,
+        0.06224595318765318
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 159,
+       "mean_forecast": 0.03154337076612944,
+       "observed": 0.03773584905660377,
+       "observed_95ci": [
+        0.01740719288942665,
+        0.07987507404973387
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 89,
+       "mean_forecast": 0.07032518761584652,
+       "observed": 0.06741573033707865,
+       "observed_95ci": [
+        0.03126095907688764,
+        0.139369447982017
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 47,
+       "mean_forecast": 0.1391553482934321,
+       "observed": 0.19148936170212766,
+       "observed_95ci": [
+        0.10415815605310119,
+        0.325442800643777
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 35,
+       "mean_forecast": 0.25772898281025003,
+       "observed": 0.42857142857142855,
+       "observed_95ci": [
+        0.27984333081678914,
+        0.5914287074102662
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 31,
+       "mean_forecast": 0.654438994917368,
+       "observed": 0.6774193548387096,
+       "observed_95ci": [
+        0.5014068555995079,
+        0.8143076925268695
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "prob_range": {
+      "min": 0.0008182425616241615,
+      "p01": 0.0008182425616241615,
+      "median": 0.010922191315945263,
+      "p99": 0.7335915350464526,
+      "max": 0.980103476272042
+     },
+     "logit_clip_for_log_loss": null
+    },
+    "2024": {
+     "n": 619,
+     "events": 49,
+     "storms": 33,
+     "observed_rate": 0.0791599353796446,
+     "mean_forecast": 0.06204292826273303,
+     "log_loss": 0.1785445365181791,
+     "log_loss_ci95": [
+      0.11359650992053899,
+      0.2486643520470962
+     ],
+     "auc": 0.9176512710347297,
+     "auc_ci95": [
+      0.8594785821813712,
+      0.9569048843994102
+     ],
+     "brier": 0.05387812430165536,
+     "brier_ci95": [
+      0.03030362062885214,
+      0.07870171917598741
+     ],
+     "bss": 0.26701354505157326,
+     "bss_ci95": [
+      0.110951046460643,
+      0.3877044549666614
+     ],
+     "bss_reference": "event rate of the case's fit seasons",
+     "brier_reference": 0.07350493851273998,
+     "calibration_intercept": 0.5172463669053109,
+     "calibration_slope": 1.0853982722664968,
+     "calibration_slope_ci95": [
+      0.7801167649898754,
+      1.630914946500583
+     ],
+     "calibration_intercept_ci95": [
+      -0.4412189402080057,
+      1.5290771681440714
+     ],
+     "calibrated": true,
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 251,
+       "mean_forecast": 0.003563304411345456,
+       "observed": 0.00398406374501992,
+       "observed_95ci": [
+        0.0007036135096944261,
+        0.02221886068604128
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 102,
+       "mean_forecast": 0.01487919084114576,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.03629574760774591
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 107,
+       "mean_forecast": 0.031163341129507357,
+       "observed": 0.04672897196261682,
+       "observed_95ci": [
+        0.020122360456377365,
+        0.10475494192828685
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 56,
+       "mean_forecast": 0.07004582060391593,
+       "observed": 0.07142857142857142,
+       "observed_95ci": [
+        0.028125581246379636,
+        0.16975682831486205
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 40,
+       "mean_forecast": 0.14609718677774622,
+       "observed": 0.275,
+       "observed_95ci": [
+        0.1610785343314309,
+        0.4283525083312457
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 46,
+       "mean_forecast": 0.2754138647381297,
+       "observed": 0.3695652173913043,
+       "observed_95ci": [
+        0.24523559514309495,
+        0.5140016685081521
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 17,
+       "mean_forecast": 0.6013257069321629,
+       "observed": 0.6470588235294118,
+       "observed_95ci": [
+        0.4129996672121182,
+        0.826905138560951
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "prob_range": {
+      "min": 0.0011176152152880987,
+      "p01": 0.0011176152152880987,
+      "median": 0.015553280505338055,
+      "p99": 0.6468969669762418,
+      "max": 0.9171105054716209
+     },
+     "logit_clip_for_log_loss": null
+    }
+   },
+   "patterns_by_season": {
+    "2022": {
+     "own_patterns": {
+      "RIOD+RIOL+RIOB+DTOP": 706,
+      "RIOD+RIOL+RIOB": 34
+     },
+     "used_patterns": {
+      "RIOD+RIOL+RIOB+DTOP": 706,
+      "RIOD+RIOL+RIOB": 34
+     },
+     "fallback_cycles": 0,
+     "refused_patterns": {}
+    },
+    "2023": {
+     "own_patterns": {
+      "RIOD+RIOL+RIOB": 37,
+      "RIOD+RIOL+RIOB+DTOP": 874
+     },
+     "used_patterns": {
+      "RIOD+RIOL+RIOB": 37,
+      "RIOD+RIOL+RIOB+DTOP": 874
+     },
+     "fallback_cycles": 0,
+     "refused_patterns": {}
+    },
+    "2024": {
+     "own_patterns": {
+      "RIOD+RIOL+RIOB+DTOP": 580,
+      "RIOD+RIOL+RIOB": 39
+     },
+     "used_patterns": {
+      "RIOD+RIOL+RIOB+DTOP": 580,
+      "RIOD+RIOL+RIOB": 39
+     },
+     "fallback_cycles": 0,
+     "refused_patterns": {}
+    }
+   },
+   "fits_by_fold": {
+    "2022": [
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "basin_al",
+       "intercept"
+      ],
+      "coef": [
+       0.6404734064557639,
+       0.5083537675227883,
+       0.18898356735172953,
+       0.07256458725955678,
+       0.002867236817895636
+      ],
+      "n": 1821,
+      "events": 89,
+      "storms": 91,
+      "iterations": 9,
+      "grad_inf": 2.8514219442197297e-17,
+      "mean_log_loss": 0.12844385728720875
+     },
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "DTOP"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_DTOP",
+       "basin_al",
+       "basin_al_x_logit_DTOP",
+       "intercept"
+      ],
+      "coef": [
+       0.27363894305096664,
+       0.6397271113934636,
+       -0.15303999912857336,
+       0.9134773873038262,
+       0.1852711411552936,
+       -0.2782026653168145,
+       0.43568131980564273
+      ],
+      "n": 1647,
+      "events": 87,
+      "storms": 90,
+      "iterations": 9,
+      "grad_inf": 3.4495350228016155e-16,
+      "mean_log_loss": 0.11804418496242797
+     }
+    ],
+    "2023": [
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "basin_al",
+       "intercept"
+      ],
+      "coef": [
+       0.8077524146293643,
+       0.3077433935992713,
+       0.08483113222541826,
+       -0.02072224504250619,
+       -0.37026584193929796
+      ],
+      "n": 2561,
+      "events": 127,
+      "storms": 125,
+      "iterations": 8,
+      "grad_inf": 3.282214056726756e-11,
+      "mean_log_loss": 0.14035364150340748
+     },
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "DTOP"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_DTOP",
+       "basin_al",
+       "basin_al_x_logit_DTOP",
+       "intercept"
+      ],
+      "coef": [
+       0.41000732615003765,
+       0.3971624321264442,
+       -0.17508658514040049,
+       0.6955563822391174,
+       0.12278066002321006,
+       -0.10129769665139379,
+       -0.07993229374759084
+      ],
+      "n": 2353,
+      "events": 125,
+      "storms": 123,
+      "iterations": 8,
+      "grad_inf": 1.67517853693311e-11,
+      "mean_log_loss": 0.13095234148532592
+     }
+    ],
+    "2024": [
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "basin_al",
+       "intercept"
+      ],
+      "coef": [
+       0.8653724650357997,
+       0.1950184144119069,
+       0.16894614865136326,
+       -0.3916668670753235,
+       0.10348259347534793
+      ],
+      "n": 3472,
+      "events": 189,
+      "storms": 167,
+      "iterations": 8,
+      "grad_inf": 4.864189242524974e-12,
+      "mean_log_loss": 0.14516496574434817
+     },
+     {
+      "pattern": [
+       "RIOD",
+       "RIOL",
+       "RIOB",
+       "DTOP"
+      ],
+      "columns": [
+       "logit_RIOD",
+       "logit_RIOL",
+       "logit_RIOB",
+       "logit_DTOP",
+       "basin_al",
+       "basin_al_x_logit_DTOP",
+       "intercept"
+      ],
+      "coef": [
+       0.4639066878014977,
+       0.2160076870871868,
+       -0.0218289268068394,
+       0.6235474868557853,
+       -0.2545832024886933,
+       -0.04874225325977658,
+       0.3648409482825169
+      ],
+      "n": 3227,
+      "events": 187,
+      "storms": 164,
+      "iterations": 8,
+      "grad_inf": 7.456785039876073e-13,
+      "mean_log_loss": 0.13633505875946908
+     }
+    ]
+   }
+  }
+ },
+ "parsimony": {
+  "rule": "best zero-parameter candidate (A, B, C) by pooled log loss is the incumbent; D, E, F in parameter order replace it only if the 95% paired storm-bootstrap interval of LL(challenger) - LL(incumbent) lies wholly below 0; otherwise the simpler stays",
+  "steps": [
+   {
+    "step": "zero-parameter candidates by pooled log loss",
+    "order": [
+     {
+      "candidate": "A",
+      "log_loss": 0.16653508144384657
+     },
+     {
+      "candidate": "C",
+      "log_loss": 0.18007159436837025
+     },
+     {
+      "candidate": "B",
+      "log_loss": 0.1949819021943248
+     }
+    ],
+    "incumbent": "A"
+   },
+   {
+    "challenger": "D",
+    "incumbent": "A",
+    "params": [
+     5,
+     0
+    ],
+    "paired_challenger_minus_incumbent": {
+     "delta_log_loss": -0.00503340554808715,
+     "delta_brier": -0.001347296780116837,
+     "delta_auc": 0.005736815292267439,
+     "ci95": {
+      "delta_auc": [
+       -0.007291571298009739,
+       0.01802060603484656
+      ],
+      "delta_brier": [
+       -0.003689964628637795,
+       0.0009314543000482857
+      ],
+      "delta_log_loss": [
+       -0.01235821477636947,
+       0.002333494976289247
+      ]
+     }
+    },
+    "interval_excludes_zero_favourably": false,
+    "replaces_incumbent": false
+   },
+   {
+    "challenger": "E",
+    "incumbent": "A",
+    "params": [
+     6,
+     0
+    ],
+    "paired_challenger_minus_incumbent": {
+     "delta_log_loss": -0.005282935154553581,
+     "delta_brier": -0.0013501545195708856,
+     "delta_auc": 0.006972461388037199,
+     "ci95": {
+      "delta_auc": [
+       -0.005901822685023997,
+       0.019699243970866146
+      ],
+      "delta_brier": [
+       -0.0036693062824475547,
+       0.0009259145071720616
+      ],
+      "delta_log_loss": [
+       -0.012641883500714771,
+       0.00215452059410971
+      ]
+     }
+    },
+    "interval_excludes_zero_favourably": false,
+    "replaces_incumbent": false
+   },
+   {
+    "challenger": "F",
+    "incumbent": "A",
+    "params": [
+     7,
+     0
+    ],
+    "paired_challenger_minus_incumbent": {
+     "delta_log_loss": -0.0017264485351577152,
+     "delta_brier": -0.0006898443808468074,
+     "delta_auc": 0.0010647757009641934,
+     "ci95": {
+      "delta_auc": [
+       -0.016127884024062438,
+       0.014864922866531693
+      ],
+      "delta_brier": [
+       -0.0029601963729224533,
+       0.00162297316701877
+      ],
+      "delta_log_loss": [
+       -0.009502471474381494,
+       0.006897666256450708
+      ]
+     }
+    },
+    "interval_excludes_zero_favourably": false,
+    "replaces_incumbent": false
+   }
+  ],
+  "choice": "A"
+ },
+ "choice": "A",
+ "bootstrap": {
+  "unit": "IBTrACS SID",
+  "reps": 2000,
+  "seed": 20261002,
+  "interval": "percentile 95%"
+ },
+ "seconds": 123.5
+}

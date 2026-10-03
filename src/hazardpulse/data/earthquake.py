@@ -14,6 +14,7 @@ scan_gnss_cache     -- List available cached GPS station codes
 from __future__ import annotations
 
 import csv
+import datetime as dt
 import json
 from pathlib import Path
 
@@ -85,29 +86,58 @@ def _load_download_module():
     return module
 
 
-def bootstrap_usgs_catalog(min_year: int, max_year: int) -> list[int]:
-    """Download any missing cached USGS year files for the requested span."""
-    missing_years = [
-        year
-        for year in range(min_year, max_year + 1)
-        if not (USGS_DIR / f"usgs_catalog_{year}.csv").exists()
-    ]
-    if not missing_years:
-        return []
+def _year_file_problems(path: Path, year: int, now: dt.datetime) -> list[str]:
+    """Completeness audit of one cached year file ([] = usable)."""
+    from hazardpulse.data.usgs_fdsn import audit_year_catalog, read_manifest
 
+    if not path.exists():
+        return ["missing"]
+    with path.open("r", encoding="utf-8", errors="replace") as fh:
+        times = [row.get("time", "") for row in csv.DictReader(fh)]
+    return audit_year_catalog(times, year, manifest=read_manifest(path), now=now)
+
+
+def bootstrap_usgs_catalog(min_year: int, max_year: int) -> list[int]:
+    """Download -- or repair -- cached USGS year files for the requested span.
+
+    A year is (re)downloaded when its file is missing or fails the completeness
+    audit (e.g. a legacy file holding only the first 20,000 rows of its year); the
+    running year is handed to the downloader every time, which re-pulls it once its
+    copy is a day old. Failures are left for load_usgs_catalog to report.
+    """
+    now = dt.datetime.now(dt.timezone.utc)
+    todo = [
+        year for year in range(min_year, min(max_year, now.year) + 1)
+        if year == now.year
+        or _year_file_problems(USGS_DIR / f"usgs_catalog_{year}.csv", year, now)
+    ]
+    if not todo:
+        return []
     downloader = _load_download_module()
     if downloader is None:
         return []
-
-    downloaded_years: list[int] = []
-    for year in missing_years:
+    done: list[int] = []
+    for year in todo:
         try:
-            downloader.download_usgs_year(year)
-        except Exception:
+            downloader.download_usgs_year(year, usgs_dir=USGS_DIR)
+        except Exception as exc:
+            print(f"  [USGS] could not download/repair {year}: {exc}")
             continue
-        if (USGS_DIR / f"usgs_catalog_{year}.csv").exists():
-            downloaded_years.append(year)
-    return downloaded_years
+        done.append(year)
+    return done
+
+
+def _read_year_file(path: Path, min_mag: float, events: list[dict]) -> list[str]:
+    """Append the file's events with mag >= min_mag; return every row's time string."""
+    times: list[str] = []
+    with path.open("r", encoding="utf-8", errors="replace") as fh:
+        for row in csv.DictReader(fh):
+            times.append(row.get("time", ""))
+            rec = _coerce_usgs_row(row)
+            mag = rec.get("mag")
+            if mag is not None and mag >= min_mag:
+                events.append(rec)
+    return times
 
 
 def load_usgs_catalog(
@@ -115,31 +145,50 @@ def load_usgs_catalog(
     max_year: int = 2025,
     min_mag: float = 2.5,
 ) -> list[dict]:
-    """Load cached USGS earthquake catalog, auto-bootstrapping missing years.
+    """Load the cached USGS earthquake catalog, auto-bootstrapping/repairing years.
+
+    REFUSES (USGSCatalogIncompleteError) to return a catalog with a missing year or
+    a year file that shows a truncation/partial-pull signature -- a silently
+    shortened catalog is what trained and backtested every earthquake model on
+    ~75% of the events before 2026-10. Years after the current UTC year are skipped.
 
     HAZARDPULSE_USGS_FULL=1 reads the fuller M2.0+ catalog (usgs_full/, ~1.0M events,
     2.5x more foreshocks) instead of the M2.5 set -- for the more-foreshocks experiment.
     """
     import os as _os
+
+    from hazardpulse.data.usgs_fdsn import (
+        USGSCatalogIncompleteError,
+        audit_year_catalog,
+        read_manifest,
+    )
+
     full = _os.environ.get("HAZARDPULSE_USGS_FULL") == "1"
+    now = dt.datetime.now(dt.timezone.utc)
     if not full:
         bootstrap_usgs_catalog(min_year=min_year, max_year=max_year)
 
     events: list[dict] = []
-    for year in range(min_year, max_year + 1):
+    problems: list[str] = []
+    for year in range(min_year, min(max_year, now.year) + 1):
         if full:
             path = USGS_DIR.parent / "usgs_full" / f"usgs_M2.0_{year}.csv"
         else:
             path = USGS_DIR / f"usgs_catalog_{year}.csv"
         if not path.exists():
+            problems.append(f"{year}: {path.name} missing")
             continue
-        with path.open("r", encoding="utf-8", errors="replace") as fh:
-            reader = csv.DictReader(fh)
-            for row in reader:
-                rec = _coerce_usgs_row(row)
-                mag = rec.get("mag")
-                if mag is not None and mag >= min_mag:
-                    events.append(rec)
+        times = _read_year_file(path, min_mag, events)
+        year_problems = audit_year_catalog(times, year, manifest=read_manifest(path), now=now)
+        problems.extend(f"{year}: {p}" for p in year_problems)
+    if problems:
+        hint = ("python scripts/pull_more_eq_data.py" if full else
+                f"python scripts/download_earthquake_data.py --usgs-only "
+                f"--min-year {min_year} --max-year {max_year}")
+        raise USGSCatalogIncompleteError(
+            f"USGS catalog {min_year}-{max_year} is incomplete ({len(problems)} problem(s)): "
+            + "; ".join(problems[:8]) + f". Rebuild with: {hint}"
+        )
     return events
 
 

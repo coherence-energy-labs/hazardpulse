@@ -1,11 +1,17 @@
-name: Hurricane Scoring (Daily)
+name: Hurricane Scoring (every NHC cycle)
 
 env:
   HAZARDPULSE_SIGNING_KEY: ${{ secrets.HAZARDPULSE_SIGNING_KEY }}
 
 on:
   schedule:
-    - cron: "0 12 * * *"
+    # Each NHC cycle (00/06/12/18Z) brings new NOAA RI guidance, served from that cycle's SHIPS
+    # text. Its publication lag, measured 2026-10-02 over 1,017 files of the 2026 season (last-
+    # modified minus synoptic time): p05 30 min, median 53, p90 115, p99 372. At the old 12:00 run
+    # the newest analysis was published before its SHIPS text, so NHC storms fell back to v8.2;
+    # at +2 h 10 min ~91% of texts are out. Off the hour: the scorers share one queue and the
+    # tornado scorer runs on every even hour.
+    - cron: "10 2,8,14,20 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -33,11 +39,16 @@ jobs:
           pip install numpy scipy
           pip install -e .
 
+      # Serves the pinned model (results/models/hurricane_ri_v8_1.json); it no longer trains.
+      # Retraining inside this job is what got every run since 2026-05-27 cancelled by the
+      # 10-minute budget with no output. `-u` streams progress live; the step timeout turns a
+      # hang into a FAILED step (which notifies) instead of a silently CANCELLED job.
       - name: Run hurricane scoring pipeline
+        timeout-minutes: 6
         env:
           HAZARDPULSE_SLACK_WEBHOOK_URL: ${{ secrets.HAZARDPULSE_SLACK_WEBHOOK_URL }}
           HAZARDPULSE_ALERT_WEBHOOK_URL: ${{ secrets.HAZARDPULSE_ALERT_WEBHOOK_URL }}
-        run: python scripts/fetch_and_score.py
+        run: python -u scripts/fetch_and_score.py
 
       - name: Check for changes
         id: changes

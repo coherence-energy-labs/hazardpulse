@@ -1,0 +1,7115 @@
+{
+ "generated_at": "2026-10-02T17:10:05Z",
+ "question": "served-recipe hurricane RI v8.2 vs NOAA operational RI guidance on the same held-out cases",
+ "origin": {
+  "members": [
+   2000,
+   2018
+  ],
+  "calibration": [
+   2019,
+   2021
+  ],
+  "test": [
+   2022,
+   2024
+  ]
+ },
+ "truth": "evaluation label: best-track wind(t+24h) - wind(t) >= 30 kt at synoptic t; SHIPS-RII's own threshold is the same (>= 30 kt / 24 h), so no second threshold is needed",
+ "ri_definition_selected": {
+  "tau": 24,
+  "dv_kt": 30,
+  "start_tau": 0,
+  "stop_tau": 24
+ },
+ "ri_techs": {
+  "RIOD": {
+   "product": "SHIPS-RII (the Rapid Intensification Index; linear-discriminant version)",
+   "identity_class": "MEASURED",
+   "evidence": "NHC Ian (AL092022) discussions quote SHIPS-RII values that equal RIOD and no other e-deck tech: #6 (12Z 24 Sep) 67% for 65 kt/72 h (RIOD 67; RIOB 60, RIOL 82, RIOC 70), #7 (18Z 24 Sep) 66% 65 kt/72 h (RIOD 66; 39/82/62), #14 (12Z 26 Sep) 73% 35 kt/24 h and 79% 45 kt/36 h (RIOD 73 and 79; RIOB 59/17, RIOL 64/42, RIOC 65/46)"
+  },
+  "RIOL": {
+   "product": "SHIPS-RII logistic-regression version",
+   "identity_class": "HYPOTHESIS",
+   "evidence": "tech letter (L) and membership of the RIOC consensus; no quoted value checked"
+  },
+  "RIOB": {
+   "product": "SHIPS-RII Bayesian version",
+   "identity_class": "HYPOTHESIS",
+   "evidence": "tech letter (B) and membership of the RIOC consensus; no quoted value checked"
+  },
+  "RIOC": {
+   "product": "SHIPS RI consensus = mean(RIOD, RIOL, RIOB)",
+   "identity_class": "MEASURED",
+   "evidence": "RIOC equals the mean of RIOB/RIOD/RIOL within 1 point in 45,579 of 45,580 2020-2024 records with all four present (one outlier); SHIPS text output labels the same average 'Consensus' of SHIPS-RII/Logistic/Bayesian"
+  },
+  "DTOP": {
+   "product": "DTOPS (Deterministic to Probabilistic Statistical RI model)",
+   "identity_class": "MEASURED",
+   "evidence": "NHC Helene (AL092024) discussion #10 (18Z 25 Sep): DTOPS 'at least a 90 percent chance of a 35-kt increase over the next 24 hours' = DTOP 90 (every other tech <= 62; DTPE does not exist in 2024); Ian 2022 #8-#10 DTOPS '>90%' at 48/72 h consistent with DTOP 91-95"
+  },
+  "SDCN": {
+   "product": "SDCON-like consensus of RIOC and DTOP (2024 e-decks only)",
+   "identity_class": "HYPOTHESIS",
+   "evidence": "equals mean(RIOC, DTOP) within 1 point in 5,524 of 5,928 2024 records (93.2%)"
+  },
+  "EIOD": {
+   "product": "E-prefixed twin of RIOD (unverified; possibly the ECMWF-driven SHIPS run)",
+   "identity_class": "HYPOTHESIS",
+   "evidence": "name pattern only"
+  },
+  "EIOC": {
+   "product": "E-prefixed twin of RIOC = mean(EIOB, EIOD, EIOL)",
+   "identity_class": "HYPOTHESIS",
+   "evidence": "consensus identity measured; source unverified"
+  }
+ },
+ "data": {
+  "v8_2_sha256": "58746a4aea3da0b19ba4e4cfa833b74be9b44ef49964c3ebeb8a89ab5bc2e84d",
+  "edeck_source": "https://ftp.nhc.noaa.gov/atcf/archive/{year}/e{al,ep,cp}NNYYYY.dat.gz",
+  "edeck_files": 245,
+  "edeck_ri_records": 423262,
+  "edeck_files_without_ri": [
+   "AL012019",
+   "AL022019",
+   "AL032019",
+   "AL042019",
+   "AL052019",
+   "AL062019",
+   "AL072019",
+   "AL082019",
+   "AL092019",
+   "AL102019",
+   "AL112019",
+   "AL122019",
+   "AL132019",
+   "AL142019",
+   "AL152019",
+   "AL162019",
+   "AL172019",
+   "AL182019",
+   "AL192019",
+   "AL202019",
+   "EP012019",
+   "EP022019",
+   "EP032019",
+   "EP042019",
+   "EP052019",
+   "EP062019",
+   "EP072019",
+   "EP082019",
+   "EP092019",
+   "EP102019",
+   "EP112019",
+   "EP122019",
+   "EP132019",
+   "EP142019",
+   "EP152019",
+   "EP162019",
+   "EP172019",
+   "EP182019",
+   "EP192019",
+   "EP202019",
+   "EP212019"
+  ],
+  "edeck_index": {
+   "identical_repeats": 19,
+   "cycles": 5763
+  },
+  "edeck_line_id_differs_from_file": 0,
+  "techs_at_30kt_24h_cycles": {
+   "EIOB": 5164,
+   "EIOC": 5162,
+   "EIOD": 5162,
+   "EIOL": 5164,
+   "RIOB": 5744,
+   "RIOC": 5742,
+   "RIOD": 5741,
+   "RIOL": 5742,
+   "DTOP": 4909,
+   "DTPE": 3178,
+   "FRIA": 1,
+   "LOGR": 1,
+   "RAPC": 1,
+   "SDCE": 665,
+   "SDCN": 741
+  },
+  "ibtracs_wind_vs_case_wind": {
+   "equal": 14668,
+   "no_usa_wind": 958
+  },
+  "duplicate_rows": {
+   "calibration": 637,
+   "test": 673
+  },
+  "unique_cases": {
+   "calibration": 7982,
+   "test": 7644
+  }
+ },
+ "model": {
+  "v8_2_C": {
+   "members_cache": "C:\\Users\\Josh\\Projects\\hazardpulse\\.cache\\hurricane_vs_ships\\model_c_members_85dec55dcda99f95.json",
+   "members_key": "85dec55dcda99f95a0b6059ab1494171e894af64daf1dad93ce287fce64a4cf8",
+   "calibration": {
+    "method": "logistic_on_logit_newton",
+    "a": 1.3416337577469595,
+    "b": -2.7022803882311903,
+    "logit_eps": 1e-06,
+    "n": 8619,
+    "n_events": 485,
+    "event_rate": 0.05627102912170785,
+    "iterations": 7,
+    "grad_inf": 3.978617498242243e-11,
+    "tol_grad": 1e-10,
+    "mean_log_loss": 0.1576897431204951
+   }
+  },
+  "reproduces_evaluation": {
+   "auc": 0.8474428424590938,
+   "brier": 0.04892222915271466,
+   "evaluation_auc": 0.8474428424590938,
+   "evaluation_brier": 0.04892222915271466,
+   "abs_diff_auc": 0.0,
+   "abs_diff_brier": 0.0,
+   "reproduces": true
+  },
+  "served_artifact_note": "calibration fitted on 2022-2024 = the test seasons: AUC honest (members <= 2021), Brier/reliability in-sample for 2 parameters"
+ },
+ "climatology": {
+  "members_years_global": 0.062061910355018374,
+  "members_years_by_dataset_basin": {
+   "EP": 0.05741066198008202,
+   "NA": 0.04563059791817962,
+   "NI": 0.040413533834586464,
+   "SI": 0.04969296173830893,
+   "SP": 0.06378275970950427,
+   "WP": 0.08500164095831966
+  }
+ },
+ "matching": {
+  "calibration": {
+   "atcf:??": {
+    "cases": 358,
+    "events": 0,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 61,
+    "matched_storms": 0,
+    "reasons": {
+     "no_usa_atcf_id": 358
+    }
+   },
+   "atcf:AL": {
+    "cases": 1626,
+    "events": 68,
+    "matched": 1126,
+    "matched_events": 54,
+    "storms": 72,
+    "matched_storms": 52,
+    "reasons": {
+     "edeck_has_no_ri_records": 399,
+     "matched": 1126,
+     "no_ri_at_cycle": 99,
+     "primary_tech_missing": 2
+    }
+   },
+   "atcf:CP": {
+    "cases": 16,
+    "events": 0,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 1,
+    "matched_storms": 0,
+    "reasons": {
+     "no_edeck_file": 16
+    }
+   },
+   "atcf:EP": {
+    "cases": 1154,
+    "events": 56,
+    "matched": 695,
+    "matched_events": 35,
+    "storms": 59,
+    "matched_storms": 39,
+    "reasons": {
+     "edeck_has_no_ri_records": 392,
+     "matched": 695,
+     "no_ri_at_cycle": 67
+    }
+   },
+   "atcf:IO": {
+    "cases": 408,
+    "events": 43,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 17,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 408
+    }
+   },
+   "atcf:SH": {
+    "cases": 2262,
+    "events": 129,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 78,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 2262
+    }
+   },
+   "atcf:WP": {
+    "cases": 2158,
+    "events": 154,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 85,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 2158
+    }
+   },
+   "dataset:EP": {
+    "cases": 1278,
+    "events": 60,
+    "matched": 695,
+    "matched_events": 35,
+    "storms": 62,
+    "matched_storms": 39,
+    "reasons": {
+     "edeck_has_no_ri_records": 392,
+     "jtwc_basin_no_public_ri": 108,
+     "no_edeck_file": 16,
+     "matched": 695,
+     "no_ri_at_cycle": 67
+    }
+   },
+   "dataset:NA": {
+    "cases": 1626,
+    "events": 68,
+    "matched": 1126,
+    "matched_events": 54,
+    "storms": 72,
+    "matched_storms": 52,
+    "reasons": {
+     "edeck_has_no_ri_records": 399,
+     "matched": 1126,
+     "no_ri_at_cycle": 99,
+     "primary_tech_missing": 2
+    }
+   },
+   "dataset:NI": {
+    "cases": 455,
+    "events": 43,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 27,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 408,
+     "no_usa_atcf_id": 47
+    }
+   },
+   "dataset:SI": {
+    "cases": 1923,
+    "events": 89,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 56,
+    "matched_storms": 0,
+    "reasons": {
+     "no_usa_atcf_id": 263,
+     "jtwc_basin_no_public_ri": 1660
+    }
+   },
+   "dataset:SP": {
+    "cases": 646,
+    "events": 40,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 28,
+    "matched_storms": 0,
+    "reasons": {
+     "no_usa_atcf_id": 44,
+     "jtwc_basin_no_public_ri": 602
+    }
+   },
+   "dataset:WP": {
+    "cases": 2054,
+    "events": 150,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 83,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 2050,
+     "no_usa_atcf_id": 4
+    }
+   }
+  },
+  "test": {
+   "atcf:??": {
+    "cases": 597,
+    "events": 1,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 65,
+    "matched_storms": 0,
+    "reasons": {
+     "no_usa_atcf_id": 597
+    }
+   },
+   "atcf:AL": {
+    "cases": 1458,
+    "events": 58,
+    "matched": 1185,
+    "matched_events": 58,
+    "storms": 57,
+    "matched_storms": 57,
+    "reasons": {
+     "matched": 1185,
+     "no_ri_at_cycle": 268,
+     "primary_tech_missing": 5
+    }
+   },
+   "atcf:CP": {
+    "cases": 38,
+    "events": 0,
+    "matched": 37,
+    "matched_events": 0,
+    "storms": 1,
+    "matched_storms": 1,
+    "reasons": {
+     "matched": 37,
+     "no_ri_at_cycle": 1
+    }
+   },
+   "atcf:EP": {
+    "cases": 1187,
+    "events": 91,
+    "matched": 999,
+    "matched_events": 91,
+    "storms": 51,
+    "matched_storms": 51,
+    "reasons": {
+     "matched": 999,
+     "no_ri_at_cycle": 184,
+     "primary_tech_missing": 4
+    }
+   },
+   "atcf:IO": {
+    "cases": 369,
+    "events": 26,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 19,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 369
+    }
+   },
+   "atcf:SH": {
+    "cases": 2233,
+    "events": 153,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 72,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 2233
+    }
+   },
+   "atcf:WP": {
+    "cases": 1762,
+    "events": 138,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 75,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 1762
+    }
+   },
+   "dataset:EP": {
+    "cases": 1225,
+    "events": 91,
+    "matched": 1036,
+    "matched_events": 91,
+    "storms": 52,
+    "matched_storms": 52,
+    "reasons": {
+     "matched": 1036,
+     "no_ri_at_cycle": 185,
+     "primary_tech_missing": 4
+    }
+   },
+   "dataset:NA": {
+    "cases": 1458,
+    "events": 58,
+    "matched": 1185,
+    "matched_events": 58,
+    "storms": 57,
+    "matched_storms": 57,
+    "reasons": {
+     "matched": 1185,
+     "no_ri_at_cycle": 268,
+     "primary_tech_missing": 5
+    }
+   },
+   "dataset:NI": {
+    "cases": 480,
+    "events": 26,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 34,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 369,
+     "no_usa_atcf_id": 111
+    }
+   },
+   "dataset:SI": {
+    "cases": 2108,
+    "events": 112,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 55,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 1663,
+     "no_usa_atcf_id": 445
+    }
+   },
+   "dataset:SP": {
+    "cases": 603,
+    "events": 42,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 24,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 570,
+     "no_usa_atcf_id": 33
+    }
+   },
+   "dataset:WP": {
+    "cases": 1770,
+    "events": 138,
+    "matched": 0,
+    "matched_events": 0,
+    "storms": 76,
+    "matched_storms": 0,
+    "reasons": {
+     "jtwc_basin_no_public_ri": 1762,
+     "no_usa_atcf_id": 8
+    }
+   }
+  }
+ },
+ "coverage": {
+  "nhc_basin_all": {
+   "n": 2683,
+   "events": 149,
+   "storms": 109,
+   "v8_2_C_auc": 0.8670007362951113,
+   "v8_2_C_brier": 0.04549478614256906
+  },
+  "matched": {
+   "n": 2221,
+   "events": 149,
+   "storms": 109,
+   "v8_2_C_auc": 0.8454561944494831,
+   "v8_2_C_brier": 0.05445682602027265,
+   "best_track_status": {
+    "DB": 56,
+    "TS": 947,
+    "TD": 282,
+    "LO": 238,
+    "HU": 613,
+    "EX": 50,
+    "SS": 32,
+    "SD": 3
+   }
+  },
+  "nhc_basin_unmatched": {
+   "n": 462,
+   "events": 0,
+   "storms": 60,
+   "v8_2_C_auc": NaN,
+   "v8_2_C_brier": 0.0024110403235654667,
+   "best_track_status": {
+    "TS": 29,
+    "HU": 28,
+    "LO": 228,
+    "EX": 143,
+    "TD": 12,
+    "SS": 3,
+    "DB": 19
+   }
+  }
+ },
+ "primary_intersection": {
+  "n": 2221,
+  "events": 149,
+  "storms": 109,
+  "observed_rate": 0.06708689779378658,
+  "by_dataset_basin": {
+   "EP": {
+    "n": 1036,
+    "events": 91
+   },
+   "NA": {
+    "n": 1185,
+    "events": 58
+   }
+  },
+  "forecasts": {
+   "v8_2_C": {
+    "n": 2221,
+    "events": 149,
+    "observed_rate": 0.06708689779378658,
+    "mean_forecast": 0.06256055896976775,
+    "auc": 0.8454561944494831,
+    "brier": 0.05445682602027265,
+    "brier_climatology": 0.0626114964369524,
+    "bss_vs_climatology": 0.13024238168291047,
+    "log_loss": 0.19321301129694615,
+    "calibration_intercept": -0.16967768861980945,
+    "calibration_slope": 0.8697076180344964,
+    "prob_range": {
+     "min": 6.458329309018919e-05,
+     "p01": 0.0003063100686199295,
+     "median": 0.0226996954609172,
+     "p99": 0.5537884507893219,
+     "max": 0.8305413034375401
+    },
+    "brier_climatology_basin": 0.06264750075897357,
+    "bss_vs_basin_climatology": 0.1307422425391439,
+    "ci95": {
+     "auc": [
+      0.8047545172791275,
+      0.8815584347691331
+     ],
+     "brier": [
+      0.04147074241063918,
+      0.06814791783618589
+     ],
+     "bss_vs_climatology": [
+      0.03910474014200075,
+      0.20743067339993732
+     ],
+     "bss_vs_basin_climatology": [
+      0.03451703961898099,
+      0.2096335282995319
+     ],
+     "mean_minus_observed": [
+      -0.019118868440278252,
+      0.009857376908300367
+     ],
+     "calibration_intercept": [
+      -0.6624076047350598,
+      0.30326818180780435
+     ],
+     "calibration_slope": [
+      0.7074217631737537,
+      1.0720328056125266
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 719,
+      "mean_forecast": 0.0037907970207166075,
+      "observed": 0.0013908205841446453,
+      "observed_95ci": [
+       0.00024554987162487543,
+       0.007835888717410398
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 326,
+      "mean_forecast": 0.01480455002316522,
+      "observed": 0.03067484662576687,
+      "observed_95ci": [
+       0.016745532858165327,
+       0.055536435213781946
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 486,
+      "mean_forecast": 0.03220811820573155,
+      "observed": 0.037037037037037035,
+      "observed_95ci": [
+       0.023553838378939675,
+       0.05778184237990153
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 293,
+      "mean_forecast": 0.0694584040783469,
+      "observed": 0.08532423208191127,
+      "observed_95ci": [
+       0.058460171828361815,
+       0.12292141350199622
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 221,
+      "mean_forecast": 0.14515384163059866,
+      "observed": 0.16289592760180996,
+      "observed_95ci": [
+       0.12004483102246552,
+       0.21726641387171783
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 122,
+      "mean_forecast": 0.2789904249127489,
+      "observed": 0.30327868852459017,
+      "observed_95ci": [
+       0.22874525512189398,
+       0.3898228495430181
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 54,
+      "mean_forecast": 0.5421267856249673,
+      "observed": 0.4074074074074074,
+      "observed_95ci": [
+       0.2867801518924045,
+       0.5403338975114846
+      ],
+      "forecast_inside_ci": false
+     }
+    ],
+    "calibrated": true,
+    "logit_clip": null
+   },
+   "v8_2_served_auc_only": {
+    "n": 2221,
+    "events": 149,
+    "observed_rate": 0.06708689779378658,
+    "mean_forecast": 0.06705732744481942,
+    "auc": 0.8479308647093882,
+    "brier": 0.053785174100413405,
+    "brier_climatology": 0.0626114964369524,
+    "bss_vs_climatology": 0.14096967552000272,
+    "log_loss": 0.19076761369785047,
+    "calibration_intercept": -0.023774770908765782,
+    "calibration_slope": 0.9875209887006492,
+    "prob_range": {
+     "min": 0.00016310377599823193,
+     "p01": 0.0007176130912773909,
+     "median": 0.02816518805365861,
+     "p99": 0.526360076382841,
+     "max": 0.7655615665947575
+    },
+    "brier_climatology_basin": 0.06264750075897357,
+    "bss_vs_basin_climatology": 0.14146337126291086,
+    "ci95": {
+     "auc": [
+      0.8068562664550117,
+      0.8846680029809215
+     ],
+     "brier": [
+      0.041199676690731525,
+      0.06719865152184633
+     ],
+     "bss_vs_climatology": [
+      0.054328222152019844,
+      0.21209128324247328
+     ],
+     "bss_vs_basin_climatology": [
+      0.05183665033484826,
+      0.21349562312122497
+     ],
+     "mean_minus_observed": [
+      -0.014995941120386398,
+      0.014714385801704276
+     ],
+     "calibration_intercept": [
+      -0.5507737639208056,
+      0.46692409510596145
+     ],
+     "calibration_slope": [
+      0.805319117612874,
+      1.212404001879948
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 592,
+      "mean_forecast": 0.004644750108382532,
+      "observed": 0.0016891891891891893,
+      "observed_95ci": [
+       0.0002982379559851051,
+       0.009505709938891653
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 309,
+      "mean_forecast": 0.014761878963884081,
+      "observed": 0.012944983818770227,
+      "observed_95ci": [
+       0.005045174496708818,
+       0.032806569005434126
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 537,
+      "mean_forecast": 0.03260213589138324,
+      "observed": 0.03910614525139665,
+      "observed_95ci": [
+       0.025717767616027558,
+       0.05904198459238245
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 343,
+      "mean_forecast": 0.0705139750434336,
+      "observed": 0.06705539358600583,
+      "observed_95ci": [
+       0.045094459400926885,
+       0.09860687284987577
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 248,
+      "mean_forecast": 0.143989323019875,
+      "observed": 0.14112903225806453,
+      "observed_95ci": [
+       0.10325659712632611,
+       0.1899499263392173
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 146,
+      "mean_forecast": 0.2743947642045459,
+      "observed": 0.3082191780821918,
+      "observed_95ci": [
+       0.23903703655594372,
+       0.3872349733531871
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 46,
+      "mean_forecast": 0.5251865977082191,
+      "observed": 0.43478260869565216,
+      "observed_95ci": [
+       0.3020904595919057,
+       0.5775281722337178
+      ],
+      "forecast_inside_ci": true
+     }
+    ],
+    "calibrated": true,
+    "logit_clip": null
+   },
+   "SHIPS_RII_RIOD": {
+    "n": 2221,
+    "events": 149,
+    "observed_rate": 0.06708689779378658,
+    "mean_forecast": 0.1119630796938316,
+    "auc": 0.881761615402555,
+    "brier": 0.053385096803241786,
+    "brier_climatology": 0.0626114964369524,
+    "bss_vs_climatology": 0.14735951316866025,
+    "log_loss": 0.19586940932240504,
+    "calibration_intercept": -0.4056033558100238,
+    "calibration_slope": 1.2182769808359013,
+    "prob_range": {
+     "min": 0.0,
+     "p01": 0.0,
+     "median": 0.09,
+     "p99": 0.6580000000000018,
+     "max": 0.99
+    },
+    "brier_climatology_basin": 0.06264750075897357,
+    "bss_vs_basin_climatology": 0.14784953658993405,
+    "ci95": {
+     "auc": [
+      0.8438454645276982,
+      0.9130002625665793
+     ],
+     "brier": [
+      0.04290814491768727,
+      0.06444917235374141
+     ],
+     "bss_vs_climatology": [
+      0.00597539859626944,
+      0.255313763426344
+     ],
+     "bss_vs_basin_climatology": [
+      0.00023028034790848923,
+      0.25753242698089374
+     ],
+     "mean_minus_observed": [
+      0.02893391942572847,
+      0.062134332319107616
+     ],
+     "calibration_intercept": [
+      -0.935170929691573,
+      0.21268762057436796
+     ],
+     "calibration_slope": [
+      0.9543090204486188,
+      1.57750418543391
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 705,
+      "mean_forecast": 0.0,
+      "observed": 0.0028368794326241137,
+      "observed_95ci": [
+       0.0007783034156402142,
+       0.010284252732305956
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 47,
+      "mean_forecast": 0.03000000000000001,
+      "observed": 0.0,
+      "observed_95ci": [
+       6.938893903907228e-18,
+       0.0755601711983887
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 441,
+      "mean_forecast": 0.07460317460317462,
+      "observed": 0.018140589569160998,
+      "observed_95ci": [
+       0.009220037566272071,
+       0.03538370452979089
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 678,
+      "mean_forecast": 0.1324188790560472,
+      "observed": 0.048672566371681415,
+      "observed_95ci": [
+       0.03486465420083028,
+       0.06756617430831319
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 248,
+      "mean_forecast": 0.2698790322580645,
+      "observed": 0.23387096774193547,
+      "observed_95ci": [
+       0.185493629127094,
+       0.29036738827432024
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 102,
+      "mean_forecast": 0.5651960784313727,
+      "observed": 0.47058823529411764,
+      "observed_95ci": [
+       0.37655749862560384,
+       0.5667540159395578
+      ],
+      "forecast_inside_ci": true
+     }
+    ],
+    "calibrated": false,
+    "logit_clip": [
+     0.005,
+     0.995
+    ]
+   },
+   "persistence_dv24": {
+    "n": 2221,
+    "events": 149,
+    "observed_rate": 0.06708689779378658,
+    "mean_forecast": 0.06308585113695082,
+    "auc": 0.7410600917312327,
+    "brier": 0.06274363528361421,
+    "brier_climatology": 0.0626114964369524,
+    "bss_vs_climatology": -0.0021104566123071322,
+    "log_loss": 0.23277717109891097,
+    "calibration_intercept": -0.5116272070336378,
+    "calibration_slope": 0.7659295536310181,
+    "prob_range": {
+     "min": 0.0006561526207815908,
+     "p01": 0.003986984669087291,
+     "median": 0.05029500820249021,
+     "p99": 0.4119848738591469,
+     "max": 0.7181844656357639
+    },
+    "brier_climatology_basin": 0.06264750075897357,
+    "bss_vs_basin_climatology": -0.0015345308827321436,
+    "ci95": {
+     "auc": [
+      0.6861764452967475,
+      0.7869837142749911
+     ],
+     "brier": [
+      0.04626689447368877,
+      0.08049824989805499
+     ],
+     "bss_vs_climatology": [
+      -0.023157392758586515,
+      0.018515991066881787
+     ],
+     "bss_vs_basin_climatology": [
+      -0.02527880319352786,
+      0.01926996044196885
+     ],
+     "mean_minus_observed": [
+      -0.019198888919000866,
+      0.010622461292401405
+     ],
+     "calibration_intercept": [
+      -1.0120694204169567,
+      -0.12611766892426918
+     ],
+     "calibration_slope": [
+      0.5661679542745928,
+      0.9658492201303724
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 82,
+      "mean_forecast": 0.005648447396534063,
+      "observed": 0.024390243902439025,
+      "observed_95ci": [
+       0.00671422956512354,
+       0.08463541909007394
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 183,
+      "mean_forecast": 0.015419002342895356,
+      "observed": 0.00546448087431694,
+      "observed_95ci": [
+       0.0009652423746200223,
+       0.030299743581398343
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 613,
+      "mean_forecast": 0.03326524493343117,
+      "observed": 0.008156606851549755,
+      "observed_95ci": [
+       0.0034888510378187406,
+       0.018950621267551065
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 1033,
+      "mean_forecast": 0.05740779462209968,
+      "observed": 0.08131655372700872,
+      "observed_95ci": [
+       0.06615875618843915,
+       0.09957687787562618
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 238,
+      "mean_forecast": 0.1317956780283375,
+      "observed": 0.19747899159663865,
+      "observed_95ci": [
+       0.15188081315501184,
+       0.2526881278377701
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 48,
+      "mean_forecast": 0.28210618189540676,
+      "observed": 0.1875,
+      "observed_95ci": [
+       0.10191276348200173,
+       0.31940139348846214
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 24,
+      "mean_forecast": 0.5094379237231667,
+      "observed": 0.041666666666666664,
+      "observed_95ci": [
+       0.007393265354805126,
+       0.20242226248842232
+      ],
+      "forecast_inside_ci": false
+     }
+    ],
+    "calibrated": false,
+    "logit_clip": null
+   }
+  },
+  "paired": {
+   "v8_2_C_minus_SHIPS_RII_RIOD": {
+    "delta_auc": -0.03630542095307199,
+    "delta_brier": 0.001071729217030866,
+    "ci95": {
+     "delta_auc": [
+      -0.06421763029360071,
+      -0.0094576595044527
+     ],
+     "delta_brier": [
+      -0.0035293360760033235,
+      0.0057776739781381795
+     ]
+    }
+   },
+   "v8_2_C_minus_persistence_dv24": {
+    "delta_auc": 0.1043961027182504,
+    "delta_brier": -0.008286809263341556,
+    "ci95": {
+     "delta_auc": [
+      0.06942248433078571,
+      0.13950575413251273
+     ],
+     "delta_brier": [
+      -0.01498565969271683,
+      -0.0025657248387292372
+     ]
+    }
+   },
+   "SHIPS_RII_RIOD_minus_persistence_dv24": {
+    "delta_auc": 0.14070152367132238,
+    "delta_brier": -0.009358538480372422,
+    "ci95": {
+     "delta_auc": [
+      0.09101202950097868,
+      0.19293750072823967
+     ],
+     "delta_brier": [
+      -0.019332808194188724,
+      -0.0005329492362050536
+     ]
+    }
+   }
+  },
+  "per_atcf_basin": {
+   "AL": {
+    "n": 1185,
+    "events": 58,
+    "storms": 57,
+    "observed_rate": 0.048945147679324896,
+    "by_dataset_basin": {
+     "NA": {
+      "n": 1185,
+      "events": 58
+     }
+    },
+    "forecasts": {
+     "v8_2_C": {
+      "n": 1185,
+      "events": 58,
+      "observed_rate": 0.048945147679324896,
+      "mean_forecast": 0.05053768977983668,
+      "auc": 0.8042560352476823,
+      "brier": 0.04296222945787692,
+      "brier_climatology": 0.04672156966106444,
+      "bss_vs_climatology": 0.0804626263727688,
+      "log_loss": 0.1653924232168515,
+      "calibration_intercept": -0.5346834094701021,
+      "calibration_slope": 0.7790045004800222,
+      "prob_range": {
+       "min": 6.458329309018919e-05,
+       "p01": 0.00027669669010865067,
+       "median": 0.018529341663782603,
+       "p99": 0.3962442531535912,
+       "max": 0.7079652938090687
+      },
+      "brier_climatology_basin": 0.04656050643809308,
+      "bss_vs_basin_climatology": 0.07728174058846271,
+      "ci95": {
+       "auc": [
+        0.7215160696551407,
+        0.8588487763274599
+       ],
+       "brier": [
+        0.02759917240168381,
+        0.059517807058505526
+       ],
+       "bss_vs_climatology": [
+        -0.035530988824314665,
+        0.14912078934508166
+       ],
+       "bss_vs_basin_climatology": [
+        -0.06078701789507297,
+        0.15181519725194104
+       ],
+       "mean_minus_observed": [
+        -0.018033914190499004,
+        0.020565828550330775
+       ],
+       "calibration_intercept": [
+        -1.569849772980698,
+        0.14871189994024986
+       ],
+       "calibration_slope": [
+        0.5390722731642229,
+        1.0185629904287765
+       ]
+      },
+      "reliability": [
+       {
+        "bin": [
+         0.0,
+         0.01
+        ],
+        "n": 419,
+        "mean_forecast": 0.0038256496382245526,
+        "observed": 0.0,
+        "observed_95ci": [
+         0.0,
+         0.009085198807307512
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.01,
+         0.02
+        ],
+        "n": 191,
+        "mean_forecast": 0.014886359407803775,
+        "observed": 0.041884816753926704,
+        "observed_95ci": [
+         0.02137375216179106,
+         0.08046076367055685
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.02,
+         0.05
+        ],
+        "n": 263,
+        "mean_forecast": 0.03209417631690394,
+        "observed": 0.045627376425855515,
+        "observed_95ci": [
+         0.026290303194593807,
+         0.07804725136961208
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.05,
+         0.1
+        ],
+        "n": 140,
+        "mean_forecast": 0.069890128824871,
+        "observed": 0.07857142857142857,
+        "observed_95ci": [
+         0.04443691687302743,
+         0.13521625717397984
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.1,
+         0.2
+        ],
+        "n": 100,
+        "mean_forecast": 0.14169146394682575,
+        "observed": 0.09,
+        "observed_95ci": [
+         0.04807199516388488,
+         0.16226374696643667
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.2,
+         0.4
+        ],
+        "n": 60,
+        "mean_forecast": 0.2810115095013666,
+        "observed": 0.2,
+        "observed_95ci": [
+         0.11828389736858964,
+         0.3178204609181701
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.4,
+         1.0
+        ],
+        "n": 12,
+        "mean_forecast": 0.5154747643506336,
+        "observed": 0.5,
+        "observed_95ci": [
+         0.2537781703934222,
+         0.7462218296065778
+        ],
+        "forecast_inside_ci": true
+       }
+      ],
+      "calibrated": true,
+      "logit_clip": null
+     },
+     "v8_2_served_auc_only": {
+      "n": 1185,
+      "events": 58,
+      "observed_rate": 0.048945147679324896,
+      "mean_forecast": 0.055705225040741005,
+      "auc": 0.8102683352201451,
+      "brier": 0.042655734996407034,
+      "brier_climatology": 0.04672156966106444,
+      "bss_vs_climatology": 0.08702264701619555,
+      "log_loss": 0.16338308711778035,
+      "calibration_intercept": -0.41407645752259525,
+      "calibration_slope": 0.8799730334795266,
+      "prob_range": {
+       "min": 0.00016310377599823193,
+       "p01": 0.0005753346152471235,
+       "median": 0.02336841234794629,
+       "p99": 0.37616116819178347,
+       "max": 0.6606023492204388
+      },
+      "brier_climatology_basin": 0.04656050643809308,
+      "bss_vs_basin_climatology": 0.08386445381297203,
+      "ci95": {
+       "auc": [
+        0.7232371258176983,
+        0.8637469640794618
+       ],
+       "brier": [
+        0.027897007367692614,
+        0.05885748470686302
+       ],
+       "bss_vs_climatology": [
+        -0.03882376603554418,
+        0.15812741772066385
+       ],
+       "bss_vs_basin_climatology": [
+        -0.06554779851342593,
+        0.16220700693632356
+       ],
+       "mean_minus_observed": [
+        -0.013293441589274868,
+        0.026095678909330167
+       ],
+       "calibration_intercept": [
+        -1.5226408913238567,
+        0.2978807928543974
+       ],
+       "calibration_slope": [
+        0.602334883320837,
+        1.1447442908808347
+       ]
+      },
+      "reliability": [
+       {
+        "bin": [
+         0.0,
+         0.01
+        ],
+        "n": 345,
+        "mean_forecast": 0.0045965220216345965,
+        "observed": 0.0,
+        "observed_95ci": [
+         0.0,
+         0.011012448056653792
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.01,
+         0.02
+        ],
+        "n": 187,
+        "mean_forecast": 0.014871674326720154,
+        "observed": 0.016042780748663103,
+        "observed_95ci": [
+         0.005470637462600011,
+         0.046098831667820195
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.02,
+         0.05
+        ],
+        "n": 287,
+        "mean_forecast": 0.03210549097221516,
+        "observed": 0.04878048780487805,
+        "observed_95ci": [
+         0.02927653204861261,
+         0.08020436752008735
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.05,
+         0.1
+        ],
+        "n": 171,
+        "mean_forecast": 0.07030046765465081,
+        "observed": 0.07017543859649122,
+        "observed_95ci": [
+         0.04059547116773929,
+         0.1186435200105615
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.1,
+         0.2
+        ],
+        "n": 114,
+        "mean_forecast": 0.14021860768493272,
+        "observed": 0.07894736842105263,
+        "observed_95ci": [
+         0.04208813714490404,
+         0.14325897287396874
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.2,
+         0.4
+        ],
+        "n": 72,
+        "mean_forecast": 0.2758542670529205,
+        "observed": 0.2222222222222222,
+        "observed_95ci": [
+         0.1416732392052012,
+         0.3309117273566856
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.4,
+         1.0
+        ],
+        "n": 9,
+        "mean_forecast": 0.5068671216504265,
+        "observed": 0.4444444444444444,
+        "observed_95ci": [
+         0.188775429471914,
+         0.7333526542559703
+        ],
+        "forecast_inside_ci": true
+       }
+      ],
+      "calibrated": true,
+      "logit_clip": null
+     },
+     "SHIPS_RII_RIOD": {
+      "n": 1185,
+      "events": 58,
+      "observed_rate": 0.048945147679324896,
+      "mean_forecast": 0.10366244725738397,
+      "auc": 0.8201740966251568,
+      "brier": 0.0452462447257384,
+      "brier_climatology": 0.04672156966106444,
+      "bss_vs_climatology": 0.03157695569794838,
+      "log_loss": 0.18270394135329,
+      "calibration_intercept": -0.6422384878000815,
+      "calibration_slope": 1.177880911667792,
+      "prob_range": {
+       "min": 0.0,
+       "p01": 0.0,
+       "median": 0.09,
+       "p99": 0.51,
+       "max": 0.9
+      },
+      "brier_climatology_basin": 0.04656050643809308,
+      "bss_vs_basin_climatology": 0.02822696342665698,
+      "ci95": {
+       "auc": [
+        0.7151679063880773,
+        0.8850371337995175
+       ],
+       "brier": [
+        0.032474051059829506,
+        0.059436857614900224
+       ],
+       "bss_vs_climatology": [
+        -0.2150787369258009,
+        0.16167865206976798
+       ],
+       "bss_vs_basin_climatology": [
+        -0.2479996572677402,
+        0.16767966122631714
+       ],
+       "mean_minus_observed": [
+        0.03405368418346359,
+        0.0754201764882724
+       ],
+       "calibration_intercept": [
+        -1.7216888280899356,
+        0.20484748531683847
+       ],
+       "calibration_slope": [
+        0.7369279042743387,
+        1.6557698008834956
+       ]
+      },
+      "reliability": [
+       {
+        "bin": [
+         0.0,
+         0.01
+        ],
+        "n": 247,
+        "mean_forecast": 0.0,
+        "observed": 0.008097165991902834,
+        "observed_95ci": [
+         0.002223304238352349,
+         0.02903785818446747
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.02,
+         0.05
+        ],
+        "n": 44,
+        "mean_forecast": 0.030227272727272735,
+        "observed": 0.0,
+        "observed_95ci": [
+         6.938893903907228e-18,
+         0.08029831778201396
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.05,
+         0.1
+        ],
+        "n": 400,
+        "mean_forecast": 0.07390000000000001,
+        "observed": 0.02,
+        "observed_95ci": [
+         0.010168264597915496,
+         0.038963870377777945
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.1,
+         0.2
+        ],
+        "n": 338,
+        "mean_forecast": 0.11979289940828403,
+        "observed": 0.029585798816568046,
+        "observed_95ci": [
+         0.01614813517870083,
+         0.05359644827749642
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.2,
+         0.4
+        ],
+        "n": 124,
+        "mean_forecast": 0.2831451612903225,
+        "observed": 0.22580645161290322,
+        "observed_95ci": [
+         0.16109993441103604,
+         0.30699182914636625
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.4,
+         1.0
+        ],
+        "n": 32,
+        "mean_forecast": 0.5109375,
+        "observed": 0.3125,
+        "observed_95ci": [
+         0.17952352116618736,
+         0.4856699969803239
+        ],
+        "forecast_inside_ci": false
+       }
+      ],
+      "calibrated": false,
+      "logit_clip": [
+       0.005,
+       0.995
+      ]
+     }
+    },
+    "paired": {
+     "v8_2_C_minus_SHIPS_RII_RIOD": {
+      "delta_auc": -0.015918061377474535,
+      "delta_brier": -0.0022840152678614764,
+      "ci95": {
+       "delta_auc": [
+        -0.06671128610626294,
+        0.038474189495359835
+       ],
+       "delta_brier": [
+        -0.00716346148368724,
+        0.0021890902751047813
+       ]
+      }
+     }
+    }
+   },
+   "EP_CP": {
+    "n": 1036,
+    "events": 91,
+    "storms": 52,
+    "observed_rate": 0.08783783783783784,
+    "by_dataset_basin": {
+     "EP": {
+      "n": 1036,
+      "events": 91
+     }
+    },
+    "forecasts": {
+     "v8_2_C": {
+      "n": 1036,
+      "events": 91,
+      "observed_rate": 0.08783783783783784,
+      "mean_forecast": 0.07631258598720822,
+      "auc": 0.8680039537182395,
+      "brier": 0.0676046029762948,
+      "brier_climatology": 0.08078675051941113,
+      "bss_vs_climatology": 0.16317214714495765,
+      "log_loss": 0.22503482295226687,
+      "calibration_intercept": 0.03327355233113191,
+      "calibration_slope": 0.911444694554366,
+      "prob_range": {
+       "min": 0.00019351818879965814,
+       "p01": 0.00041362982114739763,
+       "median": 0.027832066957589635,
+       "p99": 0.6201569476491142,
+       "max": 0.8305413034375401
+      },
+      "brier_climatology_basin": 0.08104816511249033,
+      "bss_vs_basin_climatology": 0.16587127071336683,
+      "ci95": {
+       "auc": [
+        0.8106986722250674,
+        0.9164315001898841
+       ],
+       "brier": [
+        0.04676078380122,
+        0.0923277988537244
+       ],
+       "bss_vs_climatology": [
+        0.025043544655120976,
+        0.2690323488366138
+       ],
+       "bss_vs_basin_climatology": [
+        0.026117848498296268,
+        0.271578386971018
+       ],
+       "mean_minus_observed": [
+        -0.0330338064829612,
+        0.00864112356182737
+       ],
+       "calibration_intercept": [
+        -0.5795951646575604,
+        0.6609867374342778
+       ],
+       "calibration_slope": [
+        0.6489624815641357,
+        1.228884420599234
+       ]
+      },
+      "reliability": [
+       {
+        "bin": [
+         0.0,
+         0.01
+        ],
+        "n": 300,
+        "mean_forecast": 0.0037421195315971777,
+        "observed": 0.0033333333333333335,
+        "observed_95ci": [
+         0.0005886425761407379,
+         0.018637164554943353
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.01,
+         0.02
+        ],
+        "n": 135,
+        "mean_forecast": 0.014688804893787707,
+        "observed": 0.014814814814814815,
+        "observed_95ci": [
+         0.004072118099076125,
+         0.05240663178568465
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.02,
+         0.05
+        ],
+        "n": 223,
+        "mean_forecast": 0.03234249810152375,
+        "observed": 0.026905829596412557,
+        "observed_95ci": [
+         0.012388090575053887,
+         0.057447424603819824
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.05,
+         0.1
+        ],
+        "n": 153,
+        "mean_forecast": 0.0690633618266255,
+        "observed": 0.0915032679738562,
+        "observed_95ci": [
+         0.055289031952932284,
+         0.14772853481506804
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.1,
+         0.2
+        ],
+        "n": 121,
+        "mean_forecast": 0.14801531079074148,
+        "observed": 0.2231404958677686,
+        "observed_95ci": [
+         0.1581287736809404,
+         0.30519114532041813
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.2,
+         0.4
+        ],
+        "n": 62,
+        "mean_forecast": 0.27703453660118343,
+        "observed": 0.4032258064516129,
+        "observed_95ci": [
+         0.2902468291165249,
+         0.5274975756367011
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.4,
+         1.0
+        ],
+        "n": 42,
+        "mean_forecast": 0.5497416488462056,
+        "observed": 0.38095238095238093,
+        "observed_95ci": [
+         0.24999520898785943,
+         0.5318623178000363
+        ],
+        "forecast_inside_ci": false
+       }
+      ],
+      "calibrated": true,
+      "logit_clip": null
+     },
+     "v8_2_served_auc_only": {
+      "n": 1036,
+      "events": 91,
+      "observed_rate": 0.08783783783783784,
+      "mean_forecast": 0.08004211639156934,
+      "auc": 0.8689109831966975,
+      "brier": 0.06651527577825854,
+      "brier_climatology": 0.08078675051941113,
+      "bss_vs_climatology": 0.17665613048421225,
+      "log_loss": 0.22209064844435927,
+      "calibration_intercept": 0.19995302078098423,
+      "calibration_slope": 1.0413854720908067,
+      "prob_range": {
+       "min": 0.00046365043382135706,
+       "p01": 0.00094489042862461,
+       "median": 0.03517717824219823,
+       "p99": 0.5643371782631567,
+       "max": 0.7655615665947575
+      },
+      "brier_climatology_basin": 0.08104816511249033,
+      "bss_vs_basin_climatology": 0.17931176250641767,
+      "ci95": {
+       "auc": [
+        0.8107512835669751,
+        0.9181261274999845
+       ],
+       "brier": [
+        0.04640334478684763,
+        0.09017995622256694
+       ],
+       "bss_vs_climatology": [
+        0.04892895773245598,
+        0.2708802380127271
+       ],
+       "bss_vs_basin_climatology": [
+        0.05012211721867834,
+        0.27330357662684357
+       ],
+       "mean_minus_observed": [
+        -0.029753087386748322,
+        0.012305443604592774
+       ],
+       "calibration_intercept": [
+        -0.4507109497005925,
+        0.8605370365552809
+       ],
+       "calibration_slope": [
+        0.7474539196060801,
+        1.3959405770189095
+       ]
+      },
+      "reliability": [
+       {
+        "bin": [
+         0.0,
+         0.01
+        ],
+        "n": 247,
+        "mean_forecast": 0.004712113225500094,
+        "observed": 0.004048582995951417,
+        "observed_95ci": [
+         0.0007150137688097524,
+         0.022572989496996237
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.01,
+         0.02
+        ],
+        "n": 122,
+        "mean_forecast": 0.014593586071668127,
+        "observed": 0.00819672131147541,
+        "observed_95ci": [
+         0.0014483536709422769,
+         0.04497190799133792
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.02,
+         0.05
+        ],
+        "n": 250,
+        "mean_forecast": 0.03317228425858821,
+        "observed": 0.028,
+        "observed_95ci": [
+         0.013627884857773491,
+         0.056658466945870976
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.05,
+         0.1
+        ],
+        "n": 172,
+        "mean_forecast": 0.07072624111018858,
+        "observed": 0.06395348837209303,
+        "observed_95ci": [
+         0.03608213881071923,
+         0.11087739749923245
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.1,
+         0.2
+        ],
+        "n": 134,
+        "mean_forecast": 0.14719724502124376,
+        "observed": 0.19402985074626866,
+        "observed_95ci": [
+         0.13599110366277767,
+         0.26912317243384337
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.2,
+         0.4
+        ],
+        "n": 74,
+        "mean_forecast": 0.27297470737910035,
+        "observed": 0.3918918918918919,
+        "observed_95ci": [
+         0.2886474844994506,
+         0.5058068946500016
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.4,
+         1.0
+        ],
+        "n": 37,
+        "mean_forecast": 0.5296426864790335,
+        "observed": 0.43243243243243246,
+        "observed_95ci": [
+         0.2867148684035131,
+         0.5908609366579929
+        ],
+        "forecast_inside_ci": true
+       }
+      ],
+      "calibrated": true,
+      "logit_clip": null
+     },
+     "SHIPS_RII_RIOD": {
+      "n": 1036,
+      "events": 91,
+      "observed_rate": 0.08783783783783784,
+      "mean_forecast": 0.12145752895752894,
+      "auc": 0.9072678644107216,
+      "brier": 0.06269449806949806,
+      "brier_climatology": 0.08078675051941113,
+      "bss_vs_climatology": 0.2239507386247196,
+      "log_loss": 0.21092836641063026,
+      "calibration_intercept": -0.2813433098673589,
+      "calibration_slope": 1.1868527666392654,
+      "prob_range": {
+       "min": 0.0,
+       "p01": 0.0,
+       "median": 0.1,
+       "p99": 0.8025000000000045,
+       "max": 0.99
+      },
+      "brier_climatology_basin": 0.08104816511249033,
+      "bss_vs_basin_climatology": 0.22645382554334703,
+      "ci95": {
+       "auc": [
+        0.8673166249110126,
+        0.9403869232273497
+       ],
+       "brier": [
+        0.046973747561966685,
+        0.08224181426662916
+       ],
+       "bss_vs_climatology": [
+        0.025245630928806575,
+        0.3562849226671073
+       ],
+       "bss_vs_basin_climatology": [
+        0.025259281875767113,
+        0.35946318583636366
+       ],
+       "mean_minus_observed": [
+        0.007835411455633452,
+        0.06054137468918526
+       ],
+       "calibration_intercept": [
+        -0.9180205044424581,
+        0.6809357015428789
+       ],
+       "calibration_slope": [
+        0.859064861134849,
+        1.833901485005122
+       ]
+      },
+      "reliability": [
+       {
+        "bin": [
+         0.0,
+         0.01
+        ],
+        "n": 458,
+        "mean_forecast": 0.0,
+        "observed": 0.0,
+        "observed_95ci": [
+         0.0,
+         0.00831800340203221
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.02,
+         0.05
+        ],
+        "n": 3,
+        "mean_forecast": 0.02666666666666667,
+        "observed": 0.0,
+        "observed_95ci": [
+         0.0,
+         0.5615060804490177
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.05,
+         0.1
+        ],
+        "n": 41,
+        "mean_forecast": 0.08146341463414634,
+        "observed": 0.0,
+        "observed_95ci": [
+         0.0,
+         0.08567044886890744
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.1,
+         0.2
+        ],
+        "n": 340,
+        "mean_forecast": 0.14497058823529413,
+        "observed": 0.06764705882352941,
+        "observed_95ci": [
+         0.045496099106811974,
+         0.09945901976187639
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.2,
+         0.4
+        ],
+        "n": 124,
+        "mean_forecast": 0.25661290322580643,
+        "observed": 0.24193548387096775,
+        "observed_95ci": [
+         0.17504889877225968,
+         0.3243315845758836
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.4,
+         1.0
+        ],
+        "n": 70,
+        "mean_forecast": 0.59,
+        "observed": 0.5428571428571428,
+        "observed_95ci": [
+         0.4269805339664774,
+         0.6542744767591839
+        ],
+        "forecast_inside_ci": true
+       }
+      ],
+      "calibrated": false,
+      "logit_clip": [
+       0.005,
+       0.995
+      ]
+     }
+    },
+    "paired": {
+     "v8_2_C_minus_SHIPS_RII_RIOD": {
+      "delta_auc": -0.03926391069248214,
+      "delta_brier": 0.004910104906796733,
+      "ci95": {
+       "delta_auc": [
+        -0.07593389749725749,
+        -0.0007425532021527365
+       ],
+       "delta_brier": [
+        -0.0035913006324180875,
+        0.013605813568915956
+       ]
+      }
+     }
+    }
+   }
+  }
+ },
+ "all_noaa_aids_intersection": {
+  "n": 2114,
+  "events": 146,
+  "storms": 107,
+  "observed_rate": 0.06906338694418164,
+  "by_dataset_basin": {
+   "EP": {
+    "n": 1000,
+    "events": 91
+   },
+   "NA": {
+    "n": 1114,
+    "events": 55
+   }
+  },
+  "forecasts": {
+   "v8_2_C": {
+    "n": 2114,
+    "events": 146,
+    "observed_rate": 0.06906338694418164,
+    "mean_forecast": 0.06412193775411557,
+    "auc": 0.842222129413075,
+    "brier": 0.05583943239829515,
+    "brier_climatology": 0.06434265620240848,
+    "bss_vs_climatology": 0.13215531198096597,
+    "log_loss": 0.19801721471416123,
+    "calibration_intercept": -0.17167178145713535,
+    "calibration_slope": 0.8647101769659726,
+    "prob_range": {
+     "min": 6.458329309018919e-05,
+     "p01": 0.0003052670089640542,
+     "median": 0.02350863598778209,
+     "p99": 0.554172621905743,
+     "max": 0.8305413034375401
+    },
+    "brier_climatology_basin": 0.06440274105541788,
+    "bss_vs_basin_climatology": 0.13296497193736045,
+    "ci95": {
+     "auc": [
+      0.8020059800876017,
+      0.8799255917434288
+     ],
+     "brier": [
+      0.042415286028365265,
+      0.07117858831657964
+     ],
+     "bss_vs_climatology": [
+      0.04049969839228041,
+      0.2076846064758698
+     ],
+     "bss_vs_basin_climatology": [
+      0.037490455009720355,
+      0.20940582372301822
+     ],
+     "mean_minus_observed": [
+      -0.020171108315889887,
+      0.010820483626893937
+     ],
+     "calibration_intercept": [
+      -0.6623806172951753,
+      0.2847414949627866
+     ],
+     "calibration_slope": [
+      0.7043698010454608,
+      1.066152607571825
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 670,
+      "mean_forecast": 0.0036935860784392763,
+      "observed": 0.0014925373134328358,
+      "observed_95ci": [
+       0.00026351130996352633,
+       0.008405588371623364
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 306,
+      "mean_forecast": 0.014741217025613443,
+      "observed": 0.032679738562091505,
+      "observed_95ci": [
+       0.017845879274525283,
+       0.05910182561726458
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 460,
+      "mean_forecast": 0.03224760881521275,
+      "observed": 0.03695652173913044,
+      "observed_95ci": [
+       0.02319962329473596,
+       0.05838339987524277
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 287,
+      "mean_forecast": 0.06957781424344082,
+      "observed": 0.08710801393728224,
+      "observed_95ci": [
+       0.05969699029822463,
+       0.1254264583418599
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 218,
+      "mean_forecast": 0.14528069570473412,
+      "observed": 0.16055045871559634,
+      "observed_95ci": [
+       0.11776228534204852,
+       0.21509503267224644
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 120,
+      "mean_forecast": 0.2794092765481606,
+      "observed": 0.3,
+      "observed_95ci": [
+       0.22525501338672319,
+       0.38715309503564865
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 53,
+      "mean_forecast": 0.5389664856138034,
+      "observed": 0.41509433962264153,
+      "observed_95ci": [
+       0.2926070830912865,
+       0.5490581761554623
+      ],
+      "forecast_inside_ci": true
+     }
+    ],
+    "calibrated": true,
+    "logit_clip": null
+   },
+   "RIOD": {
+    "n": 2114,
+    "events": 146,
+    "observed_rate": 0.06906338694418164,
+    "mean_forecast": 0.1139356669820246,
+    "auc": 0.8829003786613209,
+    "brier": 0.05435070955534532,
+    "brier_climatology": 0.06434265620240848,
+    "bss_vs_climatology": 0.15529272860030197,
+    "log_loss": 0.19761113523411467,
+    "calibration_intercept": -0.32179567902653833,
+    "calibration_slope": 1.2734838771898533,
+    "prob_range": {
+     "min": 0.0,
+     "p01": 0.0,
+     "median": 0.09,
+     "p99": 0.658699999999999,
+     "max": 0.99
+    },
+    "brier_climatology_basin": 0.06440274105541788,
+    "bss_vs_basin_climatology": 0.15608080239042754,
+    "ci95": {
+     "auc": [
+      0.8444898905086976,
+      0.9151219634180828
+     ],
+     "brier": [
+      0.043681203515225274,
+      0.06625873801252358
+     ],
+     "bss_vs_climatology": [
+      0.0034479219070489404,
+      0.2639597923603787
+     ],
+     "bss_vs_basin_climatology": [
+      9.290654658407406e-05,
+      0.2658570440686218
+     ],
+     "mean_minus_observed": [
+      0.02793534974720716,
+      0.06261833217197985
+     ],
+     "calibration_intercept": [
+      -0.8399444404989161,
+      0.2947577031540959
+     ],
+     "calibration_slope": [
+      1.0091795319642272,
+      1.6537947655268115
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 659,
+      "mean_forecast": 0.0,
+      "observed": 0.0015174506828528073,
+      "observed_95ci": [
+       0.0002679106546730125,
+       0.008545054614857446
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 43,
+      "mean_forecast": 0.030000000000000002,
+      "observed": 0.0,
+      "observed_95ci": [
+       0.0,
+       0.08201257002322722
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 416,
+      "mean_forecast": 0.07502403846153846,
+      "observed": 0.019230769230769232,
+      "observed_95ci": [
+       0.009775914711694,
+       0.03748381371921899
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 652,
+      "mean_forecast": 0.1326073619631902,
+      "observed": 0.05061349693251534,
+      "observed_95ci": [
+       0.036263653271554314,
+       0.07022791420449478
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 245,
+      "mean_forecast": 0.27016326530612245,
+      "observed": 0.23265306122448978,
+      "observed_95ci": [
+       0.18412010438629448,
+       0.289440586430675
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 99,
+      "mean_forecast": 0.5627272727272727,
+      "observed": 0.47474747474747475,
+      "observed_95ci": [
+       0.37917288365218244,
+       0.5722086584475127
+      ],
+      "forecast_inside_ci": true
+     }
+    ],
+    "calibrated": false,
+    "logit_clip": [
+     0.005,
+     0.995
+    ]
+   },
+   "RIOL": {
+    "n": 2114,
+    "events": 146,
+    "observed_rate": 0.06906338694418164,
+    "mean_forecast": 0.07100756859035005,
+    "auc": 0.8460626879385232,
+    "brier": 0.05840326395458846,
+    "brier_climatology": 0.06434265620240848,
+    "bss_vs_climatology": 0.09230878235949624,
+    "log_loss": 0.20285732585274208,
+    "calibration_intercept": -0.4855576687808325,
+    "calibration_slope": 0.7677483716869452,
+    "prob_range": {
+     "min": 0.0,
+     "p01": 0.0,
+     "median": 0.02,
+     "p99": 0.6086999999999989,
+     "max": 0.88
+    },
+    "brier_climatology_basin": 0.06440274105541788,
+    "bss_vs_basin_climatology": 0.09315561733105315,
+    "ci95": {
+     "auc": [
+      0.8044236867152187,
+      0.8804316283446296
+     ],
+     "brier": [
+      0.045565063619093925,
+      0.07251550489948577
+     ],
+     "bss_vs_climatology": [
+      -0.03423467036287885,
+      0.17837221458417415
+     ],
+     "bss_vs_basin_climatology": [
+      -0.03803227791129322,
+      0.1808532085085113
+     ],
+     "mean_minus_observed": [
+      -0.014949600650740646,
+      0.0194565657898898
+     ],
+     "calibration_intercept": [
+      -1.0068393670704845,
+      -0.0068590754840639695
+     ],
+     "calibration_slope": [
+      0.6313114219027026,
+      0.9195666988899336
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 666,
+      "mean_forecast": 0.0,
+      "observed": 0.0,
+      "observed_95ci": [
+       -4.336808689942018e-19,
+       0.0057350872206205165
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 370,
+      "mean_forecast": 0.009999999999999998,
+      "observed": 0.024324324324324326,
+      "observed_95ci": [
+       0.012848693721118382,
+       0.04557605087659359
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 360,
+      "mean_forecast": 0.02727777777777778,
+      "observed": 0.03611111111111111,
+      "observed_95ci": [
+       0.021222732405162127,
+       0.06079537657412994
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 261,
+      "mean_forecast": 0.06793103448275863,
+      "observed": 0.07279693486590039,
+      "observed_95ci": [
+       0.04709583632687426,
+       0.1108914285136946
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 211,
+      "mean_forecast": 0.13781990521327014,
+      "observed": 0.1943127962085308,
+      "observed_95ci": [
+       0.1465880635697102,
+       0.2529695640033483
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 163,
+      "mean_forecast": 0.27276073619631896,
+      "observed": 0.2147239263803681,
+      "observed_95ci": [
+       0.15863761247485125,
+       0.2839474502433198
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 83,
+      "mean_forecast": 0.5460240963855422,
+      "observed": 0.3493975903614458,
+      "observed_95ci": [
+       0.25555971692976304,
+       0.45655982025057457
+      ],
+      "forecast_inside_ci": false
+     }
+    ],
+    "calibrated": false,
+    "logit_clip": [
+     0.005,
+     0.995
+    ]
+   },
+   "RIOB": {
+    "n": 2114,
+    "events": 146,
+    "observed_rate": 0.06906338694418164,
+    "mean_forecast": 0.030917691579943243,
+    "auc": 0.8039087732486914,
+    "brier": 0.05768770104068117,
+    "brier_climatology": 0.06434265620240848,
+    "bss_vs_climatology": 0.10342991033494509,
+    "log_loss": 0.23600998637868068,
+    "calibration_intercept": 0.035142684784738545,
+    "calibration_slope": 0.6623580303133111,
+    "prob_range": {
+     "min": 0.0,
+     "p01": 0.0,
+     "median": 0.0,
+     "p99": 0.57,
+     "max": 0.86
+    },
+    "brier_climatology_basin": 0.06440274105541788,
+    "bss_vs_basin_climatology": 0.10426636979563475,
+    "ci95": {
+     "auc": [
+      0.7388938376683568,
+      0.8618149186481097
+     ],
+     "brier": [
+      0.04189240344408733,
+      0.07404453947961458
+     ],
+     "bss_vs_climatology": [
+      0.01488317233295938,
+      0.1932202337753441
+     ],
+     "bss_vs_basin_climatology": [
+      0.013583879769038427,
+      0.19258437547519588
+     ],
+     "mean_minus_observed": [
+      -0.05486896865346317,
+      -0.020414910251042553
+     ],
+     "calibration_intercept": [
+      -0.5812639946671809,
+      0.6371133908504144
+     ],
+     "calibration_slope": [
+      0.5305323703810015,
+      0.813222352773924
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 1499,
+      "mean_forecast": 0.0,
+      "observed": 0.02068045363575717,
+      "observed_95ci": [
+       0.014606944452929312,
+       0.029204459223945215
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 180,
+      "mean_forecast": 0.009999999999999998,
+      "observed": 0.08333333333333333,
+      "observed_95ci": [
+       0.05114940634159579,
+       0.13293080183761938
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 169,
+      "mean_forecast": 0.027633136094674556,
+      "observed": 0.15976331360946747,
+      "observed_95ci": [
+       0.11218201354565865,
+       0.22246890382608514
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 78,
+      "mean_forecast": 0.06641025641025641,
+      "observed": 0.20512820512820512,
+      "observed_95ci": [
+       0.13039684796163398,
+       0.3075418042641289
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 84,
+      "mean_forecast": 0.13333333333333333,
+      "observed": 0.2261904761904762,
+      "observed_95ci": [
+       0.14985904898307534,
+       0.32647107250833646
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 62,
+      "mean_forecast": 0.2848387096774193,
+      "observed": 0.1935483870967742,
+      "observed_95ci": [
+       0.11433696420146605,
+       0.3085203175170827
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 42,
+      "mean_forecast": 0.5916666666666667,
+      "observed": 0.6190476190476191,
+      "observed_95ci": [
+       0.46813768219996377,
+       0.7500047910121407
+      ],
+      "forecast_inside_ci": true
+     }
+    ],
+    "calibrated": false,
+    "logit_clip": [
+     0.005,
+     0.995
+    ]
+   },
+   "RIOC": {
+    "n": 2114,
+    "events": 146,
+    "observed_rate": 0.06906338694418164,
+    "mean_forecast": 0.0719678334910123,
+    "auc": 0.8743265536251253,
+    "brier": 0.05297805108798486,
+    "brier_climatology": 0.06434265620240848,
+    "bss_vs_climatology": 0.17662629715927414,
+    "log_loss": 0.18528687431544452,
+    "calibration_intercept": 0.14163547683552952,
+    "calibration_slope": 1.1173838504108136,
+    "prob_range": {
+     "min": 0.0,
+     "p01": 0.0,
+     "median": 0.04,
+     "p99": 0.59,
+     "max": 0.84
+    },
+    "brier_climatology_basin": 0.06440274105541788,
+    "bss_vs_basin_climatology": 0.1773944676920225,
+    "ci95": {
+     "auc": [
+      0.8356440967224396,
+      0.9064490307828469
+     ],
+     "brier": [
+      0.04062217849619186,
+      0.06614519466452733
+     ],
+     "bss_vs_climatology": [
+      0.07954404843294723,
+      0.25535216451040477
+     ],
+     "bss_vs_basin_climatology": [
+      0.0754005607726443,
+      0.2575299526812842
+     ],
+     "mean_minus_observed": [
+      -0.013264919781382221,
+      0.02012314389058105
+     ],
+     "calibration_intercept": [
+      -0.43132832654578945,
+      0.7636392041851894
+     ],
+     "calibration_slope": [
+      0.9188129018152147,
+      1.371811156896708
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 552,
+      "mean_forecast": 0.0,
+      "observed": 0.0018115942028985507,
+      "observed_95ci": [
+       0.0003198542424976405,
+       0.010189614642163024
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 94,
+      "mean_forecast": 0.01,
+      "observed": 0.0,
+      "observed_95ci": [
+       3.469446951953614e-18,
+       0.03926346257624569
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 515,
+      "mean_forecast": 0.030718446601941746,
+      "observed": 0.017475728155339806,
+      "observed_95ci": [
+       0.00922064329303447,
+       0.032876212471807824
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 512,
+      "mean_forecast": 0.06326171875000001,
+      "observed": 0.04296875,
+      "observed_95ci": [
+       0.02854448597889896,
+       0.06420026357212602
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 236,
+      "mean_forecast": 0.13669491525423727,
+      "observed": 0.18220338983050846,
+      "observed_95ci": [
+       0.13817575579964014,
+       0.23641147177055616
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 157,
+      "mean_forecast": 0.2719745222929936,
+      "observed": 0.2929936305732484,
+      "observed_95ci": [
+       0.22742506046449829,
+       0.36845063338584894
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 48,
+      "mean_forecast": 0.5839583333333334,
+      "observed": 0.5208333333333334,
+      "observed_95ci": [
+       0.3832899563598438,
+       0.6552890998421255
+      ],
+      "forecast_inside_ci": true
+     }
+    ],
+    "calibrated": true,
+    "logit_clip": [
+     0.005,
+     0.995
+    ]
+   },
+   "DTOP": {
+    "n": 2114,
+    "events": 146,
+    "observed_rate": 0.06906338694418164,
+    "mean_forecast": 0.06691579943235573,
+    "auc": 0.9061455897093218,
+    "brier": 0.04948013245033112,
+    "brier_climatology": 0.06434265620240848,
+    "bss_vs_climatology": 0.23099021130434805,
+    "log_loss": 0.1682359066679634,
+    "calibration_intercept": -0.16921787721542172,
+    "calibration_slope": 0.8978106714643087,
+    "prob_range": {
+     "min": 0.0,
+     "p01": 0.0,
+     "median": 0.01,
+     "p99": 0.7386999999999989,
+     "max": 0.99
+    },
+    "brier_climatology_basin": 0.06440274105541788,
+    "bss_vs_basin_climatology": 0.2317076627568695,
+    "ci95": {
+     "auc": [
+      0.8742873777316039,
+      0.9339739841832759
+     ],
+     "brier": [
+      0.037947592501217,
+      0.06126590963733977
+     ],
+     "bss_vs_climatology": [
+      0.10677585231319292,
+      0.33522439225669426
+     ],
+     "bss_vs_basin_climatology": [
+      0.10310074697267112,
+      0.33636857260252256
+     ],
+     "mean_minus_observed": [
+      -0.018139124517731624,
+      0.014183608735611712
+     ],
+     "calibration_intercept": [
+      -0.6765840043044473,
+      0.34899290888434137
+     ],
+     "calibration_slope": [
+      0.7600885970763929,
+      1.0892291354930692
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 786,
+      "mean_forecast": 0.0,
+      "observed": 0.002544529262086514,
+      "observed_95ci": [
+       0.000698064655821568,
+       0.00923000193373259
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 399,
+      "mean_forecast": 0.009999999999999998,
+      "observed": 0.005012531328320802,
+      "observed_95ci": [
+       0.0013756660793249765,
+       0.01809004947736033
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 379,
+      "mean_forecast": 0.0266754617414248,
+      "observed": 0.026385224274406333,
+      "observed_95ci": [
+       0.014393699330384927,
+       0.04788166468439298
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 171,
+      "mean_forecast": 0.06578947368421052,
+      "observed": 0.09941520467836257,
+      "observed_95ci": [
+       0.06299898745663292,
+       0.1534346301721236
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 153,
+      "mean_forecast": 0.13627450980392158,
+      "observed": 0.1830065359477124,
+      "observed_95ci": [
+       0.12975906724694125,
+       0.251782564565027
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 127,
+      "mean_forecast": 0.2759842519685039,
+      "observed": 0.31496062992125984,
+      "observed_95ci": [
+       0.24061637478558412,
+       0.400170653193285
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 99,
+      "mean_forecast": 0.6081818181818182,
+      "observed": 0.47474747474747475,
+      "observed_95ci": [
+       0.37917288365218244,
+       0.5722086584475127
+      ],
+      "forecast_inside_ci": false
+     }
+    ],
+    "calibrated": true,
+    "logit_clip": [
+     0.005,
+     0.995
+    ]
+   }
+  },
+  "paired": {
+   "v8_2_C_minus_RIOD": {
+    "delta_auc": -0.040678249248245923,
+    "delta_brier": 0.0014887228429498259,
+    "ci95": {
+     "delta_auc": [
+      -0.06932277881323044,
+      -0.01182565282846336
+     ],
+     "delta_brier": [
+      -0.003901446571476812,
+      0.00679553114700641
+     ]
+    }
+   },
+   "v8_2_C_minus_RIOL": {
+    "delta_auc": -0.00384055852544829,
+    "delta_brier": -0.0025638315562933126,
+    "ci95": {
+     "delta_auc": [
+      -0.04096647226383768,
+      0.03913277486818673
+     ],
+     "delta_brier": [
+      -0.008216269328278935,
+      0.002591277783951003
+     ]
+    }
+   },
+   "v8_2_C_minus_RIOB": {
+    "delta_auc": 0.03831335616438358,
+    "delta_brier": -0.0018482686423860195,
+    "ci95": {
+     "delta_auc": [
+      -0.014607976087843583,
+      0.09648865210516386
+     ],
+     "delta_brier": [
+      -0.008184206527858978,
+      0.0040562266339678466
+     ]
+    }
+   },
+   "v8_2_C_minus_RIOC": {
+    "delta_auc": -0.0321044242120504,
+    "delta_brier": 0.0028613813103102875,
+    "ci95": {
+     "delta_auc": [
+      -0.06150747740717305,
+      0.0006345512753279457
+     ],
+     "delta_brier": [
+      -0.0016032085188812167,
+      0.007526911983845418
+     ]
+    }
+   },
+   "v8_2_C_minus_DTOP": {
+    "delta_auc": -0.06392346029624685,
+    "delta_brier": 0.0063592999479640255,
+    "ci95": {
+     "delta_auc": [
+      -0.09865843203053845,
+      -0.03521195219003414
+     ],
+     "delta_brier": [
+      0.000927594244144529,
+      0.012622181890509473
+     ]
+    }
+   }
+  }
+ },
+ "other_techs": {
+  "SDCN": {
+   "n": 575,
+   "events": 46,
+   "storms": 33,
+   "observed_rate": 0.08,
+   "by_dataset_basin": {
+    "EP": {
+     "n": 250,
+     "events": 17
+    },
+    "NA": {
+     "n": 325,
+     "events": 29
+    }
+   },
+   "forecasts": {
+    "v8_2_C": {
+     "n": 575,
+     "events": 46,
+     "observed_rate": 0.08,
+     "mean_forecast": 0.07012016622540802,
+     "auc": 0.832333360729843,
+     "brier": 0.06552396882570537,
+     "brier_climatology": 0.0739217750601114,
+     "bss_vs_climatology": 0.11360395807023216,
+     "log_loss": 0.22609083963878704,
+     "calibration_intercept": -0.20898550435874433,
+     "calibration_slope": 0.8049896031867942,
+     "prob_range": {
+      "min": 0.00010341092319358686,
+      "p01": 0.00032126169083750644,
+      "median": 0.02675610024224162,
+      "p99": 0.5829934930713,
+      "max": 0.8305413034375401
+     },
+     "brier_climatology_basin": 0.07461244881259313,
+     "bss_vs_basin_climatology": 0.12180916363857242,
+     "ci95": {
+      "auc": [
+       0.7384461713728007,
+       0.9144261021828013
+      ],
+      "brier": [
+       0.035631616380505035,
+       0.10013358014525546
+      ],
+      "bss_vs_climatology": [
+       -0.10050496276381067,
+       0.282678866347545
+      ],
+      "bss_vs_basin_climatology": [
+       -0.09978068207337608,
+       0.28898508056885996
+      ],
+      "mean_minus_observed": [
+       -0.04260208558918932,
+       0.019962753558600395
+      ],
+      "calibration_intercept": [
+       -1.2275840651789174,
+       1.1718749286141847
+      ],
+      "calibration_slope": [
+       0.46060580359355685,
+       1.5509192693441158
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 184,
+       "mean_forecast": 0.0034249819409650152,
+       "observed": 0.0,
+       "observed_95ci": [
+        -1.734723475976807e-18,
+        0.020451273839234757
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 68,
+       "mean_forecast": 0.015413035912607636,
+       "observed": 0.058823529411764705,
+       "observed_95ci": [
+        0.023110391480533066,
+        0.14171889962656925
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 118,
+       "mean_forecast": 0.03263145266348862,
+       "observed": 0.03389830508474576,
+       "observed_95ci": [
+        0.01325961911756434,
+        0.08392886166404062
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 79,
+       "mean_forecast": 0.07122885835770176,
+       "observed": 0.11392405063291139,
+       "observed_95ci": [
+        0.06110510202849083,
+        0.20254987324963025
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 75,
+       "mean_forecast": 0.14488639299422992,
+       "observed": 0.17333333333333334,
+       "observed_95ci": [
+        0.10419048023286545,
+        0.2743102097582053
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 37,
+       "mean_forecast": 0.2768493647999074,
+       "observed": 0.24324324324324326,
+       "observed_95ci": [
+        0.13361203432663304,
+        0.4011760249070895
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 14,
+       "mean_forecast": 0.5752368045500588,
+       "observed": 0.5,
+       "observed_95ci": [
+        0.2679886791947528,
+        0.7320113208052472
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "calibrated": true,
+     "logit_clip": null
+    },
+    "SDCN": {
+     "n": 575,
+     "events": 46,
+     "observed_rate": 0.08,
+     "mean_forecast": 0.07281739130434783,
+     "auc": 0.9214268102243774,
+     "brier": 0.054721217391304346,
+     "brier_climatology": 0.0739217750601114,
+     "bss_vs_climatology": 0.25974156671959814,
+     "log_loss": 0.1818267589354566,
+     "calibration_intercept": 0.8913149358958523,
+     "calibration_slope": 1.4512354984773486,
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.03,
+      "p99": 0.5651999999999998,
+      "max": 0.69
+     },
+     "brier_climatology_basin": 0.07461244881259313,
+     "bss_vs_basin_climatology": 0.266594003250722,
+     "ci95": {
+      "auc": [
+       0.8767459029846629,
+       0.9577276692172416
+      ],
+      "brier": [
+       0.03115017075015124,
+       0.08026104188311688
+      ],
+      "bss_vs_climatology": [
+       0.14335009900496118,
+       0.3502062714303071
+      ],
+      "bss_vs_basin_climatology": [
+       0.14341516924377648,
+       0.35740033661452575
+      ],
+      "mean_minus_observed": [
+       -0.039204228584637735,
+       0.023454242814820513
+      ],
+      "calibration_intercept": [
+       -0.004698391595211739,
+       2.02611248256559
+      ],
+      "calibration_slope": [
+       1.1113587562251488,
+       2.1139699943867907
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 122,
+       "mean_forecast": 0.0,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.0305272660233182
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 51,
+       "mean_forecast": 0.01,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.07004901388726806
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 183,
+       "mean_forecast": 0.02890710382513661,
+       "observed": 0.00546448087431694,
+       "observed_95ci": [
+        0.0009652423746200223,
+        0.030299743581398343
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 88,
+       "mean_forecast": 0.06420454545454546,
+       "observed": 0.056818181818181816,
+       "observed_95ci": [
+        0.024510666532829656,
+        0.1262009935427788
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 62,
+       "mean_forecast": 0.13532258064516128,
+       "observed": 0.1774193548387097,
+       "observed_95ci": [
+        0.10206333434361749,
+        0.2904180148338023
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 56,
+       "mean_forecast": 0.2671428571428572,
+       "observed": 0.39285714285714285,
+       "observed_95ci": [
+        0.27580225617512844,
+        0.523668346215182
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 13,
+       "mean_forecast": 0.5438461538461539,
+       "observed": 0.5384615384615384,
+       "observed_95ci": [
+        0.2914343243183205,
+        0.7679424569851186
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "calibrated": false,
+     "logit_clip": [
+      0.005,
+      0.995
+     ]
+    }
+   },
+   "paired": {
+    "v8_2_C_minus_SDCN": {
+     "delta_auc": -0.08909344949453446,
+     "delta_brier": 0.010802751434401021,
+     "ci95": {
+      "delta_auc": [
+       -0.15486712351369936,
+       -0.03491906570623994
+      ],
+      "delta_brier": [
+       0.0010071462428754051,
+       0.023746060806492005
+      ]
+     }
+    }
+   }
+  },
+  "EIOD": {
+   "n": 2044,
+   "events": 139,
+   "storms": 107,
+   "observed_rate": 0.06800391389432485,
+   "by_dataset_basin": {
+    "EP": {
+     "n": 959,
+     "events": 87
+    },
+    "NA": {
+     "n": 1085,
+     "events": 52
+    }
+   },
+   "forecasts": {
+    "v8_2_C": {
+     "n": 2044,
+     "events": 139,
+     "observed_rate": 0.06800391389432485,
+     "mean_forecast": 0.06339489364602476,
+     "auc": 0.8423610717725033,
+     "brier": 0.055270073700704594,
+     "brier_climatology": 0.06341468899543924,
+     "bss_vs_climatology": 0.12843420702292496,
+     "log_loss": 0.19625742038009544,
+     "calibration_intercept": -0.1964174586245528,
+     "calibration_slope": 0.8556948711726778,
+     "prob_range": {
+      "min": 6.458329309018919e-05,
+      "p01": 0.00031908475967103167,
+      "median": 0.022930635204857087,
+      "p99": 0.5568213775094163,
+      "max": 0.8305413034375401
+     },
+     "brier_climatology_basin": 0.06344664664066034,
+     "bss_vs_basin_climatology": 0.1288732087964396,
+     "ci95": {
+      "auc": [
+       0.7989107496874919,
+       0.8808160494731451
+      ],
+      "brier": [
+       0.0415297728381517,
+       0.06985043639745252
+      ],
+      "bss_vs_climatology": [
+       0.03889916182085703,
+       0.20645084061983043
+      ],
+      "bss_vs_basin_climatology": [
+       0.0355095342444043,
+       0.20804007038063768
+      ],
+      "mean_minus_observed": [
+       -0.019547812280632623,
+       0.009822680059275642
+      ],
+      "calibration_intercept": [
+       -0.6837650267514287,
+       0.267767856169329
+      ],
+      "calibration_slope": [
+       0.6888878981885647,
+       1.0564644773902563
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 653,
+       "mean_forecast": 0.0037704349696408776,
+       "observed": 0.0015313935681470138,
+       "observed_95ci": [
+        0.00027037278062322194,
+        0.00862309559896784
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 301,
+       "mean_forecast": 0.01473355967542369,
+       "observed": 0.03322259136212625,
+       "observed_95ci": [
+        0.018143939095637485,
+        0.06006585904214949
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 448,
+       "mean_forecast": 0.03219628205456697,
+       "observed": 0.03571428571428571,
+       "observed_95ci": [
+        0.022100829705647203,
+        0.05722254379515484
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 274,
+       "mean_forecast": 0.06959016959834917,
+       "observed": 0.08759124087591241,
+       "observed_95ci": [
+        0.05956627414945086,
+        0.1270206156467496
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 204,
+       "mean_forecast": 0.145142697387712,
+       "observed": 0.1568627450980392,
+       "observed_95ci": [
+        0.11335760554939679,
+        0.21305250676690562
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 112,
+       "mean_forecast": 0.27929933272450086,
+       "observed": 0.3125,
+       "observed_95ci": [
+        0.23408095733633788,
+        0.40335498968096856
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 52,
+       "mean_forecast": 0.5442305913916454,
+       "observed": 0.40384615384615385,
+       "observed_95ci": [
+        0.28159535424282284,
+        0.5393266823750391
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "calibrated": true,
+     "logit_clip": null
+    },
+    "EIOD": {
+     "n": 2044,
+     "events": 139,
+     "observed_rate": 0.06800391389432485,
+     "mean_forecast": 0.11473581213307239,
+     "auc": 0.8782529881606526,
+     "brier": 0.05441643835616438,
+     "brier_climatology": 0.06341468899543924,
+     "bss_vs_climatology": 0.14189536812081527,
+     "log_loss": 0.20017806591635198,
+     "calibration_intercept": -0.6204251202021539,
+     "calibration_slope": 1.0839318209127158,
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.09,
+      "p99": 0.73,
+      "max": 0.99
+     },
+     "brier_climatology_basin": 0.06344664664066034,
+     "bss_vs_basin_climatology": 0.1423275895988626,
+     "ci95": {
+      "auc": [
+       0.8341324706671268,
+       0.9126198964272574
+      ],
+      "brier": [
+       0.0431086692933176,
+       0.06698233702046809
+      ],
+      "bss_vs_climatology": [
+       -0.02307761109282135,
+       0.26910374929936176
+      ],
+      "bss_vs_basin_climatology": [
+       -0.024872352679840105,
+       0.2718049588025795
+      ],
+      "mean_minus_observed": [
+       0.028438158596901648,
+       0.06438793329043328
+      ],
+      "calibration_intercept": [
+       -1.163649289690964,
+       0.029332158939183055
+      ],
+      "calibration_slope": [
+       0.808119606101847,
+       1.494510202146068
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 648,
+       "mean_forecast": 0.0,
+       "observed": 0.0030864197530864196,
+       "observed_95ci": [
+        0.0008467983434452377,
+        0.01118311812705925
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 42,
+       "mean_forecast": 0.02833333333333334,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.08380161250916197
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 405,
+       "mean_forecast": 0.07269135802469136,
+       "observed": 0.022222222222222223,
+       "observed_95ci": [
+        0.011734223668120956,
+        0.04168891135532089
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 624,
+       "mean_forecast": 0.1336698717948718,
+       "observed": 0.049679487179487176,
+       "observed_95ci": [
+        0.03521667224032188,
+        0.06965309108851775
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 224,
+       "mean_forecast": 0.2702232142857143,
+       "observed": 0.22321428571428573,
+       "observed_95ci": [
+        0.17361074338328866,
+        0.2821515054773233
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 101,
+       "mean_forecast": 0.5935643564356436,
+       "observed": 0.46534653465346537,
+       "observed_95ci": [
+        0.3711275816192353,
+        0.5621050283371178
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "calibrated": false,
+     "logit_clip": [
+      0.005,
+      0.995
+     ]
+    }
+   },
+   "paired": {
+    "v8_2_C_minus_EIOD": {
+     "delta_auc": -0.03589191638814926,
+     "delta_brier": 0.0008536353445402142,
+     "ci95": {
+      "delta_auc": [
+       -0.06988564198823019,
+       -0.0014112929577930926
+      ],
+      "delta_brier": [
+       -0.005065183291845323,
+       0.007360404949509215
+      ]
+     }
+    }
+   }
+  },
+  "EIOC": {
+   "n": 2044,
+   "events": 139,
+   "storms": 107,
+   "observed_rate": 0.06800391389432485,
+   "by_dataset_basin": {
+    "EP": {
+     "n": 959,
+     "events": 87
+    },
+    "NA": {
+     "n": 1085,
+     "events": 52
+    }
+   },
+   "forecasts": {
+    "v8_2_C": {
+     "n": 2044,
+     "events": 139,
+     "observed_rate": 0.06800391389432485,
+     "mean_forecast": 0.06339489364602476,
+     "auc": 0.8423610717725033,
+     "brier": 0.055270073700704594,
+     "brier_climatology": 0.06341468899543924,
+     "bss_vs_climatology": 0.12843420702292496,
+     "log_loss": 0.19625742038009544,
+     "calibration_intercept": -0.1964174586245528,
+     "calibration_slope": 0.8556948711726778,
+     "prob_range": {
+      "min": 6.458329309018919e-05,
+      "p01": 0.00031908475967103167,
+      "median": 0.022930635204857087,
+      "p99": 0.5568213775094163,
+      "max": 0.8305413034375401
+     },
+     "brier_climatology_basin": 0.06344664664066034,
+     "bss_vs_basin_climatology": 0.1288732087964396,
+     "ci95": {
+      "auc": [
+       0.7989107496874919,
+       0.8808160494731451
+      ],
+      "brier": [
+       0.0415297728381517,
+       0.06985043639745252
+      ],
+      "bss_vs_climatology": [
+       0.03889916182085703,
+       0.20645084061983043
+      ],
+      "bss_vs_basin_climatology": [
+       0.0355095342444043,
+       0.20804007038063768
+      ],
+      "mean_minus_observed": [
+       -0.019547812280632623,
+       0.009822680059275642
+      ],
+      "calibration_intercept": [
+       -0.6837650267514287,
+       0.267767856169329
+      ],
+      "calibration_slope": [
+       0.6888878981885647,
+       1.0564644773902563
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 653,
+       "mean_forecast": 0.0037704349696408776,
+       "observed": 0.0015313935681470138,
+       "observed_95ci": [
+        0.00027037278062322194,
+        0.00862309559896784
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 301,
+       "mean_forecast": 0.01473355967542369,
+       "observed": 0.03322259136212625,
+       "observed_95ci": [
+        0.018143939095637485,
+        0.06006585904214949
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 448,
+       "mean_forecast": 0.03219628205456697,
+       "observed": 0.03571428571428571,
+       "observed_95ci": [
+        0.022100829705647203,
+        0.05722254379515484
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 274,
+       "mean_forecast": 0.06959016959834917,
+       "observed": 0.08759124087591241,
+       "observed_95ci": [
+        0.05956627414945086,
+        0.1270206156467496
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 204,
+       "mean_forecast": 0.145142697387712,
+       "observed": 0.1568627450980392,
+       "observed_95ci": [
+        0.11335760554939679,
+        0.21305250676690562
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 112,
+       "mean_forecast": 0.27929933272450086,
+       "observed": 0.3125,
+       "observed_95ci": [
+        0.23408095733633788,
+        0.40335498968096856
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 52,
+       "mean_forecast": 0.5442305913916454,
+       "observed": 0.40384615384615385,
+       "observed_95ci": [
+        0.28159535424282284,
+        0.5393266823750391
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "calibrated": true,
+     "logit_clip": null
+    },
+    "EIOC": {
+     "n": 2044,
+     "events": 139,
+     "observed_rate": 0.06800391389432485,
+     "mean_forecast": 0.07491682974559688,
+     "auc": 0.8768122509866123,
+     "brier": 0.05198224070450098,
+     "brier_climatology": 0.06341468899543924,
+     "bss_vs_climatology": 0.18028075942721222,
+     "log_loss": 0.18289887401364938,
+     "calibration_intercept": -0.013526427469638827,
+     "calibration_slope": 1.076626600245925,
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.04,
+      "p99": 0.6356999999999994,
+      "max": 0.91
+     },
+     "brier_climatology_basin": 0.06344664664066034,
+     "bss_vs_basin_climatology": 0.18069364644422825,
+     "ci95": {
+      "auc": [
+       0.8368266497287269,
+       0.9082444211985077
+      ],
+      "brier": [
+       0.039667558793146436,
+       0.06480743538289398
+      ],
+      "bss_vs_climatology": [
+       0.07662462864106066,
+       0.27476213142189315
+      ],
+      "bss_vs_basin_climatology": [
+       0.07262263134165677,
+       0.27567571681099307
+      ],
+      "mean_minus_observed": [
+       -0.009169410274963824,
+       0.023157430052851233
+      ],
+      "calibration_intercept": [
+       -0.5522366116483006,
+       0.6210989610759473
+      ],
+      "calibration_slope": [
+       0.8757920056032912,
+       1.3451611516060358
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 534,
+       "mean_forecast": 0.0,
+       "observed": 0.0018726591760299626,
+       "observed_95ci": [
+        0.000330638342463962,
+        0.010530552015440672
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 86,
+       "mean_forecast": 0.01,
+       "observed": 0.0,
+       "observed_95ci": [
+        0.0,
+        0.042759701519118086
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 500,
+       "mean_forecast": 0.030340000000000002,
+       "observed": 0.02,
+       "observed_95ci": [
+        0.010899065235569357,
+        0.03642056855409787
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 478,
+       "mean_forecast": 0.06462343096234312,
+       "observed": 0.03765690376569038,
+       "observed_95ci": [
+        0.02395020846528342,
+        0.05873588588605527
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 250,
+       "mean_forecast": 0.13439999999999996,
+       "observed": 0.16,
+       "observed_95ci": [
+        0.11975315933080616,
+        0.21053785679893777
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 134,
+       "mean_forecast": 0.2740298507462686,
+       "observed": 0.30597014925373134,
+       "observed_95ci": [
+        0.23425809207841558,
+        0.38849730251944176
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 62,
+       "mean_forecast": 0.5788709677419354,
+       "observed": 0.46774193548387094,
+       "observed_95ci": [
+        0.34908630867622215,
+        0.5901618262415199
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "calibrated": true,
+     "logit_clip": [
+      0.005,
+      0.995
+     ]
+    }
+   },
+   "paired": {
+    "v8_2_C_minus_EIOC": {
+     "delta_auc": -0.03445117921410901,
+     "delta_brier": 0.003287832996203617,
+     "ci95": {
+      "delta_auc": [
+       -0.06663971635601981,
+       -0.0027912243626934436
+      ],
+      "delta_brier": [
+       -0.0007020891968781139,
+       0.00785424269374996
+      ]
+     }
+    }
+   }
+  }
+ },
+ "rii_developmental_sample": {
+  "n": 1486,
+  "events": 138,
+  "storms": 98,
+  "observed_rate": 0.09286675639300135,
+  "by_dataset_basin": {
+   "EP": {
+    "n": 733,
+    "events": 86
+   },
+   "NA": {
+    "n": 753,
+    "events": 52
+   }
+  },
+  "forecasts": {
+   "v8_2_C": {
+    "n": 1486,
+    "events": 138,
+    "observed_rate": 0.09286675639300135,
+    "mean_forecast": 0.07616046901679209,
+    "auc": 0.828823162602675,
+    "brier": 0.07153669200119575,
+    "brier_climatology": 0.08519146048946813,
+    "bss_vs_climatology": 0.16028330081229747,
+    "log_loss": 0.2469681472193456,
+    "calibration_intercept": 0.05132373176104317,
+    "calibration_slope": 0.8892330993266406,
+    "prob_range": {
+     "min": 0.00017442122621307138,
+     "p01": 0.000453518170582357,
+     "median": 0.03220650288385952,
+     "p99": 0.5652368309218302,
+     "max": 0.7217853056986089
+    },
+    "brier_climatology_basin": 0.08570901774024417,
+    "bss_vs_basin_climatology": 0.16535396289338045,
+    "ci95": {
+     "auc": [
+      0.7809847561450728,
+      0.8698365649713393
+     ],
+     "brier": [
+      0.053819504210885966,
+      0.09074652848302099
+     ],
+     "bss_vs_climatology": [
+      0.07835362458260521,
+      0.2267608546584038
+     ],
+     "bss_vs_basin_climatology": [
+      0.08195927779776906,
+      0.23119644528668784
+     ],
+     "mean_minus_observed": [
+      -0.03832629055641507,
+      0.0034010865551060095
+     ],
+     "calibration_intercept": [
+      -0.4234516466278947,
+      0.5080479701610024
+     ],
+     "calibration_slope": [
+      0.7209640674784438,
+      1.0871252320007245
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 375,
+      "mean_forecast": 0.004106856083894511,
+      "observed": 0.0026666666666666666,
+      "observed_95ci": [
+       0.0004708752303397238,
+       0.014948761895044606
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.01,
+       0.02
+      ],
+      "n": 206,
+      "mean_forecast": 0.014876407013052042,
+      "observed": 0.02912621359223301,
+      "observed_95ci": [
+       0.013415565913522814,
+       0.06207756795507138
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 317,
+      "mean_forecast": 0.03302193473759003,
+      "observed": 0.050473186119873815,
+      "observed_95ci": [
+       0.03130344031915555,
+       0.08040775922604058
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 248,
+      "mean_forecast": 0.07000175996248602,
+      "observed": 0.0967741935483871,
+      "observed_95ci": [
+       0.06589567956605226,
+       0.1399543467997269
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 192,
+      "mean_forecast": 0.14491382570463782,
+      "observed": 0.171875,
+      "observed_95ci": [
+       0.1250814752043684,
+       0.2315414282032835
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 102,
+      "mean_forecast": 0.2777741564623909,
+      "observed": 0.35294117647058826,
+      "observed_95ci": [
+       0.26707854330326647,
+       0.4494790295225413
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 46,
+      "mean_forecast": 0.5344573436051517,
+      "observed": 0.4782608695652174,
+      "observed_95ci": [
+       0.34124459875672114,
+       0.6186282785184867
+      ],
+      "forecast_inside_ci": true
+     }
+    ],
+    "calibrated": true,
+    "logit_clip": null
+   },
+   "SHIPS_RII_RIOD": {
+    "n": 1486,
+    "events": 138,
+    "observed_rate": 0.09286675639300135,
+    "mean_forecast": 0.128835800807537,
+    "auc": 0.8766100073108846,
+    "brier": 0.06728041722745626,
+    "brier_climatology": 0.08519146048946813,
+    "bss_vs_climatology": 0.2102445850687833,
+    "log_loss": 0.2351682034406965,
+    "calibration_intercept": -0.07078689903456228,
+    "calibration_slope": 1.2969251058002957,
+    "prob_range": {
+     "min": 0.0,
+     "p01": 0.0,
+     "median": 0.1,
+     "p99": 0.6915000000000009,
+     "max": 0.99
+    },
+    "brier_climatology_basin": 0.08570901774024417,
+    "bss_vs_basin_climatology": 0.2150135539837703,
+    "ci95": {
+     "auc": [
+      0.835540851818213,
+      0.911018451062266
+     ],
+     "brier": [
+      0.052909370659127555,
+      0.08264748497783686
+     ],
+     "bss_vs_climatology": [
+      0.0797171651512007,
+      0.3025077562710459
+     ],
+     "bss_vs_basin_climatology": [
+      0.08369262310482711,
+      0.3074328483430498
+     ],
+     "mean_minus_observed": [
+      0.011726426504975426,
+      0.05962080206612748
+     ],
+     "calibration_intercept": [
+      -0.6158132156842194,
+      0.6046274016821619
+     ],
+     "calibration_slope": [
+      1.010882871816312,
+      1.7130329368514705
+     ]
+    },
+    "reliability": [
+     {
+      "bin": [
+       0.0,
+       0.01
+      ],
+      "n": 387,
+      "mean_forecast": 0.0,
+      "observed": 0.002583979328165375,
+      "observed_95ci": [
+       0.0004562697820270113,
+       0.014489938605207102
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.02,
+       0.05
+      ],
+      "n": 19,
+      "mean_forecast": 0.02947368421052632,
+      "observed": 0.0,
+      "observed_95ci": [
+       0.0,
+       0.16818436536845052
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.05,
+       0.1
+      ],
+      "n": 301,
+      "mean_forecast": 0.0751827242524917,
+      "observed": 0.019933554817275746,
+      "observed_95ci": [
+       0.009166844614370666,
+       0.042799816103851515
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.1,
+       0.2
+      ],
+      "n": 494,
+      "mean_forecast": 0.1345748987854251,
+      "observed": 0.06275303643724696,
+      "observed_95ci": [
+       0.04455783601405543,
+       0.08769627854768468
+      ],
+      "forecast_inside_ci": false
+     },
+     {
+      "bin": [
+       0.2,
+       0.4
+      ],
+      "n": 202,
+      "mean_forecast": 0.2711881188118812,
+      "observed": 0.2722772277227723,
+      "observed_95ci": [
+       0.21556842308998125,
+       0.3374859643613407
+      ],
+      "forecast_inside_ci": true
+     },
+     {
+      "bin": [
+       0.4,
+       1.0
+      ],
+      "n": 83,
+      "mean_forecast": 0.5662650602409639,
+      "observed": 0.5421686746987951,
+      "observed_95ci": [
+       0.4354985237265798,
+       0.6451080058629257
+      ],
+      "forecast_inside_ci": true
+     }
+    ],
+    "calibrated": false,
+    "logit_clip": [
+     0.005,
+     0.995
+    ]
+   }
+  },
+  "paired": {
+   "v8_2_C_minus_SHIPS_RII_RIOD": {
+    "delta_auc": -0.0477868447082096,
+    "delta_brier": 0.0042562747737394935,
+    "ci95": {
+     "delta_auc": [
+      -0.07960395186667177,
+      -0.016860773074353626
+     ],
+     "delta_brier": [
+      -0.0022176521359786624,
+      0.011278086812435886
+     ]
+    }
+   }
+  }
+ },
+ "evaluation_row_weighting": {
+  "n_rows": 2298,
+  "events": 158,
+  "v8_2_C": {
+   "auc": 0.8385129539808353,
+   "brier": 0.055584752898088396
+  },
+  "SHIPS_RII_RIOD": {
+   "auc": 0.8804004495445404,
+   "brier": 0.05458407310704961
+  },
+  "paired_v8_2_C_minus_SHIPS_RII_RIOD": {
+   "delta_auc": -0.04188749556370519,
+   "delta_brier": 0.0010006797910387874,
+   "ci95": {
+    "delta_auc": [
+     -0.07296618366184834,
+     -0.01006548745529157
+    ],
+    "delta_brier": [
+     -0.004271605702824486,
+     0.006274677520564724
+    ]
+   }
+  }
+ },
+ "stacking": {
+  "fit_rows": {
+   "n": 1821,
+   "events": 89,
+   "storms": 91,
+   "storm_first_years": [
+    2020,
+    2021
+   ]
+  },
+  "coefficients": {
+   "stack_v8_2_C_plus_RII": {
+    "logit_v8_2_C": 0.5716963274096638,
+    "logit_RII": 0.8614169286194978,
+    "intercept": 0.20207212699705943,
+    "iterations": 8,
+    "grad_inf": 4.481606329502575e-12,
+    "mean_log_loss": 0.12902748404632414
+   },
+   "v8_2_C_recalibrated_AL_EP": {
+    "logit_v8_2_C": 1.042722890236026,
+    "intercept": -0.027635473369706495,
+    "iterations": 8,
+    "grad_inf": 3.2606323523192836e-17,
+    "mean_log_loss": 0.14094783395778074
+   },
+   "SHIPS_RII_recalibrated": {
+    "logit_RII": 1.48971526738289,
+    "intercept": -0.38347616031348014,
+    "iterations": 8,
+    "grad_inf": 1.0206920899663733e-12,
+    "mean_log_loss": 0.13638489648067958
+   }
+  },
+  "test": {
+   "n": 2221,
+   "events": 149,
+   "storms": 109,
+   "observed_rate": 0.06708689779378658,
+   "by_dataset_basin": {
+    "EP": {
+     "n": 1036,
+     "events": 91
+    },
+    "NA": {
+     "n": 1185,
+     "events": 58
+    }
+   },
+   "forecasts": {
+    "stack_v8_2_C_plus_RII": {
+     "n": 2221,
+     "events": 149,
+     "observed_rate": 0.06708689779378658,
+     "mean_forecast": 0.05690299798087555,
+     "auc": 0.8854817185354098,
+     "brier": 0.05096282765027584,
+     "brier_climatology": 0.0626114964369524,
+     "bss_vs_climatology": 0.18604680369533022,
+     "log_loss": 0.17805721323063164,
+     "calibration_intercept": -0.08159218874748912,
+     "calibration_slope": 0.8420107174392221,
+     "prob_range": {
+      "min": 5.1539785025818394e-05,
+      "p01": 0.00013011976679418906,
+      "median": 0.015355156706936402,
+      "p99": 0.6305167243515192,
+      "max": 0.9910348429282441
+     },
+     "brier_climatology_basin": 0.06264750075897357,
+     "bss_vs_basin_climatology": 0.18651459303464757,
+     "ci95": {
+      "auc": [
+       0.8507781552730437,
+       0.914826222934267
+      ],
+      "brier": [
+       0.03814283839982642,
+       0.0643672310999868
+      ],
+      "bss_vs_climatology": [
+       0.07216270681269923,
+       0.2796146031573806
+      ],
+      "bss_vs_basin_climatology": [
+       0.07179290901437049,
+       0.28191736724990424
+      ],
+      "mean_minus_observed": [
+       -0.023654614658660676,
+       0.004159727189769697
+      ],
+      "calibration_intercept": [
+       -0.5958651433836522,
+       0.5087866543088514
+      ],
+      "calibration_slope": [
+       0.6717919073627805,
+       1.064883717211716
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 977,
+       "mean_forecast": 0.0024009895181972478,
+       "observed": 0.006141248720573183,
+       "observed_95ci": [
+        0.0028175005164525306,
+        0.013333527335547223
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 242,
+       "mean_forecast": 0.014787315884692027,
+       "observed": 0.024793388429752067,
+       "observed_95ci": [
+        0.011411302429498855,
+        0.05302693747782358
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 442,
+       "mean_forecast": 0.032206531417707095,
+       "observed": 0.027149321266968326,
+       "observed_95ci": [
+        0.015597337667825818,
+        0.04684995302913921
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 240,
+       "mean_forecast": 0.07010043359772326,
+       "observed": 0.09166666666666666,
+       "observed_95ci": [
+        0.06131436364513062,
+        0.13488513635815017
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 155,
+       "mean_forecast": 0.14108959649061328,
+       "observed": 0.23870967741935484,
+       "observed_95ci": [
+        0.17843300010047397,
+        0.3116250199647985
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 103,
+       "mean_forecast": 0.2801366066153072,
+       "observed": 0.3300970873786408,
+       "observed_95ci": [
+        0.24682835312636037,
+        0.425583890793611
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 62,
+       "mean_forecast": 0.6237889100749775,
+       "observed": 0.5161290322580645,
+       "observed_95ci": [
+        0.39447247460618196,
+        0.6359034579349471
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "calibrated": true,
+     "logit_clip": null
+    },
+    "v8_2_C_recalibrated_AL_EP": {
+     "n": 2221,
+     "events": 149,
+     "observed_rate": 0.06708689779378658,
+     "mean_forecast": 0.057648071069818146,
+     "auc": 0.8454561944494831,
+     "brier": 0.05462626840464822,
+     "brier_climatology": 0.0626114964369524,
+     "bss_vs_climatology": 0.12753613132925223,
+     "log_loss": 0.1945792483774517,
+     "calibration_intercept": -0.14662767030460522,
+     "calibration_slope": 0.8340735838623753,
+     "prob_range": {
+      "min": 4.160309647262793e-05,
+      "p01": 0.00021090591866391607,
+      "median": 0.01887576329962856,
+      "p99": 0.5492354370039363,
+      "max": 0.8361339709206597
+     },
+     "brier_climatology_basin": 0.06264750075897357,
+     "bss_vs_basin_climatology": 0.12803754750226637,
+     "ci95": {
+      "auc": [
+       0.8047545172791275,
+       0.8815584347691331
+      ],
+      "brier": [
+       0.041394144871752414,
+       0.06860211056185414
+      ],
+      "bss_vs_climatology": [
+       0.03845791324688077,
+       0.2038555844098342
+      ],
+      "bss_vs_basin_climatology": [
+       0.03661444666529088,
+       0.20442794965996305
+      ],
+      "mean_minus_observed": [
+       -0.024071565924591476,
+       0.00496804396068654
+      ],
+      "calibration_intercept": [
+       -0.642099439306985,
+       0.32442873344989986
+      ],
+      "calibration_slope": [
+       0.6784362592503517,
+       1.0280279243241726
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 806,
+       "mean_forecast": 0.003593028856683071,
+       "observed": 0.0037220843672456576,
+       "observed_95ci": [
+        0.0012666117621200502,
+        0.010885888183548336
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 340,
+       "mean_forecast": 0.014748177504576871,
+       "observed": 0.026470588235294117,
+       "observed_95ci": [
+        0.013987383567423926,
+        0.049534889479234755
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 468,
+       "mean_forecast": 0.032652978988894646,
+       "observed": 0.042735042735042736,
+       "observed_95ci": [
+        0.027831970949879836,
+        0.06508395676823572
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 240,
+       "mean_forecast": 0.07034159063818328,
+       "observed": 0.1,
+       "observed_95ci": [
+        0.06812304903363428,
+        0.14448054280631428
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 203,
+       "mean_forecast": 0.14223638918620277,
+       "observed": 0.1921182266009852,
+       "observed_95ci": [
+        0.1438425314745383,
+        0.2518302925608588
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 113,
+       "mean_forecast": 0.2767479763674551,
+       "observed": 0.2920353982300885,
+       "observed_95ci": [
+        0.21614182470769672,
+        0.38160418356333003
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 51,
+       "mean_forecast": 0.5454101957202969,
+       "observed": 0.4117647058823529,
+       "observed_95ci": [
+        0.28754192992486893,
+        0.5483490725258254
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "calibrated": true,
+     "logit_clip": null
+    },
+    "SHIPS_RII_recalibrated": {
+     "n": 2221,
+     "events": 149,
+     "observed_rate": 0.06708689779378658,
+     "mean_forecast": 0.05415441701726798,
+     "auc": 0.881761615402555,
+     "brier": 0.051940115261895,
+     "brier_climatology": 0.0626114964369524,
+     "bss_vs_climatology": 0.17043804704145837,
+     "log_loss": 0.18339286765906715,
+     "calibration_intercept": -0.09199968332435104,
+     "calibration_slope": 0.8177918341242164,
+     "prob_range": {
+      "min": 0.00025627755975751775,
+      "p01": 0.00025627755975751775,
+      "median": 0.021245547811829874,
+      "p99": 0.643677066712535,
+      "max": 0.9984406786341465
+     },
+     "brier_climatology_basin": 0.06264750075897357,
+     "bss_vs_basin_climatology": 0.17091480693337724,
+     "ci95": {
+      "auc": [
+       0.8438454645276982,
+       0.9130002625665793
+      ],
+      "brier": [
+       0.03859437579270516,
+       0.06535839355904224
+      ],
+      "bss_vs_climatology": [
+       0.06581434049202874,
+       0.2600318220029053
+      ],
+      "bss_vs_basin_climatology": [
+       0.06334266535788055,
+       0.2603566787314609
+      ],
+      "mean_minus_observed": [
+       -0.027668888773199965,
+       0.0023883044763036067
+      ],
+      "calibration_intercept": [
+       -0.6748819908514903,
+       0.6212487655219988
+      ],
+      "calibration_slope": [
+       0.6405753066845128,
+       1.05916578601471
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 793,
+       "mean_forecast": 0.000897267886937032,
+       "observed": 0.006305170239596469,
+       "observed_95ci": [
+        0.0026960705955720032,
+        0.014674508450501896
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 269,
+       "mean_forecast": 0.014624003281331685,
+       "observed": 0.011152416356877323,
+       "observed_95ci": [
+        0.0037998714958330237,
+        0.032270874314190075
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 653,
+       "mean_forecast": 0.03160980207230082,
+       "observed": 0.03215926493108729,
+       "observed_95ci": [
+        0.021128681561608485,
+        0.048662269559635964
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 235,
+       "mean_forecast": 0.07048631209545611,
+       "observed": 0.10212765957446808,
+       "observed_95ci": [
+        0.0695932995190361,
+        0.14746101597709188
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 129,
+       "mean_forecast": 0.14269634599650474,
+       "observed": 0.3023255813953488,
+       "observed_95ci": [
+        0.22973280228483467,
+        0.3863513159431902
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 89,
+       "mean_forecast": 0.28177718944971564,
+       "observed": 0.34831460674157305,
+       "observed_95ci": [
+        0.2574733314684021,
+        0.45170875931848653
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 53,
+       "mean_forecast": 0.6592469299644239,
+       "observed": 0.49056603773584906,
+       "observed_95ci": [
+        0.36124029356039444,
+        0.6211669574670219
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "calibrated": true,
+     "logit_clip": null
+    },
+    "v8_2_C": {
+     "n": 2221,
+     "events": 149,
+     "observed_rate": 0.06708689779378658,
+     "mean_forecast": 0.06256055896976775,
+     "auc": 0.8454561944494831,
+     "brier": 0.05445682602027265,
+     "brier_climatology": 0.0626114964369524,
+     "bss_vs_climatology": 0.13024238168291047,
+     "log_loss": 0.19321301129694615,
+     "calibration_intercept": -0.16967768861980945,
+     "calibration_slope": 0.8697076180344964,
+     "prob_range": {
+      "min": 6.458329309018919e-05,
+      "p01": 0.0003063100686199295,
+      "median": 0.0226996954609172,
+      "p99": 0.5537884507893219,
+      "max": 0.8305413034375401
+     },
+     "brier_climatology_basin": 0.06264750075897357,
+     "bss_vs_basin_climatology": 0.1307422425391439,
+     "ci95": {
+      "auc": [
+       0.8047545172791275,
+       0.8815584347691331
+      ],
+      "brier": [
+       0.04147074241063918,
+       0.06814791783618589
+      ],
+      "bss_vs_climatology": [
+       0.03910474014200075,
+       0.20743067339993732
+      ],
+      "bss_vs_basin_climatology": [
+       0.03451703961898099,
+       0.2096335282995319
+      ],
+      "mean_minus_observed": [
+       -0.019118868440278252,
+       0.009857376908300367
+      ],
+      "calibration_intercept": [
+       -0.6624076047350598,
+       0.30326818180780435
+      ],
+      "calibration_slope": [
+       0.7074217631737537,
+       1.0720328056125266
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 719,
+       "mean_forecast": 0.0037907970207166075,
+       "observed": 0.0013908205841446453,
+       "observed_95ci": [
+        0.00024554987162487543,
+        0.007835888717410398
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 326,
+       "mean_forecast": 0.01480455002316522,
+       "observed": 0.03067484662576687,
+       "observed_95ci": [
+        0.016745532858165327,
+        0.055536435213781946
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 486,
+       "mean_forecast": 0.03220811820573155,
+       "observed": 0.037037037037037035,
+       "observed_95ci": [
+        0.023553838378939675,
+        0.05778184237990153
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 293,
+       "mean_forecast": 0.0694584040783469,
+       "observed": 0.08532423208191127,
+       "observed_95ci": [
+        0.058460171828361815,
+        0.12292141350199622
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 221,
+       "mean_forecast": 0.14515384163059866,
+       "observed": 0.16289592760180996,
+       "observed_95ci": [
+        0.12004483102246552,
+        0.21726641387171783
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 122,
+       "mean_forecast": 0.2789904249127489,
+       "observed": 0.30327868852459017,
+       "observed_95ci": [
+        0.22874525512189398,
+        0.3898228495430181
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 54,
+       "mean_forecast": 0.5421267856249673,
+       "observed": 0.4074074074074074,
+       "observed_95ci": [
+        0.2867801518924045,
+        0.5403338975114846
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "calibrated": true,
+     "logit_clip": null
+    },
+    "SHIPS_RII_RIOD": {
+     "n": 2221,
+     "events": 149,
+     "observed_rate": 0.06708689779378658,
+     "mean_forecast": 0.1119630796938316,
+     "auc": 0.881761615402555,
+     "brier": 0.053385096803241786,
+     "brier_climatology": 0.0626114964369524,
+     "bss_vs_climatology": 0.14735951316866025,
+     "log_loss": 0.19586940932240504,
+     "calibration_intercept": -0.4056033558100238,
+     "calibration_slope": 1.2182769808359013,
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.09,
+      "p99": 0.6580000000000018,
+      "max": 0.99
+     },
+     "brier_climatology_basin": 0.06264750075897357,
+     "bss_vs_basin_climatology": 0.14784953658993405,
+     "ci95": {
+      "auc": [
+       0.8438454645276982,
+       0.9130002625665793
+      ],
+      "brier": [
+       0.04290814491768727,
+       0.06444917235374141
+      ],
+      "bss_vs_climatology": [
+       0.00597539859626944,
+       0.255313763426344
+      ],
+      "bss_vs_basin_climatology": [
+       0.00023028034790848923,
+       0.25753242698089374
+      ],
+      "mean_minus_observed": [
+       0.02893391942572847,
+       0.062134332319107616
+      ],
+      "calibration_intercept": [
+       -0.935170929691573,
+       0.21268762057436796
+      ],
+      "calibration_slope": [
+       0.9543090204486188,
+       1.57750418543391
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 705,
+       "mean_forecast": 0.0,
+       "observed": 0.0028368794326241137,
+       "observed_95ci": [
+        0.0007783034156402142,
+        0.010284252732305956
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 47,
+       "mean_forecast": 0.03000000000000001,
+       "observed": 0.0,
+       "observed_95ci": [
+        6.938893903907228e-18,
+        0.0755601711983887
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 441,
+       "mean_forecast": 0.07460317460317462,
+       "observed": 0.018140589569160998,
+       "observed_95ci": [
+        0.009220037566272071,
+        0.03538370452979089
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 678,
+       "mean_forecast": 0.1324188790560472,
+       "observed": 0.048672566371681415,
+       "observed_95ci": [
+        0.03486465420083028,
+        0.06756617430831319
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 248,
+       "mean_forecast": 0.2698790322580645,
+       "observed": 0.23387096774193547,
+       "observed_95ci": [
+        0.185493629127094,
+        0.29036738827432024
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 102,
+       "mean_forecast": 0.5651960784313727,
+       "observed": 0.47058823529411764,
+       "observed_95ci": [
+        0.37655749862560384,
+        0.5667540159395578
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "calibrated": false,
+     "logit_clip": [
+      0.005,
+      0.995
+     ]
+    }
+   },
+   "paired": {
+    "stack_v8_2_C_plus_RII_minus_v8_2_C": {
+     "delta_auc": 0.040025524085926745,
+     "delta_brier": -0.003493998369996809,
+     "ci95": {
+      "delta_auc": [
+       0.02423518283331292,
+       0.057378788234873114
+      ],
+      "delta_brier": [
+       -0.006375921350477079,
+       -0.0007687929340972902
+      ]
+     }
+    },
+    "stack_v8_2_C_plus_RII_minus_SHIPS_RII_RIOD": {
+     "delta_auc": 0.0037201031328547574,
+     "delta_brier": -0.002422269152965943,
+     "ci95": {
+      "delta_auc": [
+       -0.008014157146348622,
+       0.016102445310528214
+      ],
+      "delta_brier": [
+       -0.005925215901116126,
+       0.0010294576748945009
+      ]
+     }
+    },
+    "stack_v8_2_C_plus_RII_minus_v8_2_C_recalibrated_AL_EP": {
+     "delta_auc": 0.040025524085926745,
+     "delta_brier": -0.003663440754372381,
+     "ci95": {
+      "delta_auc": [
+       0.02423518283331292,
+       0.057378788234873114
+      ],
+      "delta_brier": [
+       -0.006699423664854475,
+       -0.000859457589459335
+      ]
+     }
+    },
+    "stack_v8_2_C_plus_RII_minus_SHIPS_RII_recalibrated": {
+     "delta_auc": 0.0037201031328547574,
+     "delta_brier": -0.0009772876116191584,
+     "ci95": {
+      "delta_auc": [
+       -0.008014157146348622,
+       0.016102445310528214
+      ],
+      "delta_brier": [
+       -0.0031001559741438943,
+       0.0010300721150830153
+      ]
+     }
+    },
+    "v8_2_C_recalibrated_AL_EP_minus_v8_2_C": {
+     "delta_auc": 0.0,
+     "delta_brier": 0.00016944238437557185,
+     "ci95": {
+      "delta_auc": [
+       0.0,
+       0.0
+      ],
+      "delta_brier": [
+       -0.00013732329062473848,
+       0.00047977444507766063
+      ]
+     }
+    }
+   }
+  },
+  "all_aids": {
+   "fit_rows": {
+    "n": 1647,
+    "events": 87
+   },
+   "coefficients": {
+    "stack_v8_2_C_plus_all": {
+     "logit_v8_2_C": 0.1415962166553446,
+     "RIOD": 0.13771129363177445,
+     "RIOL": 0.6162139282920208,
+     "RIOB": -0.09702553346089579,
+     "DTOP": 0.6192011373171822,
+     "intercept": 0.6346792315345513,
+     "iterations": 8,
+     "grad_inf": 3.2894714557156853e-12,
+     "mean_log_loss": 0.11949244203151231
+    },
+    "stack_noaa_only": {
+     "RIOD": 0.17477405581854247,
+     "RIOL": 0.6266857895296563,
+     "RIOB": -0.07601185122813894,
+     "DTOP": 0.6588045911544814,
+     "intercept": 0.528737795413471,
+     "iterations": 8,
+     "grad_inf": 2.0307639157020254e-12,
+     "mean_log_loss": 0.11990540475775482
+    }
+   },
+   "test": {
+    "n": 2114,
+    "events": 146,
+    "storms": 107,
+    "observed_rate": 0.06906338694418164,
+    "by_dataset_basin": {
+     "EP": {
+      "n": 1000,
+      "events": 91
+     },
+     "NA": {
+      "n": 1114,
+      "events": 55
+     }
+    },
+    "forecasts": {
+     "stack_v8_2_C_plus_all": {
+      "n": 2114,
+      "events": 146,
+      "observed_rate": 0.06906338694418164,
+      "mean_forecast": 0.0626473214988731,
+      "auc": 0.9089089820692727,
+      "brier": 0.04784589102084379,
+      "brier_climatology": 0.06434265620240848,
+      "bss_vs_climatology": 0.2563892471219922,
+      "log_loss": 0.164703299635344,
+      "calibration_intercept": -0.10589546062395537,
+      "calibration_slope": 0.8460636518197947,
+      "prob_range": {
+       "min": 0.0005389578901534732,
+       "p01": 0.0007110891542293177,
+       "median": 0.0074276422340389696,
+       "p99": 0.744718728973356,
+       "max": 0.9779623550913192
+      },
+      "brier_climatology_basin": 0.06440274105541788,
+      "bss_vs_basin_climatology": 0.25708300241952586,
+      "ci95": {
+       "auc": [
+        0.8792705534884713,
+        0.9347329446861248
+       ],
+       "brier": [
+        0.03643109778407667,
+        0.059460850888045716
+       ],
+       "bss_vs_climatology": [
+        0.14163123763425603,
+        0.3483354973278839
+       ],
+       "bss_vs_basin_climatology": [
+        0.14017885928736834,
+        0.34852617933931446
+       ],
+       "mean_minus_observed": [
+        -0.02021749320703362,
+        0.007738726381684231
+       ],
+       "calibration_intercept": [
+        -0.542850417265133,
+        0.3209865076351366
+       ],
+       "calibration_slope": [
+        0.7250651266664822,
+        1.01811721663829
+       ]
+      },
+      "reliability": [
+       {
+        "bin": [
+         0.0,
+         0.01
+        ],
+        "n": 1152,
+        "mean_forecast": 0.0030053365581314117,
+        "observed": 0.003472222222222222,
+        "observed_95ci": [
+         0.0013510608517929767,
+         0.008893941577605653
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.01,
+         0.02
+        ],
+        "n": 239,
+        "mean_forecast": 0.01440578307093452,
+        "observed": 0.03347280334728033,
+        "observed_95ci": [
+         0.017056731252921155,
+         0.06464920380927575
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.02,
+         0.05
+        ],
+        "n": 243,
+        "mean_forecast": 0.03202656773356663,
+        "observed": 0.04526748971193416,
+        "observed_95ci": [
+         0.02546157016681291,
+         0.07922742877015719
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.05,
+         0.1
+        ],
+        "n": 155,
+        "mean_forecast": 0.07258714604295718,
+        "observed": 0.07741935483870968,
+        "observed_95ci": [
+         0.044838963095826766,
+         0.13044005700973751
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.1,
+         0.2
+        ],
+        "n": 109,
+        "mean_forecast": 0.14244929407943435,
+        "observed": 0.21100917431192662,
+        "observed_95ci": [
+         0.14492255462317266,
+         0.29677270669889294
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.2,
+         0.4
+        ],
+        "n": 132,
+        "mean_forecast": 0.28700521405818696,
+        "observed": 0.3181818181818182,
+        "observed_95ci": [
+         0.24482802098506334,
+         0.4018192505429516
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.4,
+         1.0
+        ],
+        "n": 84,
+        "mean_forecast": 0.631978367540987,
+        "observed": 0.5476190476190477,
+        "observed_95ci": [
+         0.44142846686988807,
+         0.6496445554794317
+        ],
+        "forecast_inside_ci": true
+       }
+      ],
+      "calibrated": true,
+      "logit_clip": null
+     },
+     "stack_noaa_only": {
+      "n": 2114,
+      "events": 146,
+      "observed_rate": 0.06906338694418164,
+      "mean_forecast": 0.06252656278286632,
+      "auc": 0.9089942504733266,
+      "brier": 0.047853945164444626,
+      "brier_climatology": 0.06434265620240848,
+      "bss_vs_climatology": 0.2562640713198695,
+      "log_loss": 0.16464571691700208,
+      "calibration_intercept": -0.09743869254952026,
+      "calibration_slope": 0.8500861671996649,
+      "prob_range": {
+       "min": 0.0007711270696745853,
+       "p01": 0.0011141673978442633,
+       "median": 0.007402122117722593,
+       "p99": 0.731146665376026,
+       "max": 0.9796487272445916
+      },
+      "brier_climatology_basin": 0.06440274105541788,
+      "bss_vs_basin_climatology": 0.2569579434007815,
+      "ci95": {
+       "auc": [
+        0.878741099711352,
+        0.9347746728560182
+       ],
+       "brier": [
+        0.0365952865547536,
+        0.05951585231211195
+       ],
+       "bss_vs_climatology": [
+        0.14224849548143673,
+        0.34921067938083344
+       ],
+       "bss_vs_basin_climatology": [
+        0.14094511500167745,
+        0.35119552669889437
+       ],
+       "mean_minus_observed": [
+        -0.0207221835336928,
+        0.008031633156567275
+       ],
+       "calibration_intercept": [
+        -0.5541983541246897,
+        0.35126879253274
+       ],
+       "calibration_slope": [
+        0.7260473369990945,
+        1.0273929395768997
+       ]
+      },
+      "reliability": [
+       {
+        "bin": [
+         0.0,
+         0.01
+        ],
+        "n": 1146,
+        "mean_forecast": 0.003063120908274365,
+        "observed": 0.0034904013961605585,
+        "observed_95ci": [
+         0.0013581387019698994,
+         0.008940323277488837
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.01,
+         0.02
+        ],
+        "n": 251,
+        "mean_forecast": 0.01451098566850731,
+        "observed": 0.03187250996015936,
+        "observed_95ci": [
+         0.01623687056557588,
+         0.06162168941835139
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.02,
+         0.05
+        ],
+        "n": 238,
+        "mean_forecast": 0.031843901761885486,
+        "observed": 0.046218487394957986,
+        "observed_95ci": [
+         0.026000503775676996,
+         0.0808529077134961
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.05,
+         0.1
+        ],
+        "n": 151,
+        "mean_forecast": 0.0726774948589985,
+        "observed": 0.08609271523178808,
+        "observed_95ci": [
+         0.051001900671616,
+         0.1417215018248707
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.1,
+         0.2
+        ],
+        "n": 109,
+        "mean_forecast": 0.1393313682337407,
+        "observed": 0.1926605504587156,
+        "observed_95ci": [
+         0.1296063745018461,
+         0.2766409669041602
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.2,
+         0.4
+        ],
+        "n": 131,
+        "mean_forecast": 0.28077151759318975,
+        "observed": 0.33587786259541985,
+        "observed_95ci": [
+         0.26069820802208127,
+         0.42040910604123444
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.4,
+         1.0
+        ],
+        "n": 88,
+        "mean_forecast": 0.6194002440236193,
+        "observed": 0.5113636363636364,
+        "observed_95ci": [
+         0.40865348719267547,
+         0.61312313690795
+        ],
+        "forecast_inside_ci": false
+       }
+      ],
+      "calibrated": true,
+      "logit_clip": null
+     },
+     "v8_2_C_recalibrated_AL_EP": {
+      "n": 2114,
+      "events": 146,
+      "observed_rate": 0.06906338694418164,
+      "mean_forecast": 0.05998360248528543,
+      "auc": 0.842222129413075,
+      "brier": 0.05590628990203791,
+      "brier_climatology": 0.06434265620240848,
+      "bss_vs_climatology": 0.13111622675059498,
+      "log_loss": 0.1987883681773689,
+      "calibration_intercept": -0.11534269962287122,
+      "calibration_slope": 0.8548724987980297,
+      "prob_range": {
+       "min": 5.4111856105323105e-05,
+       "p01": 0.0002603943898290613,
+       "median": 0.021136833184129795,
+       "p99": 0.5384630891065736,
+       "max": 0.8237360974156784
+      },
+      "brier_climatology_basin": 0.06440274105541788,
+      "bss_vs_basin_climatology": 0.13192685612664934,
+      "ci95": {
+       "auc": [
+        0.8020059800876017,
+        0.8799255917434288
+       ],
+       "brier": [
+        0.042208385286860654,
+        0.07143817170406411
+       ],
+       "bss_vs_climatology": [
+        0.04232480447840316,
+        0.20361361609322925
+       ],
+       "bss_vs_basin_climatology": [
+        0.04029923706986502,
+        0.2049051886919206
+       ],
+       "mean_minus_observed": [
+        -0.0246070395187975,
+        0.006695170216612286
+       ],
+       "calibration_intercept": [
+        -0.6133395357831543,
+        0.3490876237621258
+       ],
+       "calibration_slope": [
+        0.6970190081344644,
+        1.0540266228391861
+       ]
+      },
+      "reliability": [
+       {
+        "bin": [
+         0.0,
+         0.01
+        ],
+        "n": 714,
+        "mean_forecast": 0.0036322887668223717,
+        "observed": 0.0028011204481792717,
+        "observed_95ci": [
+         0.0007684885700966568,
+         0.01015536984100685
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.01,
+         0.02
+        ],
+        "n": 314,
+        "mean_forecast": 0.01467173510901182,
+        "observed": 0.03184713375796178,
+        "observed_95ci": [
+         0.01738883161161099,
+         0.05762211723838222
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.02,
+         0.05
+        ],
+        "n": 460,
+        "mean_forecast": 0.03240533046910252,
+        "observed": 0.0391304347826087,
+        "observed_95ci": [
+         0.024892739400809088,
+         0.06100210056179885
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.05,
+         0.1
+        ],
+        "n": 254,
+        "mean_forecast": 0.06932850822156532,
+        "observed": 0.09448818897637795,
+        "observed_95ci": [
+         0.06431847974759199,
+         0.13674139577288258
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.1,
+         0.2
+        ],
+        "n": 210,
+        "mean_forecast": 0.14166683977297137,
+        "observed": 0.18571428571428572,
+        "observed_95ci": [
+         0.1389334294828914,
+         0.2437872385255785
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.2,
+         0.4
+        ],
+        "n": 112,
+        "mean_forecast": 0.2745899681813393,
+        "observed": 0.2857142857142857,
+        "observed_95ci": [
+         0.21024717263298542,
+         0.3753939096725075
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.4,
+         1.0
+        ],
+        "n": 50,
+        "mean_forecast": 0.5316990151490755,
+        "observed": 0.42,
+        "observed_95ci": [
+         0.2937479723456693,
+         0.5576680331222217
+        ],
+        "forecast_inside_ci": true
+       }
+      ],
+      "calibrated": true,
+      "logit_clip": null
+     },
+     "v8_2_C": {
+      "n": 2114,
+      "events": 146,
+      "observed_rate": 0.06906338694418164,
+      "mean_forecast": 0.06412193775411557,
+      "auc": 0.842222129413075,
+      "brier": 0.05583943239829515,
+      "brier_climatology": 0.06434265620240848,
+      "bss_vs_climatology": 0.13215531198096597,
+      "log_loss": 0.19801721471416123,
+      "calibration_intercept": -0.17167178145713535,
+      "calibration_slope": 0.8647101769659726,
+      "prob_range": {
+       "min": 6.458329309018919e-05,
+       "p01": 0.0003052670089640542,
+       "median": 0.02350863598778209,
+       "p99": 0.554172621905743,
+       "max": 0.8305413034375401
+      },
+      "brier_climatology_basin": 0.06440274105541788,
+      "bss_vs_basin_climatology": 0.13296497193736045,
+      "ci95": {
+       "auc": [
+        0.8020059800876017,
+        0.8799255917434288
+       ],
+       "brier": [
+        0.042415286028365265,
+        0.07117858831657964
+       ],
+       "bss_vs_climatology": [
+        0.04049969839228041,
+        0.2076846064758698
+       ],
+       "bss_vs_basin_climatology": [
+        0.037490455009720355,
+        0.20940582372301822
+       ],
+       "mean_minus_observed": [
+        -0.020171108315889887,
+        0.010820483626893937
+       ],
+       "calibration_intercept": [
+        -0.6623806172951753,
+        0.2847414949627866
+       ],
+       "calibration_slope": [
+        0.7043698010454608,
+        1.066152607571825
+       ]
+      },
+      "reliability": [
+       {
+        "bin": [
+         0.0,
+         0.01
+        ],
+        "n": 670,
+        "mean_forecast": 0.0036935860784392763,
+        "observed": 0.0014925373134328358,
+        "observed_95ci": [
+         0.00026351130996352633,
+         0.008405588371623364
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.01,
+         0.02
+        ],
+        "n": 306,
+        "mean_forecast": 0.014741217025613443,
+        "observed": 0.032679738562091505,
+        "observed_95ci": [
+         0.017845879274525283,
+         0.05910182561726458
+        ],
+        "forecast_inside_ci": false
+       },
+       {
+        "bin": [
+         0.02,
+         0.05
+        ],
+        "n": 460,
+        "mean_forecast": 0.03224760881521275,
+        "observed": 0.03695652173913044,
+        "observed_95ci": [
+         0.02319962329473596,
+         0.05838339987524277
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.05,
+         0.1
+        ],
+        "n": 287,
+        "mean_forecast": 0.06957781424344082,
+        "observed": 0.08710801393728224,
+        "observed_95ci": [
+         0.05969699029822463,
+         0.1254264583418599
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.1,
+         0.2
+        ],
+        "n": 218,
+        "mean_forecast": 0.14528069570473412,
+        "observed": 0.16055045871559634,
+        "observed_95ci": [
+         0.11776228534204852,
+         0.21509503267224644
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.2,
+         0.4
+        ],
+        "n": 120,
+        "mean_forecast": 0.2794092765481606,
+        "observed": 0.3,
+        "observed_95ci": [
+         0.22525501338672319,
+         0.38715309503564865
+        ],
+        "forecast_inside_ci": true
+       },
+       {
+        "bin": [
+         0.4,
+         1.0
+        ],
+        "n": 53,
+        "mean_forecast": 0.5389664856138034,
+        "observed": 0.41509433962264153,
+        "observed_95ci": [
+         0.2926070830912865,
+         0.5490581761554623
+        ],
+        "forecast_inside_ci": true
+       }
+      ],
+      "calibrated": true,
+      "logit_clip": null
+     }
+    },
+    "paired": {
+     "stack_v8_2_C_plus_all_minus_v8_2_C_recalibrated_AL_EP": {
+      "delta_auc": 0.06668685265619778,
+      "delta_brier": -0.008060398881194121,
+      "ci95": {
+       "delta_auc": [
+        0.03910643502401184,
+        0.0956152559431469
+       ],
+       "delta_brier": [
+        -0.013608270131471504,
+        -0.002829935473609491
+       ]
+      }
+     },
+     "stack_v8_2_C_plus_all_minus_stack_noaa_only": {
+      "delta_auc": -8.526840405387315e-05,
+      "delta_brier": -8.054143600839947e-06,
+      "ci95": {
+       "delta_auc": [
+        -0.003053412832534358,
+        0.003304831287717181
+       ],
+       "delta_brier": [
+        -0.0006517768034224719,
+        0.0006306506992565907
+       ]
+      }
+     },
+     "v8_2_C_recalibrated_AL_EP_minus_stack_noaa_only": {
+      "delta_auc": -0.06677212106025165,
+      "delta_brier": 0.008052344737593281,
+      "ci95": {
+       "delta_auc": [
+        -0.09835465415651044,
+        -0.03669040678528034
+       ],
+       "delta_brier": [
+        0.002515301830937348,
+        0.01396385832233703
+       ]
+      }
+     }
+    }
+   }
+  }
+ },
+ "input_source_bias": {
+  "ships_initial_minus_besttrack_vmax_kt": {
+   "n": 2221,
+   "mean": -0.4570013507429086,
+   "median": 0.0,
+   "mae": 1.294461954074741,
+   "p05": -5.0,
+   "p95": 5.0,
+   "frac_exact": 0.7627194957226474,
+   "frac_abs_ge_10kt": 0.018009905447996397
+  },
+  "same_on_RI_events": {
+   "n": 149,
+   "mean": -0.436241610738255,
+   "median": 0.0,
+   "mae": 1.5771812080536913,
+   "p05": -5.0,
+   "p95": 5.0,
+   "frac_exact": 0.697986577181208,
+   "frac_abs_ge_10kt": 0.013422818791946308
+  },
+  "same_on_non_events": {
+   "n": 2072,
+   "mean": -0.4584942084942085,
+   "median": 0.0,
+   "mae": 1.274131274131274,
+   "p05": -5.0,
+   "p95": 5.0,
+   "frac_exact": 0.7673745173745173,
+   "frac_abs_ge_10kt": 0.01833976833976834
+  },
+  "edeck_position_vs_ibtracs_fix": {
+   "n": 2221,
+   "median_km": 11.119492664478061,
+   "p99_km": 84.16408227211896,
+   "max_km": 204.81382606505255,
+   "n_over_150_km": 3
+  },
+  "note": "SHIPS-RII initial intensity = e-deck V_final - dV of its 30kt/24h record; the truth is best-track wind(t+24) - best-track wind(t), so a real-time V(t) that is too low/high shifts RII's baseline while v8.2 is scored on the best-track baseline itself"
+ },
+ "operational_inputs": {
+  "skipped": false,
+  "variants": {
+   "v8_2_C_operational_inputs": "scripts/fetch_and_score.py build_live_case on the archived a-deck truncated at t: the analysis is OFCL tau 0 (as live), which carries no pressure",
+   "v8_2_C_operational_carq_inputs": "the same builder with OFCL removed, so the analysis is CARQ tau 0 -- SHIPS-RII's own real-time initial conditions, with pressure: the input-source comparison without the live defect"
+  },
+  "built": {
+   "as_live": {
+    "built_OFCL": 1952,
+    "built_CARQ": 268,
+    "no_analysis_at_cycle": 1
+   },
+   "carq": {
+    "built_CARQ": 2220,
+    "no_analysis_at_cycle": 1
+   }
+  },
+  "input_differences": {
+   "vmax_operational_minus_besttrack_kt": {
+    "n": 2220,
+    "mean": -0.3761261261261261,
+    "median": 0.0,
+    "mae": 1.1914414414414414,
+    "p05": -5.0,
+    "p95": 5.0,
+    "frac_exact": 0.7788288288288289,
+    "frac_abs_ge_10kt": 0.015765765765765764
+   },
+   "vmax_carq_minus_besttrack_kt": {
+    "n": 2220,
+    "mean": -0.42567567567567566,
+    "median": 0.0,
+    "mae": 1.259009009009009,
+    "p05": -5.0,
+    "p95": 5.0,
+    "frac_exact": 0.7680180180180181,
+    "frac_abs_ge_10kt": 0.017117117117117116
+   },
+   "dv24_operational_minus_besttrack_kt": {
+    "n": 1795,
+    "mean": 0.13983286908077994,
+    "median": 0.0,
+    "mae": 2.002785515320334,
+    "p05": -5.0,
+    "p95": 5.0,
+    "frac_exact": 0.6456824512534819,
+    "frac_abs_ge_10kt": 0.03899721448467967
+   },
+   "storm_age_operational_minus_besttrack_h": {
+    "n": 2220,
+    "mean": 37.66486486486487,
+    "median": 36.0,
+    "mae": 39.50810810810811,
+    "p05": -6.0,
+    "p95": 132.0,
+    "frac_exact": 0.09549549549549549,
+    "frac_abs_ge_10kt": 0.8653153153153154
+   },
+   "missing_fraction": {
+    "analysis_vmax_kt": {
+     "besttrack": 0.0,
+     "operational_as_live": 0.0,
+     "operational_carq": 0.0
+    },
+    "mpi_deficit": {
+     "besttrack": 0.0,
+     "operational_as_live": 0.0,
+     "operational_carq": 0.0
+    },
+    "intensity_frac_mpi": {
+     "besttrack": 0.0,
+     "operational_as_live": 0.0,
+     "operational_carq": 0.0
+    },
+    "analysis_mslp_hpa": {
+     "besttrack": 0.0,
+     "operational_as_live": 0.8792792792792793,
+     "operational_carq": 0.0
+    },
+    "analysis_dv_6h": {
+     "besttrack": 0.045495495495495496,
+     "operational_as_live": 0.01126126126126126,
+     "operational_carq": 0.01126126126126126
+    },
+    "analysis_dv_12h": {
+     "besttrack": 0.08963963963963964,
+     "operational_as_live": 0.02252252252252252,
+     "operational_carq": 0.02252252252252252
+    },
+    "analysis_dv_24h": {
+     "besttrack": 0.17792792792792791,
+     "operational_as_live": 0.052702702702702706,
+     "operational_carq": 0.052702702702702706
+    },
+    "analysis_dp_6h": {
+     "besttrack": 0.045495495495495496,
+     "operational_as_live": 0.8914414414414414,
+     "operational_carq": 0.01126126126126126
+    },
+    "analysis_dp_12h": {
+     "besttrack": 0.08963963963963964,
+     "operational_as_live": 0.9027027027027027,
+     "operational_carq": 0.02252252252252252
+    },
+    "analysis_dp_24h": {
+     "besttrack": 0.17792792792792791,
+     "operational_as_live": 0.9234234234234234,
+     "operational_carq": 0.052702702702702706
+    },
+    "analysis_lat": {
+     "besttrack": 0.0,
+     "operational_as_live": 0.0,
+     "operational_carq": 0.0
+    },
+    "analysis_lon": {
+     "besttrack": 0.0,
+     "operational_as_live": 0.0,
+     "operational_carq": 0.0
+    },
+    "abs_lat": {
+     "besttrack": 0.0,
+     "operational_as_live": 0.0,
+     "operational_carq": 0.0
+    },
+    "translation_speed_kmh": {
+     "besttrack": 0.045495495495495496,
+     "operational_as_live": 0.01126126126126126,
+     "operational_carq": 0.01126126126126126
+    },
+    "storm_age_h": {
+     "besttrack": 0.0,
+     "operational_as_live": 0.0,
+     "operational_carq": 0.0
+    }
+   }
+  },
+  "one_group_swaps_as_live": {
+   "none (best track)": {
+    "mean_forecast": 0.06258350885834907,
+    "auc": 0.8453912936395542
+   },
+   "vmax_and_mpi": {
+    "mean_forecast": 0.062089263931316176,
+    "auc": 0.8425751590354496,
+    "delta_mean_vs_besttrack": -0.0004942449270328927,
+    "delta_auc_vs_besttrack": -0.002816134604104681
+   },
+   "mslp": {
+    "mean_forecast": 0.0621003501548639,
+    "auc": 0.8452811111579207,
+    "delta_mean_vs_besttrack": -0.0004831587034851703,
+    "delta_auc_vs_besttrack": -0.00011018248163352506
+   },
+   "dv_6_12_24h": {
+    "mean_forecast": 0.06424886273748595,
+    "auc": 0.839865966251754,
+    "delta_mean_vs_besttrack": 0.0016653538791368827,
+    "delta_auc_vs_besttrack": -0.005525327387800205
+   },
+   "dp_6_12_24h": {
+    "mean_forecast": 0.04489972848324832,
+    "auc": 0.8365864170925436,
+    "delta_mean_vs_besttrack": -0.017683780375100745,
+    "delta_auc_vs_besttrack": -0.008804876547010676
+   },
+   "position": {
+    "mean_forecast": 0.06219810471665012,
+    "auc": 0.8454139782681258,
+    "delta_mean_vs_besttrack": -0.0003854041416989501,
+    "delta_auc_vs_besttrack": 2.2684628571578713e-05
+   },
+   "translation_speed": {
+    "mean_forecast": 0.06220885814920819,
+    "auc": 0.8463375667171129,
+    "delta_mean_vs_besttrack": -0.00037465070914087517,
+    "delta_auc_vs_besttrack": 0.0009462730775586792
+   },
+   "storm_age": {
+    "mean_forecast": 0.059304596278098,
+    "auc": 0.8452130572722059,
+    "delta_mean_vs_besttrack": -0.0032789125802510713,
+    "delta_auc_vs_besttrack": -0.00017823636734837223
+   },
+   "all (operational)": {
+    "mean_forecast": 0.0423443490764743,
+    "auc": 0.8234973864067224
+   }
+  },
+  "test": {
+   "n": 2220,
+   "events": 149,
+   "storms": 109,
+   "observed_rate": 0.06711711711711711,
+   "by_dataset_basin": {
+    "EP": {
+     "n": 1036,
+     "events": 91
+    },
+    "NA": {
+     "n": 1184,
+     "events": 58
+    }
+   },
+   "forecasts": {
+    "v8_2_C_besttrack_inputs": {
+     "n": 2220,
+     "events": 149,
+     "observed_rate": 0.06711711711711711,
+     "mean_forecast": 0.06258350885834907,
+     "auc": 0.8453912936395542,
+     "brier": 0.054481295386026835,
+     "brier_climatology": 0.06263796482241188,
+     "bss_vs_climatology": 0.13021926014854468,
+     "log_loss": 0.19329478303635075,
+     "calibration_intercept": -0.16990616821325893,
+     "calibration_slope": 0.8695265609631166,
+     "prob_range": {
+      "min": 6.458329309018919e-05,
+      "p01": 0.00030616106009766165,
+      "median": 0.02270422420868436,
+      "p99": 0.5538433323773809,
+      "max": 0.8305413034375401
+     },
+     "brier_climatology_basin": 0.06267478244784411,
+     "bss_vs_basin_climatology": 0.13073020346956332,
+     "ci95": {
+      "auc": [
+       0.8047539563938148,
+       0.8814424989820111
+      ],
+      "brier": [
+       0.04150730094699818,
+       0.0681806854322971
+      ],
+      "bss_vs_climatology": [
+       0.039073539749286255,
+       0.20739212775054489
+      ],
+      "bss_vs_basin_climatology": [
+       0.03447743228340012,
+       0.2096327490207405
+      ],
+      "mean_minus_observed": [
+       -0.01915730661142195,
+       0.009856627775949237
+      ],
+      "calibration_intercept": [
+       -0.6632044316366142,
+       0.30332319098162464
+      ],
+      "calibration_slope": [
+       0.7073847808317075,
+       1.0719635352248083
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 719,
+       "mean_forecast": 0.0037907970207166075,
+       "observed": 0.0013908205841446453,
+       "observed_95ci": [
+        0.00024554987162487543,
+        0.007835888717410398
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 325,
+       "mean_forecast": 0.014814373849946489,
+       "observed": 0.03076923076923077,
+       "observed_95ci": [
+        0.016797317436182208,
+        0.05570445849484354
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 486,
+       "mean_forecast": 0.03220811820573155,
+       "observed": 0.037037037037037035,
+       "observed_95ci": [
+        0.023553838378939675,
+        0.05778184237990153
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 293,
+       "mean_forecast": 0.0694584040783469,
+       "observed": 0.08532423208191127,
+       "observed_95ci": [
+        0.058460171828361815,
+        0.12292141350199622
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 221,
+       "mean_forecast": 0.14515384163059866,
+       "observed": 0.16289592760180996,
+       "observed_95ci": [
+        0.12004483102246552,
+        0.21726641387171783
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 122,
+       "mean_forecast": 0.2789904249127489,
+       "observed": 0.30327868852459017,
+       "observed_95ci": [
+        0.22874525512189398,
+        0.3898228495430181
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 54,
+       "mean_forecast": 0.5421267856249673,
+       "observed": 0.4074074074074074,
+       "observed_95ci": [
+        0.2867801518924045,
+        0.5403338975114846
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "calibrated": true,
+     "logit_clip": null
+    },
+    "v8_2_C_operational_inputs": {
+     "n": 2220,
+     "events": 149,
+     "observed_rate": 0.06711711711711711,
+     "mean_forecast": 0.0423443490764743,
+     "auc": 0.8234973864067224,
+     "brier": 0.05646307808213914,
+     "brier_climatology": 0.06263796482241188,
+     "bss_vs_climatology": 0.09858057741466342,
+     "log_loss": 0.20610791393575864,
+     "calibration_intercept": 0.5187558782287494,
+     "calibration_slope": 0.9886887812873735,
+     "prob_range": {
+      "min": 0.00012878425646676748,
+      "p01": 0.0006994511326147097,
+      "median": 0.019594936538346586,
+      "p99": 0.30338674925711084,
+      "max": 0.5220968115508847
+     },
+     "brier_climatology_basin": 0.06267478244784411,
+     "bss_vs_basin_climatology": 0.09911010653884822,
+     "ci95": {
+      "auc": [
+       0.777123113310977,
+       0.8647534631566364
+      ],
+      "brier": [
+       0.04210208975538204,
+       0.07167016147363167
+      ],
+      "bss_vs_climatology": [
+       0.053429149122449664,
+       0.14613498507142078
+      ],
+      "bss_vs_basin_climatology": [
+       0.0511524541824247,
+       0.14664974361166555
+      ],
+      "mean_minus_observed": [
+       -0.0417014413367824,
+       -0.008266441234334069
+      ],
+      "calibration_intercept": [
+       -0.15188180045101038,
+       1.163245795925565
+      ],
+      "calibration_slope": [
+       0.7935540380112722,
+       1.2286965074703986
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 720,
+       "mean_forecast": 0.004374986411897186,
+       "observed": 0.008333333333333333,
+       "observed_95ci": [
+        0.0038246249214149387,
+        0.018060826260169537
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 407,
+       "mean_forecast": 0.014849953885626663,
+       "observed": 0.02457002457002457,
+       "observed_95ci": [
+        0.013399495247735344,
+        0.04463162915641457
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 556,
+       "mean_forecast": 0.0324846352610074,
+       "observed": 0.048561151079136694,
+       "observed_95ci": [
+        0.03358576700119231,
+        0.06973202860385026
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 281,
+       "mean_forecast": 0.07001812123801861,
+       "observed": 0.11743772241992882,
+       "observed_95ci": [
+        0.08485505000727404,
+        0.16033947214117616
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 177,
+       "mean_forecast": 0.13945031246714584,
+       "observed": 0.24293785310734464,
+       "observed_95ci": [
+        0.18565472427802587,
+        0.311142472827065
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 74,
+       "mean_forecast": 0.27158160027214184,
+       "observed": 0.3918918918918919,
+       "observed_95ci": [
+        0.2886474844994506,
+        0.5058068946500016
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 5,
+       "mean_forecast": 0.45884810038605633,
+       "observed": 0.2,
+       "observed_95ci": [
+        0.03622316096978745,
+        0.6244717358814613
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "calibrated": false,
+     "logit_clip": null
+    },
+    "v8_2_C_operational_carq_inputs": {
+     "n": 2220,
+     "events": 149,
+     "observed_rate": 0.06711711711711711,
+     "mean_forecast": 0.060338661077316995,
+     "auc": 0.8322082837782221,
+     "brier": 0.0558666254476341,
+     "brier_climatology": 0.06263796482241188,
+     "bss_vs_climatology": 0.10810279985908788,
+     "log_loss": 0.2001233406968856,
+     "calibration_intercept": -0.281852552464765,
+     "calibration_slope": 0.7967358093764235,
+     "prob_range": {
+      "min": 4.9509246265899684e-05,
+      "p01": 0.00030254086213786323,
+      "median": 0.019822495167996817,
+      "p99": 0.5240451687517402,
+      "max": 0.8326131234280055
+     },
+     "brier_climatology_basin": 0.06267478244784411,
+     "bss_vs_basin_climatology": 0.10862673525632949,
+     "ci95": {
+      "auc": [
+       0.7882933878960997,
+       0.8722522697326136
+      ],
+      "brier": [
+       0.04231710400310289,
+       0.07016027783967772
+      ],
+      "bss_vs_climatology": [
+       0.020022484100993505,
+       0.18940020008553696
+      ],
+      "bss_vs_basin_climatology": [
+       0.018288144773057492,
+       0.19107680447240957
+      ],
+      "mean_minus_observed": [
+       -0.021620398274129343,
+       0.008083741148460296
+      ],
+      "calibration_intercept": [
+       -0.7852446815383839,
+       0.1915624487620093
+      ],
+      "calibration_slope": [
+       0.6421374357131907,
+       0.9904448104724339
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 739,
+       "mean_forecast": 0.003773967142948775,
+       "observed": 0.009472259810554804,
+       "observed_95ci": [
+        0.00459573021033845,
+        0.019422310782519246
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.01,
+        0.02
+       ],
+       "n": 377,
+       "mean_forecast": 0.014519512697827537,
+       "observed": 0.01856763925729443,
+       "observed_95ci": [
+        0.009022522066131144,
+        0.03782530128089817
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 442,
+       "mean_forecast": 0.032779314499437155,
+       "observed": 0.038461538461538464,
+       "observed_95ci": [
+        0.02414977718309418,
+        0.06072700416705351
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 293,
+       "mean_forecast": 0.07009632048741211,
+       "observed": 0.10238907849829351,
+       "observed_95ci": [
+        0.07266529793661623,
+        0.14240428799743077
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 191,
+       "mean_forecast": 0.14185239534911562,
+       "observed": 0.16753926701570682,
+       "observed_95ci": [
+        0.12124701378054892,
+        0.22694146342349786
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 125,
+       "mean_forecast": 0.2811450156400423,
+       "observed": 0.304,
+       "observed_95ci": [
+        0.23020209041460138,
+        0.38948596064965113
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 53,
+       "mean_forecast": 0.5363282303334767,
+       "observed": 0.33962264150943394,
+       "observed_95ci": [
+        0.22686862857429074,
+        0.4740546388917903
+       ],
+       "forecast_inside_ci": false
+      }
+     ],
+     "calibrated": false,
+     "logit_clip": null
+    },
+    "SHIPS_RII_RIOD": {
+     "n": 2220,
+     "events": 149,
+     "observed_rate": 0.06711711711711711,
+     "mean_forecast": 0.1119774774774775,
+     "auc": 0.8817272076194427,
+     "brier": 0.05340626126126126,
+     "brier_climatology": 0.06263796482241188,
+     "bss_vs_climatology": 0.14738192065026212,
+     "log_loss": 0.19592007950275792,
+     "calibration_intercept": -0.4057574284584566,
+     "calibration_slope": 1.2179219002941186,
+     "prob_range": {
+      "min": 0.0,
+      "p01": 0.0,
+      "median": 0.09,
+      "p99": 0.6580999999999995,
+      "max": 0.99
+     },
+     "brier_climatology_basin": 0.06267478244784411,
+     "bss_vs_basin_climatology": 0.1478827819513503,
+     "ci95": {
+      "auc": [
+       0.8438049622460342,
+       0.912966441225364
+      ],
+      "brier": [
+       0.042909393054247645,
+       0.06444917235374141
+      ],
+      "bss_vs_climatology": [
+       0.005998307808900429,
+       0.2553588937395542
+      ],
+      "bss_vs_basin_climatology": [
+       0.00023124871218122456,
+       0.25753242698089374
+      ],
+      "mean_minus_observed": [
+       0.02893391942572847,
+       0.062127905605655856
+      ],
+      "calibration_intercept": [
+       -0.935408915157698,
+       0.2132133415768034
+      ],
+      "calibration_slope": [
+       0.95407833599684,
+       1.5773596076837004
+      ]
+     },
+     "reliability": [
+      {
+       "bin": [
+        0.0,
+        0.01
+       ],
+       "n": 705,
+       "mean_forecast": 0.0,
+       "observed": 0.0028368794326241137,
+       "observed_95ci": [
+        0.0007783034156402142,
+        0.010284252732305956
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.02,
+        0.05
+       ],
+       "n": 47,
+       "mean_forecast": 0.03000000000000001,
+       "observed": 0.0,
+       "observed_95ci": [
+        6.938893903907228e-18,
+        0.0755601711983887
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.05,
+        0.1
+       ],
+       "n": 440,
+       "mean_forecast": 0.0745909090909091,
+       "observed": 0.01818181818181818,
+       "observed_95ci": [
+        0.00924105611372734,
+        0.03546318071310457
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.1,
+        0.2
+       ],
+       "n": 678,
+       "mean_forecast": 0.1324188790560472,
+       "observed": 0.048672566371681415,
+       "observed_95ci": [
+        0.03486465420083028,
+        0.06756617430831319
+       ],
+       "forecast_inside_ci": false
+      },
+      {
+       "bin": [
+        0.2,
+        0.4
+       ],
+       "n": 248,
+       "mean_forecast": 0.2698790322580645,
+       "observed": 0.23387096774193547,
+       "observed_95ci": [
+        0.185493629127094,
+        0.29036738827432024
+       ],
+       "forecast_inside_ci": true
+      },
+      {
+       "bin": [
+        0.4,
+        1.0
+       ],
+       "n": 102,
+       "mean_forecast": 0.5651960784313727,
+       "observed": 0.47058823529411764,
+       "observed_95ci": [
+        0.37655749862560384,
+        0.5667540159395578
+       ],
+       "forecast_inside_ci": true
+      }
+     ],
+     "calibrated": false,
+     "logit_clip": [
+      0.005,
+      0.995
+     ]
+    }
+   },
+   "paired": {
+    "v8_2_C_besttrack_inputs_minus_v8_2_C_operational_inputs": {
+     "delta_auc": 0.0218939072328318,
+     "delta_brier": -0.001981782696112308,
+     "ci95": {
+      "delta_auc": [
+       0.004726077965375048,
+       0.04053902705259701
+      ],
+      "delta_brier": [
+       -0.005405909799069451,
+       0.0012730751484688401
+      ]
+     }
+    },
+    "v8_2_C_besttrack_inputs_minus_v8_2_C_operational_carq_inputs": {
+     "delta_auc": 0.01318300986133214,
+     "delta_brier": -0.001385330061607265,
+     "ci95": {
+      "delta_auc": [
+       -8.819268572706482e-05,
+       0.027000292829074388
+      ],
+      "delta_brier": [
+       -0.002946396162230451,
+       0.0001088677100300945
+      ]
+     }
+    },
+    "v8_2_C_operational_carq_inputs_minus_v8_2_C_operational_inputs": {
+     "delta_auc": 0.00871089737149966,
+     "delta_brier": -0.000596452634505043,
+     "ci95": {
+      "delta_auc": [
+       -0.0009519357073389883,
+       0.020586646471607656
+      ],
+      "delta_brier": [
+       -0.003689992249650499,
+       0.0022373642277646873
+      ]
+     }
+    },
+    "v8_2_C_operational_inputs_minus_SHIPS_RII_RIOD": {
+     "delta_auc": -0.058229821212720245,
+     "delta_brier": 0.0030568168208778834,
+     "ci95": {
+      "delta_auc": [
+       -0.09162254569809412,
+       -0.027324672854996457
+      ],
+      "delta_brier": [
+       -0.003152862425193261,
+       0.009902443848714117
+      ]
+     }
+    },
+    "v8_2_C_operational_carq_inputs_minus_SHIPS_RII_RIOD": {
+     "delta_auc": -0.049518923841220586,
+     "delta_brier": 0.0024603641863728404,
+     "ci95": {
+      "delta_auc": [
+       -0.07857483061369322,
+       -0.020819968919126606
+      ],
+      "delta_brier": [
+       -0.0022794992195374823,
+       0.007392139760535374
+      ]
+     }
+    },
+    "v8_2_C_besttrack_inputs_minus_SHIPS_RII_RIOD": {
+     "delta_auc": -0.036335913979888446,
+     "delta_brier": 0.0010750341247655754,
+     "ci95": {
+      "delta_auc": [
+       -0.0643546495510703,
+       -0.009520948200696263
+      ],
+      "delta_brier": [
+       -0.0035293360760033235,
+       0.005788603503168528
+      ]
+     }
+    }
+   }
+  }
+ },
+ "bootstrap": {
+  "unit": "storm (IBTrACS SID)",
+  "reps": 2000,
+  "interval": "percentile 95%",
+  "seed": 20261002
+ },
+ "seconds": 182.4
+}

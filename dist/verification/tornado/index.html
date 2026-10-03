@@ -267,210 +267,131 @@
     <section class="hero">
       <div class="eyebrow">Verification &rsaquo; Tornado</div>
       <h1>Tornado prediction accuracy</h1>
-      <p class="subtitle">
-        Definitive out-of-sample results for HazardPulse Tornado Coherence v1.
-        Every number on this page comes from a single, locked evaluation on 2024 test data
-        that the model never saw during training or tuning.
-      </p>
+<!-- hp-evidence:tornado-hero -->
+<p class="subtitle">
+  Out-of-sample results for the served HazardPulse tornado model, <span class="mono">tornado_v3-05a06c843c87</span>. Every number on this page is read from the results files of a pre-registered programme whose final test (every storm of 2025) was run once, after every choice was frozen.
+</p>
+<!-- /hp-evidence:tornado-hero -->
     </section>
 
-    <!-- Section 1: System Overview -->
-    <section class="section" aria-labelledby="overview-heading">
-      <h2 id="overview-heading">System overview</h2>
-      <div class="card">
-        <div class="overview-grid">
-          <div>
-            <div class="kv"><span>Model</span><strong>HazardPulse Tornado Coherence v1</strong></div>
-            <div class="kv"><span>Architecture</span><strong>GBT on ProbSevere v3 + HRRR + Coherence Field Theory (Helmholtz PDE)</strong></div>
-            <div class="kv"><span>Trees / depth / lr</span><strong>37 trees, depth 4, lr 0.05 (early-stopped)</strong></div>
-            <div class="kv"><span>Label window</span><strong>40 km radius, 60 min forward</strong></div>
-          </div>
-          <div>
-            <div class="kv"><span>Training</span><strong>2021&ndash;2022 (6,120 storms, 1,020 positive)</strong></div>
-            <div class="kv"><span>Validation</span><strong>2023 (2,880 storms, 480 positive)</strong></div>
-            <div class="kv"><span>Test</span><strong>2024 (5,310 storms, 885 positive) &mdash; fully out-of-sample</strong></div>
-            <div class="kv">
-              <span>Audit</span>
-              <strong>
-                <span class="audit-badge pass">Zero leakage confirmed</span>
-              </strong>
-            </div>
-          </div>
-        </div>
-        <p class="muted" style="margin-top:12px;font-size:12px;">
-          Strict temporal split. No meta-stacker. No hyperparameter tuning on test set.
-          Single test evaluation. Unknown-timing labels excluded (n=0 after filtering).
-          All code at <a href="https://github.com/Jphilbrick10/hazardpulse">github.com/Jphilbrick10/hazardpulse</a>.
-        </p>
+<!-- hp-evidence:tornado-body -->
+<section class="section" aria-labelledby="overview-heading">
+  <h2 id="overview-heading">The served model</h2>
+  <div class="card">
+    <div class="overview-grid">
+      <div>
+        <div class="kv"><span>Model</span><strong><span class="mono">tornado_v3-05a06c843c87</span></strong></div>
+        <div class="kv"><span>Forecasts</span><strong>P(a tornado from THIS storm within 60 min); inputs include NWS warning state</strong></div>
+        <div class="kv"><span>Event</span><strong>a tornado report starts within 10 km of THIS storm&#x27;s tracked polygon within 60 min</strong></div>
+        <div class="kv"><span>Inputs (30)</span><strong>28 ProbSevere storm attributes, 2 NWS tornado-warning state</strong></div>
       </div>
-    </section>
+      <div>
+        <div class="kv"><span>Model form</span><strong>LightGBM, 339 trees, scored in NumPy from a JSON payload</strong></div>
+        <div class="kv"><span>Calibration</span><strong>Platt on leave-one-year-out scores; Venn&ndash;Abers band per storm</strong></div>
+        <div class="kv"><span>Training</span><strong>2020-10-15..2024-12-31, fixed rounds chosen by early stopping on validation 2023</strong></div>
+        <div class="kv"><span>Final test</span><strong>2025, read once: 1,469,977 storm observations, 1,579 tornadic</strong></div>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:12px;font-size:12px;">Protocol: <a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/TORNADO_MODEL_PROGRAM.md" rel="noopener">docs/TORNADO_MODEL_PROGRAM.md</a>. Every choice (inputs, model family, hyperparameters, calibration, label) was made on 2023; 2024 was a development test; the model was then refitted on 2020&ndash;2024 and scored once on 2025. A forecast is scored against SPC storm reports matched to the storm&rsquo;s own tracked radar polygon.</p>
+  </div>
+</section>
 
-    <!-- Section 2: Definitive Results -->
-    <section class="section" aria-labelledby="results-heading">
-      <h2 id="results-heading">Definitive results (2024 test set)</h2>
-      <div class="card">
-        <table class="results-table">
-          <thead>
-            <tr>
-              <th>Model variant</th>
-              <th>AUC</th>
-              <th>95% CI</th>
-              <th>PR-AUC</th>
-              <th>Brier</th>
-              <th>BSS</th>
-              <th>Significance</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Baseline (ProbSevere only)</td>
-              <td class="mono">0.803</td>
-              <td class="mono">[0.792, 0.819]</td>
-              <td class="mono">0.355</td>
-              <td class="mono">0.125</td>
-              <td class="mono">+0.099</td>
-              <td>&mdash;</td>
-            </tr>
-            <tr>
-              <td>Enhanced (+HRRR atmosphere)</td>
-              <td class="mono">0.878</td>
-              <td class="mono">[0.867, 0.889]</td>
-              <td class="mono">0.561</td>
-              <td class="mono">0.113</td>
-              <td class="mono">+0.187</td>
-              <td>+0.075 over baseline, p&lt;0.0001</td>
-            </tr>
-            <tr class="best-row">
-              <td>Full (+Coherence Field Theory)</td>
-              <td class="mono">0.894</td>
-              <td class="mono">[0.883, 0.904]</td>
-              <td class="mono">0.606</td>
-              <td class="mono">0.114</td>
-              <td class="mono">+0.180</td>
-              <td>+0.016 over enhanced, p&lt;0.0001</td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="muted" style="margin-top:12px;font-size:12px;">
-          Source: <a href="/data/definitive_results.json"><code>definitive_results.json</code></a>.
-          Bootstrap CIs from 1,000 resamples. p-values from paired bootstrap DeLong test.
-          Base rate: 16.7% (885/5,310).
-        </p>
-      </div>
-    </section>
+<section class="section" aria-labelledby="results-heading">
+  <h2 id="results-heading">Final test: every storm of 2025</h2>
+  <div class="card">
+    <table class="results-table">
+      <thead><tr><th>Forecast</th><th>AUC</th><th>95% CI</th><th>PR-AUC</th><th>Brier skill</th><th>Storm obs / tornadic</th></tr></thead>
+      <tbody>
+        <tr class="best-row"><td>Served: with the NWS warning state</td><td class="mono">0.970</td><td class="mono">[0.964, 0.976]</td><td class="mono">0.175</td><td class="mono">+0.107</td><td class="mono">1,469,977 / 1,579</td></tr>
+        <tr><td>Fallback: no NWS input (feed down)</td><td class="mono">0.969</td><td class="mono">[0.963, 0.975]</td><td class="mono">0.166</td><td class="mono">+0.097</td><td class="mono">1,469,977 / 1,579</td></tr>
+        <tr><td>Tornado within 30 min</td><td class="mono">0.974</td><td class="mono">[0.968, 0.979]</td><td class="mono">0.139</td><td class="mono">+0.084</td><td class="mono">1,469,977 / 978</td></tr>
+        <tr><td>Tornado within 90 min</td><td class="mono">0.968</td><td class="mono">[0.961, 0.974]</td><td class="mono">0.189</td><td class="mono">+0.111</td><td class="mono">1,469,977 / 1,993</td></tr>
+        <tr><td>EF2+ tornado within 60 min</td><td class="mono">0.994</td><td class="mono">[0.989, 0.997]</td><td class="mono">0.151</td><td class="mono">+0.061</td><td class="mono">1,469,977 / 284</td></tr>
+        <tr><td>NOAA ProbTor, as issued</td><td class="mono">0.879</td><td class="mono">[0.850, 0.902]</td><td class="mono">--</td><td class="mono">--</td><td class="mono">same storms</td></tr>
+        <tr><td>NOAA ProbTor, ties broken</td><td class="mono">0.939</td><td class="mono">[0.924, 0.951]</td><td class="mono">--</td><td class="mono">--</td><td class="mono">same storms</td></tr>
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:12px;font-size:12px;">Intervals: bootstrap over days. Brier skill is against the test year&rsquo;s base rate. Development year 2024: AUC 0.969 [0.963, 0.974], Brier skill +0.114.</p>
+  </div>
+</section>
 
-    <!-- Section 3: Theory Test Results -->
-    <section class="section" aria-labelledby="theory-heading">
-      <h2 id="theory-heading">Theory test results</h2>
-      <div class="card">
-        <p class="muted" style="margin-bottom:12px;">
-          Each model variant is a strict superset of the previous one.
-          The lift is measured as the AUC difference on the same held-out 2024 test set.
-        </p>
-        <ul class="theory-list">
-          <li>
-            <strong>HRRR atmospheric features add +0.075 AUC over ProbSevere alone</strong>
-            <br>95% CI: [0.062, 0.083], p&lt;0.0001. Adding 3D atmospheric state from HRRR (shear, CAPE, moisture, STP)
-            substantially improves discrimination. This is expected and validates the feature engineering.
-          </li>
-          <li>
-            <strong>Coherence Field Theory adds +0.016 AUC over HRRR</strong>
-            <br>95% CI: [0.012, 0.020], p&lt;0.0001. The CFT features (tau, alignment, grad_tau, S/Gamma, Da)
-            provide statistically significant additional signal beyond conventional meteorology.
-            The effect is real but modest &mdash; we do not overclaim.
-          </li>
-          <li>
-            <strong>4 of the top 15 features in the full model are from CFT</strong>
-            <br>
-            <span class="feature-rank">1</span> srh01 (conventional)
-            <span class="feature-rank cft">2</span> tau (CFT)
-            <span class="feature-rank cft">3</span> alignment (CFT)
-            <span class="feature-rank">4</span> storm_speed_ms
-            <span class="feature-rank cft">5</span> alignment&times;CAPE (CFT)
-            <br style="margin-bottom:6px;">
-            <span style="font-size:12px;color:var(--muted,#6b7280);">
-              grad_tau ranks #15. Feature importance is split frequency (not causal attribution).
-            </span>
-          </li>
-        </ul>
-      </div>
-    </section>
+<section class="section" aria-labelledby="comparison-heading">
+  <h2 id="comparison-heading">Against NOAA and the NWS, on the same storms</h2>
+  <div class="card">
+    <ul class="theory-list">
+      <li><strong>NOAA ProbTor</strong> scores 0.879 as issued and 0.939 with its integer ties broken; the model is +0.031 [+0.022, +0.042] AUC above the tie-broken version, paired by day over 365 days; Brier &minus;0.000036 [&minus;0.000055, &minus;0.000021]. The issued product is an integer percent and 0 for most storms, so its ties are broken by ProbSevere&rsquo;s own severe probability for a fair ranking comparison.</li>
+      <li><strong>NWS tornado warnings:</strong> At the NWS warnings&rsquo; own false-alarm rate it catches 30.5% of tornadic storm observations vs the warnings&rsquo; 22.7% (+7.7 [+3.8, +10.1] points, using the warning state as an input); without that input it catches 27.5% (+4.7 [&minus;0.2, +8.5] points). The false-alarm rate is the warnings&rsquo; own (0.090% of non-tornadic storm observations). A model that reads the warning state measures what it adds on top of the warnings; the figure without that input is the contest on its own.</li>
+      <li><strong>Our previous model (v2):</strong> +0.007 [+0.003, +0.010] AUC on the same storms and the same event.</li>
+    </ul>
+  </div>
+</section>
 
-    <!-- Section 4: Comparison to Published Systems -->
-    <section class="section" aria-labelledby="comparison-heading">
-      <h2 id="comparison-heading">Comparison to published systems</h2>
-      <div class="card">
-        <table class="results-table">
-          <thead>
-            <tr>
-              <th>System</th>
-              <th>AUC / Score</th>
-              <th>Data used</th>
-              <th>Published</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr class="best-row">
-              <td><strong>HazardPulse (ours)</strong></td>
-              <td><span class="mono">0.894</span> AUC</td>
-              <td>ProbSevere + HRRR + CFT</td>
-              <td>2026</td>
-              <td>Storm-object, 60-min forward, 2024 test</td>
-            </tr>
-            <tr>
-              <td>TorNet CNN (MIT)</td>
-              <td><span class="mono">0.874</span> AUC</td>
-              <td>Full dual-pol radar imagery</td>
-              <td>AIES 2025</td>
-              <td>+0.020 AUC advantage; we need no radar imagery</td>
-            </tr>
-            <tr>
-              <td>ProbSevere v3 tornado</td>
-              <td>~0.85*</td>
-              <td>Radar + satellite + lightning + NWP</td>
-              <td>WAF 2024</td>
-              <td>+0.044 AUC advantage; we add coherence physics</td>
-            </tr>
-            <tr>
-              <td>TORP (NSSL)</td>
-              <td>POD 57%, FAR 50%</td>
-              <td>Single-radar rotation tracks</td>
-              <td>WAF 2023</td>
-              <td>Different target (rotation); complementary approach</td>
-            </tr>
-            <tr>
-              <td>NWS tornado warnings</td>
-              <td>POD ~75%, FAR ~70%</td>
-              <td>Human forecasters + all data</td>
-              <td>Operational</td>
-              <td>13-min lead time vs. our 60-min storm-object window</td>
-            </tr>
-            <tr>
-              <td>WoFS (NSSL)</td>
-              <td>Ensemble guidance</td>
-              <td>3 km NWP with radar DA</td>
-              <td>WAF 2023</td>
-              <td>Different product entirely; 0&ndash;6 h ensemble, not storm-object</td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="muted" style="margin-top:6px;font-size:12px;">
-          *ProbSevere v3 tornado-specific AUC is not published; Cintineo et al. (WAF 2024) report
-          "modest improvement over v2." Our 0.85 estimate is approximate.
-        </p>
-      </div>
-      <div class="caveat-box">
-        <strong>Important caveat on cross-system comparisons.</strong>
-        Direct comparison across these systems is approximate. Each uses different test sets, time periods,
-        prediction targets, and evaluation methodologies. Our AUC of 0.894 was evaluated on 2024 ProbSevere
-        storm objects with strict temporal labeling (40 km, 60 min forward window). TorNet uses radar imagery
-        classification on a different storm sample. ProbSevere v3 evaluates on its own operational dataset.
-        NWS warnings target imminent tornadoes with 13-minute average lead time.
-        These systems are <strong>complementary, not directly comparable</strong>.
-        We present this table for context, not to claim superiority.
-      </div>
-    </section>
+<section class="section" aria-labelledby="stress-heading">
+  <h2 id="stress-heading">Every stratum</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:12px;">The protocol&rsquo;s strata, defined before any result. Lowest AUC in any stratum: 0.929; in 17 of 19 the model&rsquo;s interval lies wholly above calibrated ProbTor&rsquo;s.</p>
+    <table class="results-table">
+      <thead><tr><th>Stratum</th><th>Storm obs / tornadic</th><th>Model AUC</th><th>ProbTor (calibrated) AUC</th></tr></thead>
+      <tbody>
+        <tr><td>region plains</td><td class="mono">273,395 / 546</td><td class="mono">0.969 [0.961, 0.976]</td><td class="mono">0.859 [0.824, 0.891]</td></tr>
+        <tr><td>region midwest</td><td class="mono">244,581 / 401</td><td class="mono">0.966 [0.952, 0.977]</td><td class="mono">0.893 [0.847, 0.923]</td></tr>
+        <tr><td>region southeast</td><td class="mono">551,398 / 540</td><td class="mono">0.974 [0.961, 0.982]</td><td class="mono">0.907 [0.859, 0.940]</td></tr>
+        <tr><td>season DJF</td><td class="mono">71,657 / 63</td><td class="mono">0.979 [0.967, 0.987]</td><td class="mono">0.965 [0.931, 0.988]</td></tr>
+        <tr><td>season MAM</td><td class="mono">305,354 / 948</td><td class="mono">0.970 [0.963, 0.977]</td><td class="mono">0.919 [0.895, 0.941]</td></tr>
+        <tr><td>season JJA</td><td class="mono">783,458 / 440</td><td class="mono">0.957 [0.945, 0.968]</td><td class="mono">0.764 [0.717, 0.802]</td></tr>
+        <tr><td>season SON</td><td class="mono">309,508 / 128</td><td class="mono">0.952 [0.924, 0.968]</td><td class="mono">0.872 [0.818, 0.913]</td></tr>
+        <tr><td>local night</td><td class="mono">492,724 / 382</td><td class="mono">0.984 [0.975, 0.989]</td><td class="mono">0.942 [0.909, 0.963]</td></tr>
+        <tr><td>local day</td><td class="mono">977,253 / 1,197</td><td class="mono">0.964 [0.956, 0.970]</td><td class="mono">0.859 [0.828, 0.883]</td></tr>
+        <tr><td>size small</td><td class="mono">498,712 / 148</td><td class="mono">0.933 [0.902, 0.954]</td><td class="mono">0.728 [0.642, 0.794]</td></tr>
+        <tr><td>size mid</td><td class="mono">481,316 / 144</td><td class="mono">0.943 [0.926, 0.959]</td><td class="mono">0.760 [0.707, 0.809]</td></tr>
+        <tr><td>size large</td><td class="mono">489,949 / 1,287</td><td class="mono">0.969 [0.963, 0.975]</td><td class="mono">0.901 [0.873, 0.923]</td></tr>
+        <tr><td>analysis 9km</td><td class="mono">1,466,639 / 1,575</td><td class="mono">0.970 [0.964, 0.976]</td><td class="mono">0.880 [0.851, 0.904]</td></tr>
+        <tr><td>region elsewhere</td><td class="mono">400,603 / 92</td><td class="mono">0.929 [0.890, 0.953]</td><td class="mono">0.731 [0.666, 0.800]</td></tr>
+        <tr><td>lead 0 15</td><td class="mono">1,468,932 / 534</td><td class="mono">0.977 [0.970, 0.982]</td><td class="mono">0.904 [0.873, 0.926]</td></tr>
+        <tr><td>lead 15 30</td><td class="mono">1,468,842 / 444</td><td class="mono">0.971 [0.962, 0.978]</td><td class="mono">0.882 [0.846, 0.911]</td></tr>
+        <tr><td>lead 30 60</td><td class="mono">1,468,999 / 601</td><td class="mono">0.964 [0.956, 0.971]</td><td class="mono">0.854 [0.823, 0.883]</td></tr>
+        <tr><td>ef2plus</td><td class="mono">1,468,682 / 284</td><td class="mono">0.995 [0.989, 0.998]</td><td class="mono">0.977 [0.949, 0.990]</td></tr>
+        <tr><td>ef0 1</td><td class="mono">1,469,438 / 1,040</td><td class="mono">0.968 [0.963, 0.974]</td><td class="mono">0.875 [0.848, 0.897]</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="calibration-heading">
+  <h2 id="calibration-heading">Does 10% mean 10%?</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:12px;">2025 storm observations grouped by the probability the served model gave them, and how often a tornado followed (95% Jeffreys interval).</p>
+    <table class="results-table">
+      <thead><tr><th>Forecast range</th><th>Storm obs</th><th>Mean forecast</th><th>Observed</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">0.00% &ndash; 0.10%</td><td class="mono">1,340,592</td><td class="mono">0.01%</td><td class="mono">0.01% [0.01%, 0.01%]</td></tr>
+        <tr><td class="mono">0.10% &ndash; 0.20%</td><td class="mono">44,834</td><td class="mono">0.14%</td><td class="mono">0.13% [0.10%, 0.17%]</td></tr>
+        <tr><td class="mono">0.20% &ndash; 0.50%</td><td class="mono">39,904</td><td class="mono">0.32%</td><td class="mono">0.29% [0.24%, 0.35%]</td></tr>
+        <tr><td class="mono">0.50% &ndash; 1.00%</td><td class="mono">18,840</td><td class="mono">0.70%</td><td class="mono">0.58% [0.48%, 0.70%]</td></tr>
+        <tr><td class="mono">1.00% &ndash; 2.00%</td><td class="mono">11,724</td><td class="mono">1.40%</td><td class="mono">1.17% [0.99%, 1.38%]</td></tr>
+        <tr><td class="mono">2.00% &ndash; 5.00%</td><td class="mono">8,184</td><td class="mono">3.09%</td><td class="mono">2.30% [1.99%, 2.64%]</td></tr>
+        <tr><td class="mono">5.00% &ndash; 10.00%</td><td class="mono">3,231</td><td class="mono">7.03%</td><td class="mono">6.96% [6.12%, 7.88%]</td></tr>
+        <tr><td class="mono">10.00% &ndash; 20.00%</td><td class="mono">1,595</td><td class="mono">13.76%</td><td class="mono">16.99% [15.21%, 18.89%]</td></tr>
+        <tr><td class="mono">20.00% &ndash; 30.00%</td><td class="mono">430</td><td class="mono">24.49%</td><td class="mono">21.86% [18.15%, 25.95%]</td></tr>
+        <tr><td class="mono">30.00% &ndash; 50.00%</td><td class="mono">641</td><td class="mono">37.65%</td><td class="mono">34.63% [31.03%, 38.38%]</td></tr>
+        <tr><td class="mono">50.00% &ndash; 100.00%</td><td class="mono">2</td><td class="mono">51.27%</td><td class="mono">50.00% [6.08%, 93.92%]</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="theory-heading">
+  <h2 id="theory-heading">Tested and not served</h2>
+  <div class="card">
+    <p class="muted" style="margin-bottom:12px;">Each was measured on 2023 under the same protocol. None improved the forecast, so none is in the served model.</p>
+    <ul class="theory-list">
+      <li><strong>The HRRR environment at the storm, timed as it is available live:</strong> +0.0001 validation AUC (difference of two validation runs).</li>
+      <li><strong>The coherence field (80 km) on top of those HRRR fields:</strong> &minus;0.0011 [&minus;0.0032, +0.0007] validation AUC (paired by day; measured before amendment 8 corrected the HRRR timing, which both arms shared).</li>
+      <li><strong>The coherence PDE solution against a Gaussian-smoothing control (9 km):</strong> +0.0004 [&minus;0.0008, +0.0015] validation AUC (paired by day; measured before amendment 8 corrected the HRRR timing, which both arms shared).</li>
+    </ul>
+  </div>
+</section>
+<!-- /hp-evidence:tornado-body -->
 
     <!-- Section 5: Live Prediction Ledger -->
     <section class="section" aria-labelledby="ledger-heading">
@@ -481,27 +402,31 @@
       </p>
 
       <div class="card" id="ledger-container">
-        <div class="ledger-row ledger-header">
-          <div>Timestamp (UTC)</div>
-          <div>Storms</div>
-          <div>Scoring tier</div>
-          <div>Top P(tor)</div>
-          <div>Hash (SHA-256)</div>
-        </div>
+<!-- hp-ledger:rows -->
+        <div class="ledger-row ledger-header"><div>Timestamp (UTC)</div><div>Storms</div><div>Model</div><div>Top P(tor)</div><div>Hash (SHA-256)</div></div>
         <div id="ledger-rows">
-        <div class="ledger-row"><div>2026-03-31T04:08:22.080151Z</div><div>86</div><div>ML</div><div>50.1%</div><div class="hash-mono">b458797b..2f832d7b</div></div>
-        <div class="ledger-row"><div>2026-03-31T03:52:04.624978Z</div><div>76</div><div>ML</div><div>50.5%</div><div class="hash-mono">a11d6418..19fa9e90</div></div>
-        <div class="ledger-row"><div>2026-03-23T13:16:25.719175Z</div><div>7</div><div>ML</div><div>22.6%</div><div class="hash-mono">61cb1457..90f38b33</div></div>
-        <div class="ledger-row"><div>2026-03-23T07:16:47.304049Z</div><div>37</div><div>ML</div><div>35.1%</div><div class="hash-mono">2b3e06d5..34f082e1</div></div>
-        <div class="ledger-row"><div>2026-03-23T01:15:14.531846Z</div><div>52</div><div>ML</div><div>37.8%</div><div class="hash-mono">475a206b..70f33b65</div></div>
-        <div class="ledger-row"><div>2026-03-22T23:14:51.707439Z</div><div>41</div><div>ML</div><div>45.9%</div><div class="hash-mono">f66a0fa7..b4cbe36b</div></div>
-        <div class="ledger-row"><div>2026-03-22T18:42:26.273935Z</div><div>11</div><div>ML</div><div>36.6%</div><div class="hash-mono">a645618b..a7243c7d</div></div>
-        <div class="ledger-row"><div>2026-03-22T12:59:34.773629Z</div><div>18</div><div>ML</div><div>57.4%</div><div class="hash-mono">afd4984f..2ea6d424</div></div>
-        <div class="ledger-row"><div>2026-03-22T06:57:08.910052Z</div><div>7</div><div>ML</div><div>41.6%</div><div class="hash-mono">94922256..dbdba297</div></div>
-        <div class="ledger-row"><div>2026-03-22T05:40:17.318866Z</div><div>4</div><div>ML</div><div>9.4%</div><div class="hash-mono">004314c4..1f9a70ef</div></div>
-        <div class="ledger-row"><div>2026-03-22T05:12:29.861938Z</div><div>5</div><div>ML</div><div>9.7%</div><div class="hash-mono">a793fdf4..66484a45</div></div>
-        <div class="ledger-row"><div>2026-03-22T04:11:35.843464Z</div><div>6</div><div>ML</div><div>10.9%</div><div class="hash-mono">dd40cf57..a2f3b3ee</div></div>
+        <div class="ledger-row"><div>2026-10-03T00:54:52.400169Z</div><div>92</div><div class="hash-mono">tornado_storm_v1_0</div><div>0.2%</div><div class="hash-mono">8af035f2..8bdf3319</div></div>
+        <div class="ledger-row"><div>2026-10-02T21:46:36.714547Z</div><div>170</div><div class="hash-mono">tornado_storm_v1_0</div><div>0.4%</div><div class="hash-mono">7f1eefc7..eaf4c7be</div></div>
+        <div class="ledger-row"><div>2026-10-02T17:21:40.847498Z</div><div>125</div><div class="hash-mono">tornado_storm_v1_0</div><div>0.4%</div><div class="hash-mono">0e6ba2f6..69aba847</div></div>
+        <div class="ledger-row"><div>2026-10-02T10:17:24.410437Z</div><div>113</div><div class="hash-mono">tornado_storm_v1_0</div><div>0.4%</div><div class="hash-mono">adfc1888..96b69599</div></div>
+        <div class="ledger-row"><div>2026-10-02T03:49:42.883642Z</div><div>102</div><div class="hash-mono">tornado_storm_v1_0</div><div>0.6%</div><div class="hash-mono">13f638bb..45391974</div></div>
+        <div class="ledger-row"><div>2026-10-01T22:17:40.333587Z</div><div>175</div><div class="hash-mono">tornado_storm_v1_0</div><div>0.6%</div><div class="hash-mono">7bc6de63..c46955c4</div></div>
+        <div class="ledger-row"><div>2026-10-01T16:52:12.888541Z</div><div>148</div><div class="hash-mono">tornado_storm_v1_0</div><div>0.6%</div><div class="hash-mono">1c1c105b..4d17074c</div></div>
+        <div class="ledger-row"><div>2026-10-01T08:14:51.817882Z</div><div>133</div><div class="hash-mono">tornado_storm_v1_0</div><div>1.8%</div><div class="hash-mono">5834989b..a42f420b</div></div>
+        <div class="ledger-row"><div>2026-10-01T01:03:11.741401Z</div><div>120</div><div class="hash-mono">tornado_storm_v1_0</div><div>2.4%</div><div class="hash-mono">798bd7de..739de97c</div></div>
+        <div class="ledger-row"><div>2026-09-30T20:30:13.003352Z</div><div>129</div><div class="hash-mono">tornado_storm_v1_0</div><div>2.4%</div><div class="hash-mono">60c0acef..0525ed72</div></div>
+        <div class="ledger-row"><div>2026-09-30T14:34:04.769985Z</div><div>103</div><div class="hash-mono">tornado_storm_v1_0</div><div>0.6%</div><div class="hash-mono">df1e3d79..35ff60d7</div></div>
+        <div class="ledger-row"><div>2026-09-30T07:53:13.856768Z</div><div>93</div><div class="hash-mono">tornado_storm_v1_0</div><div>1.0%</div><div class="hash-mono">2546ad4c..009e8c3a</div></div>
+        <div class="ledger-row"><div>2026-09-30T01:00:54.217747Z</div><div>123</div><div class="hash-mono">tornado_storm_v1_0</div><div>1.8%</div><div class="hash-mono">e681828d..20d74bea</div></div>
+        <div class="ledger-row"><div>2026-09-29T20:25:59.207441Z</div><div>144</div><div class="hash-mono">tornado_storm_v1_0</div><div>1.8%</div><div class="hash-mono">4d9b0f97..bc768b5f</div></div>
+        <div class="ledger-row"><div>2026-09-29T14:35:09.861425Z</div><div>166</div><div class="hash-mono">tornado_storm_v1_0</div><div>1.8%</div><div class="hash-mono">fee2bdb9..315675ae</div></div>
+        <div class="ledger-row"><div>2026-09-29T07:50:19.027872Z</div><div>126</div><div class="hash-mono">tornado_storm_v1_0</div><div>1.0%</div><div class="hash-mono">69bf084a..5063d775</div></div>
+        <div class="ledger-row"><div>2026-09-29T00:09:42.841022Z</div><div>106</div><div class="hash-mono">tornado_storm_v1_0</div><div>1.2%</div><div class="hash-mono">1d1bcd27..253257f5</div></div>
+        <div class="ledger-row"><div>2026-09-28T19:10:59.766119Z</div><div>65</div><div class="hash-mono">tornado_storm_v1_0</div><div>0.3%</div><div class="hash-mono">c6884d56..74de301d</div></div>
+        <div class="ledger-row"><div>2026-09-28T10:28:37.528306Z</div><div>71</div><div class="hash-mono">tornado_storm_v1_0</div><div>0.6%</div><div class="hash-mono">661478e9..bd14f8ea</div></div>
+        <div class="ledger-row"><div>2026-09-28T03:20:21.666998Z</div><div>27</div><div class="hash-mono">tornado_storm_v1_0</div><div>0.3%</div><div class="hash-mono">58196d80..562f688e</div></div>
         </div>
+<!-- /hp-ledger:rows -->
       </div>
 
       <div class="card" style="margin-top:16px;">
@@ -511,11 +436,13 @@
           Verify independently by downloading the ledger and recomputing.
         </p>
         <div id="hash-chain">
-        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-03-31T04:08:22.080151Z</strong></div><div class="hash-mono">hash: b458797b56f70a3b2a03939bd689c2f87ad558c21398d2a306e4bb342f832d7b</div><div class="hash-mono">prev: a11d6418..19fa9e90</div></div>
-        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-03-31T03:52:04.624978Z</strong></div><div class="hash-mono">hash: a11d6418c7b906c842bc62b63530f3db6cf855f6ac28213b6895935319fa9e90</div><div class="hash-mono">prev: 61cb1457..90f38b33</div></div>
-        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-03-23T13:16:25.719175Z</strong></div><div class="hash-mono">hash: 61cb1457f5bf3898fd2d961222c36441657d164b28b508e831abc8f190f38b33</div><div class="hash-mono">prev: 2b3e06d5..34f082e1</div></div>
-        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-03-23T07:16:47.304049Z</strong></div><div class="hash-mono">hash: 2b3e06d5e3e74864f307c90df538a3a9d87911ce248cd06f0d36e84c34f082e1</div><div class="hash-mono">prev: 475a206b..70f33b65</div></div>
-        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-03-23T01:15:14.531846Z</strong></div><div class="hash-mono">hash: 475a206bd17d9a6be6a54c75717f342e527ea2324f5720cf7b5f949c70f33b65</div><div class="hash-mono">prev: f66a0fa7..b4cbe36b</div></div>
+<!-- hp-ledger:chain -->
+        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-10-03T00:54:52.400169Z</strong></div><div class="hash-mono">hash: 8af035f24305dd2708898a40bc465232f09d8e8b44dacbeb8c11b8608bdf3319</div><div class="hash-mono">prev: 7f1eefc7..eaf4c7be</div></div>
+        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-10-02T21:46:36.714547Z</strong></div><div class="hash-mono">hash: 7f1eefc7c5f346cde7a15d9bf6a6c517bfc4969b704e821a960ddd97eaf4c7be</div><div class="hash-mono">prev: 0e6ba2f6..69aba847</div></div>
+        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-10-02T17:21:40.847498Z</strong></div><div class="hash-mono">hash: 0e6ba2f6d3706322afd18bfba81a16b17eecd55223a6943e0631439369aba847</div><div class="hash-mono">prev: adfc1888..96b69599</div></div>
+        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-10-02T10:17:24.410437Z</strong></div><div class="hash-mono">hash: adfc1888e24a26f9e265afd6eecf191e4e5d143473fa341ea5de332c96b69599</div><div class="hash-mono">prev: 13f638bb..45391974</div></div>
+        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-10-02T03:49:42.883642Z</strong></div><div class="hash-mono">hash: 13f638bbfc5199bd4b4ca5d419726f2d0d97c5f63b882c8e33ab5c3a45391974</div><div class="hash-mono">prev: 7bc6de63..c46955c4</div></div>
+<!-- /hp-ledger:chain -->
         </div>
       </div>
     </section>
@@ -540,50 +467,35 @@
     <!-- Section 6: What Makes This Different -->
     <section class="section" aria-labelledby="different-heading">
       <h2 id="different-heading">What makes this different</h2>
-      <div class="card">
-        <ul class="diff-list">
-          <li>
-            <strong>Coherence Field Theory</strong>
-            <p>
-              First tornado prediction system grounded in a unified physics framework.
-              The coherence field (S_One) generates a Helmholtz PDE whose solutions produce
-              tau (coherence time), alignment (field-flow coupling), and gradient features
-              that capture mesoscale organization beyond what conventional indices measure.
-            </p>
-          </li>
-          <li>
-            <strong>Honest by design</strong>
-            <p>
-              Zero-leakage architecture verified by audit. Strict temporal split with no data
-              from the future leaking into training. No meta-stacker. No ensemble of ensembles.
-              A single gradient-boosted tree per variant, early-stopped on validation loss.
-            </p>
-          </li>
-          <li>
-            <strong>Transparent</strong>
-            <p>
-              Every prediction is logged with a SHA-256 hash chain. The full results JSON,
-              feature importances, and model configuration are published. All code is open-source.
-              We publish our false alarm rate and do not hide failures.
-            </p>
-          </li>
-          <li>
-            <strong>Self-aware limitations</strong>
-            <p>
-              The CFT contribution is +0.016 AUC &mdash; real but modest. We do not claim to replace
-              NWS warnings, ProbSevere, or radar-based systems. This system adds
-              a new physics-based signal. It works best as a complement to existing tools.
-            </p>
-          </li>
-        </ul>
-      </div>
+<!-- hp-evidence:tornado-different -->
+<div class="card">
+  <ul class="diff-list">
+    <li>
+      <strong>Pre-registered and read once</strong>
+      <p>Every modelling choice was fixed on 2023 and checked on 2024 before 2025 was scored, once. The protocol and its dated amendments are public, including the ones that corrected our own earlier numbers.</p>
+    </li>
+    <li>
+      <strong>Scored against NOAA on the same storms</strong>
+      <p>The comparison with NOAA ProbTor and the NWS warnings uses the same storm observations, the same event and intervals paired by day.</p>
+    </li>
+    <li>
+      <strong>Open and reproducible</strong>
+      <p>The served model is a JSON file in the repository, scored in pure NumPy; its identity is the hash of its bytes, and every live forecast is appended to a hash-chained ledger.</p>
+    </li>
+    <li>
+      <strong>We publish what did not work</strong>
+      <p>The HRRR environment and the coherence field were tested and did not improve the forecast; the measurements are above.</p>
+    </li>
+  </ul>
+</div>
 
-      <div class="link-row">
-        <a href="https://github.com/Jphilbrick10/hazardpulse" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;" rel="noopener">GitHub Repository</a>
-        <a href="/data/definitive_results.json" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">Definitive Results JSON</a>
-        <a href="/data/tornado-ledger.jsonl" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">Prediction Ledger (JSONL)</a>
-        <a href="/verification/" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">All Verification Scores</a>
-      </div>
+<div class="link-row">
+  <a href="https://github.com/coherence-energy-labs/hazardpulse" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;" rel="noopener">GitHub repository</a>
+  <a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/TORNADO_MODEL_PROGRAM.md" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;" rel="noopener">Model programme</a>
+  <a href="/data/tornado-ledger.jsonl" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">Prediction ledger (JSONL)</a>
+  <a href="/verification/" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">All verification scores</a>
+</div>
+<!-- /hp-evidence:tornado-different -->
     </section>
 
   </main>

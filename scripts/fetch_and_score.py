@@ -1,11 +1,22 @@
 #!/usr/bin/env python3
-"""Fetch active tropical cyclones from NHC ATCF, score with v8.1, output JSON.
+"""Fetch active tropical cyclones from NHC ATCF + JTWC, score P(RI in 24 h), output JSON.
 
 Designed to run once daily via GitHub Actions cron. Outputs:
   - dist/data/live-storms.json    (scored active storms)
   - dist/data/live-pulse.json     (updated hurricane entry)
 
 If no active storms exist, outputs empty arrays with honest timestamps.
+
+The model is NOT trained here. It is served from the pinned artifact named by
+SERVED_MODEL_VERSION (results/models/<version>.json, scripts/train_hurricane_ri.py), bound
+to its data files' SHA-256 and config, with a calibration fitted to convergence on held-out
+seasons. Training in this job is what kept every run since 2026-05-27 from finishing inside
+the workflow's 10-minute budget; which version is served is decided by
+scripts/evaluate_hurricane_ri.py.
+
+Atlantic / East / Central Pacific storms are served NOAA's own RI guidance instead whenever the
+cycle's SHIPS text carries it (results/models/hurricane_ri_stack_v1.json, chosen by the
+pre-registered program docs/HURRICANE_RI_PROGRAM.md); every storm says which (``ri_source``).
 """
 
 from __future__ import annotations
@@ -37,39 +48,74 @@ from hazardpulse.hurricane.atcf import (  # noqa: E402
     parse_atcf_deck,
 )
 from hazardpulse.hurricane.operational_ri import (  # noqa: E402
-    best_known_operational_ri_config,
-    brier_skill_score,
-    build_feature_matrix,
-    compute_roc_auc,
-    platt_calibrate,
-    predict_bagged,
-    predict_histogram_gbt,
-    predict_logistic,
-    precompute_bins,
-    rank_ensemble,
-    select_features_by_logistic,
-    sigmoid,
-    standardize,
-    train_bagged_logistic,
-    train_histogram_gbt,
-    train_logistic,
-    train_median_impute,
+    climatological_mpi_features,
+    translation_speed_kmh,
 )
+from hazardpulse.hurricane import ri_model  # noqa: E402
+from hazardpulse.hurricane import ri_stack, ships_text  # noqa: E402
 
 DIST = Path(__file__).resolve().parents[1] / "dist"
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 HISTORICAL_DATA = RESULTS / "hurricane_operational_ri_2000_2024_al_sst.jsonl"
+# The served model, as chosen by scripts/evaluate_hurricane_ri.py's pre-registered rule
+# (results/calibration/hurricane_ri_evaluation.json; a test keeps the two in agreement).
+SERVED_MODEL_VERSION = "hurricane_ri_v8_2"
+MODEL_ARTIFACT = ri_model.ARTIFACTS[SERVED_MODEL_VERSION]
 PRIMARY_DOMAIN = "https://hazardpulse.com"
+
+# NHC basins (AL/EP/CP) are served NOAA's own RI guidance, as the pre-registered program
+# chose it (docs/HURRICANE_RI_PROGRAM.md, scripts/hurricane_ri_stack.py; the artifact names the
+# candidate -- since 2026-10-02 A: DTOPS as issued, SHIPS-RII where DTOPS is missing), read from
+# the SAME cycle's SHIPS text. v8.2 serves everything else: the JTWC basins (no public RI
+# guidance) and NHC cycles whose SHIPS text is absent, unreadable, or lacks the needed aids.
+# Every scored storm says which (``ri_source``) and carries the inputs it used.
+STACK_ARTIFACT = ri_stack.ARTIFACT_PATH
+RI_SOURCE_STACK = "noaa_aid_stack"
+RI_SOURCE_V82 = "v8.2"
+# What each pre-registered candidate serves, in words for the site (ri_stack.CANDIDATES).
+STACK_PUBLIC = {
+    "A": "DTOPS as issued, and SHIPS-RII where DTOPS is missing",
+    "B": "SHIPS-RII as issued",
+    "C": "NOAA's SHIPS RI consensus as issued (SHIPS-RII where it is missing)",
+    "D": "a logistic pool of SHIPS-RII, its logistic and Bayesian versions, and DTOPS",
+    "E": "a logistic pool of SHIPS-RII, its logistic and Bayesian versions, DTOPS and HazardPulse v8.2",
+    "F": "a logistic pool of SHIPS-RII, its logistic and Bayesian versions, and DTOPS, with an Atlantic term",
+}
+
+
+def ri_sources_note(stack: dict[str, object] | None) -> str:
+    v82_text = ("West Pacific, Indian Ocean, Southern Hemisphere (no public RI guidance) and any NHC cycle "
+                "without a usable SHIPS text: HazardPulse v8.2.")
+    if stack is None:
+        return "Every basin: HazardPulse v8.2."
+    return ("Atlantic, East and Central Pacific: NOAA's rapid-intensification guidance read from NHC's SHIPS "
+            f"text for the same cycle -- {STACK_PUBLIC[stack['payload']['candidate']]} -- chosen by a "
+            "pre-registered comparison on 2020-2024 and scored once on 2025 (docs/HURRICANE_RI_PROGRAM.md). "
+            + v82_text)
 
 # NHC real-time ATCF data URLs
 REALTIME_ADECK_INDEX = f"{ATCF_ROOT}/aid_public/"
 REALTIME_ADECK_FILE_RE = re.compile(
     r'href="(a[a-z]{2}\d{2}\d{4}\.dat\.gz)"', re.IGNORECASE
 )
+# Same listing, with the server's "last modified" column (UTC) when it is present.
+REALTIME_ADECK_ROW_RE = re.compile(
+    r'href="(a[a-z]{2}\d{2}\d{4}\.dat\.gz)"[^\n]*?(\d{4}-\d{2}-\d{2} \d{2}:\d{2})',
+    re.IGNORECASE,
+)
+
+# aid_public keeps EVERY a-deck of the season -- 53 files on 2026-10-02, of which three
+# had an analysis in the last 12 h; AL01 was last analysed 106 days earlier. A storm is
+# active only if its latest analysis cycle is this recent. NHC cycles every 6 h, so 12 h
+# tolerates one late or missed cycle; two missed cycles means NHC is no longer tracking it.
+ACTIVE_MAX_AGE_HOURS = 12.0
 
 # All global basins — NHC ATCF hosts a-decks for NHC basins; JTWC storms
 # are discovered from the JTWC RSS feed and parsed from warning text.
 ALL_BASINS = ("AL", "EP", "CP", "WP", "IO", "SH")
+# Basins NHC/CPHC warn on: their a-decks are authoritative, and JTWC's warnings for them
+# are re-issues that would only duplicate the storm (under the wrong basin, before 2026-10).
+NHC_BASINS = frozenset({"AL", "EP", "CP"})
 
 # JTWC public RSS feed listing active tropical cyclone warnings
 JTWC_RSS_URL = "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss"
@@ -77,6 +123,28 @@ JTWC_RSS_URL = "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss"
 JTWC_WARNING_URL = "https://www.metoc.navy.mil/jtwc/products/{product_id}web.txt"
 # Regex to extract storm product IDs from JTWC RSS
 JTWC_PRODUCT_RE = re.compile(r"products/(\w+)web\.txt", re.IGNORECASE)
+# Warning products are "<basin><NN><YY>": wp2626, ep1526, sh0126, io0226. Anything else on
+# the feed (abpw, abio: area advisories) is not a single-storm warning.
+JTWC_WARNING_PRODUCT_RE = re.compile(r"^(wp|io|sh|ep|cp)(\d{2})(\d{2})$", re.IGNORECASE)
+# The storm's identity comes from the SUBJ header ONLY. The body routinely names OTHER
+# storms ("REFER TO TROPICAL STORM 15E (NOLO) WARNINGS"), and the old whole-text search
+# published Hurricane Rachel's 100 kt / 19.4N 109.4W under Nolo's name (2026-10-02).
+JTWC_SUBJ_RE = re.compile(
+    r"^SUBJ/(?P<kind>[A-Z][A-Z -]*?)\s+(?P<num>\d{2}[A-Z])\s+\((?P<name>[^)]+)\)\s+WARNING",
+    re.IGNORECASE | re.MULTILINE,
+)
+# A final warning on a system that is no longer a tropical cyclone.
+JTWC_NOT_A_TC_RE = re.compile(r"REMNANTS|POST-TROPICAL|EXTRATROPICAL|DISSIPATED", re.IGNORECASE)
+JTWC_SUFFIX_BASIN = {"W": "WP", "A": "IO", "B": "IO", "S": "SH", "P": "SH", "E": "EP", "C": "CP"}
+
+# Every model feature is built live by build_live_case() with the v8.2 training set's own
+# definitions (true 6/12/24-h deltas, displacement over the real 6 h, hours since the first
+# analysis). A model whose training set cannot be matched live declares the features to
+# median-impute in its artifact (``serving.impute_live``: v8.1's 3-hourly-stepped speed and
+# age), and ri_model applies that contract at scoring time -- offline evaluation included.
+# Features a SOURCE cannot provide (a single JTWC warning has no history: no lagged deltas,
+# no motion, no age) arrive as None and are imputed the same way; a test checks that an
+# a-deck case leaves nothing undeclared.
 
 # Category thresholds (Saffir-Simpson)
 CATEGORY_THRESHOLDS = [
@@ -136,49 +204,86 @@ def _discover_jtwc_storms() -> dict[str, list[ATCFRecord]]:
 
     result: dict[str, list[ATCFRecord]] = {}
     for pid in product_ids:
+        pm = JTWC_WARNING_PRODUCT_RE.match(pid)
+        if pm is None:
+            continue  # area advisories (abpw, abio), not single-storm warnings
+        if pm.group(1).upper() in NHC_BASINS:
+            # JTWC re-issues NHC/CPHC warnings for EP/CP storms; the NHC a-deck is the
+            # authority and already carries the storm.
+            continue
         url = JTWC_WARNING_URL.format(product_id=pid)
         try:
             text = fetch_text(url, namespace="jtwc_warning", use_cache=False)
         except Exception:
             continue
 
-        storm_id, records = _parse_jtwc_warning_to_atcf(text)
+        storm_id, records = _parse_jtwc_warning_to_atcf(text, product_id=pid)
         if storm_id and records:
+            if storm_id in result:
+                print(f"  WARNING: two JTWC warnings resolve to {storm_id}; keeping the first")
+                continue
             result[storm_id] = records
 
     return result
 
 
-def _parse_jtwc_warning_to_atcf(text: str) -> tuple[str, list[ATCFRecord]]:
+def _jtwc_day_to_datetime(ddhhmm: str, now: dt.datetime) -> dt.datetime | None:
+    """Resolve a JTWC ``DDHHMM`` group to the most recent such time not after ``now`` (+1 day).
+
+    A warning carries only day-of-month: at a month boundary (warning 302100Z read on the
+    1st) the naive ``now.month`` reading lands 29 days in the future.
+    """
+    day, hour, minute = int(ddhhmm[:2]), int(ddhhmm[2:4]), int(ddhhmm[4:6])
+    year, month = now.year, now.month
+    for _ in range(3):
+        try:
+            candidate = dt.datetime(year, month, day, hour, minute)
+        except ValueError:
+            candidate = None
+        if candidate is not None and candidate <= now + dt.timedelta(days=1):
+            return candidate
+        month -= 1
+        if month == 0:
+            year, month = year - 1, 12
+    return None
+
+
+def _parse_jtwc_warning_to_atcf(
+    text: str,
+    product_id: str | None = None,
+    now: dt.datetime | None = None,
+) -> tuple[str, list[ATCFRecord]]:
     """Parse a JTWC warning text product into ATCFRecords.
 
     Extracts analysis position + all forecast lead times (12h through 120h)
     and returns them as ATCFRecord objects compatible with build_live_case().
+
+    Identity (number, name) is read from the ``SUBJ/`` header only; the basin from the
+    product id (``wp2626`` -> WP) when given, else from the number's suffix letter. Final
+    warnings on systems that are no longer tropical cyclones ("REMNANTS OF ...") and
+    warnings whose basin cannot be determined yield no storm.
     """
+    now = now or dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
     lines = text.strip().split("\n")
 
-    # Extract storm name and number from SUBJ line
-    storm_name = ""
-    storm_number = ""
-    for line in lines:
-        m = re.search(
-            r"(?:SUPER TYPHOON|TYPHOON|TROPICAL STORM|TROPICAL DEPRESSION|TROPICAL CYCLONE)"
-            r"\s+(\d{2}[A-Z])\s+\((\w+)\)",
-            line, re.IGNORECASE,
-        )
-        if m:
-            storm_number = m.group(1)
-            storm_name = m.group(2).title()
-            break
-
-    if not storm_number:
+    subj = JTWC_SUBJ_RE.search(text)
+    if subj is None:
         return "", []
+    if JTWC_NOT_A_TC_RE.search(subj.group("kind")):
+        return "", []
+    storm_number = subj.group("num").upper()
+    storm_name = subj.group("name").strip().title()
 
-    # Map basin from storm number suffix
-    suffix = storm_number[-1].upper()
-    basin_map = {"W": "WP", "A": "IO", "B": "IO", "S": "SH", "P": "SH"}
-    basin = basin_map.get(suffix, "WP")
-    year = dt.datetime.now(dt.timezone.utc).year
+    basin = None
+    if product_id:
+        pm = JTWC_WARNING_PRODUCT_RE.match(product_id)
+        if pm is not None:
+            basin = pm.group(1).upper()
+    if basin is None:
+        basin = JTWC_SUFFIX_BASIN.get(storm_number[-1])
+    if basin is None:
+        return "", []
+    year = now.year
     storm_id = f"{basin}{storm_number[:2]}{year}"
 
     # Parse analysis position: "DDHHMM Z --- NEAR NN.NN NS.S EEE.EE EW"
@@ -189,11 +294,8 @@ def _parse_jtwc_warning_to_atcf(text: str) -> tuple[str, list[ATCFRecord]]:
         m = re.search(r"(\d{6})Z\s*---\s*NEAR\s+([\d.]+)([NS])\s+([\d.]+)([EW])", line)
         if m:
             ddhhmm = m.group(1)
-            now = dt.datetime.now(dt.timezone.utc)
-            try:
-                cycle_time = dt.datetime(now.year, now.month, int(ddhhmm[:2]),
-                                         int(ddhhmm[2:4]), int(ddhhmm[4:6]))
-            except ValueError:
+            cycle_time = _jtwc_day_to_datetime(ddhhmm, now)
+            if cycle_time is None:
                 continue
             analysis_lat = float(m.group(2)) * (-1 if m.group(3) == "S" else 1)
             analysis_lon = float(m.group(4)) * (-1 if m.group(5) == "W" else 1)
@@ -251,14 +353,13 @@ def _parse_jtwc_warning_to_atcf(text: str) -> tuple[str, list[ATCFRecord]]:
     return storm_id, records
 
 
-def list_realtime_storms(
+def fetch_adeck_index(
     basin_prefixes: tuple[str, ...] = ALL_BASINS,
-) -> list[str]:
-    """List active storm IDs from NHC ATCF real-time index (hosts all basins).
+) -> dict[str, dt.datetime | None]:
+    """Every a-deck in the NHC ATCF real-time index, with its last-modified time.
 
-    The NHC ATCF server at ftp.nhc.noaa.gov hosts a-deck files for all global
-    basins including JTWC-tracked Western Pacific (WP), Indian Ocean (IO),
-    and Southern Hemisphere (SH) storms.
+    The index holds the WHOLE season's a-decks, dissipated storms and old invests
+    included; whether a storm is active is decided from its deck (is_active()).
     """
     try:
         html = fetch_text(
@@ -268,15 +369,67 @@ def list_realtime_storms(
         )
     except Exception as e:
         print(f"  Warning: Could not fetch ATCF real-time index: {e}")
-        return []
+        return {}
+    return parse_adeck_index(html, basin_prefixes)
 
+
+def list_realtime_storms(
+    basin_prefixes: tuple[str, ...] = ALL_BASINS,
+) -> list[str]:
+    """Storm IDs of every a-deck in the NHC ATCF real-time index (active OR NOT).
+
+    The NHC ATCF server at ftp.nhc.noaa.gov hosts a-deck files for all global
+    basins including JTWC-tracked Western Pacific (WP), Indian Ocean (IO),
+    and Southern Hemisphere (SH) storms. Filter with is_active() before scoring.
+    """
+    return sorted(fetch_adeck_index(basin_prefixes))
+
+
+def parse_adeck_index(
+    html: str,
+    basin_prefixes: tuple[str, ...] = ALL_BASINS,
+) -> dict[str, dt.datetime | None]:
+    """``{storm_id: last-modified (UTC, naive) or None}`` for every a-deck in the listing."""
     wanted = {p.upper() for p in basin_prefixes}
-    storm_ids: set[str] = set()
+    out: dict[str, dt.datetime | None] = {}
     for filename in REALTIME_ADECK_FILE_RE.findall(html):
         storm_id = filename[1:9].upper()
         if storm_id[:2] in wanted:
-            storm_ids.add(storm_id)
-    return sorted(storm_ids)
+            out.setdefault(storm_id, None)
+    for filename, stamp in REALTIME_ADECK_ROW_RE.findall(html):
+        storm_id = filename[1:9].upper()
+        if storm_id in out:
+            try:
+                out[storm_id] = dt.datetime.strptime(stamp, "%Y-%m-%d %H:%M")
+            except ValueError:
+                pass
+    return out
+
+
+def latest_analysis_cycle(
+    records: list[ATCFRecord],
+    analysis_priority: tuple[str, ...] = DEFAULT_ANALYSIS_PRIORITY,
+) -> dt.datetime | None:
+    """The most recent cycle with an analysis build_live_case() would use (tau 0, a wind)."""
+    wanted = set(analysis_priority)
+    cycles = [
+        r.cycle for r in records
+        if r.tau_hours == 0 and r.vmax_kt is not None and r.model in wanted
+    ]
+    return max(cycles) if cycles else None
+
+
+def is_active(
+    records: list[ATCFRecord],
+    now: dt.datetime,
+    max_age_hours: float = ACTIVE_MAX_AGE_HOURS,
+) -> tuple[bool, float | None]:
+    """(active?, age of the latest analysis in hours). No analysis at all is inactive."""
+    latest = latest_analysis_cycle(records)
+    if latest is None:
+        return False, None
+    age_h = (now - latest).total_seconds() / 3600.0
+    return age_h <= max_age_hours, age_h
 
 
 def fetch_realtime_adeck(storm_id: str) -> list[ATCFRecord]:
@@ -310,11 +463,15 @@ def build_live_case(
     *,
     aid_models: tuple[str, ...] = DEFAULT_AID_MODELS,
     lead_times: tuple[int, ...] = DEFAULT_LEAD_TIMES,
+    full_history: bool = True,
 ) -> dict[str, object] | None:
     """Build a single feature case from the LATEST advisory cycle of an active storm.
 
     Unlike build_operational_ri_cases, this doesn't need b-deck/best-track
     because we're scoring a live storm, not evaluating historical accuracy.
+
+    ``full_history``: the records hold the storm's whole track (an a-deck). A JTWC warning
+    holds one cycle, so its storm age is unknown (None, not 0).
     """
 
     if not adeck_records:
@@ -435,128 +592,132 @@ def build_live_case(
         row["issue_month_sin"] = float(np.sin(2 * np.pi * month / 12.0))
         row["issue_month_cos"] = float(np.cos(2 * np.pi * month / 12.0))
 
+        # Location / potential-intensity features, by the training set's own definition
+        # (until 2026-10 these were never set live and were median-imputed).
+        row.update(climatological_mpi_features(analysis.lat, current_vmax, month))
+
+        # Motion and age on the REAL clock, as the v8.2 training set defines them.
+        prev6 = _select_analysis_record({
+            (r.model, r.tau_hours): r for r in adeck_records
+            if r.cycle == cycle - dt.timedelta(hours=6)
+        })
+        row["translation_speed_kmh"] = (
+            translation_speed_kmh(prev6.lat, prev6.lon, analysis.lat, analysis.lon, 6.0)
+            if prev6 is not None else None
+        )
+        if full_history:
+            first_cycle = min(r.cycle for r in adeck_records if r.tau_hours == 0)
+            row["storm_age_h"] = (cycle - first_cycle).total_seconds() / 3600.0
+        else:
+            row["storm_age_h"] = None
+
         return row
 
     return None
 
 
-def load_historical_cases() -> list[dict[str, object]]:
-    """Load the historical JSONL training dataset."""
+def load_stack_model() -> dict[str, object]:
+    """The served NOAA-aid stack artifact, refused unless it validates (ri_stack.load_artifact).
 
-    if not HISTORICAL_DATA.exists():
-        print(f"  ERROR: Historical data not found at {HISTORICAL_DATA}")
-        return []
+    Loaded on every run, storms or not, like the v8.2 artifact: a missing or corrupt file fails
+    the job the day it happens, not at the first Atlantic storm.
+    """
+    payload, version = ri_stack.load_artifact(STACK_ARTIFACT)
+    if ri_stack.V82 in (payload.get("inputs") or []):
+        # The fitted pool would need v8.2 from the benchmark's model C on live inputs, a model
+        # this scorer does not load: refuse rather than feed it a different v8.2.
+        raise ri_stack.StackArtifactError(
+            f"{STACK_ARTIFACT} pools v8.2 (candidate {payload['candidate']}); this scorer serves no such stack")
+    print(f"  RI stack {version}: candidate {payload['candidate']} -- {payload['description']}; "
+          f"fitted on {payload['training']['seasons']} ({payload['training']['n']} cycles)")
+    return {"payload": payload, "model_version": version}
 
-    cases: list[dict[str, object]] = []
-    with HISTORICAL_DATA.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if line:
-                cases.append(json.loads(line))
-    print(f"  Loaded {len(cases)} historical cases")
-    return cases
+
+def fetch_ships_ri(storm_id: str, cycle: dt.datetime) -> tuple[ships_text.ShipsRI | None, str]:
+    """``(parsed SHIPS RI matrix, "ok")`` for the storm's cycle, or ``(None, why)``."""
+    name = ships_text.filename_for(storm_id, cycle)
+    try:
+        raw = fetch_text(ships_text.STEXT_ROOT + name, namespace="ships_text", use_cache=False)
+    except Exception as exc:  # 404 (not yet published), network
+        return None, f"absent ({type(exc).__name__})"
+    try:
+        return ships_text.parse_ships_text(raw, filename=name), "ok"
+    except ships_text.ShipsTextError as exc:
+        return None, f"refused ({exc})"
 
 
-def train_and_score(
-    historical_cases: list[dict[str, object]],
+def stack_forecast(
+    case: dict[str, object],
+    stack: dict[str, object],
+    ships_fetcher=None,
+) -> tuple[float | None, dict[str, object]]:
+    """``(P(RI), inputs)`` from NOAA's aids at the case's own cycle, or ``(None, {"status": why})``.
+
+    Only an NHC a-deck case qualifies: the JTWC basins publish no RI guidance, and a JTWC
+    warning is never the source of an NHC-basin storm (see _discover_jtwc_storms).
+    """
+    sid = str(case["storm_id"]).upper()
+    if sid[:2] not in NHC_BASINS:
+        return None, {"status": "jtwc_basin: NOAA publishes no RI guidance"}
+    if case.get("analysis_model") == "JTWC":
+        return None, {"status": "jtwc_warning_case"}
+    cycle = dt.datetime.fromisoformat(str(case["issue_time"]))
+    fetcher = ships_fetcher or fetch_ships_ri
+    ri, status = fetcher(sid, cycle)
+    if ri is None:
+        return None, {"status": f"ships_text_{status}", "ships_text": ships_text.filename_for(sid, cycle)}
+    out = ri_stack.predict(stack["payload"], ri.whole_percent, sid[:2], None)
+    if out is None:
+        return None, {"status": "ships_text_lacks_the_needed_aids", "ships_text": ships_text.summary(ri)}
+    prob, info = out
+    return prob, {"status": "ok", "candidate": stack["payload"]["candidate"],
+                  "ships_text": ships_text.summary(ri), "url": ships_text.url_for(sid, cycle), **info}
+
+
+def ri_source_label(storm: dict[str, object]) -> str:
+    """What produced a storm's number, for people: 'NOAA DTOPS', 'NOAA SHIPS-RII', 'HazardPulse v8.2'."""
+    if storm.get("ri_source") != RI_SOURCE_STACK:
+        return "HazardPulse v8.2"
+    used = (storm.get("ri_inputs") or {}).get("used")
+    names = {"DTOP": "DTOPS", "RIOD": "SHIPS-RII", "RIOC": "SHIPS RI consensus"}
+    return f"NOAA {names.get(str(used), 'RI guidance (SHIPS-RII/DTOPS)')}"
+
+
+def score_live_cases(
+    model: dict[str, object],
     live_cases: list[dict[str, object]],
+    stack: dict[str, object] | None = None,
+    ships_fetcher=None,
 ) -> list[dict[str, object]]:
-    """Train v8.1 on all historical data, score the live cases."""
+    """Score live cases with the pinned artifacts. No training happens here.
 
-    if not historical_cases or not live_cases:
+    v8.2 scores every case. With ``stack`` (load_stack_model), an NHC-basin a-deck case whose
+    cycle's SHIPS text carries the needed aids is served NOAA's guidance instead, and keeps
+    v8.2's number beside it (``v8_2``) for comparison. ``ri_probability`` is what is published;
+    every downstream band (pulse risk_band, page) is derived from it.
+    """
+
+    if not live_cases:
         return []
+    p = ri_model.score_cases(model, live_cases)
+    n_features = len(model["selected_idx"])
 
-    config = best_known_operational_ri_config()
-
-    # Build feature matrix from historical data
-    X_hist, y_hist, years_hist, feature_names = build_feature_matrix(historical_cases)
-    print(f"  Training on {len(X_hist)} cases, {len(feature_names)} raw features")
-
-    # Build feature matrix for live cases using same feature names
-    X_live, _, _, _ = build_feature_matrix(live_cases, feature_names=feature_names)
-
-    # Impute and standardize
-    X_hist_imp, X_live_imp = train_median_impute(X_hist, X_live)
-    X_hist_std, X_live_std = standardize(X_hist_imp, X_live_imp)
-
-    pos = int(np.sum(y_hist == 1))
-    neg = int(np.sum(y_hist == 0))
-    cw_ratio = min(neg / max(pos, 1), 20.0)
-    scale_pw = cw_ratio
-
-    # L2 feature selection
-    sel_idx, sel_names, _ = select_features_by_logistic(
-        X_hist_std, y_hist, feature_names,
-        n_select=config.n_features_select,
-        lam=config.feature_select_lam,
-        n_epochs=config.feature_select_epochs,
-        cw_ratio=cw_ratio,
-    )
-    print(f"  Selected {len(sel_idx)} features")
-
-    X_hist_sel = X_hist_imp[:, sel_idx]
-    X_live_sel = X_live_imp[:, sel_idx]
-    X_hist_s, X_live_s = standardize(X_hist_sel, X_live_sel)
-
-    # Train all 4 models
-    print("  Training histogram GBT depth-3...")
-    gbt3_trees, gbt3_init, gbt3_lr, _, _ = train_histogram_gbt(
-        X_hist_sel, y_hist,
-        n_trees=config.hgbt_d3_n_trees, max_depth=config.hgbt_d3_max_depth,
-        learning_rate=config.hgbt_d3_lr, lambda_reg=config.hgbt_d3_lambda_reg,
-        scale_pos_weight=scale_pw, n_bins=config.n_bins,
-    )
-
-    print("  Training histogram GBT depth-4...")
-    gbt4_trees, gbt4_init, gbt4_lr, _, _ = train_histogram_gbt(
-        X_hist_sel, y_hist,
-        n_trees=config.hgbt_d4_n_trees, max_depth=config.hgbt_d4_max_depth,
-        learning_rate=config.hgbt_d4_lr, lambda_reg=config.hgbt_d4_lambda_reg,
-        min_samples_leaf=config.hgbt_d4_min_samples_leaf,
-        min_child_weight=config.hgbt_d4_min_child_weight,
-        colsample=config.hgbt_d4_colsample, subsample=config.hgbt_d4_subsample,
-        gamma=config.hgbt_d4_gamma, scale_pos_weight=scale_pw, n_bins=config.n_bins,
-    )
-
-    print("  Training logistic regression...")
-    w_lr, b_lr = train_logistic(
-        X_hist_s, y_hist,
-        lam=config.logistic_lam, lr=config.logistic_lr,
-        n_epochs=config.logistic_epochs_final, cw_ratio=cw_ratio,
-    )
-
-    print("  Training bagged logistic (50 bags)...")
-    bags = train_bagged_logistic(
-        X_hist_s, y_hist,
-        n_bags=config.bag_n_bags_final, feat_fraction=config.bag_feat_fraction,
-        lam=config.bag_lam, lr=config.bag_lr,
-        n_epochs=config.bag_epochs_final, cw_ratio=cw_ratio,
-    )
-
-    # Score live cases with all 4 models
-    p_gbt3 = predict_histogram_gbt(X_live_sel, gbt3_trees, gbt3_init, gbt3_lr)
-    p_gbt4 = predict_histogram_gbt(X_live_sel, gbt4_trees, gbt4_init, gbt4_lr)
-    p_lr = predict_logistic(X_live_s, w_lr, b_lr)
-    p_bag = predict_bagged(X_live_s, bags)
-
-    # Bag-weighted ensemble (weight by historical AUC approximation)
-    # Use equal weights since we don't have holdout AUCs for full-data training
-    p_ensemble = (p_gbt3 + p_gbt4 + p_lr + p_bag) / 4.0
-
-    # Platt calibration using training predictions
-    p_hist_ens = (
-        predict_histogram_gbt(X_hist_sel, gbt3_trees, gbt3_init, gbt3_lr)
-        + predict_histogram_gbt(X_hist_sel, gbt4_trees, gbt4_init, gbt4_lr)
-        + predict_logistic(X_hist_s, w_lr, b_lr)
-        + predict_bagged(X_hist_s, bags)
-    ) / 4.0
-
-    p_calibrated, platt_a, platt_b = platt_calibrate(y_hist, p_hist_ens, p_ensemble)
-
-    # Build scored results
     scored: list[dict[str, object]] = []
     for i, case in enumerate(live_cases):
-        scored.append({
+        v82 = {
+            "ri_probability": round(float(p["calibrated"][i]), 4),
+            "ri_probability_raw": round(float(p["ensemble"][i]), 4),
+            "model_scores": {
+                "gbt_d3": round(float(p["gbt_d3"][i]), 4),
+                "gbt_d4": round(float(p["gbt_d4"][i]), 4),
+                "logistic": round(float(p["logistic"][i]), 4),
+                "bagged": round(float(p["bagged"][i]), 4),
+            },
+            "n_features": n_features,
+            "model_version": model["model_version"],
+            "calibration": model["calibration"]["method"],
+        }
+        storm: dict[str, object] = {
             "storm_id": case["storm_id"],
             "storm_name": case.get("storm_name", case["storm_id"]),
             "basin": case.get("basin", ""),
@@ -566,20 +727,39 @@ def train_and_score(
             "mslp_hpa": case.get("analysis_mslp_hpa"),
             "category": classify_storm(case.get("analysis_vmax_kt")),
             "issue_time": case.get("issue_time"),
-            "ri_probability": round(float(p_calibrated[i]), 4),
-            "ri_probability_raw": round(float(p_ensemble[i]), 4),
-            "model_scores": {
-                "gbt_d3": round(float(p_gbt3[i]), 4),
-                "gbt_d4": round(float(p_gbt4[i]), 4),
-                "logistic": round(float(p_lr[i]), 4),
-                "bagged": round(float(p_bag[i]), 4),
-            },
-            "n_features": len(sel_idx),
-            "model_version": "hurricane_ri_v8_1",
-            "calibration": "platt",
-        })
+            **v82,
+            "ri_source": RI_SOURCE_V82,
+            "ri_inputs": {"analysis_model": case.get("analysis_model")},
+        }
+        if stack is not None:
+            prob, inputs = stack_forecast(case, stack, ships_fetcher)
+            if prob is None:
+                storm["ri_inputs"]["noaa_aid_stack"] = inputs
+            else:
+                payload = stack["payload"]
+                storm.update({
+                    "ri_probability": round(float(prob), 4),
+                    "ri_probability_raw": round(float(prob), 4),
+                    "model_scores": {RI_SOURCE_STACK: round(float(prob), 4)},
+                    "n_features": len(inputs.get("inputs") or {}),
+                    "model_version": stack["model_version"],
+                    "calibration": ("none: NOAA's probability as issued" if payload["kind"] == "raw_aid"
+                                    else "logistic pool of NOAA aids fitted 2020-2024"),
+                    "ri_source": RI_SOURCE_STACK,
+                    "ri_inputs": inputs,
+                    "v8_2": {k: v82[k] for k in ("ri_probability", "model_version")},
+                })
+        storm["ri_source_label"] = ri_source_label(storm)
+        scored.append(storm)
 
     return scored
+
+
+def headline_model_version(scored: list[dict[str, object]], default: str) -> str:
+    """The model behind the number the pulse shows (the top storm's), else ``default``."""
+    if not scored:
+        return default
+    return str(max(scored, key=lambda s: s["ri_probability"])["model_version"])
 
 
 def _render_hurricane_geojson(storms: list[dict[str, object]]) -> str:
@@ -597,6 +777,7 @@ def _render_hurricane_geojson(storms: list[dict[str, object]]) -> str:
                 "storm_id": s.get("storm_id", ""),
                 "storm_name": s.get("storm_name", ""),
                 "ri_probability": s.get("ri_probability", 0),
+                "ri_source": s.get("ri_source", RI_SOURCE_V82),
                 "category": s.get("category", ""),
                 "vmax_kt": s.get("vmax_kt"),
                 "mslp_hpa": s.get("mslp_hpa"),
@@ -609,15 +790,29 @@ def _render_hurricane_geojson(storms: list[dict[str, object]]) -> str:
 def write_outputs(
     scored_storms: list[dict[str, object]],
     now: dt.datetime,
+    model_version: str = SERVED_MODEL_VERSION,
+    note: str | None = None,
 ) -> None:
-    """Write scored results to dist/data/."""
+    """Write scored results to dist/data/.
+
+    ``model_version`` is the model behind the headline (top-storm) number; each storm carries
+    its own ``model_version`` and ``ri_source``, and ``model_versions`` lists every model that
+    produced a number in this run.
+    """
     forecast_id = f"hu_fcst_{now.strftime('%Y%m%d_%H%M')}"
+    sources: dict[str, int] = {}
+    for s in scored_storms:
+        key = str(s.get("ri_source", RI_SOURCE_V82))
+        sources[key] = sources.get(key, 0) + 1
 
     # Write live-storms.json
     output = {
         "updated_at": now.isoformat() + "Z",
         "forecast_id": forecast_id,
-        "model_version": "hurricane_ri_v8_1",
+        "model_version": model_version,
+        "model_versions": sorted({str(s.get("model_version")) for s in scored_storms if s.get("model_version")}),
+        "ri_sources": sources,
+        "ri_sources_note": note if note is not None else ri_sources_note(None),
         "n_active_storms": len(scored_storms),
         "storms": scored_storms,
     }
@@ -639,7 +834,7 @@ def write_outputs(
     replay_payload = {
         "forecast_id": forecast_id,
         "issued_at": now.isoformat() + "Z",
-        "model_version": "hurricane_ri_v8_1",
+        "model_version": model_version,
         "hazard": "hurricane",
         "n_active_storms": len(scored_storms),
         "storms": scored_storms,
@@ -653,6 +848,12 @@ def write_outputs(
         pulse = json.loads(pulse_path.read_text(encoding="utf-8"))
         for hazard in pulse.get("hazards", []):
             if hazard.get("key") == "hu":
+                # Benchmark fields left in the pulse by earlier model versions (v8.1's
+                # "model_auc": 0.938 under its 12-h label, "n_features": 65) would ride along
+                # beside a different model. The served model's held-out metrics live on the
+                # verification surface (results/calibration/hurricane_ri_evaluation.json).
+                hazard.pop("model_auc", None)
+                hazard.pop("n_features", None)
                 if scored_storms:
                     # Use highest RI probability storm
                     top = max(scored_storms, key=lambda s: s["ri_probability"])
@@ -665,7 +866,9 @@ def write_outputs(
                     hazard["receipt_sha256"] = top.get("receipt_sha256")
                     hazard["risk_band"] = _risk_band(top["ri_probability"])
                     hazard["gate_status"] = "pass"
-                    hazard["model_version"] = "hurricane_ri_v8_1"
+                    hazard["model_version"] = top.get("model_version", model_version)
+                    hazard["ri_source"] = top.get("ri_source", RI_SOURCE_V82)
+                    hazard["ri_source_label"] = top.get("ri_source_label") or ri_source_label(top)
                     hazard["forecast_id"] = forecast_id
                     hazard["n_active_storms"] = len(scored_storms)
                 else:
@@ -674,7 +877,9 @@ def write_outputs(
                     hazard["conf_hi"] = None
                     hazard["risk_band"] = "none"
                     hazard["gate_status"] = "pass"
-                    hazard["model_version"] = "hurricane_ri_v8_1"
+                    hazard["model_version"] = model_version
+                    hazard.pop("ri_source", None)
+                    hazard.pop("ri_source_label", None)
                     hazard["forecast_id"] = forecast_id
                     hazard["n_active_storms"] = 0
                 break
@@ -725,8 +930,12 @@ def _format_time(ts: dt.datetime) -> str:
 def render_hurricane_page(
     scored_storms: list[dict[str, object]],
     now: dt.datetime,
+    model_version: str = SERVED_MODEL_VERSION,
+    note: str | None = None,
 ) -> None:
-    """Render an honest hurricane live page from the current saved feed."""
+    """Render an honest hurricane live page from the current saved feed (build_site_artifacts
+    re-renders the same page from live-storms.json; the two show the same columns)."""
+    note = note if note is not None else ri_sources_note(None)
     page_path = DIST / "live" / "hurricane" / "index.html"
     page_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -743,11 +952,12 @@ def render_hurricane_page(
                 f"<td>{_esc(storm.get('category', '--'))}</td>"
                 f"<td>{storm.get('lat', '--')}, {storm.get('lon', '--')}</td>"
                 f"<td>{float(storm.get('ri_probability', 0) or 0) * 100:.1f}%</td>"
+                f"<td>{_esc(storm.get('ri_source_label') or ri_source_label(storm))}</td>"
                 f"<td>{storm.get('vmax_kt', '--')} kt</td>"
                 f"</tr>"
             )
         storms_html = (
-            "<table><thead><tr><th>Storm</th><th>Status</th><th>Location</th><th>RI 24h</th><th>Wind</th></tr></thead>"
+            "<table><thead><tr><th>Storm</th><th>Status</th><th>Location</th><th>RI 24h</th><th>Source</th><th>Wind</th></tr></thead>"
             f"<tbody>{''.join(rows)}</tbody></table>"
         )
         summary_html = (
@@ -857,7 +1067,7 @@ def render_hurricane_page(
         This page is rendered from the current tropical cyclone feed. When there are no active storms,
         it says so plainly instead of showing synthetic examples.
       </p>
-      <p class="muted">Updated {_esc(_format_time(now))} &middot; Model: hurricane_ri_v8_1 &middot; Independent hazard intelligence platform</p>
+      <p class="muted">Updated {_esc(_format_time(now))} &middot; Model: {_esc(model_version)} &middot; Independent hazard intelligence platform</p>
     </section>
 
     <section class="section">
@@ -878,6 +1088,7 @@ def render_hurricane_page(
         <div class="card col-8">
           <h2 style="margin-top:0;">Active tropical systems</h2>
           {storms_html}
+          <p class="muted" style="margin-top:12px;">Where the RI number comes from: {_esc(note)}</p>
           <p class="muted" style="margin-top:12px;">Source feed: <a href="/data/live-storms.json">/data/live-storms.json</a> &middot; GeoJSON: <a href="/data/hurricane-storms.geojson">/data/hurricane-storms.geojson</a>. Always follow official advisories from the NHC, JTWC, and local authorities.</p>
         </div>
       </div>
@@ -921,16 +1132,51 @@ def render_hurricane_page(
     print(f"  Wrote {page_path} ({len(scored_storms)} storms, honest state)")
 
 
+def load_serving_model() -> dict[str, object]:
+    """The pinned served artifact, verified against its data files, config and calibration.
+
+    Loaded on EVERY run, storms or not, so a missing or stale artifact fails the job the
+    same day instead of hiding until the first storm of the season. Refuses anything but a
+    held-out, converged calibration: the legacy in-sample Platt is never served again.
+    """
+    model = ri_model.load_model(MODEL_ARTIFACT)
+    if model["model_version"] != SERVED_MODEL_VERSION:
+        raise ri_model.ModelArtifactError(
+            f"{MODEL_ARTIFACT} holds {model['model_version']}, expected {SERVED_MODEL_VERSION}")
+    if model["calibration"]["method"] != "logistic_on_logit_newton":
+        raise ri_model.ModelArtifactError(
+            f"refusing to serve calibration {model['calibration']['method']!r}: only a held-out "
+            "converged calibration (logistic_on_logit_newton) may be published")
+    prov = model.get("provenance", {})
+    cal = model["calibration"]
+    data = prov.get("data", {})
+    print(
+        f"  Model {model['model_version']}: {len(model['selected_idx'])} features, "
+        f"{len(model['gbt_d3']['trees'])}+{len(model['gbt_d4']['trees'])} trees, "
+        f"{len(model['bagged'])} bags; members {data.get('members', {}).get('storm_years')}, "
+        f"calibrated on {cal.get('fitted_on', {}).get('storm_years')} "
+        f"({cal['n']} rows, a={cal['a']:.3f}, b={cal['b']:.3f}); trained {prov.get('trained_at', '?')}"
+    )
+    return model
+
+
 def main() -> None:
     now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
-    print(f"HazardPulse v8.1 scoring pipeline — {now.isoformat()}Z")
+    print(f"HazardPulse hurricane RI scoring pipeline ({SERVED_MODEL_VERSION}) — {now.isoformat()}Z")
+    print()
+
+    print("Step 0: Loading the pinned model artifacts...")
+    model = load_serving_model()
+    stack = load_stack_model()
+    note = ri_sources_note(stack)
     print()
 
     # Step 1: Check NHC ATCF for active storms
     print("Step 1: Checking NHC ATCF for active tropical cyclones...")
-    active_ids = list_realtime_storms()
+    adeck_index = fetch_adeck_index()
+    active_ids = sorted(adeck_index)
     if active_ids:
-        print(f"  Found {len(active_ids)} storms in ATCF: {', '.join(active_ids)}")
+        print(f"  {len(active_ids)} a-decks in the ATCF index (the whole season's, active or not)")
     else:
         # In peak season (Jun-Nov Atlantic, year-round WP), zero storms is
         # unusual and worth flagging loudly in case the feed rotted.
@@ -968,13 +1214,26 @@ def main() -> None:
     live_cases: list[dict[str, object]] = []
 
     # NHC-tracked storms from ATCF a-deck
+    # A file not modified since well before the activity window cannot hold a recent
+    # analysis; skip downloading it (the deck's own cycles stay the authority below).
+    stale_before = now - dt.timedelta(hours=ACTIVE_MAX_AGE_HOURS + 6)
+    n_skipped_unmodified = 0
     for sid in active_ids:
         if sid in jtwc_storm_records:
             continue  # Will use JTWC data instead
+        modified = adeck_index.get(sid)
+        if modified is not None and modified < stale_before:
+            n_skipped_unmodified += 1
+            continue
         print(f"  Fetching ATCF a-deck for {sid}...")
         records = fetch_realtime_adeck(sid)
         if not records:
             print(f"    No records for {sid}, skipping")
+            continue
+        active, age_h = is_active(records, now)
+        if not active:
+            age_txt = "no analysis" if age_h is None else f"latest analysis {age_h:.0f} h old"
+            print(f"    {sid}: inactive ({age_txt} > {ACTIVE_MAX_AGE_HOURS:.0f} h), skipping")
             continue
         case = build_live_case(sid, records)
         if case is not None:
@@ -984,9 +1243,20 @@ def main() -> None:
             print(f"    {name}: {cat} ({vmax} kt)")
             live_cases.append(case)
 
+    if n_skipped_unmodified:
+        print(
+            f"  {n_skipped_unmodified} a-decks not modified in the last "
+            f"{ACTIVE_MAX_AGE_HOURS + 6:.0f} h: inactive, not downloaded"
+        )
+
     # JTWC-tracked storms from warning text (parsed into ATCFRecords)
     for sid, records in jtwc_storm_records.items():
-        case = build_live_case(sid, records)
+        active, age_h = is_active(records, now)
+        if not active:
+            age_txt = "no analysis" if age_h is None else f"warning analysis {age_h:.0f} h old"
+            print(f"    {sid} (JTWC): inactive ({age_txt}), skipping")
+            continue
+        case = build_live_case(sid, records, full_history=False)
         if case is not None:
             name = case.get("storm_name", sid)
             vmax = case.get("analysis_vmax_kt", "?")
@@ -997,54 +1267,57 @@ def main() -> None:
     if not live_cases:
         print()
         print("  No active tropical cyclones in any basin.")
-        write_outputs([], now)
-        render_hurricane_page([], now)
+        # No number is published; the page names the model that serves the NHC basins.
+        write_outputs([], now, stack["model_version"], note=note)
+        render_hurricane_page([], now, stack["model_version"], note=note)
         build_site_artifacts()
         print("Done. No storms to score.")
         return
 
-    # Step 3: Load historical data and train model
+    # Steps 3-4: score all storms (NHC + JTWC unified) with the pinned artifacts. Both were
+    # loaded and checked in step 0; nothing is trained in this job.
     print()
-    print("Step 3: Loading historical training data...")
-    historical = load_historical_cases()
-    if not historical:
-        # Hard fail — CI should NOT mark this green when scoring cannot happen.
-        raise RuntimeError(
-            f"Historical training data missing or empty at {HISTORICAL_DATA}. "
-            "Run scripts/build_hurricane_training_data.py to (re)build, or ensure "
-            "the JSONL file is present before scoring. Cannot emit RI probabilities "
-            "without training data."
-        )
-
-    # Step 4: Train and score all storms (NHC + JTWC unified)
-    print()
-    print("Step 4: Training v8.1 model and scoring active storms...")
-    scored = train_and_score(historical, live_cases)
+    print(f"Step 3-4: Scoring {len(live_cases)} active storms: NOAA aids ({stack['model_version']}) where the "
+          f"cycle's SHIPS text has them, else {model['model_version']}...")
+    scored = score_live_cases(model, live_cases, stack=stack)
 
     for s in scored:
         ri = s.get("ri_probability", 0) or 0
-        print(f"  {s.get('storm_name', s['storm_id'])}: P(RI) = {ri:.1%} "
-              f"({s['category']}, {s['vmax_kt']} kt)")
+        why = "" if s["ri_source"] == RI_SOURCE_STACK else f" [{s['ri_inputs'].get('noaa_aid_stack', {}).get('status', '')}]"
+        print(f"  {s.get('storm_name', s['storm_id'])}: P(RI) = {ri:.1%} from {s['ri_source_label']}"
+              f"{why} ({s['category']}, {s['vmax_kt']} kt)")
 
     # Trust layer: recalibrate RI probabilities on live outcomes + attach honest
     # [conf_lo, conf_hi] bands + Ed25519-signed receipts. Fail-safe: the model's
-    # own Platt-calibrated ri_probability stands until a live calibrator exists.
+    # own held-out calibrated ri_probability stands until a live calibrator exists.
     try:
         from hazardpulse.trust.scoring import enrich_cells, load_forecaster, load_signer
 
         _signer = load_signer()
         _forecaster = load_forecaster("hurricane", signer=_signer)
-        if _forecaster is not None and scored:
-            enrich_cells(scored, _forecaster, prob_key="ri_probability",
+        trust_version = getattr(_forecaster, "model_version", None)
+        # A calibrator is one model's curve: it may re-map, band and SIGN only the storms that
+        # model scored (the receipt would otherwise name the wrong model). With two models
+        # serving (NOAA aids in NHC basins, v8.2 elsewhere) that is a per-storm decision.
+        own = [s for s in scored if s.get("model_version") == trust_version]
+        foreign = len(scored) - len(own)
+        if _forecaster is not None and own:
+            enrich_cells(own, _forecaster, prob_key="ri_probability",
                          issued_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+            scored.sort(key=lambda c: (c.get("abstained", False), -float(c.get("ri_probability") or 0.0)))
             print(
-                f"  Trust layer: calibrated {len(scored)} storms "
+                f"  Trust layer: calibrated {len(own)} storms "
                 f"(model {_forecaster.model_version}, signed={_signer is not None})"
             )
-        elif scored:
+        if _forecaster is not None and foreign:
+            print(
+                f"  Trust layer: skipped {foreign} storms -- its calibrator was fitted for {trust_version}, "
+                "they were scored by another model; emitting their model-calibrated forecasts."
+            )
+        elif _forecaster is None and scored:
             print(
                 "  Trust layer: no calibrator yet "
-                "(results/models/hurricane_calibration.json); emitting model-calibrated forecasts."
+                "(results/calibration/hurricane_calibration.json); emitting model-calibrated forecasts."
             )
     except Exception as exc:  # never let the trust layer break a live forecast
         print(f"  Trust layer: skipped ({exc})")
@@ -1052,8 +1325,9 @@ def main() -> None:
     # Step 5: Write outputs
     print()
     print("Step 5: Writing outputs...")
-    write_outputs(scored, now)
-    render_hurricane_page(scored, now)
+    headline_version = headline_model_version(scored, stack["model_version"])
+    write_outputs(scored, now, headline_version, note=note)
+    render_hurricane_page(scored, now, headline_version, note=note)
     build_site_artifacts()
 
     # ---- Alert manager evaluation ----

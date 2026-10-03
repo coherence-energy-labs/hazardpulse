@@ -18,70 +18,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      # Per-hazard freshness, no fallback to the pulse-level timestamp (every scorer
+      # rewrites that one, so the old inline check passed for four months while the
+      # hurricane scorer was dead). Logic + tests: scripts/check_liveness.py,
+      # tests/test_liveness.py.
       - name: Check scorer freshness
-        run: |
-          python - <<'PY'
-          import datetime as dt
-          import json
-          import sys
-          from pathlib import Path
-
-          # Max acceptable age per hazard (hours) — based on scheduled cadence.
-          MAX_AGE_HOURS = {
-              "eq": 12,   # earthquake scorer runs every 6h
-              "hu": 36,   # hurricane scorer runs daily
-              "to": 6,    # tornado scorer runs every 2h
-          }
-
-          pulse = json.loads(Path("dist/data/live-pulse.json").read_text())
-          now = dt.datetime.now(dt.timezone.utc)
-          failures: list[str] = []
-
-          for hazard in pulse.get("hazards", []):
-              key = hazard.get("key")
-              if key not in MAX_AGE_HOURS:
-                  continue
-              updated_at = hazard.get("updated_at") or pulse.get("updated_at", "")
-              if not updated_at:
-                  failures.append(f"{key}: no updated_at timestamp")
-                  continue
-              t = dt.datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
-              age_h = (now - t).total_seconds() / 3600.0
-              max_age = MAX_AGE_HOURS[key]
-              status = "OK" if age_h < max_age else "STALE"
-              print(f"  {key}: last_update={updated_at}  age={age_h:.1f}h  limit={max_age}h  {status}")
-              if age_h >= max_age:
-                  failures.append(
-                      f"{key} is stale: {age_h:.1f}h since last update "
-                      f"(threshold: {max_age}h)"
-                  )
-
-          # Tornado scoring tier check — ensure tier1_ml is winning, not falling back.
-          replays = sorted(Path("dist/data/replay").glob("to_fcst_*.json"), reverse=True)[:5]
-          tier_counts: dict[str, int] = {}
-          for r in replays:
-              try:
-                  d = json.loads(r.read_text())
-              except Exception:
-                  continue
-              t = d.get("scoring_tier", "unknown")
-              tier_counts[t] = tier_counts.get(t, 0) + 1
-          if tier_counts:
-              print()
-              print(f"  Tornado tier distribution (last {len(replays)} replays): {tier_counts}")
-              if tier_counts.get("tier1_ml", 0) == 0 and len(replays) >= 3:
-                  failures.append(
-                      "Tornado tier1_ml has NOT triggered in the last "
-                      f"{len(replays)} runs (got {tier_counts}). HRRR or "
-                      "trained-model loading is likely broken."
-                  )
-
-          if failures:
-              print()
-              print("LIVENESS CHECK FAILED:")
-              for f in failures:
-                  print(f"  - {f}")
-              sys.exit(1)
-          print()
-          print("All three scorers are fresh; tier1_ml is firing.")
-          PY
+        run: python scripts/check_liveness.py

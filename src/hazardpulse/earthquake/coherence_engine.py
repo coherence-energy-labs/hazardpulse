@@ -264,24 +264,28 @@ def compute_seismic_moment(magnitude: float) -> float:
 
 def solve_helmholtz_2d(
     source: np.ndarray,
-    kappa: float | np.ndarray,
+    gamma: float | np.ndarray,
     dx: float = 1.0,
     *,
     D: float | np.ndarray = 1.0,
     n_iter: int = HELMHOLTZ_ITERS,
     omega: float = SOR_OMEGA,
 ) -> np.ndarray:
-    """Solve ``D nabla^2 tau - kappa^2 tau + S = 0`` on a 2-D grid.
+    """Solve ``D nabla^2 tau - gamma tau + S = 0`` on a 2-D grid.
 
     Earthquake-grid wrapper around the shared
     ``hazardpulse.coherence.tau_c_solver.solve_helmholtz_2d``.
     Uses float64 (small global 2-degree grid; precision over speed).
+    ``gamma`` is the damping rate Gamma(x) itself — this module's header
+    has always stated the PDE as ``D*nabla^2(tau) - Gamma*tau + S = 0``
+    with kappa = sqrt(Gamma/D) a DERIVED quantity; the solver input now
+    matches that statement (FVCS W-2).
     """
     from hazardpulse.coherence.tau_c_solver import (
         solve_helmholtz_2d as _shared_solver,
     )
     return _shared_solver(
-        source, kappa, dx,
+        source, gamma, dx,
         D=D, n_iter=n_iter, omega=omega, dtype=np.float64,
     )
 
@@ -1144,11 +1148,17 @@ def compute_seismic_coherence_field(
 
     # --- Solve Helmholtz ---
     D_field = np.full((N_LAT, N_LON), BASE_D, dtype=np.float64)
+    # kappa is a DERIVED reporting quantity (returned below, feeds kappa_local);
+    # the solver consumes Gamma directly (FVCS W-2).
     kappa_field = np.sqrt(
         Gamma_field / np.maximum(D_field, 1e-12)
     )
 
-    tau = solve_helmholtz_2d(S_field, kappa_field, dx=1.0, D=D_field)
+    # Passed as kappa_field**2 rather than Gamma_field: with BASE_D = 1 the two are
+    # equal in exact arithmetic, but sqrt-then-square is not the identity in floats,
+    # and kappa_field**2 reproduces BIT-FOR-BIT the value the solver used to compute
+    # internally — the live earthquake ledger's scores must not move under a rename.
+    tau = solve_helmholtz_2d(S_field, kappa_field ** 2, dx=1.0, D=D_field)
 
     # Gradient magnitude
     grad_y, grad_x = _gradient_2d(tau)

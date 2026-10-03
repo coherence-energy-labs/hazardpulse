@@ -2,9 +2,9 @@
   "key": "hu",
   "hazard": "hurricane",
   "model_version": "hurricane_ri_v8_1",
-  "verification_status": "matured_unscored_no_evaluator",
-  "status_badge": "Backlog",
-  "verification_status_label": "Matured hurricane forecasts exist, but no live advisory-to-outcome scorer is wired yet.",
+  "verification_status": "prospective_scored",
+  "status_badge": "Scored",
+  "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 14 storm forecasts scored against NHC best track; 0 rapid-intensification events observed.",
   "metric_source": "retrospective_holdout_exact_model",
   "metric_source_label": "Exact-model retrospective benchmark is available.",
   "auc": 0.938,
@@ -13,9 +13,9 @@
   "homepage_line": "AUC 0.938 retrospective holdout",
   "forecast_storage": {
     "n_replay_artifacts": 52,
-    "n_matured_forecasts": 51,
-    "n_scored_forecasts": 0,
-    "n_backlog": 51,
+    "n_matured_forecasts": 52,
+    "n_scored_forecasts": 52,
+    "n_backlog": 0,
     "first_issued_at": "2026-03-13T03:00:00Z",
     "last_issued_at": "2026-05-26T12:50:43Z",
     "last_forecast_id": "hu_fcst_20260526_1250",
@@ -30,10 +30,16 @@
     "prev_hash_mismatches": 0
   },
   "prospective": {
-    "summary_path": null,
-    "status": "evaluator_missing",
-    "scored_as_of": null,
-    "message": "Live hurricane forecasts are stored, but the repo does not yet score them against realized 24-hour intensity change."
+    "summary_path": "results/hurricane_prospective/prospective_summary.json",
+    "status": "ok",
+    "scored_as_of": "2026-10-02T20:24:45Z",
+    "n_scored_forecasts": 52,
+    "stale": false,
+    "message": null,
+    "mean_brier": 0.0014,
+    "mean_auc": null,
+    "total_storms_scored": 14,
+    "total_ri_events": 0
   },
   "exact_model_benchmark": {
     "availability": "exact_model_benchmark",
@@ -41,11 +47,12 @@
     "model_version": "hurricane_ri_v8_1",
     "source_updated_at": "2026-03-13T03:00:00Z",
     "auc": 0.938,
+    "auc_ci95": null,
     "brier": 0.034,
     "brier_skill_score": 0.29,
     "reliability_slope": 0.976,
     "n_cases": 9714
   },
   "related_benchmark": null,
-  "recommended_action": "Implement an advisory-to-outcome scorer that joins frozen hurricane forecasts to realized 24-hour intensity change before using the model for calibration or promotion decisions."
+  "recommended_action": "Keep scoring matured hurricane forecasts against NHC best track; live AUC stays undefined until at least one rapid-intensification event is observed, so promotion decisions still rest on the retrospective benchmark."
 }

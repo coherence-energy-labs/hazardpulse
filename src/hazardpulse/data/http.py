@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import ssl
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -40,6 +41,16 @@ def fetch_bytes(
             with urllib.request.urlopen(req, timeout=timeout, context=ssl.create_default_context()) as resp:
                 data = resp.read()
             break
+        except urllib.error.HTTPError as exc:
+            # A 4xx answer is deterministic -- the object is missing or
+            # forbidden, and asking again returns the same answer. Retrying it
+            # (with back-off) only multiplied the cost of every miss by ~4x.
+            # 408 and 429 are the transient exceptions.
+            last_exc = exc
+            if 400 <= exc.code < 500 and exc.code not in (408, 429):
+                raise
+            if attempt < 2:
+                time.sleep(2 ** attempt)
         except (urllib.error.URLError, OSError) as exc:
             last_exc = exc
             if attempt < 2:
