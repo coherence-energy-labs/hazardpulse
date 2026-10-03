@@ -98,8 +98,10 @@ def test_nws_bar_matches_the_false_alarm_rate_and_scores_hits(lab, tmp_path, mon
     monkeypatch.setattr(lab, "LAB", tmp_path)
     monkeypatch.setattr(lab, "OUT", tmp_path)
     rng = np.random.RandomState(4)
+    import datetime as _dt
     n = 20000
-    days = np.repeat(np.arange(20240101, 20240141), n // 40)
+    real = [int((_dt.date(2024, 1, 1) + _dt.timedelta(days=i)).strftime("%Y%m%d")) for i in range(40)]
+    days = np.repeat(real, n // 40)                    # real calendar days: events need true adjacency
     y = (rng.rand(n) < 0.02).astype(np.int8)
     p = np.clip(0.02 + 0.6 * y * rng.rand(n) + 0.05 * rng.rand(n), 0, 1)       # a skilful model
     warned = ((y == 1) & (rng.rand(n) < 0.4)) | ((y == 0) & (rng.rand(n) < 0.01))
@@ -146,6 +148,15 @@ def test_final_refit_rows_skip_a_split_wholly_inside_the_held_out_year(lab):
     n_pos_expected = sum(int(p[1][:, lab.LIDX["storm_60"]].sum()) for k, p in parts.items() if k != "val")
     assert int(yc.sum()) == n_pos_expected and Xc.shape[1] == len(cols)
     assert wc[yc == 1].sum() == pytest.approx(wc[yc == 0].sum())
+
+
+def test_event_clusters_merge_consecutive_tornado_days_only(lab):
+    days = np.array([20240101, 20240102, 20240102, 20240103, 20240105, 20240106, 20240107])
+    pos = np.array([1, 0, 1, 1, 0, 1, 0], bool)
+    # tornado days: 0101, 0102, 0103 (consecutive -> one event), 0106 (alone); 0105 and 0107 quiet
+    c = lab.event_clusters(days, pos)
+    assert c[0] == c[1] == c[2] == c[3]
+    assert len({c[4], c[5], c[6], c[0]}) == 4
 
 
 def test_block_w_is_appended_after_the_store_columns_and_only_when_asked(lab):

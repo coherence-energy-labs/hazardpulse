@@ -417,6 +417,19 @@ def baselines(splits=("val", "dev"), label: str = "storm_60") -> dict:
                      else fit_calibrator("platt", s_val_platt, y_val)(raw_platt))
             np.save(LAB / "preds" / f"{name}_platt_{split}.npy", p_cal.astype(np.float32))
             res[f"{name}_platt"] = metrics(y, p_cal, m["day"], n_boot=200)
+        # ProbTor with its ties broken (amendment 8): published ProbTor is an integer percent and 0 for
+        # ~93% of storms, so much of its AUC deficit is ties, not ranking. Ties are broken by ProbSevere's
+        # own any-severe probability (+0.001 x ps): a discrimination comparison, not the product as issued.
+        def tie_broken(Xs):
+            tor = np.nan_to_num(np.asarray(Xs[:, FIDX["p_ps_tor"]], np.float64), nan=0.0)
+            ps = np.nan_to_num(np.asarray(Xs[:, FIDX["p_ps"]], np.float64), nan=0.0)
+            q = np.clip((tor + 0.001 * ps) / 100.0, 1e-6, 1 - 1e-6)
+            return np.log(q / (1 - q))
+        tb_val, tb = tie_broken(val_X), tie_broken(X)
+        p_tb = (out_of_fold_calibrated("platt", tb_val, y_val, val_m["day"]) if split == "val"
+                else fit_calibrator("platt", tb_val, y_val)(tb))
+        np.save(LAB / "preds" / f"probtor_tiebroken_{split}.npy", p_tb.astype(np.float32))
+        res["probtor_tiebroken"] = metrics(y, p_tb, m["day"], n_boot=200)
         v2 = np.asarray(m["v2"], np.float64)
         np.save(LAB / "preds" / f"v2_{split}.npy", v2.astype(np.float32))
         ok = np.isfinite(v2)
@@ -647,6 +660,30 @@ def oof_only(which: str = "plus_W") -> dict:
     return {"name": exp["name"], "rows": int(len(s)), "positives": int(y.sum()), "calibration": cal}
 
 
+def event_clusters(days, pos) -> np.ndarray:
+    """Bootstrap unit for outbreak-driven statistics: consecutive calendar days that each hold a
+    positive are ONE event (a multi-day outbreak is not several independent draws); a day without
+    a positive is its own cluster. Returns a cluster index per row."""
+    days = np.asarray(days, np.int64)
+    uniq = np.unique(days)
+    has_pos = set(np.unique(days[np.asarray(pos, bool)]).tolist())
+    ords = np.array([dt_ordinal(int(d)) for d in uniq])
+    cid = np.empty(len(uniq), np.int64)
+    c = -1
+    for i, d in enumerate(uniq):
+        if i > 0 and int(d) in has_pos and int(uniq[i - 1]) in has_pos and ords[i] - ords[i - 1] == 1:
+            cid[i] = c
+        else:
+            c += 1
+            cid[i] = c
+    return cid[np.searchsorted(uniq, days)]
+
+
+def dt_ordinal(yyyymmdd: int) -> int:
+    import datetime as _dt
+    return _dt.date(yyyymmdd // 10000, (yyyymmdd // 100) % 100, yyyymmdd % 100).toordinal()
+
+
 def nws_bar(name: str, split: str, label: str = "storm_60", n_boot: int = 2000, seed: int = 42) -> dict:
     """NWS tornado warnings as a bar: their POD at their own false-alarm rate (POFD = share of
     negative storm observations inside an active warning), against the model's POD at the SAME
@@ -668,12 +705,38 @@ def nws_bar(name: str, split: str, label: str = "storm_60", n_boot: int = 2000, 
     hit_w = np.bincount(di, weights=(warned & pos), minlength=D)
     npos = np.bincount(di, weights=pos, minlength=D)
     M = day_bootstrap_counts(D, n_boot, seed)
-    d = (M @ hit_m - M @ hit_w) / np.maximum(M @ npos, 1)
+    d_day = (M @ hit_m - M @ hit_w) / np.maximum(M @ npos, 1)
+    # amendment 8 (adversary): resample multi-day EVENTS, and re-match the model's threshold to the
+    # warnings' false-alarm rate INSIDE every replicate (a threshold fixed on the whole split is a
+    # choice made with the very sample being resampled)
+    ev = event_clusters(days, pos)
+    E = int(ev.max()) + 1
+    grid = np.unique(np.quantile(p[neg], 1.0 - np.clip(pofd * np.geomspace(0.25, 4.0, 400), 1e-7, 0.5)))
+    neg_above = np.zeros((E, len(grid)))
+    pos_above = np.zeros((E, len(grid)))
+    for k, t in enumerate(grid):
+        a = p > t
+        neg_above[:, k] = np.bincount(ev, weights=a & neg, minlength=E)
+        pos_above[:, k] = np.bincount(ev, weights=a & pos, minlength=E)
+    e_neg = np.bincount(ev, weights=neg, minlength=E)
+    e_pos = np.bincount(ev, weights=pos, minlength=E)
+    e_wneg = np.bincount(ev, weights=warned & neg, minlength=E)
+    e_wpos = np.bincount(ev, weights=warned & pos, minlength=E)
+    Me = day_bootstrap_counts(E, n_boot, seed + 1)
+    nws_pofd_r = (Me @ e_wneg) / np.maximum(Me @ e_neg, 1)
+    model_pofd_r = (Me @ neg_above) / np.maximum(Me @ e_neg, 1)[:, None]
+    k_r = np.argmin(np.abs(model_pofd_r - nws_pofd_r[:, None]), axis=1)
+    pod_m_r = (Me @ pos_above)[np.arange(n_boot), k_r] / np.maximum(Me @ e_pos, 1)
+    pod_w_r = (Me @ e_wpos) / np.maximum(Me @ e_pos, 1)
+    d_ev = pod_m_r - pod_w_r
     out = {"model": name, "split": split, "label": label, "n_rows": int(len(y)), "positives": int(pos.sum()),
            "nws_pofd": pofd, "model_pofd": float(alarm[neg].mean()), "threshold": thr,
            "nws_pod": float(warned[pos].mean()), "model_pod_at_nws_pofd": float(alarm[pos].mean()),
            "delta_pod": float(alarm[pos].mean() - warned[pos].mean()),
-           "delta_pod_ci": [float(np.percentile(d, 2.5)), float(np.percentile(d, 97.5))],
+           "delta_pod_ci": [float(np.percentile(d_ev, 2.5)), float(np.percentile(d_ev, 97.5))],
+           "delta_pod_ci_method": f"{E} multi-day event clusters, threshold re-matched per replicate",
+           "p_delta_le_0": float(np.mean(d_ev <= 0)),
+           "delta_pod_ci_day_fixed_threshold": [float(np.percentile(d_day, 2.5)), float(np.percentile(d_day, 97.5))],
            "rows_without_warning_state": int((~ok).sum())}
     (OUT / f"nws_bar_{name}_{split}_{label}.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
     return out
