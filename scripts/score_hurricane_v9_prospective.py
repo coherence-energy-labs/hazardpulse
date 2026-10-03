@@ -13,7 +13,8 @@ frozen into the output file:
 * v9.1  -- 30/24 log loss or Brier vs DTOPS, 97.5% interval wholly below 0, both points <= 0;
 * v10.1 -- the sum of Brier scores over the 25/30/35/40-kt 24-h thresholds vs NOAA's own published
   values, 98.75% interval wholly below 0, and its 30/24 log loss point <= DTOPS's;
-* v10.2 (amendment 4, the amendment-3 challenger, ``ri_v10_2_shadow``) -- v10.1's rule at 99.375%.
+* v10.2 (amendment 4, the amendment-3 challenger, ``ri_v10_2_shadow``) -- v10.1's rule at 99.375%;
+* v10.3 (amendment 6, the amendment-5 IR challenger, ``ri_v10_3_shadow``) -- v10.1's rule at 99.6875%.
 
 Each entrant's error budget is half the previous one's (2.5%, 1.25%, 0.625%, ...), so however many
 challengers enter, the family's total stays below 5%.
@@ -44,7 +45,8 @@ START = dt.datetime.fromisoformat(ri_v9.PROSPECTIVE_START.replace("Z", ""))
 MULTI = (25, 30, 35, 40)
 ENTRANTS = {"v9_1": {"key": "ri_v9_shadow", "level": 0.975, "metric": "30kt"},
             "v10_1": {"key": "ri_v10_shadow", "level": 0.9875, "metric": "multi"},
-            "v10_2": {"key": "ri_v10_2_shadow", "level": 0.99375, "metric": "multi"}}
+            "v10_2": {"key": "ri_v10_2_shadow", "level": 0.99375, "metric": "multi"},
+            "v10_3": {"key": "ri_v10_3_shadow", "level": 0.996875, "metric": "multi"}}
 
 
 def _iso(s: str) -> dt.datetime:
@@ -149,7 +151,7 @@ def evaluate(scored: list[dict], level: float, metric: str = "30kt") -> dict:
     return res
 
 
-CHALLENGES = (("v10_2", "v10_1"),)        # (challenger, champion) -- descriptive, amendment 4
+CHALLENGES = (("v10_2", "v10_1"), ("v10_3", "v10_1"), ("v10_3", "v10_2"))   # descriptive (amendments 4, 6)
 
 
 def versus(challenger: list[dict], champion: list[dict]) -> dict:

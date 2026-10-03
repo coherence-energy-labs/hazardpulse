@@ -477,28 +477,51 @@ def _ours_vs_all(root: Path, dev: dict, prov: dict) -> dict | None:
             "aids": aids, "calls": calls}
 
 
-def _ours_challenger(root: Path, champion_dev: dict, entrant: dict, versus: dict | None) -> dict | None:
-    """The challenger running in shadow beside v10.1 (amendments 3 and 4), from its own artifact's
-    provenance -- refused when the champion numbers it was selected against are not the served
-    champion's, bit for bit."""
+# the challengers in shadow, in order: (artifact file, prospective entrant, what it adds, the model it
+# was selected against)
+HURRICANE_CHALLENGERS = (
+    ("hurricane_ri_v10_2.json", "v10_2", "the same inputs, never lowering the odds when the guidance or "
+                                         "NOAA&rsquo;s probability rises", "v10.1"),
+    ("hurricane_ri_v10_3.json", "v10_3", "v10.2 plus the storm&rsquo;s cloud-top structure from satellite "
+                                         "infrared (NOAA GMGSI, two hours after the cycle and six hours earlier)",
+     "v10.2"),
+)
+
+
+def _ours_challengers(root: Path, champion_dev: dict, pros: dict) -> list[dict]:
+    """Every challenger running in shadow (amendments 3-6), each from its own artifact's provenance --
+    refused when the numbers of the model it was selected against are not that model's own, bit for
+    bit (v10.2 against the served v10.1, v10.3 against v10.2)."""
     from hazardpulse.hurricane import ri_v10
 
-    path = root / "results" / "models" / ri_v10.V10_2_PATH.name
-    if not path.exists():
-        return None
-    art, version = ri_v10.load(path)
-    dev = (art.get("provenance") or {}).get("dev_2022_2025") or {}
-    if _finite(dev.get("champion_log_loss")) != _finite(champion_dev.get("log_loss")):
-        raise EvidenceError(f"{path.name} was selected against champion LL {dev.get('champion_log_loss')}, "
-                            f"not the served v10.1's {champion_dev.get('log_loss')}")
-    return {"model_version": version, "label": art.get("label"),
-            "dev": {"log_loss": _finite(dev.get("log_loss")), "brier4": _finite(dev.get("brier4")),
-                    "champion_log_loss": _finite(dev.get("champion_log_loss")),
-                    "champion_brier4": _finite(dev.get("champion_brier4")),
-                    "d_log_loss_ci": _ci(dev.get("d_log_loss_vs_champion_ci"))},
-            "level": _finite((entrant.get("claim_rule") or {}).get("level")),
-            "matured_and_scored": entrant.get("matured_and_scored", 0),
-            "versus_champion": versus if isinstance(versus, dict) else None}
+    out, against = [], {"v10.1": champion_dev}
+    for fname, entrant_key, what, base_label in HURRICANE_CHALLENGERS:
+        path = root / "results" / "models" / fname
+        if not path.exists():
+            continue
+        art, version = ri_v10.load(path)
+        prov = art.get("provenance") or {}
+        dev = prov.get("dev_2022_2025") or {}
+        base = against.get(base_label)
+        if base is None or _finite(dev.get("champion_log_loss")) != _finite(base.get("log_loss")):
+            raise EvidenceError(f"{fname} was selected against LL {dev.get('champion_log_loss')}, not "
+                                f"{base_label}'s {None if base is None else base.get('log_loss')}")
+        against[str(art.get("label"))] = dev
+        entrant = (pros.get("entrants") or {}).get(entrant_key) or {}
+        versus = (pros.get("challenger_vs_champion") or {}).get(f"{entrant_key}_vs_v10_1")
+        s26 = prov.get("season_2026_fourth_read") or prov.get("season_2026_third_read") or {}
+        out.append({"model_version": version, "label": art.get("label"), "what": what, "against": base_label,
+                    "dev": {"log_loss": _finite(dev.get("log_loss")), "brier4": _finite(dev.get("brier4")),
+                            "champion_log_loss": _finite(dev.get("champion_log_loss")),
+                            "champion_brier4": _finite(dev.get("champion_brier4")),
+                            "d_log_loss_ci": _ci(dev.get("d_log_loss_vs_champion_ci"))},
+                    "season_2026": {"log_loss": _finite(s26.get("log_loss")),
+                                    "champion_log_loss": _finite(s26.get("champion_log_loss")),
+                                    "d_log_loss_ci": _ci(s26.get("d_log_loss_ci"))} if s26 else None,
+                    "level": _finite((entrant.get("claim_rule") or {}).get("level")),
+                    "matured_and_scored": entrant.get("matured_and_scored", 0),
+                    "versus_champion": versus if isinstance(versus, dict) else None})
+    return out
 
 
 def ours_hurricane(root: Path = ROOT) -> dict | None:
@@ -519,9 +542,9 @@ def ours_hurricane(root: Path = ROOT) -> dict | None:
     looks = entrant.get("looks") or {}
     claimed = any(bool(l.get("claim")) for l in looks.values())
     vs_all = _ours_vs_all(root, dev, prov)
-    challenger = _ours_challenger(root, dev, (pros.get("entrants") or {}).get("v10_2") or {},
-                                  (pros.get("challenger_vs_champion") or {}).get("v10_2_vs_v10_1"))
-    return {"model_version": version, "name": "HazardPulse RI v10.1", "vs_all": vs_all, "challenger": challenger,
+    challengers = _ours_challengers(root, dev, pros)
+    return {"model_version": version, "name": "HazardPulse RI v10.1", "vs_all": vs_all,
+            "challengers": challengers, "challenger": challengers[0] if challengers else None,
             "status": "claim met at a look" if claimed else "in prospective verification",
             "dev": {"log_loss": _finite(dev.get("log_loss")), "auc": _finite(dev.get("auc")),
                     "dtops_log_loss": _finite(dev.get("dtops_log_loss")), "d_log_loss_ci": _ci(dev.get("d_log_loss_ci")),

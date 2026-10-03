@@ -713,8 +713,47 @@ def load_v10_model(path: Path | None = None, label: str = "v10.1") -> dict[str, 
 
 def load_challengers() -> dict[str, dict[str, object]]:
     """``{shadow key: loaded model}`` for every challenger whose artifact is present."""
-    v10_2 = load_v10_model(ri_v10.V10_2_PATH, "v10.2")
-    return {"ri_v10_2_shadow": v10_2} if v10_2 is not None else {}
+    out = {}
+    for key, path, label in (("ri_v10_2_shadow", ri_v10.V10_2_PATH, "v10.2"),
+                             ("ri_v10_3_shadow", ri_v10.V10_3_PATH, "v10.3")):
+        m = load_v10_model(path, label)
+        if m is None:
+            continue
+        if ri_v10.needs_ir(m["artifact"]) and not ir_reader_available():
+            # a missing image is NaN, as in training; a missing reader would record every forecast
+            # without IR under this model's name -- so the model is not scored at all
+            print(f"  {label} shadow: NOT scored -- its IR reader (h5py) is not installed")
+            continue
+        out[key] = m
+    return out
+
+
+def ir_reader_available() -> bool:
+    try:
+        import h5py  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+_IR_IMAGES: dict = {}            # one download per image hour per run, shared by every storm
+
+
+def live_ir_features(sid: str, cycle: dt.datetime, records) -> dict[str, float]:
+    """The amendment-5 IR features for a cycle, made by the training code path
+    (``ir_source`` crops, ``ir_features``): GMGSI at t + 2 h and t - 4 h around the extrapolated
+    CARQ centre. A missing image gives NaNs, as it did in training."""
+    from hazardpulse.hurricane import ir_features, ir_source
+    cen = ir_source.centres(records, cycle)
+    if cen is None:
+        return ir_features.features(None, None)
+    crops = {}
+    for tag, (hour, centre) in cen.items():
+        if hour not in _IR_IMAGES:
+            _IR_IMAGES[hour] = ir_source.fetch_image(hour)
+        key, counts, lat, lon = _IR_IMAGES[hour]
+        crops[tag] = None if key is None else ir_source.crop(counts, lat, lon, centre)
+    return ir_features.features(crops["p2"], crops["m4"])
 
 
 def _shadow_inputs(case: dict[str, object], ships_raw_fetcher=None, adeck_fetcher=None):
@@ -758,9 +797,10 @@ def _shadow_keys(v9, v10, challengers) -> list[str]:
 
 def shadow_forecasts(case: dict[str, object], v9: dict[str, object] | None, v10: dict[str, object] | None,
                      ships_raw_fetcher=None, adeck_fetcher=None,
-                     challengers: dict[str, dict[str, object]] | None = None) -> dict[str, dict[str, object]]:
+                     challengers: dict[str, dict[str, object]] | None = None,
+                     ir_fetcher=None) -> dict[str, dict[str, object]]:
     """Every shadow (v9.1, v10.1 and each challenger) from ONE read of the cycle's SHIPS text and
-    the storm's a-deck."""
+    the storm's a-deck; an IR model also gets the cycle's IR features, read once."""
     got = _shadow_inputs(case, ships_raw_fetcher, adeck_fetcher)
     if got is None:
         return {k: {"status": "not an NHC a-deck case"} for k in _shadow_keys(v9, v10, challengers)}
@@ -769,10 +809,22 @@ def shadow_forecasts(case: dict[str, object], v9: dict[str, object] | None, v10:
     if v9 is not None:
         out["ri_v9_shadow"] = {"status": "ok", "ships_text": note,
                                **ri_v9.predict(v9["payload"], str(v9["model_version"]), records, cycle, sid[:2], pcts)}
+    ir, ir_note = None, None
     for key, m in (("ri_v10_shadow", v10), *(challengers or {}).items()):
-        if m is not None:
-            out[key] = {"status": "ok", "ships_text": note,
-                        **ri_v10.predict(m["artifact"], str(m["model_version"]), records, cycle, sid[:2], pcts)}
+        if m is None:
+            continue
+        extra = None
+        if ri_v10.needs_ir(m["artifact"]):
+            if ir is None:
+                try:
+                    ir = (ir_fetcher or live_ir_features)(sid, cycle, records)
+                    ir_note = "ok"
+                except Exception as exc:  # noqa: BLE001 -- no IR: NaN inputs, as a missing image was in training
+                    ir, ir_note = {}, f"error: {type(exc).__name__}: {exc}"
+            extra = ir
+        out[key] = {"status": "ok", "ships_text": note,
+                    **({"ir": ir_note} if extra is not None else {}),
+                    **ri_v10.predict(m["artifact"], str(m["model_version"]), records, cycle, sid[:2], pcts, extra)}
     return out
 
 

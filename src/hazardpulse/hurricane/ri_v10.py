@@ -25,7 +25,20 @@ MODEL_PATH = ri_model.RESULTS / "models" / "hurricane_ri_v10.json"
 # amendment 3's carried challenger (V5: v10.1's inputs, monotone in the guidance and NOAA's
 # probabilities); same schema and inputs, served in shadow beside v10.1 under its own label
 V10_2_PATH = ri_model.RESULTS / "models" / "hurricane_ri_v10_2.json"
+# amendment 5's carried challenger (V8: V5 + the 14 IR structure features from GMGSI)
+V10_3_PATH = ri_model.RESULTS / "models" / "hurricane_ri_v10_3.json"
 GATE_AIDS = ("DSHP", "IVCN", "NNIC")
+
+
+def allowed_feature_sets() -> dict[str, list[str]]:
+    """The input sets a v10-schema artifact may declare (the order is the model's)."""
+    from hazardpulse.hurricane import ir_features
+    base = list(fx.names_for("ONH"))
+    return {"ONH": base, "ONH+IR": base + list(ir_features.IR_NAMES)}
+
+
+def needs_ir(art: Mapping) -> bool:
+    return art["feature_names"] == allowed_feature_sets()["ONH+IR"]
 NOAA_24H = (25, 30, 35, 40)          # the 24-h thresholds NOAA's aids publish
 
 
@@ -37,9 +50,9 @@ def load(path: str | Path = MODEL_PATH) -> tuple[dict, str]:
     art = json.loads(Path(path).read_bytes().decode("utf-8"))
     if art.get("schema") != SCHEMA:
         raise ValueError(f"{path}: schema {art.get('schema')!r}, expected {SCHEMA!r}")
-    names = list(fx.names_for("ONH"))
-    if art["feature_names"] != names:
-        raise ValueError(f"{path}: inputs are not the v9/v10 feature set")
+    names = list(art["feature_names"])
+    if names not in allowed_feature_sets().values():
+        raise ValueError(f"{path}: inputs are not a v10 feature set (ONH, or ONH + IR)")
     for m in art["members"]:
         if m["feature_names"] != names + ["threshold_kt"]:
             raise ValueError(f"{path}: a member's inputs are not the feature set + threshold")
@@ -53,13 +66,16 @@ def predict_matrix(art: Mapping, X: np.ndarray, k: float) -> np.ndarray:
 
 
 def predict(art: Mapping, version: str, records: Iterable, cycle, basin: str,
-            ri_pcts: Mapping[tuple[str, str], float | None]) -> dict:
+            ri_pcts: Mapping[tuple[str, str], float | None], extra: Mapping[str, float] | None = None) -> dict:
     """The exceedance curve for one cycle, with what produced it -- labelled by the artifact's own
-    ``label`` (v10.1's artifact has none and is "v10.1")."""
+    ``label`` (v10.1's artifact has none and is "v10.1"). ``extra`` carries inputs read outside the
+    decks (the IR features of an ONH+IR artifact); an input it lacks is NaN, as in training."""
     label = str(art.get("label") or "v10.1")
     records = list(records)
     f = fx.adeck_features(fx.cycle_table(records, cycle), basin)
     f.update(fx.ri_features(ri_pcts))
+    if extra:
+        f.update(extra)
     gate_ok = all(math.isfinite(f[f"dv24_{a}"]) for a in GATE_AIDS)
     X = fx.vector(f, art["feature_names"])[None, :]
     model = {int(k): float(predict_matrix(art, X, k)[0]) for k in art["thresholds_kt"]}
@@ -79,4 +95,7 @@ def predict(art: Mapping, version: str, records: Iterable, cycle, basin: str,
             "source": source, "gate_ok": gate_ok,
             "gate_missing": [a for a in GATE_AIDS if not math.isfinite(f[f"dv24_{a}"])],
             "dtops_pct": ri_pcts.get(("DTOP", "30/24")), "riod_pct": ri_pcts.get(("RIOD", "30/24")),
-            "cycle": cycle.strftime("%Y-%m-%dT%H:00:00Z"), "model_version": version}
+            "cycle": cycle.strftime("%Y-%m-%dT%H:00:00Z"), "model_version": version,
+            **({"ir_inputs": {n: (round(float(f[n]), 4) if math.isfinite(float(f.get(n, math.nan))) else None)
+                              for n in art["feature_names"] if n.startswith(("ir_", "d_ir_"))}}
+               if needs_ir(art) else {})}
