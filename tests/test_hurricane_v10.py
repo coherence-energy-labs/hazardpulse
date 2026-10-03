@@ -8,6 +8,7 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from hazardpulse.hurricane import atcf, ri_v10
@@ -70,7 +71,13 @@ def test_without_the_early_guidance_each_threshold_is_noaas_own(fs, v10):
     assert out["probabilities"]["15"] is None and out["probabilities"]["45"] is None   # NOAA has no 24-h value
 
 
-def test_both_shadows_come_from_one_read(fs, v10):
+@pytest.fixture(scope="module")
+def v10_2():
+    art, version = ri_v10.load(ri_v10.V10_2_PATH)
+    return {"artifact": art, "model_version": version}
+
+
+def test_every_shadow_comes_from_one_read(fs, v10, v10_2):
     import hazardpulse.hurricane.ri_v9 as ri_v9
     payload, version = ri_v9.load()
     calls = {"ships": 0, "adeck": 0}
@@ -83,8 +90,73 @@ def test_both_shadows_come_from_one_read(fs, v10):
     def adeck(sid):
         calls["adeck"] += 1
         return _records()
-    out = fs.shadow_forecasts(_case(c["dtg"]), {"payload": payload, "model_version": version}, v10, ships, adeck)
-    assert set(out) == {"ri_v9_shadow", "ri_v10_shadow"} and calls == {"ships": 1, "adeck": 1}
+    out = fs.shadow_forecasts(_case(c["dtg"]), {"payload": payload, "model_version": version}, v10, ships, adeck,
+                              challengers={"ri_v10_2_shadow": v10_2})
+    assert set(out) == {"ri_v9_shadow", "ri_v10_shadow", "ri_v10_2_shadow"} and calls == {"ships": 1, "adeck": 1}
+
+
+def test_the_challenger_reproduces_the_labs_curve_under_its_own_label(fs, v10, v10_2):
+    exp = json.loads((FIX / "expected.json").read_text(encoding="utf-8"))
+    for c in exp["cases"]:
+        out = fs.shadow_forecasts(_case(c["dtg"]), None, v10, ships_raw_fetcher=_ships(c["ships_text"]),
+                                  adeck_fetcher=lambda sid: _records(), challengers={"ri_v10_2_shadow": v10_2})
+        ch, champ = out["ri_v10_2_shadow"], out["ri_v10_shadow"]
+        assert ch["status"] == "ok" and ch["source"] == "v10.2" and champ["source"] == "v10.1"
+        assert ch["model_version"] == v10_2["model_version"] != champ["model_version"]
+        for k, want in c["v10_2"].items():
+            assert ch["probabilities"][k] == pytest.approx(want, abs=5e-5)          # live == lab
+    stripped = [r for r in _records() if r.model not in ri_v10.GATE_AIDS]
+    c = exp["cases"][0]
+    gated = fs.shadow_forecasts(_case(c["dtg"]), None, None, ships_raw_fetcher=_ships(c["ships_text"]),
+                                adeck_fetcher=lambda sid: stripped,
+                                challengers={"ri_v10_2_shadow": v10_2})["ri_v10_2_shadow"]
+    assert gated["source"] == "DTOPS (v10.2 gate: early guidance missing)"
+
+
+def test_the_challenger_never_lowers_the_odds_when_the_guidance_rises(v10, v10_2):
+    """The monotone constraint is a property of the frozen artifact, not of the training script:
+    sweep each constrained input on real cycles and the 30-kt probability never falls."""
+    from hazardpulse.hurricane import ri_v9_features as fx
+    names = v10_2["artifact"]["feature_names"]
+    up = v10_2["artifact"]["provenance"]["monotone_up"]
+    assert {"dv24_HCCA", "ofcl_dv24", "ri_DTOP_30_24"} <= set(up)
+    recs = _records()
+    base = []
+    for c in json.loads((FIX / "expected.json").read_text(encoding="utf-8"))["cases"]:
+        cyc = dt.datetime.strptime(c["dtg"], "%Y%m%d%H")
+        base.append(fx.vector(fx.adeck_features(fx.cycle_table(recs, cyc), "AL"), names))
+    grid = np.linspace(-40.0, 80.0, 61)
+    falls = {}
+    for label, model in (("v10.2", v10_2), ("v10.1", v10)):
+        worst = 0.0
+        for x0 in base:
+            for n in ("dv24_HCCA", "dv24_IVCN", "ofcl_dv24", "dv24_regional_max"):
+                X = np.repeat(x0[None, :], len(grid), axis=0)
+                X[:, names.index(n)] = grid
+                p = ri_v10.predict_matrix(model["artifact"], X, 30)
+                worst = max(worst, float(np.max(p[:-1] - p[1:])))
+        falls[label] = worst
+    assert falls["v10.2"] <= 1e-12, falls
+    assert falls["v10.1"] > 1e-6, falls          # the sweep can see a fall: the unconstrained model has one
+
+
+def test_each_entrant_spends_half_the_previous_error_budget():
+    sys.path.insert(0, str(ROOT / "scripts"))
+    spec = importlib.util.spec_from_file_location("v9_prosp_budget", ROOT / "scripts" / "score_hurricane_v9_prospective.py")
+    p = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(p)
+    alphas = [1 - e["level"] for e in p.ENTRANTS.values()]
+    assert alphas == pytest.approx([0.025, 0.0125, 0.00625])
+    assert all(b == pytest.approx(a / 2) for a, b in zip(alphas, alphas[1:])) and sum(alphas) < 0.05
+    assert p.ENTRANTS["v10_2"]["key"] == "ri_v10_2_shadow"
+    # challenger minus champion on shared cycles, by hand: one cycle, dV 32 kt
+    champ = [{"storm_id": "EP01", "cycle": "c1", "dv": 32.0, "p_k": {"25": 0.5, "30": 0.5, "35": 0.5, "40": 0.5}}]
+    chall = [{"storm_id": "EP01", "cycle": "c1", "dv": 32.0, "p_k": {"25": 0.9, "30": 0.8, "35": 0.2, "40": 0.1}},
+             {"storm_id": "EP02", "cycle": "c9", "dv": 0.0, "p_k": {"25": 0.0, "30": 0.0, "35": 0.0, "40": 0.0}}]
+    v = p.versus(chall, champ)
+    # challenger 0.01+0.04+0.04+0.01 = 0.10; champion 4 x 0.25 = 1.00; only the shared cycle counts
+    assert v["n"] == 1 and v["d_brier4"] == pytest.approx(0.10 - 1.00)
+    assert p.versus(chall, [])["n"] == 0
 
 
 def test_the_site_shows_our_model_beside_the_published_number_with_its_bound_evidence():
@@ -152,6 +224,26 @@ def test_the_every_aid_comparison_is_bound_to_the_served_artifact(tmp_path):
         se.ours_hurricane(_root_copy(tmp_path / "a", lambda r: r.update(control_V2_log_loss=0.15)))
     with pytest.raises(se.EvidenceError):                     # a file computed without the served gate
         se.ours_hurricane(_root_copy(tmp_path / "b", lambda r: r.update(model="V2 ungated")))
+
+
+def test_the_challenger_line_is_bound_to_the_served_champion(tmp_path):
+    from hazardpulse.verification import evidence_pages as ep
+    from hazardpulse.verification import served_evidence as se
+    root = _root_copy(tmp_path)
+    (root / "results/models").joinpath(ri_v10.V10_2_PATH.name).write_bytes(ri_v10.V10_2_PATH.read_bytes())
+    ch = se.ours_hurricane(root)["challenger"]
+    prov = json.loads(ri_v10.V10_2_PATH.read_text(encoding="utf-8"))["provenance"]["dev_2022_2025"]
+    assert ch["dev"]["log_loss"] == prov["log_loss"] and ch["label"] == "v10.2"           # never typed
+    (line,) = ep._ours_challenger_lines(ch)
+    assert f"{prov['log_loss']:.4f} vs {prov['champion_log_loss']:.4f}" in line[1]
+    assert ("interval still includes zero" in line[1]) == (prov["d_log_loss_vs_champion_ci"][1] >= 0)
+    art = json.loads(ri_v10.V10_2_PATH.read_text(encoding="utf-8"))
+    art["provenance"]["dev_2022_2025"]["champion_log_loss"] = 0.2                   # selected against another model
+    (root / "results/models" / ri_v10.V10_2_PATH.name).write_bytes(ri_v10.canonical_bytes(art))
+    with pytest.raises(se.EvidenceError):
+        se.ours_hurricane(root)
+    (root / "results/models" / ri_v10.V10_2_PATH.name).unlink()
+    assert se.ours_hurricane(root)["challenger"] is None
 
 
 def test_a_comparison_whose_interval_straddles_zero_is_reported_as_a_tie():

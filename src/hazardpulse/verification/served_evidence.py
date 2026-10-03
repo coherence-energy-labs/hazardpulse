@@ -477,6 +477,30 @@ def _ours_vs_all(root: Path, dev: dict, prov: dict) -> dict | None:
             "aids": aids, "calls": calls}
 
 
+def _ours_challenger(root: Path, champion_dev: dict, entrant: dict, versus: dict | None) -> dict | None:
+    """The challenger running in shadow beside v10.1 (amendments 3 and 4), from its own artifact's
+    provenance -- refused when the champion numbers it was selected against are not the served
+    champion's, bit for bit."""
+    from hazardpulse.hurricane import ri_v10
+
+    path = root / "results" / "models" / ri_v10.V10_2_PATH.name
+    if not path.exists():
+        return None
+    art, version = ri_v10.load(path)
+    dev = (art.get("provenance") or {}).get("dev_2022_2025") or {}
+    if _finite(dev.get("champion_log_loss")) != _finite(champion_dev.get("log_loss")):
+        raise EvidenceError(f"{path.name} was selected against champion LL {dev.get('champion_log_loss')}, "
+                            f"not the served v10.1's {champion_dev.get('log_loss')}")
+    return {"model_version": version, "label": art.get("label"),
+            "dev": {"log_loss": _finite(dev.get("log_loss")), "brier4": _finite(dev.get("brier4")),
+                    "champion_log_loss": _finite(dev.get("champion_log_loss")),
+                    "champion_brier4": _finite(dev.get("champion_brier4")),
+                    "d_log_loss_ci": _ci(dev.get("d_log_loss_vs_champion_ci"))},
+            "level": _finite((entrant.get("claim_rule") or {}).get("level")),
+            "matured_and_scored": entrant.get("matured_and_scored", 0),
+            "versus_champion": versus if isinstance(versus, dict) else None}
+
+
 def ours_hurricane(root: Path = ROOT) -> dict | None:
     """Our own RI model in prospective verification (docs/HURRICANE_RI_V9_PROGRAM.md, amendment 2):
     its identity and numbers from the frozen artifact's own provenance (bound by its bytes), and the
@@ -495,7 +519,9 @@ def ours_hurricane(root: Path = ROOT) -> dict | None:
     looks = entrant.get("looks") or {}
     claimed = any(bool(l.get("claim")) for l in looks.values())
     vs_all = _ours_vs_all(root, dev, prov)
-    return {"model_version": version, "name": "HazardPulse RI v10.1", "vs_all": vs_all,
+    challenger = _ours_challenger(root, dev, (pros.get("entrants") or {}).get("v10_2") or {},
+                                  (pros.get("challenger_vs_champion") or {}).get("v10_2_vs_v10_1"))
+    return {"model_version": version, "name": "HazardPulse RI v10.1", "vs_all": vs_all, "challenger": challenger,
             "status": "claim met at a look" if claimed else "in prospective verification",
             "dev": {"log_loss": _finite(dev.get("log_loss")), "auc": _finite(dev.get("auc")),
                     "dtops_log_loss": _finite(dev.get("dtops_log_loss")), "d_log_loss_ci": _ci(dev.get("d_log_loss_ci")),

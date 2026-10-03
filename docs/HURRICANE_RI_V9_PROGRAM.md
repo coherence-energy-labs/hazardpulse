@@ -310,6 +310,55 @@ call's false-alarm rate.
 decided only on cycles it never saw, under a rule written (amendment 4) before it scores its first
 cycle.
 
+### Amendment 3 outcome (2026-10-03)
+
+`scripts/hurricane_ri_v10_challengers.py` -> `results/calibration/hurricane_ri_v10_challengers.json`.
+The control passed: V2 reproduced 0.1443435895033004. 4,400 of 4,692 cycles had the previous cycle.
+
+| | dev 30/24 LL | vs V2 [95%] | dev Brier4 | vs V2 [95%] | AUC | POD at HCCA's FAR (HCCA 0.236) | 2026 LL | 2026 Brier4 |
+|---|---|---|---|---|---|---|---|---|
+| V2 (v10.1) | 0.1443 | -- | 0.1554 | -- | 0.9304 | 0.209 | 0.1291 | 0.1274 |
+| **V5 (+M)** | **0.1436** | -0.0007 [-0.0022, +0.0008] | **0.1544** | -0.0010 [-0.0027, +0.0005] | 0.9322 | 0.215 | 0.1262 | 0.1261 |
+| V6 (+R) | 0.1441 | -0.0002 [-0.0013, +0.0009] | 0.1549 | -0.0005 [-0.0017, +0.0007] | 0.9314 | 0.204 | 0.1274 | 0.1255 |
+| V7 (+R+M) | 0.1440 | -0.0003 [-0.0018, +0.0013] | 0.1548 | -0.0006 [-0.0021, +0.0009] | 0.9320 | 0.204 | 0.1258 | 0.1255 |
+
+The 2026 DTOPS reference is LL 0.1495 and Brier4 0.1476 (586 cycles, third read).
+
+**Carried: V5 -> v10.2** (all three were eligible; V5 has the lowest log loss).
+- The gain is small, and no interval excludes 0. It goes the same way on both metrics and on the
+  2026 third read. The prior is structural: a model should not lower RI odds because the guidance
+  forecasts more strengthening.
+- **R adds nothing** (-0.0002). KILLED: "how the guidance changed since the last cycle predicts RI
+  beyond the guidance itself".
+- What survives narrower: nothing. The revision is a difference of two inputs the model already
+  sees at t and, through the previous cycle's case, implicitly in training.
+- **The top-end gap to HCCA's yes/no call is not closed by M** (0.215 against 0.236). With the
+  inputs we have, the cheap levers are exhausted.
+- **The next material gain needs new information**, not a reshaped model. See
+  `docs/MODEL_IMPROVEMENT_LEDGER.md`.
+
+## Amendment 4 -- v10.2 in the prospective test, and which model the site shows (2026-10-03, before v10.2 scores any cycle)
+
+- **v10.2** = V5 with v10.1's gate. Artifact `results/models/hurricane_ri_v10_2.json`, label "v10.2",
+  v10.1's schema and inputs. It runs live in shadow (`ri_v10_2_shadow`) from the same single read
+  as v9.1 and v10.1. Its first scored cycle is the first at or after 2026-10-04 00Z, the shared
+  start.
+- **Its claim** is v10.1's rule (four-threshold Brier vs NOAA's own values, plus the 30/24 log-loss
+  point) at **99.375%**, at the same looks (2026-12-01, 2027-12-01).
+- **Error budget:** each new entrant gets half the previous one's (v9.1 2.5%, v10.1 1.25%, v10.2
+  0.625%, the next 0.3125%, ...). The family total stays below 5% however many challengers ever
+  enter, and no later entrant can spend an earlier one's budget.
+- **Challenger vs champion, descriptive:** the prospective scorer reports v10.2 minus v10.1 on the
+  cycles both scored (four-threshold Brier, storm bootstrap).
+- **Which model the site's "HazardPulse model" column shows:** v10.1 until the first look. At each
+  look, in this order:
+  1. the entrant whose claim is met (the newest if several);
+  2. else the newest carried challenger, provided its descriptive comparison with the shown model
+     has a point estimate <= 0;
+  3. else the shown model stays.
+
+  The switch is made by a commit at the look, citing the scorer's frozen output.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
