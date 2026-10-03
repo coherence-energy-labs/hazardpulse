@@ -1,18 +1,17 @@
 {
-  "generated_at": "2026-10-03T02:12:08Z",
-  "score_as_of": "2026-10-03T00:54:52Z",
+  "generated_at": "2026-10-03T03:41:03Z",
+  "score_as_of": "2026-10-03T03:39:53Z",
   "system": {
-    "frozen_forecasts": 2516,
+    "frozen_forecasts": 2517,
     "matured_forecasts": 2398,
     "scored_forecasts": 2396,
     "matured_unscored_backlog": 2,
-    "raw_chain_rows": 2541,
+    "raw_chain_rows": 2542,
     "hash_chain_mismatches": 0,
-    "exact_model_benchmarks": 1,
+    "exact_model_benchmarks": 2,
     "alerts": [
       "2 matured forecast windows are waiting for scoring.",
-      "Earthquake: no exact benchmark is attached to the current live model version.",
-      "Tornado: no exact benchmark is attached to the current live model version."
+      "Earthquake: no exact benchmark is attached to the current live model version."
     ],
     "rollup_violations": []
   },
@@ -133,34 +132,34 @@
     {
       "key": "to",
       "hazard": "tornado",
-      "model_version": "tornado_storm_v1_0",
+      "model_version": "tornado_v3-05a06c843c87",
       "verification_status": "prospective_scored",
       "status_badge": "Scored",
       "verification_status_label": "Prospective live scoring is active for matured tornado forecasts.",
-      "metric_source": "no_exact_model_benchmark",
-      "metric_source_label": "No storm forecast of this model version has been scored yet.",
-      "auc": null,
+      "metric_source": "retrospective_holdout_exact_model",
+      "metric_source_label": "Pre-registered programme (docs/TORNADO_MODEL_PROGRAM.md): every choice made on 2023, development test 2024, scored once on every 2025 storm observation (1,469,977; 1,579 tornadic). No storm forecast of this model version has been scored yet.",
+      "auc": 0.9702,
       "brier": null,
-      "brier_skill_score": null,
-      "brier_skill_score_reference": null,
+      "brier_skill_score": 0.1067,
+      "brier_skill_score_reference": "test_year_base_rate",
       "live_this_version": null,
-      "homepage_line": "1746 frozen forecasts \u00b7 1 matured backlog",
+      "homepage_line": "AUC 0.970 pre-registered 2025 test",
       "forecast_storage": {
-        "n_replay_artifacts": 1746,
+        "n_replay_artifacts": 1747,
         "n_matured_forecasts": 1741,
         "n_scored_forecasts": 1740,
         "n_backlog": 1,
         "first_issued_at": "2026-03-13T03:00:00Z",
-        "last_issued_at": "2026-10-03T00:54:52Z",
-        "last_forecast_id": "to_fcst_20261003_0054",
-        "latest_replay_artifact": "/data/replay/to_fcst_20261003_0054.json",
+        "last_issued_at": "2026-10-03T03:39:53Z",
+        "last_forecast_id": "to_fcst_20261003_0339",
+        "latest_replay_artifact": "/data/replay/to_fcst_20261003_0339.json",
         "forecast_horizon": "24 hours",
         "next_mature_at": "2026-10-03T03:49:42Z"
       },
       "ledger": {
         "supported": true,
         "path": "/data/tornado-ledger.jsonl",
-        "n_rows": 1812,
+        "n_rows": 1813,
         "prev_hash_mismatches": 0
       },
       "prospective": {
@@ -176,7 +175,18 @@
         "skill_reference": null,
         "pooled_model_version": null
       },
-      "exact_model_benchmark": null,
+      "exact_model_benchmark": {
+        "availability": "exact_model_benchmark",
+        "label": "Pre-registered programme (docs/TORNADO_MODEL_PROGRAM.md): every choice made on 2023, development test 2024, scored once on every 2025 storm observation (1,469,977; 1,579 tornadic).",
+        "model_version": "tornado_v3-05a06c843c87",
+        "auc": 0.9702,
+        "auc_ci95": [
+          0.9636,
+          0.9758
+        ],
+        "brier_skill_score": 0.1067,
+        "n_cases": 1469977
+      },
       "related_benchmark": {
         "availability": "related_research_benchmark",
         "label": "A historical 2024 holdout benchmark exists for a related tornado GBT family, but not yet as an exact score for the live storm-object model. Its Brier/BSS were measured at a downsampled base rate of 0.003 and are not comparable to live skill at the natural base rate.",
