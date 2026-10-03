@@ -135,7 +135,10 @@ class V3Suite:
                      "band": [lo, hi] if np.isfinite(lo) and np.isfinite(hi) else None,
                      "hrrr_used": h80 is not None and uses_hrrr, "warning": None if warning is None else
                      {"active": bool(warning[0] > 0.5),
-                      "minutes_since_issue": None if not np.isfinite(warning[1]) else float(warning[1])}}
+                      "minutes_since_issue": None if not np.isfinite(warning[1]) else float(warning[1])},
+                     # the exact feature vector and warning state every served product read: the
+                     # record alone recomputes the forecast (recompute_p60)
+                     "inputs": record_inputs(fv, warning)}
         try:
             bias, contrib = lp.contributions(model, X)
             order = np.argsort(-np.abs(contrib[0]))[:n_drivers]
@@ -150,6 +153,21 @@ class V3Suite:
                 raw[key] = float(lp.predict_proba(payload, self._columns(payload, fv, warning))[0])
             out.update(coherent(p60, raw))
         return out
+
+
+def record_inputs(fv: np.ndarray, warning: tuple[float, float] | None) -> dict[str, float | None]:
+    """Full-precision inputs for a forecast record (None = missing), including the warning state."""
+    vals = {n: (float(v) if np.isfinite(v) else None) for n, v in zip(sf.FEATURE_NAMES, np.asarray(fv, np.float64))}
+    if warning is not None:
+        for n, v in zip(W_NAMES, warning):
+            vals[n] = float(v) if np.isfinite(v) else None
+    return vals
+
+
+def recompute_p60(payload: dict, inputs: dict[str, float | None]) -> float:
+    """The payload's probability from a record's stored inputs alone (for auditing a past forecast)."""
+    row = np.array([[np.nan if inputs.get(n) is None else float(inputs[n]) for n in payload["feature_names"]]])
+    return float(lp.predict_proba(payload, row)[0])
 
 
 def coherent(p60: float, raw: dict[str, float]) -> dict:
