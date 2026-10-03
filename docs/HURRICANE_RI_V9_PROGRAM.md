@@ -359,6 +359,55 @@ The 2026 DTOPS reference is LL 0.1495 and Brier4 0.1476 (586 cycles, third read)
 
   The switch is made by a commit at the look, citing the scorer's frozen output.
 
+## Amendment 5 -- convective structure from geostationary IR (2026-10-03, before any IR feature is compared with an outcome)
+
+**Why.** Amendment 3 exhausted the cheap levers on our inputs, so the next gain needs new
+information (`docs/MODEL_IMPROVEMENT_LEDGER.md`, H1). Satellite convective structure enters
+NOAA's RI aids through their GOES predictors. Here it becomes a direct input.
+
+**Source:** NOAA GMGSI longwave IR, `s3://noaa-gmgsi-pds/GMGSI_LW/`.
+- Global, hourly, at about 0.072 degrees (8 km); 8-bit counts, where higher means colder.
+- Archived from **2021-07-12**, and live about 35-40 minutes after each hour.
+- The product's file naming changed between 2024 and 2025 (to `v3r0_blend`). The grid, the
+  encoding and the label are the same; drift is checked below.
+
+**Images and centre.**
+- Two images per cycle t:
+  - **t + 2 h**, the newest image certain to exist when the live forecast runs at t + 3 h 30;
+  - **t - 4 h**, six hours earlier, for trends.
+- The centre is the CARQ position at t, extrapolated along the t - 6 h -> t motion to each image's
+  hour.
+- Crops are +-4 degrees (`scripts/hurricane_ir_crops.py`). A missing image gives NaN.
+
+**IR features (14):** `src/hazardpulse/hurricane/ir_features.py`, the same code for training and
+live. All are in counts. A region with fewer than 50% valid pixels is NaN.
+- Means in the 0-50, 50-200 and 200-300 km rings.
+- Std of 50-200 km.
+- Fraction of pixels with count >= 195 in 50-200 km and in 0-300 km.
+- Fraction >= 215 in 0-100 km.
+- Azimuthal asymmetry: the std of the eight octant means in 50-200 km.
+- Eye contrast: the 25-75 km mean minus the 0-25 km minimum.
+- Max count in 0-50 km.
+- The t+2h minus t-4h change of the 0-50 km mean, the 50-200 km mean, the 50-200 km cold
+  fraction, and the asymmetry.
+
+**Candidate:** **V8 = V5 + IR**, with V5's settings and monotone set (the IR features are
+unconstrained). Training rows before 2021-07-12 carry NaN IR. Every scored fold (2022-2025) has IR.
+
+**Control:** V5, recomputed by the same script, must reproduce its amendment-3 log loss
+(0.143633...), or the run stops.
+
+**Carried rule (amendment 3's):** V8 is carried iff its pooled 30/24 log loss AND its pooled
+four-threshold Brier are both below V5's.
+- Reported: paired 95% intervals vs V5, and POD at the HCCA call's false-alarm rate.
+- Reported: a **drift check**. For each IR feature, the 2025 median minus the 2022-2024 median, in
+  pooled-SD units; a shift above 1 SD is flagged. This is descriptive and cannot change the rule.
+
+**2026:** a declared fourth read (no claim).
+
+**A carried V8 (v10.3):** runs in shadow with the IR read live at hour t + 2 h. It enters the
+prospective test at half of v10.2's error budget (99.6875%), under amendment 4's display rule.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
