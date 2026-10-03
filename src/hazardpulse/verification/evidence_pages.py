@@ -114,13 +114,18 @@ def methods_simple(ev: dict) -> str:
     if eq:
         t = eq["test"]
         replaced = eq.get("replaced_ig_per_target") or {}
+        g1 = eq.get("gear1")
         out.append(
             '<div class="card col-4 hazard-eq">\n  <h3>Earthquake</h3>\n  <p class="muted">'
             f"The chance of a magnitude {eq['target_magnitude_min']:.0f}+ earthquake in each 2&deg; cell of the globe "
             f"over the next {eq['horizon_days']:.0f} days, from where quakes happen in the long run, how they cluster "
-            f"after recent ones, and boosted trees on both. Tested once on {_when(t)}: "
-            f"{_signed(t['ig_per_target']['value'], 2)} nats of information per quake over a uniform map"
-            + (f" (the model it replaced: {_signed(replaced.get('value'), 2)})" if replaced.get("value") is not None else "")
+            "after recent ones, and boosted trees on both"
+            + (", plus a published global model of where the crust is straining (GEAR1)" if g1 else "")
+            + (f". Scored on {_when(t)} (a second look at those years): " if t.get("second_read")
+               else f". Tested once on {_when(t)}: ")
+            + f"{_signed(t['ig_per_target']['value'], 2)} nats of information per quake over a uniform map"
+            + (f" ({_e(eq.get('replaced_name', 'the model it replaced'))}: {_signed(replaced.get('value'), 2)})"
+               if replaced.get("value") is not None else "")
             + ". Earthquakes cannot be predicted; this ranks where the odds are higher.</p>\n</div>")
     else:
         out.append('<div class="card col-4 hazard-eq">\n  <h3>Earthquake</h3>\n  <p class="muted">'
@@ -165,6 +170,16 @@ def methods_simple(ev: dict) -> str:
     return "\n".join(out)
 
 
+def _gear1_sentence(g1: dict | None) -> str:
+    """How GEAR1 earned its place, read from the bound evaluation."""
+    if not g1 or not g1.get("dev_vs_recalibrated"):
+        return ""
+    d = g1["dev_vs_recalibrated"]["ig_per_target"]
+    return ("; GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights fitted on "
+            f"2018&ndash;2020, decided on {_e(g1['decided_on']).replace('-', '&ndash;')} against C0 recalibrated on the "
+            f"same years, {_signed(d['diff'])}{_ci(d['ci'], signed=True)} nats per quake")
+
+
 def methods_earthquake(ev: dict) -> str:
     eq = ev.get("earthquake")
     if not eq:
@@ -178,8 +193,10 @@ def methods_earthquake(ev: dict) -> str:
         _kv("Architecture", f"{_e(eq['candidate_name'][0].upper() + eq['candidate_name'][1:])}"
                             f" ({_n(eq.get('n_trees'))} trees, {_n(eq.get('n_inputs'))} inputs, scored in NumPy)"),
         _kv("How it was chosen", "Pre-registered comparison of smoothed seismicity, aftershock clustering, two "
-                                 f"boosted models and the previous model ({_doc(eq['program'])})"),
-        _kv(f"Final test {_when(t)}",
+                                 f"boosted models and the previous model ({_doc(eq['program'])})"
+            + _gear1_sentence(eq.get("gear1"))),
+        _kv(f"{'Test' if t.get('second_read') else 'Final test'} {_when(t)}"
+            + (" (a second read)" if t.get("second_read") else ""),
             f"{_signed(t['ig_per_target']['value'], 2)}{_ci(t['ig_per_target']['ci'], 2)} nats per quake over a "
             f"uniform map; AUC {_f(t['auc']['value'])}{_ci(t['auc']['ci'])} over all cells, "
             f"{_f(t['auc_active_cells']['value'])}{_ci(t['auc_active_cells']['ci'])} among recently active cells; "
@@ -194,8 +211,9 @@ def methods_earthquake(ev: dict) -> str:
     replaced = eq.get("replaced_ig_per_target")
     if replaced and replaced.get("value") is not None:
         share = t.get("share_outside_active_cells")
-        rows.append(_kv("Replaced", f"The previous model scored {_signed(replaced['value'], 2)} nats per quake on "
-                                    "the same test"
+        rows.append(_kv("Replaced", f"{_e(eq.get('replaced_name', 'The previous model'))[:1].upper()}"
+                                    f"{_e(eq.get('replaced_name', 'The previous model'))[1:]} scored "
+                                    f"{_signed(replaced['value'], 2)} nats per quake on the same test"
                         + (f"; {_pct(share, 0)} of the test&rsquo;s M6+ cell-windows fell outside recently active "
                            "cells" if share is not None else "")))
     cr = t.get("calib_ratio") or {}

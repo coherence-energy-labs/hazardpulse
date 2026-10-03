@@ -71,22 +71,29 @@ __all__ = [
     "LongTermParams",
     "ModelSpec",
     "N_CELLS",
+    "LoadedStack",
     "OperationalArtifactError",
     "RateEngine",
+    "STACK_SCHEMA",
     "ShortTermParams",
     "TARGET_MAG",
+    "apply_stack",
     "artifact_model_version",
     "causal_aftershock_flags",
     "cell_areas",
     "cell_centres",
     "cell_index",
     "forecast_from_artifact",
+    "forecast_with_stack",
     "kernel_matrix",
     "load_artifact",
+    "load_stack",
     "omori_window_integral",
     "sha256_text_file",
+    "stack_model_version",
     "target_matrix",
     "write_artifact",
+    "write_stack",
 ]
 
 HORIZON_DAYS = 30.0
@@ -666,6 +673,85 @@ def forecast_from_artifact(art: LoadedArtifact, live_events: Iterable[dict], iss
     out["model_version"] = art.model_version
     out["n_input_events"] = n
     out["input_sha256"] = digest
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Stack on the served artifact (docs/EARTHQUAKE_FORECAST_PROGRAM.md section 10, amendment E1)
+# ---------------------------------------------------------------------------
+
+STACK_SCHEMA = "hazardpulse/earthquake-operational-stack/v1"
+STACK_CLIP = 1e-12
+
+
+@dataclasses.dataclass(frozen=True)
+class LoadedStack:
+    path: Path
+    model_name: str
+    model_version: str
+    base_model_version: str
+    a: float
+    c: float
+    b: float
+    g_log10: np.ndarray
+    meta: dict
+
+
+def stack_model_version(path) -> str:
+    meta = json.loads(Path(path).read_text(encoding="utf-8"))
+    return f"{meta['model_name']}-{sha256_text_file(path)[:12]}"
+
+
+def write_stack(path, *, model_name: str, base_model_version: str, a: float, c: float, b: float,
+                g_log10: np.ndarray, provenance: dict) -> str:
+    """``logit p = a + c logit(p_base) + b g_log10[cell]`` on top of the artifact named
+    ``base_model_version``; returns the stack's model_version."""
+    g = np.asarray(g_log10, np.float64)
+    if g.shape != (N_CELLS,) or not np.all(np.isfinite(g)):
+        raise OperationalArtifactError(f"stack map must be {N_CELLS} finite values")
+    body = {"schema": STACK_SCHEMA, "model_name": model_name, "base_model_version": base_model_version,
+            "formula": "logit p = a + c logit(p_base) + b g_log10[cell]",
+            "coefficients": {"a": float(a), "c": float(c), "b": float(b)},
+            "g_log10": [float(x) for x in g], "provenance": provenance}
+    text = json.dumps(body, separators=(",", ":"), allow_nan=False)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text + "\n")
+    return stack_model_version(path)
+
+
+def load_stack(path, base: LoadedArtifact) -> LoadedStack:
+    """Refused unless it names exactly the loaded base artifact's model_version."""
+    path = Path(path)
+    meta = json.loads(path.read_text(encoding="utf-8"))
+    if meta.get("schema") != STACK_SCHEMA:
+        raise OperationalArtifactError(f"{path}: schema {meta.get('schema')!r} != {STACK_SCHEMA!r}")
+    if meta.get("base_model_version") != base.model_version:
+        raise OperationalArtifactError(f"{path} stacks on {meta.get('base_model_version')!r}, "
+                                       f"the served base is {base.model_version!r}")
+    g = np.asarray(meta["g_log10"], np.float64)
+    if g.shape != (N_CELLS,) or not np.all(np.isfinite(g)):
+        raise OperationalArtifactError(f"{path}: map is not {N_CELLS} finite values")
+    co = meta["coefficients"]
+    return LoadedStack(path=path, model_name=meta["model_name"], model_version=stack_model_version(path),
+                       base_model_version=base.model_version, a=float(co["a"]), c=float(co["c"]),
+                       b=float(co["b"]), g_log10=g, meta=meta)
+
+
+def apply_stack(stack: LoadedStack, p_base: np.ndarray) -> np.ndarray:
+    p = np.clip(np.asarray(p_base, np.float64), STACK_CLIP, 1 - STACK_CLIP)
+    eta = stack.a + stack.c * (np.log(p) - np.log1p(-p)) + stack.b * stack.g_log10
+    return 0.5 * (1.0 + np.tanh(0.5 * eta))
+
+
+def forecast_with_stack(art: LoadedArtifact, stack: LoadedStack, live_events: Iterable[dict],
+                        issue_time: dt.datetime | float) -> dict:
+    """The base artifact's forecast with the stack applied; the base probability is kept."""
+    out = forecast_from_artifact(art, live_events, issue_time)
+    out["probability_base"] = out["probability"]
+    out["probability"] = apply_stack(stack, out["probability_base"])
+    out["base_model_version"] = art.model_version
+    out["model_version"] = stack.model_version
     return out
 
 

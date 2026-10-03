@@ -124,9 +124,18 @@ def test_reliability_bin_lookup_never_invents_a_rate(tmp_path):
 
 def test_the_served_earthquake_and_hurricane_models_are_bound_to_their_final_tests():
     eq = se.earthquake_evidence()
-    final = json.loads((ROOT / se.EARTHQUAKE_FINAL).read_text(encoding="utf-8"))
-    assert eq["model_version"] == json.loads((ROOT / se.EARTHQUAKE_ARTIFACT_RECORD).read_text())["model_version"]
-    assert eq["test"]["auc"]["value"] == final["candidates"][eq["candidate"]]["auc"]["value"]
+    base = json.loads((ROOT / se.EARTHQUAKE_ARTIFACT_RECORD).read_text())["model_version"]
+    if (ROOT / se.EARTHQUAKE_STACK).exists():             # amendment E1: S1 = C0 + GEAR1 is served
+        rec = json.loads((ROOT / se.EARTHQUAKE_STACK_RECORD).read_text(encoding="utf-8"))
+        e1 = json.loads((ROOT / se.EARTHQUAKE_E1).read_text(encoding="utf-8"))
+        assert eq["candidate"] == "S1" and eq["model_version"] == rec["model_version"]
+        assert eq["base_model_version"] == base == rec["base_model_version"]
+        assert eq["test"]["auc"]["value"] == e1["splits"]["final"]["models"]["S1"]["auc"]["value"]
+        assert eq["test"]["second_read"] is True                  # never presented as a first read
+    else:
+        final = json.loads((ROOT / se.EARTHQUAKE_FINAL).read_text(encoding="utf-8"))
+        assert eq["model_version"] == base
+        assert eq["test"]["auc"]["value"] == final["candidates"][eq["candidate"]]["auc"]["value"]
     hu = se.hurricane_evidence()
     hfinal = json.loads((ROOT / se.HURRICANE_FINAL).read_text(encoding="utf-8"))
     assert hu["model_version"] == hfinal["artifact"]["model_version"]
@@ -150,6 +159,55 @@ def test_an_earthquake_record_naming_another_artifact_is_refused(tmp_path):
     _write(tmp_path / se.EARTHQUAKE_ARTIFACT_RECORD, rec)
     with pytest.raises(se.EvidenceError):
         se.earthquake_evidence(tmp_path)
+
+
+def _eq_stack_root(tmp_path: Path) -> Path:
+    for rel in (se.EARTHQUAKE_SERVED, se.EARTHQUAKE_FINAL, se.EARTHQUAKE_ARTIFACT_RECORD, se.EARTHQUAKE_STACK,
+                se.EARTHQUAKE_STACK_RECORD, se.EARTHQUAKE_E1):
+        _copy(rel, tmp_path)
+    return tmp_path
+
+
+@pytest.mark.skipif(not (ROOT / se.EARTHQUAKE_STACK).exists(), reason="no earthquake stack served")
+def test_the_earthquake_stack_is_shown_only_when_bound_to_its_evaluation_and_base(tmp_path):
+    root = _eq_stack_root(tmp_path)
+    assert se.earthquake_evidence(root)["candidate"] == "S1"
+    e1 = json.loads((root / se.EARTHQUAKE_E1).read_text(encoding="utf-8"))
+    e1["coefficients_fitted_on_choose"]["S1"]["b"] += 1e-9                   # another fit
+    _write(root / se.EARTHQUAKE_E1, e1)
+    with pytest.raises(se.EvidenceError):
+        se.earthquake_evidence(root)
+    root = _eq_stack_root(tmp_path / "b")
+    rec = json.loads((root / se.EARTHQUAKE_STACK_RECORD).read_text(encoding="utf-8"))
+    rec["base_model_version"] = "eq_operational_C0_v1-000000000000"            # built on another C0
+    _write(root / se.EARTHQUAKE_STACK_RECORD, rec)
+    with pytest.raises(se.EvidenceError):
+        se.earthquake_evidence(root)
+    root = _eq_stack_root(tmp_path / "c")
+    (root / se.EARTHQUAKE_STACK).unlink()                                      # no stack: C0, read once
+    eq = se.earthquake_evidence(root)
+    assert eq["candidate"] == "C0" and not eq["test"].get("second_read")
+
+
+@pytest.mark.skipif(not (ROOT / se.EARTHQUAKE_STACK).exists(), reason="no earthquake stack served")
+def test_the_stack_refuses_another_base_and_applies_its_formula_by_hand(tmp_path):
+    import math
+
+    import numpy as np
+
+    from hazardpulse.earthquake import operational_forecast as of
+    base = of.load_artifact(ROOT / se.EARTHQUAKE_SERVED)
+    stack = of.load_stack(ROOT / se.EARTHQUAKE_STACK, base)
+    p = np.full(of.N_CELLS, 0.01)
+    p[0] = 1e-15                                                               # clipped, never log(0)
+    got = of.apply_stack(stack, p)
+    z = stack.a + stack.c * math.log(0.01 / 0.99) + stack.b * stack.g_log10[5]
+    assert got[5] == pytest.approx(1 / (1 + math.exp(-z)), rel=1e-12) and np.all(np.isfinite(got))
+    other = json.loads((ROOT / se.EARTHQUAKE_STACK).read_text(encoding="utf-8"))
+    other["base_model_version"] = "eq_operational_C0_v1-000000000000"
+    (tmp_path / "s.json").write_text(json.dumps(other), encoding="utf-8")
+    with pytest.raises(of.OperationalArtifactError):
+        of.load_stack(tmp_path / "s.json", base)
 
 
 def test_a_hurricane_final_naming_another_artifact_is_refused(tmp_path):

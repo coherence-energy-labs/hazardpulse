@@ -199,7 +199,7 @@
 <!-- hp-evidence:methods-simple -->
 <div class="card col-4 hazard-eq">
   <h3>Earthquake</h3>
-  <p class="muted">The chance of a magnitude 6+ earthquake in each 2&deg; cell of the globe over the next 30 days, from where quakes happen in the long run, how they cluster after recent ones, and boosted trees on both. Tested once on 2023&ndash;2025: +2.59 nats of information per quake over a uniform map (the model it replaced: &minus;13.67). Earthquakes cannot be predicted; this ranks where the odds are higher.</p>
+  <p class="muted">The chance of a magnitude 6+ earthquake in each 2&deg; cell of the globe over the next 30 days, from where quakes happen in the long run, how they cluster after recent ones, and boosted trees on both, plus a published global model of where the crust is straining (GEAR1). Scored on 2023&ndash;2025 (a second look at those years): +2.60 nats of information per quake over a uniform map (C0 alone: +2.59). Earthquakes cannot be predicted; this ranks where the odds are higher.</p>
 </div>
 <div class="card col-4 hazard-hu">
   <h3>Hurricane</h3>
@@ -220,14 +220,14 @@
         <div class="grid">
 <!-- hp-evidence:methods-earthquake -->
 <div class="card col-4 hazard-eq">
-  <h3>Earthquake (eq_operational_C0_v1-d28c62a2e35b)</h3>
+  <h3>Earthquake (eq_operational_S1_gear1_v1-d409c534bb4c)</h3>
   <div class="kv"><span>Target</span><strong>P(an M6.0+ epicentre in the 2&deg; cell within 30 days), every one of 11,700 cells, from events before the issue time only</strong></div>
-  <div class="kv"><span>Architecture</span><strong>Gradient-boosted trees on causal seismicity features, with the smoothed-seismicity and aftershock-clustering rates as inputs (156 trees, 21 inputs, scored in NumPy)</strong></div>
-  <div class="kv"><span>How it was chosen</span><strong>Pre-registered comparison of smoothed seismicity, aftershock clustering, two boosted models and the previous model (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/EARTHQUAKE_FORECAST_PROGRAM.md" rel="noopener">docs/EARTHQUAKE_FORECAST_PROGRAM.md</a>)</strong></div>
-  <div class="kv"><span>Final test 2023&ndash;2025</span><strong>+2.59 [2.47, 2.71] nats per quake over a uniform map; AUC 0.968 [0.963, 0.972] over all cells, 0.767 [0.733, 0.798] among recently active cells; Brier skill +0.021</strong></div>
-  <div class="kv"><span>Against the standard reference</span><strong>vs long-term smoothed seismicity (the standard reference forecast): +0.061 [+0.000, +0.120] nats per quake, AUC +0.0013 [+0.0000, +0.0026] (paired, by month)</strong></div>
-  <div class="kv"><span>Replaced</span><strong>The previous model scored &minus;13.67 nats per quake on the same test; 74% of the test&rsquo;s M6+ cell-windows fell outside recently active cells</strong></div>
-  <div class="kv"><span>Limits</span><strong>Forecasts 14% more quakes than occurred in the test period (ratio 1.14 [1.03, 1.26]); live catalogs are preliminary in the first days after a large quake</strong></div>
+  <div class="kv"><span>Architecture</span><strong>C0 plus GEAR1&#x27;s long-term rate (geodetic strain and smoothed seismicity, Bird et al. 2015) as one extra term (156 trees, 22 inputs, scored in NumPy)</strong></div>
+  <div class="kv"><span>How it was chosen</span><strong>Pre-registered comparison of smoothed seismicity, aftershock clustering, two boosted models and the previous model (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/EARTHQUAKE_FORECAST_PROGRAM.md" rel="noopener">docs/EARTHQUAKE_FORECAST_PROGRAM.md</a>); GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights fitted on 2018&ndash;2020, decided on 2021&ndash;2022 against C0 recalibrated on the same years, +0.016 [+0.002, +0.030] nats per quake</strong></div>
+  <div class="kv"><span>Test 2023&ndash;2025 (a second read)</span><strong>+2.60 [2.48, 2.73] nats per quake over a uniform map; AUC 0.969 [0.964, 0.973] over all cells, 0.769 [0.735, 0.799] among recently active cells; Brier skill +0.021</strong></div>
+  <div class="kv"><span>Against the standard reference</span><strong>vs long-term smoothed seismicity (the standard reference forecast): +0.072 [+0.018, +0.125] nats per quake, AUC +0.0019 [+0.0009, +0.0028] (paired, by month)</strong></div>
+  <div class="kv"><span>Replaced</span><strong>C0 alone scored +2.59 nats per quake on the same test; 74% of the test&rsquo;s M6+ cell-windows fell outside recently active cells</strong></div>
+  <div class="kv"><span>Limits</span><strong>Forecasts 13% more quakes than occurred in the test period (ratio 1.13 [1.03, 1.26]); live catalogs are preliminary in the first days after a large quake</strong></div>
 </div>
 <!-- /hp-evidence:methods-earthquake -->
 

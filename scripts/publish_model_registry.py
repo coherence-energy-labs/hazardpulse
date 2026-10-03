@@ -190,6 +190,56 @@ def hurricane_stack_entry(stack_path: Path = HU_STACK_PATH, final_path: Path = H
 
 EQ_OPERATIONAL_PATH = MODELS_DIR / "earthquake_operational_v1.json"
 EQ_PROGRAM_FINAL_PATH = PROJECT_ROOT / "results" / "earthquake_program" / "final.json"
+EQ_STACK_PATH = MODELS_DIR / "earthquake_gear1_stack_v1.json"
+EQ_E1_PATH = PROJECT_ROOT / "results" / "earthquake_program" / "gear1_e1.json"
+
+
+def earthquake_stack_entry(path: Path = EQ_STACK_PATH, e1_path: Path = EQ_E1_PATH,
+                           base_path: Path = EQ_OPERATIONAL_PATH) -> dict | None:
+    """The served earthquake model since amendment E1: C0 + GEAR1 (a stack bound to C0's version)."""
+    if not path.exists():
+        return None
+    from hazardpulse.earthquake import operational_forecast as eq_op
+
+    stack = eq_op.load_stack(path, eq_op.load_artifact(base_path))
+    e1 = _read_json(e1_path)
+    bound = bool(e1) and (e1.get("coefficients_fitted_on_choose") or {}).get("S1") == {
+        k: stack.meta["coefficients"][k] for k in ("a", "c", "b")}
+    fin = ((e1.get("splits") or {}).get("final") or {}) if bound else {}
+    dev = ((e1.get("splits") or {}).get("dev") or {}) if bound else {}
+    s1 = (fin.get("models") or {}).get("S1") or {}
+    g1 = (stack.meta.get("provenance") or {}).get("gear1") or {}
+    return _make_entry(
+        record_id=f"weights_hazardpulse_{stack.model_version}",
+        name="HazardPulse Earthquake operational forecast S1 (C0 + GEAR1, served)",
+        description=(
+            "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for every cell: "
+            f"logit p = a + c logit(p_C0) + b log10 G, with p_C0 from {stack.base_model_version} and G the GEAR1 "
+            "long-term rate (Bird et al. 2015; geodetic strain + smoothed seismicity; CC-BY-4.0) on the grid. "
+            "Weights fitted on 2018-2020, decided on 2021-2022 against C0 recalibrated on the same years "
+            "(docs/EARTHQUAKE_FORECAST_PROGRAM.md section 10); 2023-2025 is a declared second read."
+            + ("" if bound else " No evaluation is bound to this file.")),
+        weights_path=path,
+        benchmark={
+            "benchmark_type": "operational forward test on every cell-time of the grid (not case-control)",
+            "benchmark_bound_to_this_artifact": bound,
+            "decided_on": "weekly issue times 2021-2022" if bound else None,
+            "dev_ig_vs_recalibrated_C0": ((dev.get("paired") or {}).get("S1-S0") or {}).get("ig_per_target"),
+            "test_window": "weekly issue times 2023-2025, 30-day windows (a declared second read)" if bound else None,
+            "test_information_gain_per_target_nats": (s1.get("ig_per_target") or {}).get("value"),
+            "test_information_gain_ci95": (s1.get("ig_per_target") or {}).get("ci95"),
+            "test_auc": (s1.get("auc") or {}).get("value"), "test_auc_ci95": (s1.get("auc") or {}).get("ci95"),
+            "test_bss_vs_uniform": (s1.get("bss") or {}).get("value"),
+            "paired_this_minus_C0": ((fin.get("paired") or {}).get("S1-C0")) if bound else None,
+        },
+        framework="hazardpulse_eq_operational_stack_v1",
+        input_schema={"base_model_version": stack.base_model_version, "gear1_sha256": g1.get("sha256"),
+                      "gear1_source": g1.get("source")},
+        output_schema={"outputs": ["m6_probability_30d_every_cell"], "domain": "[0, 1]",
+                       "calibration": "the stack's logistic weights (fitted by Bernoulli likelihood on 2018-2020)",
+                       "model_version": stack.model_version, "coefficients": stack.meta["coefficients"]},
+        paper_url="https://github.com/coherence-energy-labs/hazardpulse",
+    )
 
 
 def earthquake_operational_entry(path: Path = EQ_OPERATIONAL_PATH,
@@ -230,7 +280,8 @@ def earthquake_operational_entry(path: Path = EQ_OPERATIONAL_PATH,
 
     return _make_entry(
         record_id=f"weights_hazardpulse_{art.model_version}",
-        name=f"HazardPulse Earthquake operational forecast v1 (candidate {candidate}, served)",
+        name=(f"HazardPulse Earthquake operational forecast v1 (candidate {candidate}, "
+              + ("base of the served S1)" if EQ_STACK_PATH.exists() else "served)")),
         description=(
             "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for "
             f"every cell of the global grid, from {kind} of ComCat M5+ events since 1973 strictly "
@@ -401,6 +452,9 @@ def main() -> int:
     eq_op_entry = earthquake_operational_entry()
     if eq_op_entry is not None:
         entries.append(eq_op_entry)
+    eq_stack_entry = earthquake_stack_entry()
+    if eq_stack_entry is not None:
+        entries.append(eq_stack_entry)
 
     # ----- Earthquake GBT v1 (not served) -----
     eq_path = MODELS_DIR / "earthquake_gbt_v1.json"
