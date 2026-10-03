@@ -46,7 +46,8 @@ def test_the_committed_registry_is_what_the_repository_produces(reg_mod, committ
 
 
 def test_every_live_model_is_registered_with_the_hash_of_its_stored_bytes(committed):
-    by_path = {e["weights_path"].replace("\\", "/"): e for e in committed["entries"]}
+    assert not any("\\" in e["weights_path"] for e in committed["entries"])       # no OS-specific paths
+    by_path = {e["weights_path"]: e for e in committed["entries"]}
     for name in LIVE_ARTIFACTS:
         path = ROOT / "results" / "models" / name
         if not path.exists():

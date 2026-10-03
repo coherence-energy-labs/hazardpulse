@@ -86,7 +86,7 @@ def _make_entry(
         "name": name,
         "description": description,
         "weights_uri": f"hazardpulse://results/models/{weights_path.name}",
-        "weights_path": str(weights_path.relative_to(PROJECT_ROOT)),
+        "weights_path": weights_path.relative_to(PROJECT_ROOT).as_posix(),      # the same on every OS
         "size_bytes": len(_canonical_bytes(weights_path)),
         "blake3": primary_hash if HAS_BLAKE3 else None,
         "sha256": sha_hex,
