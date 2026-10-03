@@ -91,6 +91,26 @@ carried, for reporting only: the better of B_lr/B_gbt ("ours alone").
   input where it uses N); otherwise DTOPS stays served and the result is reported as it is.
 - An independent adversary attacks a claimed result before it is published.
 
+## Outcome (2026-10-03)
+
+**Development** (forward chaining 2022-2025, 2,871 cycles, 193 events; `results/calibration/
+hurricane_ri_v9_selection.json`): carried D_gbt, pooled LL 0.1459 vs DTOPS 0.1647, dLL -0.0189
+[-0.0294, -0.0084], dBrier -0.0053 [-0.0090, -0.0017], AUC 0.932 vs 0.905; better than DTOPS on LL,
+Brier and AUC in each of the four seasons. "Ours alone" (B_lr) LL 0.1513, dLL -0.0134 [-0.0233, -0.0018].
+
+**Final, 2026 read once** (586 cycles, 35 events from 9 storms; `hurricane_ri_v9_final.json`):
+D_gbt LL 0.1316 vs DTOPS 0.1495, dLL -0.0180 [-0.0427, +0.0106]; Brier 0.0349 vs 0.0423, dBrier
+-0.0074 [-0.0149, +0.0001]; AUC 0.924 vs 0.893. Better on every point estimate, but no interval
+lies wholly below 0: **the claim rule is NOT met. DTOPS stays served.** "Ours alone" did not hold
+up (LL 0.1597, AUC 0.864).
+
+Found after the read (exploratory -- it cannot turn this result into a claim): the 2026 public
+a-deck of CP01 carries none of the early aids (only late global and ensemble runs), while every
+development CP case had them (65/65). On those 54 cycles (4 events) D_gbt scored LL 0.2218 vs
+DTOPS 0.1305; on the 532 cycles with the aids, dLL -0.0291 [-0.0475, -0.0087], dBrier -0.0101
+[-0.0163, -0.0040]. The model is good where its inputs exist and poor where they do not -- a gate,
+designed after this read, needs its own unseen test (v9.1 below).
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
