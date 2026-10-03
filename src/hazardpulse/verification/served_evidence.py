@@ -70,7 +70,12 @@ EARTHQUAKE_CANDIDATES = {
     "C0": "gradient-boosted trees on causal seismicity features, with the smoothed-seismicity and aftershock-clustering rates as inputs",
     "C1": "C0 + the 61 coherence block-S features",
     "D": "the previous served model",
+    "S1": "C0 plus GEAR1's long-term rate (geodetic strain and smoothed seismicity, Bird et al. 2015) as one extra term",
 }
+# Amendment E1 (section 10): the served S1 = the C0 artifact + a stack bound to its model_version
+EARTHQUAKE_STACK = "results/models/earthquake_gear1_stack_v1.json"
+EARTHQUAKE_STACK_RECORD = "results/earthquake_program/stack_artifact.json"
+EARTHQUAKE_E1 = "results/earthquake_program/gear1_e1.json"
 
 HURRICANE_SERVED = "results/models/hurricane_ri_stack_v1.json"
 HURRICANE_FINAL = "results/calibration/hurricane_ri_stack_final.json"
@@ -310,6 +315,67 @@ def tornado_evidence(root: Path = ROOT) -> dict | None:
 # Earthquake
 # ---------------------------------------------------------------------------
 
+def _earthquake_stack_evidence(root: Path, base_version: str, contract: dict, payload: dict, metric) -> dict:
+    """The served S1 (C0 + GEAR1): bound when the stack's build record names this file and the
+    served C0, and the evaluation's coefficients and GEAR1 hash are the stack's own."""
+    from hazardpulse.earthquake import operational_forecast as eq
+
+    path = root / EARTHQUAKE_STACK
+    version = eq.stack_model_version(path)
+    rec = _read(root, EARTHQUAKE_STACK_RECORD) or {}
+    if rec.get("model_version") != version or rec.get("base_model_version") != base_version:
+        raise EvidenceError(f"{EARTHQUAKE_STACK_RECORD} names {rec.get('model_version')!r} on "
+                            f"{rec.get('base_model_version')!r}; served is {version!r} on {base_version!r}")
+    stack = json.loads(path.read_text(encoding="utf-8"))
+    if stack.get("base_model_version") != base_version:
+        raise EvidenceError(f"{EARTHQUAKE_STACK} stacks on {stack.get('base_model_version')!r}, not {base_version!r}")
+    e1 = _read(root, EARTHQUAKE_E1)
+    if e1 is None:
+        raise EvidenceError(f"{EARTHQUAKE_E1} missing for the served stack")
+    if (e1.get("coefficients_fitted_on_choose") or {}).get("S1") != {
+            k: stack["coefficients"][k] for k in ("a", "c", "b")} \
+            or e1.get("gear1_sha256") != ((stack.get("provenance") or {}).get("gear1") or {}).get("sha256"):
+        raise EvidenceError(f"{EARTHQUAKE_E1} does not describe the served stack's coefficients and GEAR1 map")
+    fin, dev = e1["splits"]["final"], e1["splits"]["dev"]
+    cand = fin["models"]["S1"]
+
+    def pair(split, key, name):
+        p = split["paired"].get(key)
+        return None if p is None else {"name": name, **{k: {"diff": _finite(v.get("diff")), "ci": _ci(v.get("ci95"))}
+                                                         for k, v in p.items()}}
+    n_issue, n_pos = int(fin["n_issue_times"]), int(fin["n_positive"])
+    return {
+        "hazard": "earthquake", "program": EARTHQUAKE_PROGRAM, "file": EARTHQUAKE_STACK,
+        "model_version": version, "base_model_version": base_version, "candidate": "S1",
+        "candidate_name": EARTHQUAKE_CANDIDATES["S1"],
+        "event": contract.get("event"), "horizon_days": contract.get("horizon_days"),
+        "target_magnitude_min": contract.get("target_magnitude_min"),
+        "test": {
+            "period": f"issue times {fin['first_issue'][:7]} .. {fin['last_issue'][:7]} (a second read)",
+            "when": f"{fin['first_issue'][:4]}-{fin['last_issue'][:4]}", "second_read": True,
+            "n_issue_times": n_issue, "n_cell_times": fin.get("n_cell_times"), "n_positive": n_pos,
+            "block": "month",
+            "ig_per_target": metric(cand, "ig_per_target"), "auc": metric(cand, "auc"),
+            "bss": metric(cand, "bss"), "auc_active_cells": metric(cand, "auc_active_cells"),
+            "calib_ratio": metric(cand, "calib_ratio"),
+            "n_cells": (int(fin["n_cell_times"]) // n_issue) if n_issue else None,
+            "share_outside_active_cells": 1.0 - int(fin["positives_in_active_cells"]) / n_pos if n_pos else None,
+        },
+        "gear1": {"decided_on": f"{dev['first_issue'][:4]}-{dev['last_issue'][:4]}",
+                  "dev_vs_recalibrated": pair(dev, "S1-S0", "C0 recalibrated on the same years"),
+                  "dev_vs_C0": pair(dev, "S1-C0", "C0"),
+                  "global_rate_per_year": _finite(((stack.get("provenance") or {}).get("gear1") or {}).get("global_total_per_year"))},
+        "n_trees": payload.get("n_trees"),
+        "n_inputs": len(payload.get("feature_names") or []) + 1,
+        "replaced_ig_per_target": metric(fin["models"]["C0"], "ig_per_target"),
+        "replaced_name": "C0 alone",
+        "vs": {o: v for o, v in (("A", pair(fin, "S1-A", EARTHQUAKE_CANDIDATES["A"])),
+                                 ("B", pair(fin, "S1-B", EARTHQUAKE_CANDIDATES["B"])),
+                                 ("C0", pair(fin, "S1-C0", "C0")),
+                                 ("D", pair(fin, "S1-D", EARTHQUAKE_CANDIDATES["D"]))) if v},
+    }
+
+
 def earthquake_evidence(root: Path = ROOT) -> dict | None:
     from hazardpulse.earthquake import operational_forecast as eq
 
@@ -355,6 +421,8 @@ def earthquake_evidence(root: Path = ROOT) -> dict | None:
     in_active = final.get("positives_in_active_cells")
     replaced = (final.get("candidates") or {}).get("D") if chosen != "D" else None
     payload = (meta.get("gbt") or {}).get("payload") or {}
+    if (root / EARTHQUAKE_STACK).exists():
+        return _earthquake_stack_evidence(root, version, contract, payload, metric)
     return {
         "hazard": "earthquake", "program": EARTHQUAKE_PROGRAM, "file": EARTHQUAKE_SERVED,
         "model_version": version, "candidate": chosen,

@@ -391,3 +391,130 @@ python scripts/earthquake_program/build_artifact.py         # served artifact + 
 python -m pytest -q tests/test_earthquake_operational_forecast.py \
     tests/test_earthquake_operational_serving.py tests/test_earthquake_program_metrics.py
 ```
+
+## 10. Amendment E1 -- GEAR1 as a challenger to C0 (registered 2026-10-03, before any GEAR1 number is computed)
+
+**Why.**
+- C0 has been compared with smoothed seismicity and with ETAS-style clustering, never with the
+  strongest public global long-term forecast.
+- Most of the skill is long-term (section 9.6: A alone gives 2.53 nats per target).
+- GEAR1 (Bird, Jackson, Kagan, Kreemer and Stein 2015, BSSA,
+  doi:10.1785/0120150058) adds geodetic strain rates (GSRM v2.1) to smoothed seismicity. It is
+  the place-where-quakes-can-happen information our causal catalog maps lack where a fault has
+  been quiet. (`docs/MODEL_IMPROVEMENT_LEDGER.md`, E1.)
+
+**G, the GEAR1 map on this grid.**
+- Source: `GEAR1.dat` from Zenodo record 7086053 (CC-BY-4.0). It is a CSV of 0.1 x 0.1 degree
+  cells, each with shallow-seismicity rates in 31 magnitude bins centred 6.00 .. 9.00.
+- Its SHA-256 is computed while it is streamed and recorded. The file is not kept.
+- G_c = the sum over all bins and over every 0.1-degree cell whose centre falls in grid cell `c`.
+  Assignment is by `operational_forecast.cell_index`, the verifier's rule: edge rows take
+  everything beyond 70N and 60S.
+- The global total is reported, so the rate's unit is checked (shallow M >= 5.95, per year).
+- G_c is then scaled to the 30-day window.
+
+**Correction of G's definition (2026-10-03, after the unit check and before any outcome was
+read).** The unit check above failed on the first stream.
+- Summing all bins gave a total of 5.6e-6. Weighting by cell area gave 576 per year, about 5x
+  GEAR1's expected order (~10^2 per year).
+- Cause, from pyCSEP's `read_GEAR1_format` ("Original GEAR1 format provides cumulative rates per
+  meter**2"): the 31 columns are **cumulative** rate densities. Each is the M >= bin rate per m^2
+  per year, not an incremental count per cell.
+- **G_c is therefore the first column (M >= 5.95) times each 0.1-degree cell's exact spherical
+  area (m^2), summed into `c`.**
+- The run now stops unless the global total lies in [50, 500] per year.
+- No candidate was fitted and no outcome was read before this correction. The wrong map was
+  deleted.
+
+**Leakage, stated in advance.**
+- GEAR1 was built from GCMT 1977-2013 and GSRM v2.1. It is not causal for any issue time before
+  2014, so **nothing is fitted on FIT**.
+- Everything is fitted on CHOOSE (2018-2020), which is out of sample for both GEAR1 and C0.
+- DEV (2021-2022) decides. FINAL (2023-2025) is a declared SECOND read: reported, never used to
+  decide.
+
+**Candidates.** Each is fitted on CHOOSE by maximum Bernoulli likelihood, pooled over all
+cell-times, on C0's cached CHOOSE forecasts:
+
+- **S0, the control:** `logit p = a + c logit(p_C0)`. This is C0 recalibrated on CHOOSE. Without
+  S0, a gain from G could be a gain from recalibration.
+- **S1, the challenger:** `logit p = a + c logit(p_C0) + b log10(max(G_c, 1e-7))`.
+- **AG, descriptive only** (is GEAR1 a better long-term map than ours?):
+  - AG: `P = 1 - exp(-mu ((1 - eps) G_c / sum G + eps / 11700))`;
+  - against A_ch: A's own causal map `s_t` with its `mu`, `eps` refitted on CHOOSE in the same
+    form;
+  - both compared on DEV.
+
+**Carried rule (on DEV, month-block paired intervals as in section 4).** S1 replaces C0 as the
+served model iff BOTH hold:
+
+- the 95% interval of `IG(S1) - IG(S0)` lies entirely above 0;
+- the point `IG(S1) - IG(C0)` is >= 0.
+
+Otherwise C0 stays and "GEAR1 adds to C0" is recorded as killed, with the interval as its
+witness. If S0 itself beats C0 on DEV, that is recorded as a separate open branch (recalibration),
+not adopted here.
+
+**Reported:** IG, AUC, BSS and `sum p / sum y` for C0, S0, S1, A_ch and AG on DEV, then on FINAL
+(declared second read), plus the fitted coefficients.
+
+### 10.1 Outcome (2026-10-03) -- S1 carried and served
+
+**G.** `results/earthquake_program/gear1_cells.json`: GEAR1.dat SHA-256 `82f469ab88a75cf3...`,
+4,690,445,703 bytes, 6,480,000 cells. The global total is **116.4 shallow M >= 5.95 per year**, so
+the unit check passes.
+
+**Coefficients fitted on CHOOSE:**
+- S1: a 0.309, c 0.944, **b 0.257** (on log10 G);
+- S0: a 0.138, c 1.030.
+
+**Information gain per target** (nats; `results/earthquake_program/gear1_e1.json`):
+
+| | CHOOSE (fit) | DEV (decides) | FINAL (2nd read) |
+|---|---|---|---|
+| C0 (served until now) | 2.607 | 2.717 | 2.593 |
+| S0 = C0 recalibrated | 2.608 | 2.720 | 2.592 |
+| **S1 = C0 + GEAR1** | 2.616 | **2.736** | **2.605** |
+| A_ch (our causal smoothed seismicity, refit) | 2.578 | 2.593 | 2.539 |
+| AG (GEAR1 alone) | 2.218 | 2.382 | 2.227 |
+
+**Paired comparisons (95% month-block):**
+
+| comparison | DEV | FINAL |
+|---|---|---|
+| S1 - S0 | **+0.0159 [+0.0020, +0.0298]** | +0.0130 [+0.0003, +0.0257] |
+| S1 - C0 | +0.0193 [+0.0044, +0.0340] | +0.0115 [-0.0012, +0.0238] |
+| S1 - A | +0.098 [+0.035, +0.156] | +0.072 [+0.018, +0.125] |
+| S1 - B | +0.019 [-0.048, +0.087] | +0.002 [-0.038, +0.043] |
+| AG - A_ch | -0.21 [-0.33, -0.08] | -0.31 [-0.41, -0.21] |
+
+AUC: S1 0.9714 (DEV) and 0.9687 (FINAL); among active cells, 0.756 and 0.769.
+
+**The registered rule carried S1:** the DEV S1 - S0 interval is above 0, and S1 - C0 >= 0. The
+FINAL second read goes the same way. Three findings:
+- **GEAR1's information is real but small:** about +0.016 nats per target. It comes from where
+  the crust is straining, not from recalibration: S0 is about C0.
+- **GEAR1 alone loses to our own long-term map** by 0.2-0.3 nats per target. A causally updated
+  smoothed-seismicity map (with M5+ events through the issue time) beats a time-fixed global
+  model built through 2013. So "the best public global model" is a useful input, not a better
+  forecast.
+- S1 and B remain indistinguishable on FINAL, as C0 and B were (section 9.6).
+
+**Served.** `results/models/earthquake_gear1_stack_v1.json` holds the coefficients and GEAR1's
+30-day log map. It is bound to C0's exact model_version (`eq_operational_C0_v1-d28c62a2e35b`) and
+refused by any other base. Its model_version is `eq_operational_S1_gear1_v1-d409c534bb4c`.
+- The C0 artifact is unchanged.
+- Parity (`results/earthquake_program/stack_artifact.json`): the formula on C0's DEV forecasts
+  reproduces the evaluated S1 to 5.6e-17. The live path (C0 from its frozen catalog plus a
+  simulated live fetch, then the stack) reproduces it at three FINAL issue times to 5.6e-17.
+- The site shows S1's 2023-2025 numbers labelled as a second read, with the DEV decision beside
+  them.
+
+**Reproduce:**
+
+```
+python scripts/earthquake_program/gear1_map.py      # streams GEAR1.dat, checks the unit
+python scripts/earthquake_program/gear1_stack.py    # S0, S1, AG, A_ch; the carried rule
+python scripts/earthquake_program/build_stack.py    # the served stack + parity
+```
+
