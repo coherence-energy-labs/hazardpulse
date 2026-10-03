@@ -128,8 +128,8 @@ def _rows(rows, names, ks, mask: bool):
     return Xs, ys, np.tile(seasons, len(ks))
 
 
-def fit_predict(cand: str, train, test, ks_out=(30,)):
-    """``{k: P(dV >= k)}`` on ``test`` (averaged over SEEDS), and the rounds each seed used."""
+def fit_models(cand: str, train):
+    """The candidate's boosters (one per seed) fitted on ``train``, and the rounds each used."""
     import lightgbm as lgb
     spec = CANDS[cand]
     names = list(spec["names"])
@@ -140,22 +140,94 @@ def fit_predict(cand: str, train, test, ks_out=(30,)):
     Xa, ya, _ = _rows(train, names, ks, spec["mask"])
     Xi, yi, _ = _rows(inner_tr, names, ks, spec["mask"])
     Xv, yv, _ = _rows(inner_va, names, ks, False)               # validation on real rows only
-    preds = {k: [] for k in ks_out}
-    rounds = []
+    models, rounds = [], []
     for s in SEEDS:
         p = _params(s, len(names), spec["stacked"])
         b = lgb.train(p, lgb.Dataset(Xi, yi), 2000, valid_sets=[lgb.Dataset(Xv, yv)],
                       callbacks=[lgb.early_stopping(100, verbose=False)])
         r = max(1, int(b.best_iteration or 1))
         rounds.append(r)
-        m = lgb.train(p, lgb.Dataset(Xa, ya), r)
-        Xt = v9.design(test, names)
-        for k in ks_out:
-            if spec["stacked"]:
-                preds[k].append(m.predict(np.hstack([Xt, np.full((len(Xt), 1), float(k))])))
-            elif k == 30:
-                preds[k].append(m.predict(Xt))
-    return {k: np.mean(v, axis=0) for k, v in preds.items() if v}, rounds
+        models.append(lgb.train(p, lgb.Dataset(Xa, ya), r))
+    return models, rounds
+
+
+def predict_models(cand: str, models, test, ks_out=(30,)):
+    spec = CANDS[cand]
+    Xt = v9.design(test, list(spec["names"]))
+    preds = {}
+    for k in ks_out:
+        if spec["stacked"]:
+            Xk = np.hstack([Xt, np.full((len(Xt), 1), float(k))])
+            preds[k] = np.mean([m.predict(Xk) for m in models], axis=0)
+        elif k == 30:
+            preds[k] = np.mean([m.predict(Xt) for m in models], axis=0)
+    return preds
+
+
+def fit_predict(cand: str, train, test, ks_out=(30,)):
+    """``{k: P(dV >= k)}`` on ``test`` (averaged over SEEDS), and the rounds each seed used."""
+    models, rounds = fit_models(cand, train)
+    return predict_models(cand, models, test, ks_out), rounds
+
+
+MODEL10 = ROOT / "results" / "models" / "hurricane_ri_v10.json"
+
+
+def export(_a) -> int:
+    """Freeze the carried stacked model as hurricane_ri_v10.json: every seed's booster as a NumPy
+    payload. Refused unless the refit reproduces the second read's reported 2026 log loss and the
+    payloads reproduce the boosters."""
+    from hazardpulse.hurricane import ri_v10
+    from hazardpulse.tornado import lgbm_payload as lp
+    sel = json.loads(SEL10.read_text(encoding="utf-8"))
+    rep = json.loads(SECOND.read_text(encoding="utf-8"))
+    c = sel["carried"]
+    if not CANDS[c]["stacked"]:
+        raise SystemExit(f"{c} is not a stacked candidate")
+    dev = load(DEV10)
+    models, rounds = fit_models(c, dev)
+    if rounds != rep["models"][c]["rounds"]:
+        raise SystemExit(f"refit rounds {rounds} != the second read's {rep['models'][c]['rounds']}")
+    test = cases_2026()
+    y = np.array([r["y"] for r in test])
+    p = predict_models(c, models, test, MULTI)
+    ll = v9.summary(y, p[30], False)["log_loss"]
+    if abs(ll - rep["models"][c]["all"]["log_loss"]) > 1e-12:
+        raise SystemExit(f"refit 2026 LL {ll} != the reported {rep['models'][c]['all']['log_loss']}")
+    names = list(CANDS[c]["names"]) + ["threshold_kt"]
+    members = [lp.export_booster(m, names, calibration={"method": "identity", "a": 1.0, "b": 0.0}, provenance={})
+               for m in models]
+    art = {"schema": ri_v10.SCHEMA, "model_name": "hurricane_ri_v10", "thresholds_kt": list(K),
+           "feature_names": list(CANDS[c]["names"]), "members": members,
+           "provenance": {"program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendment 2)", "candidate": c,
+                          "trained": "NHC cycles 2020-2025", "event": "V(t+24 h) - V(t) >= k kt", "rounds": rounds,
+                          "seeds": list(SEEDS), "gate_aids": list(ri_v10.GATE_AIDS),
+                          "dev_2022_2025": {"log_loss": sel["pooled"][c]["log_loss"], "auc": sel["pooled"][c]["auc"],
+                                            "dtops_log_loss": sel["pooled"]["A"]["log_loss"],
+                                            "d_log_loss_ci": sel["vs_DTOPS"][c]["d_log_loss_ci"],
+                                            "multi_threshold": sel["multi_threshold"][c]},
+                          "season_2026_second_read": {"log_loss": ll, "auc": rep["models"][c]["all"]["auc"],
+                                                      "dtops_log_loss": v9.summary(y, v9.a_forecast(test), True)["log_loss"],
+                                                      "declared": "design informed by the 2026 read; no claim"}}}
+    MODEL10.write_bytes(ri_v10.canonical_bytes(art))
+    loaded, version = ri_v10.load(MODEL10)
+    X = np.vstack([v9.design(test, list(CANDS[c]["names"]))])
+    worst = 0.0
+    for k in MULTI:
+        got = ri_v10.predict_matrix(loaded, X, k)
+        worst = max(worst, float(np.max(np.abs(got - p[k]))))
+    if worst > 1e-9:
+        raise SystemExit(f"artifact disagrees with the boosters by {worst:.2e}")
+    log(f"{MODEL10.name}: {version}; {len(members)} members, rounds {rounds}; 2026 LL {ll:.4f} reproduced; "
+        f"artifact = boosters to {worst:.1e}")
+    return 0
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("phase", choices=("build-dev", "select", "second-read", "export"))
+    a = ap.parse_args(argv)
+    return {"build-dev": build_dev, "select": select, "second-read": second_read, "export": export}[a.phase](a)
 
 
 def multi_brier(rows, probs: dict, base: bool) -> np.ndarray:
@@ -297,13 +369,6 @@ def second_read(_a) -> int:
             + f" | without guidance LL {m['without_guidance']['log_loss']:.4f} vs DTOPS {m['without_guidance']['dtops_log_loss']:.4f}")
     SECOND.write_text(json.dumps(out, indent=1, default=float), encoding="utf-8")
     return 0
-
-
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=("build-dev", "select", "second-read"))
-    a = ap.parse_args(argv)
-    return {"build-dev": build_dev, "select": select, "second-read": second_read}[a.phase](a)
 
 
 if __name__ == "__main__":

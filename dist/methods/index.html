@@ -203,7 +203,7 @@
 </div>
 <div class="card col-4 hazard-hu">
   <h3>Hurricane</h3>
-  <p class="muted">Chance of rapid intensification (a 30+ knot wind increase in 24 hours). For storms the National Hurricane Center tracks we serve NOAA DTOPS, which beat every alternative in a pre-registered test on 2025: AUC 0.928 vs our own model&rsquo;s 0.849 on the same cycles. Everywhere else, our v8.2 model (AUC 0.847 on held-out 2022&ndash;2024 cases). Each storm says which.</p>
+  <p class="muted">Chance of rapid intensification (a 30+ knot wind increase in 24 hours). For storms the National Hurricane Center tracks we serve NOAA DTOPS, which beat every alternative in a pre-registered test on 2025: AUC 0.928 vs our own model&rsquo;s 0.849 on the same cycles. Everywhere else, our v8.2 model (AUC 0.847 on held-out 2022&ndash;2024 cases). Each storm says which. Our new model beat DTOPS in every season tested so far (log loss 0.144 vs 0.165 over 2022&ndash;2025) and is shown beside it while a pre-registered prospective test confirms it.</p>
 </div>
 <div class="card col-4 hazard-to">
   <h3>Tornado</h3>
@@ -239,6 +239,14 @@
   <div class="kv"><span>Final test (2025, read once)</span><strong>AUC 0.928 [0.890, 0.966], Brier skill +0.311 [+0.183, +0.398]; 601 cycles, 44 RI events, 33 storms (intervals by storm)</strong></div>
   <div class="kv"><span>Beats</span><strong>NOAA SHIPS-RII, NOAA RIOC consensus, our previous model (v8.2) (paired 95% intervals on Brier and log loss below zero)</strong></div>
   <div class="kv"><span>Independent attack</span><strong>CONFIRMED, scoped to the 601-cycle case set</strong></div>
+</div>
+
+<div class="card col-4 hazard-hu">
+  <h3>Hurricane RI, our model (hurricane_ri_v10-8a5ba5896731, experimental)</h3>
+  <div class="kv"><span>What it is</span><strong>Our own model: one exceedance curve P(a rise of k kt in 24 h), k = 15&ndash;45, from the early intensity guidance (NOAA&rsquo;s statistical models, the hurricane and global models, NHC&rsquo;s consensus aids), NOAA&rsquo;s RI probabilities at six thresholds and the official forecast; NOAA&rsquo;s DTOPS wherever that guidance is missing</strong></div>
+  <div class="kv"><span>Each season 2022&ndash;2025</span><strong>predicted from earlier seasons only: log loss 0.144 vs DTOPS 0.165 (paired by storm [&minus;0.031, &minus;0.010]); over DTOPS&rsquo;s four 24-h thresholds, Brier 0.155 vs 0.172 [&minus;0.028, &minus;0.006]</strong></div>
+  <div class="kv"><span>2026 so far</span><strong>log loss 0.129 vs DTOPS 0.150, AUC 0.925 (a second look at a season that informed its design, so not a proof)</strong></div>
+  <div class="kv"><span>Status</span><strong>in prospective verification: shown beside NOAA&rsquo;s number, not instead of it, until the pre-registered prospective test on cycles from 2026-10-04 meets its rule (verdicts 2026-12-01 and 2027-12-01); cycles scored so far: 0</strong></div>
 </div>
 
 <div class="card col-4 hazard-hu">

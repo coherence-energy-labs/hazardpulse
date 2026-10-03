@@ -54,6 +54,7 @@ from hazardpulse.hurricane.operational_ri import (  # noqa: E402
 from hazardpulse.hurricane import ri_model  # noqa: E402
 from hazardpulse.hurricane import ri_stack, ships_text  # noqa: E402
 from hazardpulse.hurricane import ri_v9  # noqa: E402
+from hazardpulse.hurricane import ri_v10  # noqa: E402
 from hazardpulse.hurricane import ri_v9_features as v9fx  # noqa: E402
 
 DIST = Path(__file__).resolve().parents[1] / "dist"
@@ -697,13 +698,23 @@ def fetch_ships_raw(storm_id: str, cycle: dt.datetime) -> tuple[str | None, str]
         return None, f"absent ({type(exc).__name__})"
 
 
-def v9_shadow(case: dict[str, object], v9: dict[str, object], ships_raw_fetcher=None,
-              adeck_fetcher=None) -> dict[str, object]:
-    """The v9.1 forecast for an NHC a-deck case: every RI threshold of the cycle's SHIPS text and the
-    storm's a-deck, through the same feature builder as training (ri_v9_features)."""
+def load_v10_model() -> dict[str, object] | None:
+    """The frozen v10.1 exceedance-curve model (amendment 2), SHADOW like v9.1."""
+    if not ri_v10.MODEL_PATH.exists():
+        print("  v10.1 shadow: no artifact; not scored")
+        return None
+    art, version = ri_v10.load()
+    print(f"  v10.1 shadow {version}: {len(art['members'])} members, thresholds {art['thresholds_kt']} kt "
+          "(recorded beside the published number, not published)")
+    return {"artifact": art, "model_version": version}
+
+
+def _shadow_inputs(case: dict[str, object], ships_raw_fetcher=None, adeck_fetcher=None):
+    """``(sid, cycle, {(tech, threshold): pct}, a-deck records, SHIPS file note)`` for an NHC a-deck
+    case, or None: every RI threshold of the cycle's SHIPS text and the storm's a-deck."""
     sid = str(case["storm_id"]).upper()
     if sid[:2] not in NHC_BASINS or case.get("analysis_model") == "JTWC":
-        return {"status": "not an NHC a-deck case"}
+        return None
     cycle = dt.datetime.fromisoformat(str(case["issue_time"]))
     raw, name = (ships_raw_fetcher or fetch_ships_raw)(sid, cycle)
     pcts: dict[tuple[str, str], float] = {}
@@ -718,8 +729,35 @@ def v9_shadow(case: dict[str, object], v9: dict[str, object], ships_raw_fetcher=
                 if v is not None:
                     pcts[(tech, th)] = v
     records = (adeck_fetcher or fetch_realtime_adeck)(sid)
+    return sid, cycle, pcts, records, (name if raw is not None else f"ships_text_{name}")
+
+
+def v9_shadow(case: dict[str, object], v9: dict[str, object], ships_raw_fetcher=None,
+              adeck_fetcher=None) -> dict[str, object]:
+    """The v9.1 forecast for an NHC a-deck case, through the same feature builder as training."""
+    got = _shadow_inputs(case, ships_raw_fetcher, adeck_fetcher)
+    if got is None:
+        return {"status": "not an NHC a-deck case"}
+    sid, cycle, pcts, records, note = got
     out = ri_v9.predict(v9["payload"], str(v9["model_version"]), records, cycle, sid[:2], pcts)
-    return {"status": "ok", "ships_text": name if raw is not None else f"ships_text_{name}", **out}
+    return {"status": "ok", "ships_text": note, **out}
+
+
+def shadow_forecasts(case: dict[str, object], v9: dict[str, object] | None, v10: dict[str, object] | None,
+                     ships_raw_fetcher=None, adeck_fetcher=None) -> dict[str, dict[str, object]]:
+    """Both shadows from ONE read of the cycle's SHIPS text and the storm's a-deck."""
+    got = _shadow_inputs(case, ships_raw_fetcher, adeck_fetcher)
+    if got is None:
+        return {k: {"status": "not an NHC a-deck case"} for k, m in (("ri_v9_shadow", v9), ("ri_v10_shadow", v10)) if m}
+    sid, cycle, pcts, records, note = got
+    out: dict[str, dict[str, object]] = {}
+    if v9 is not None:
+        out["ri_v9_shadow"] = {"status": "ok", "ships_text": note,
+                               **ri_v9.predict(v9["payload"], str(v9["model_version"]), records, cycle, sid[:2], pcts)}
+    if v10 is not None:
+        out["ri_v10_shadow"] = {"status": "ok", "ships_text": note,
+                                **ri_v10.predict(v10["artifact"], str(v10["model_version"]), records, cycle, sid[:2], pcts)}
+    return out
 
 
 def ri_source_label(storm: dict[str, object]) -> str:
@@ -738,6 +776,7 @@ def score_live_cases(
     ships_fetcher=None,
     v9: dict[str, object] | None = None,
     ships_raw_fetcher=None,
+    v10: dict[str, object] | None = None,
     adeck_fetcher=None,
 ) -> list[dict[str, object]]:
     """Score live cases with the pinned artifacts. No training happens here.
@@ -800,13 +839,14 @@ def score_live_cases(
                     "ri_inputs": inputs,
                     "v8_2": {k: v82[k] for k in ("ri_probability", "model_version")},
                 })
-        if v9 is not None:
-            # shadow: recorded for the prospective test, never the published number; a failure here
+        if v9 is not None or v10 is not None:
+            # shadows: recorded for the prospective test, never the published number; a failure here
             # is written down and must not touch the forecast that is published
             try:
-                storm["ri_v9_shadow"] = v9_shadow(case, v9, ships_raw_fetcher, adeck_fetcher)
+                storm.update(shadow_forecasts(case, v9, v10, ships_raw_fetcher, adeck_fetcher))
             except Exception as exc:  # noqa: BLE001
-                storm["ri_v9_shadow"] = {"status": f"error: {type(exc).__name__}: {exc}"}
+                err = {"status": f"error: {type(exc).__name__}: {exc}"}
+                storm.update({k: dict(err) for k, m in (("ri_v9_shadow", v9), ("ri_v10_shadow", v10)) if m})
         storm["ri_source_label"] = ri_source_label(storm)
         scored.append(storm)
 
@@ -1227,6 +1267,7 @@ def main() -> None:
     model = load_serving_model()
     stack = load_stack_model()
     v9 = load_v9_model()
+    v10 = load_v10_model()
     note = ri_sources_note(stack)
     print()
 
@@ -1341,7 +1382,7 @@ def main() -> None:
     print()
     print(f"Step 3-4: Scoring {len(live_cases)} active storms: NOAA aids ({stack['model_version']}) where the "
           f"cycle's SHIPS text has them, else {model['model_version']}...")
-    scored = score_live_cases(model, live_cases, stack=stack, v9=v9,
+    scored = score_live_cases(model, live_cases, stack=stack, v9=v9, v10=v10,
                               adeck_fetcher=lambda s: adeck_by_storm.get(str(s).upper(), []))
 
     for s in scored:

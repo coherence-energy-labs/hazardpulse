@@ -52,11 +52,38 @@ def test_only_matured_cycles_with_both_fixes_are_scored_and_the_event_is_30_kt()
 def test_a_look_is_evaluated_once_and_then_frozen(tmp_path, monkeypatch):
     m = _mod()
     monkeypatch.setattr(m, "OUT", tmp_path / "v9.json")
-    monkeypatch.setattr(m, "collect", lambda: [])
+    monkeypatch.setattr(m, "collect", lambda **kw: [])
     m.main(["--as-of", "2026-12-02"])
     first = json.loads((tmp_path / "v9.json").read_text())
-    assert "2026-12-01" in first["looks"] and first["looks"]["2026-12-01"]["n"] == 0
-    first["looks"]["2026-12-01"]["marker"] = "frozen"
+    for name in ("v9_1", "v10_1"):
+        assert first["entrants"][name]["looks"]["2026-12-01"]["n"] == 0
+    first["entrants"]["v10_1"]["looks"]["2026-12-01"]["marker"] = "frozen"
     (tmp_path / "v9.json").write_text(json.dumps(first))
     m.main(["--as-of", "2026-12-20"])
-    assert json.loads((tmp_path / "v9.json").read_text())["looks"]["2026-12-01"]["marker"] == "frozen"
+    assert json.loads((tmp_path / "v9.json").read_text())["entrants"]["v10_1"]["looks"]["2026-12-01"]["marker"] == "frozen"
+
+
+def _scored(dv, p_k, a_k, sid):
+    return {"storm_id": sid, "cycle": "2026-10-05T00:00:00Z", "p": p_k["30"], "a": a_k["30"], "gate_ok": True,
+            "dv": dv, "y": int(dv >= 30), "p_k": p_k, "a_k": a_k}
+
+
+def test_the_v10_claim_uses_the_four_threshold_brier_and_the_30_kt_log_loss():
+    m = _mod()
+    good = {"25": 0.9, "30": 0.8, "35": 0.2, "40": 0.1}
+    noaa = {"25": 0.5, "30": 0.4, "35": 0.3, "40": 0.2}
+    calm_ours = {"25": 0.02, "30": 0.01, "35": 0.01, "40": 0.0}
+    calm_noaa = {"25": 0.10, "30": 0.08, "35": 0.05, "40": 0.03}
+    rows = []
+    for i in range(30):
+        rows.append(_scored(32.0, good, noaa, f"EP{i:02d}2026"))        # RI: dV 32 kt -> 25 and 30 exceeded
+        rows.append(_scored(0.0, calm_ours, calm_noaa, f"EP{i:02d}2026"))
+    # hand check of one RI row: ours (0.9-1)^2+(0.8-1)^2+0.2^2+0.1^2 = 0.10; NOAA 0.25+0.36+0.09+0.04 = 0.74
+    assert abs(m._multi_brier(rows[:1], "ours")[0] - 0.10) < 1e-12
+    assert abs(m._multi_brier(rows[:1], "noaa")[0] - 0.74) < 1e-12
+    res = m.evaluate(rows, 0.9875, "multi")
+    assert res["multi_threshold_brier"]["d"] < 0 and res["multi_threshold_brier"]["d_ci"][1] < 0
+    assert res["claim"] is True
+    # ours worse on every threshold: no claim
+    worse = [dict(r, p_k=r["a_k"], a_k=r["p_k"], p=r["a"], a=r["p"]) for r in rows]
+    assert m.evaluate(worse, 0.9875, "multi")["claim"] is False

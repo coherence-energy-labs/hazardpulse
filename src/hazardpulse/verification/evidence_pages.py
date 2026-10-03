@@ -138,7 +138,11 @@ def methods_simple(ev: dict) -> str:
             + "."
             + (f" Everywhere else, our v8.2 model (AUC {_f(ob.get('auc'))} on held-out {_when(ob)} cases)."
                if ob.get("auc") is not None else "")
-            + " Each storm says which.</p>\n</div>")
+            + " Each storm says which."
+            + (f" Our new model beat DTOPS in every season tested so far (log loss {_f(hu['ours']['dev']['log_loss'])} "
+               f"vs {_f(hu['ours']['dev']['dtops_log_loss'])} over 2022&ndash;2025) and is shown beside it while a "
+               "pre-registered prospective test confirms it." if hu.get("ours") else "")
+            + "</p>\n</div>")
     else:
         out.append('<div class="card col-4 hazard-hu">\n  <h3>Hurricane</h3>\n  <p class="muted">'
                    "No final test is bound to the served hurricane model in this repository.</p>\n</div>")
@@ -230,6 +234,9 @@ def methods_hurricane(ev: dict) -> str:
         rows.append(_kv("Independent attack", _e(adv["verdict"])))
     out = [f'<div class="card col-4 hazard-hu">\n  <h3>Hurricane RI, NHC basins ({_e(hu["model_version"])})</h3>\n  '
            + "\n  ".join(rows) + "\n</div>"]
+    ours = hu.get("ours")
+    if ours:
+        out.append(_ours_hurricane_card(ours))
     ob = hu.get("other_basins")
     if ob:
         o = ob["test"]
@@ -248,6 +255,35 @@ def methods_hurricane(ev: dict) -> str:
                                 "and NHC cycles without SHIPS text"),
             ]) + "\n</div>")
     return "\n\n".join(out)
+
+
+def ours_hurricane_lines(ours: dict) -> list[tuple[str, str]]:
+    """(label, value) lines describing our hurricane RI model, from its bound evidence."""
+    d, s26, pr = ours["dev"], ours["season_2026"], ours["prospective"]
+    mt = d.get("multi_threshold") or {}
+    lines = [
+        ("What it is", "Our own model: one exceedance curve P(a rise of k kt in 24 h), k = 15&ndash;45, from the "
+                       "early intensity guidance (NOAA&rsquo;s statistical models, the hurricane and global models, "
+                       "NHC&rsquo;s consensus aids), NOAA&rsquo;s RI probabilities at six thresholds and the official "
+                       "forecast; NOAA&rsquo;s DTOPS wherever that guidance is missing"),
+        ("Each season 2022&ndash;2025", f"predicted from earlier seasons only: log loss {_f(d['log_loss'])} vs DTOPS "
+                                       f"{_f(d['dtops_log_loss'])} (paired by storm{_ci(d.get('d_log_loss_ci'), signed=True)})"
+                                       + (f"; over DTOPS&rsquo;s four 24-h thresholds, Brier {_f(mt.get('ours'))} vs "
+                                          f"{_f(mt.get('dtops'))}{_ci(mt.get('d_ci'), signed=True)}" if mt else "")),
+        ("2026 so far", f"log loss {_f(s26['log_loss'])} vs DTOPS {_f(s26['dtops_log_loss'])}, AUC {_f(s26['auc'])} "
+                        "(a second look at a season that informed its design, so not a proof)"),
+        ("Status", f"{_e(ours['status'])}: shown beside NOAA&rsquo;s number, not instead of it, until the "
+                   "pre-registered prospective test on cycles from 2026-10-04 meets its rule (verdicts "
+                   + " and ".join(_e(x) for x in pr.get("look_dates") or [])
+                   + f"); cycles scored so far: {_n(pr.get('matured_and_scored', 0))}"),
+    ]
+    return lines
+
+
+def _ours_hurricane_card(ours: dict) -> str:
+    rows = "\n  ".join(_kv(k, v) for k, v in ours_hurricane_lines(ours))
+    return (f'<div class="card col-4 hazard-hu">\n  <h3>Hurricane RI, our model ({_e(ours["model_version"])}, '
+            f'experimental)</h3>\n  {rows}\n</div>')
 
 
 def _tornado_inputs_text(to: dict) -> str:
@@ -383,6 +419,13 @@ def registry_active(ev: dict) -> str:
         rows.append(_registry_row(hu["model_version"], "Hurricane RI (NHC basins)", "active",
                                   _when(t), f"{_f(t['auc'])}{_ci(t['auc_ci'])}",
                                   f"BSS {_signed(t['bss'])}", "NOAA DTOPS as issued (SHIPS-RII fallback)"))
+        ours = hu.get("ours")
+        if ours:
+            d = ours["dev"]
+            rows.append(_registry_row(ours["model_version"], "Hurricane RI (NHC basins, our model)", "experimental",
+                                      "2022&ndash;2025 (each season out of sample)", f"{_f(d['auc'])}",
+                                      f"LL {_f(d['log_loss'])} vs DTOPS {_f(d['dtops_log_loss'])}",
+                                      "LightGBM exceedance curve; in prospective verification, shown beside DTOPS"))
         ob = hu.get("other_basins")
         if ob:
             o = ob["test"]
