@@ -84,7 +84,28 @@ except ImportError as _eq_imp_err:
 DIST = Path(__file__).resolve().parents[1] / "dist"
 LEDGER_PATH = DIST / "data" / "earthquake-ledger.jsonl"
 
-MODEL_VERSION = "eq_coherence_v1_0"
+# The served probability: the operational 30-day M6+ forecast chosen by the pre-registered
+# program (docs/EARTHQUAKE_FORECAST_PROGRAM.md), one artifact = parameters + frozen M5+
+# catalog. Its model_version is bound to the artifact's content (CRLF-normalised SHA-256),
+# so every forecast, ledger entry and replay names exactly the bytes that produced it.
+from hazardpulse.earthquake import operational_forecast as eq_operational  # noqa: E402
+
+OPERATIONAL_ARTIFACT_PATH = (
+    Path(__file__).resolve().parents[1] / "results" / "models" / "earthquake_operational_v1.json"
+)
+# Cells listed on the page / in the replay beyond the active ones: the highest-probability
+# cells of the full grid, so a high forecast is never hidden for lack of recent M2.5+ events.
+TOP_PROBABILITY_CELLS = 25
+
+
+def _served_model_version() -> str:
+    try:
+        return eq_operational.artifact_model_version(OPERATIONAL_ARTIFACT_PATH)
+    except Exception:  # missing at import time; run_pipeline refuses to publish without it
+        return "eq_operational_unavailable"
+
+
+MODEL_VERSION = _served_model_version()
 PRIMARY_DOMAIN = "https://hazardpulse.com"
 SITE_PUBLISHER_NAME = "HazardPulse"
 
@@ -609,8 +630,33 @@ def _format_cell_coords(lat: float, lon: float) -> str:
     return f"{_compass_value(lat, 'N', 'S')}, {_compass_value(lon, 'E', 'W')}"
 
 
+def _operational_summary_sentence(cell: dict) -> str:
+    """What drives an operational-model cell: the split of its clustering-model rate.
+
+    ``lambda_long`` / ``lambda_short`` are the rate model's components (the boosted trees'
+    two strongest inputs); the published probability is the trees' output.
+    """
+    lam_long = float(cell.get("lambda_long") or 0.0)
+    lam_short = float(cell.get("lambda_short") or 0.0)
+    total = lam_long + lam_short
+    if total <= 0:
+        return "This cell's forecast rate is at the model's floor."
+    share = lam_short / total
+    if share >= 0.5:
+        return (f"{share:.0%} of this cell's rate comes from earthquakes of the last weeks to "
+                "years nearby (aftershock-style clustering); the rest is its long-term rate of "
+                "M5+ earthquakes since 1973.")
+    if share >= 0.1:
+        return (f"Mostly this cell's long-term rate of M5+ earthquakes since 1973, raised by "
+                f"recent nearby earthquakes ({share:.0%} of the rate).")
+    return ("This cell's probability rests on its long-term rate of M5+ earthquakes since "
+            "1973; recent activity adds little.")
+
+
 def _earthquake_summary_sentence(cell: dict) -> str:
     """Explain why a cell is ranking highly in plain language."""
+    if cell.get("scoring_tier") == "tier1_operational":
+        return _operational_summary_sentence(cell)
     reasons: list[str] = []
     conditions = int(cell.get("conditions_met", 0) or 0)
     rate_acceleration = float(cell.get("rate_acceleration", 0) or 0)
@@ -1228,7 +1274,7 @@ def render_earthquake_page(
             <div class="kv"><span>Model</span><strong>{_esc(MODEL_VERSION)}</strong></div>
           </div>
           <div class="card col-3">
-            <div class="kv"><span>Active cells</span><strong>{n_active} cells scored</strong></div>
+            <div class="kv"><span>Cells listed</span><strong>{n_active} of 11,700 (all forecast)</strong></div>
           </div>
           <div class="card col-3">
             <div class="kv"><span>Events (30 d)</span><strong>{n_events_total} M2.5+</strong></div>
@@ -1241,8 +1287,8 @@ def render_earthquake_page(
         cell_rows = _render_cell_rows(scored_cells)
         cells_html = f"""
       <section class="section" aria-labelledby="cells-heading">
-        <h2 id="cells-heading">Top risk cells by seismic criticality</h2>
-        <p class="muted" style="margin-top:-8px;margin-bottom:16px;">2-degree grid cells ranked by estimated M6.0+ probability (30 days). Click any row to expand coherence diagnostics.</p>
+        <h2 id="cells-heading">Highest-probability cells</h2>
+        <p class="muted" style="margin-top:-8px;margin-bottom:16px;">2-degree grid cells ranked by estimated M6.0+ probability (30 days): the recently active cells plus the highest-probability cells of the whole grid. Click any row to expand coherence diagnostics (context only).</p>
 
 {cell_rows}
       </section>"""
@@ -1263,7 +1309,7 @@ def render_earthquake_page(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Earthquake Monitor - HazardPulse</title>
-  <meta name="description" content="30-day M6.0+ earthquake probability for global seismic zones. Grid cells ranked by coherence field singularity conditions with full evidence.">
+  <meta name="description" content="30-day M6.0+ earthquake probability for every 2-degree cell, from a pre-registered operational forecast tested on held-out years.">
   <meta name="theme-color" content="#f6f9ff">
   <link rel="canonical" href="{PRIMARY_DOMAIN}/live/earthquake/">
   <script src="/assets/site-shell.js?v=2"></script>
@@ -1274,12 +1320,12 @@ def render_earthquake_page(
 
   <meta property="og:type" content="website">
   <meta property="og:title" content="Earthquake Monitor - HazardPulse">
-  <meta property="og:description" content="30-day M6.0+ earthquake probability for global seismic zones. Grid cells ranked by coherence field singularity conditions with full evidence.">
+  <meta property="og:description" content="30-day M6.0+ earthquake probability for every 2-degree cell, from a pre-registered operational forecast tested on held-out years.">
   <meta property="og:url" content="{PRIMARY_DOMAIN}/live/earthquake/">
   <meta property="og:site_name" content="HazardPulse">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Earthquake Monitor - HazardPulse">
-  <meta name="twitter:description" content="30-day M6.0+ earthquake probability for global seismic zones. Grid cells ranked by coherence field singularity conditions with full evidence.">
+  <meta name="twitter:description" content="30-day M6.0+ earthquake probability for every 2-degree cell, from a pre-registered operational forecast tested on held-out years.">
 
   <script type="application/ld+json">
   {{
@@ -1352,7 +1398,10 @@ def render_earthquake_page(
       <h1 id="hero-heading">Global Earthquake Monitor</h1>
       <p class="subtitle">
         30-day M6.0+ earthquake probability for the world's most active seismic zones.
-        Grid cells ranked by coherence field singularity conditions with full evidence.
+        Every 2-degree cell gets a probability from the pre-registered operational forecast:
+        boosted trees over each cell's long-term M5+ rate, the clustering rate after recent
+        nearby earthquakes, and recent catalog counts, tested once on 2023-2025. Coherence
+        diagnostics are shown for context; they do not set the probability.
       </p>
     </section>
 
@@ -1633,15 +1682,20 @@ def score_grid_cells(
     deep_scorer=None,
     deep_scorer_st=None,
     deep_scorer_op=None,
+    operational: dict | None = None,
 ) -> list[dict]:
     """Score active grid cells using causal history and recent activity.
 
-    Per-cell PRIMARY probability precedence: the deep GRU year-ahead nowcast
-    (``deep_scorer``, AUC ~0.86 -- the measured champion) > the exported VerifiableForest
-    champion (``eq_forest``) > the incumbent GBT (``pretrained_gbt``) > singularity
-    heuristic. If ``deep_scorer_st`` is given, each cell ALSO gets a second, independent
-    field ``prob_30d_local`` = P(M4.5+ within 50km / 30 days) from the short-term local
-    model (AUC ~0.895) -- a distinct product, not a fallback.
+    ``operational`` (the output of ``eq_operational.forecast_from_artifact`` for this issue
+    time) is the served PRIMARY probability: when given, every listed cell publishes its
+    full-grid value and no other tier is consulted, and the listed cells are the active
+    ones plus the TOP_PROBABILITY_CELLS highest-probability cells of the whole grid. The
+    pre-2026-10 precedence below (deep GRU year-ahead nowcast > forest > GBT > singularity
+    heuristic) only applies without it -- those are case-control nowcasts of other
+    quantities; scored on this page's contract the deep tier had no operational skill
+    (docs/EARTHQUAKE_FORECAST_PROGRAM.md). If ``deep_scorer_st`` is given, each cell ALSO
+    gets a second, independent field ``prob_30d_local`` = P(M4.5+ within 50km / 30 days)
+    from the short-term local model -- a distinct product, not a fallback.
     """
     if now is None:
         now = dt.datetime.now(dt.timezone.utc)
@@ -1671,13 +1725,16 @@ def score_grid_cells(
             deep_scorer_op = None
 
     cell_bins = bin_events_to_grid(candidate_events)
+    listed = {key: evs for key, evs in cell_bins.items() if len(evs) >= MIN_CELL_EVENTS}
+    if operational is not None:
+        grid_p = np.asarray(operational["probability"], dtype=np.float64)
+        for flat in np.argsort(-grid_p, kind="stable")[:TOP_PROBABILITY_CELLS]:
+            key = (int(flat) // N_LON, int(flat) % N_LON)
+            listed.setdefault(key, cell_bins.get(key, []))
     scored_cells: list[dict] = []
     n_ml = n_heur = 0
 
-    for (row, col), cell_events in cell_bins.items():
-        if len(cell_events) < MIN_CELL_EVENTS:
-            continue
-
+    for (row, col), cell_events in listed.items():
         lat, lon = grid_cell_to_latlon(row, col)
         features = extract_coherence_features(
             history_events,
@@ -1693,9 +1750,20 @@ def score_grid_cells(
         prob = None
         cell_tier = "tier2_heuristic"
         model_id = None
+        op_fields: dict = {}
+        if operational is not None:
+            flat = row * N_LON + col
+            prob = float(operational["probability"][flat])
+            model_id = MODEL_VERSION
+            cell_tier = "tier1_operational"
+            op_fields = {
+                "lambda_long": _publish_prob(float(operational["lambda_long"][flat])),
+                "lambda_short": _publish_prob(float(operational["lambda_short"][flat])),
+            }
+            n_ml += 1
         # Tier 1a: deep GRU nowcast (champion). Reads the raw event sequence directly --
         # no Block S/C needed. P(M5+ within radius/365d) precursory-state score.
-        if deep_scorer is not None and cat_arrays is not None:
+        if prob is None and deep_scorer is not None and cat_arrays is not None:
             try:
                 dp = deep_scorer.score(cat_arrays, lat, lon, ref_epoch)
                 if dp is not None:
@@ -1771,7 +1839,8 @@ def score_grid_cells(
                 "lon": round(lon, 2),
                 "n_events": len(cell_events),
                 "max_mag": round(max_mag, 1),
-                "probability": round(prob, 4),
+                "probability": _publish_prob(prob),
+                **op_fields,
                 "prob_30d_local": prob_30d_local,
                 "prob_op_m5_30d": prob_op_m5_30d,
                 "risk_band": risk,
@@ -1822,8 +1891,14 @@ def score_grid_cells(
     )
 
     if n_ml or n_heur:
-        print(f"  Scored cells by tier: tier1_ml={n_ml}, tier2_heuristic={n_heur}")
+        print(f"  Scored cells by tier: tier1={n_ml}, tier2_heuristic={n_heur}")
     return scored_cells
+
+
+def _publish_prob(p: float) -> float:
+    """Six significant digits: the operational model's quiet cells sit at 1e-5..1e-3, which
+    the old ``round(p, 4)`` would have published as 0."""
+    return float(f"{float(p):.6g}")
 
 
 def _make_json_serializable(obj):
@@ -1898,6 +1973,8 @@ def write_replay_artifact(
     n_recent_events: int,
     replay_dir: Path = REPLAY_DIR,
     update_index: bool = True,
+    probability_grid=None,
+    operational_meta: dict | None = None,
 ) -> Path:
     """Write a frozen replay artifact for later prospective scoring."""
     from hazardpulse.earthquake.prospective import format_utc_z
@@ -1938,6 +2015,18 @@ def write_replay_artifact(
         "top_probability": scored_cells[0]["probability"] if scored_cells else 0.0,
         "active_cells": scored_cells,
     }
+    if probability_grid is not None:
+        grid = np.asarray(probability_grid, dtype=np.float64).ravel()
+        if grid.size != N_LAT * N_LON:
+            raise ValueError(f"probability_grid has {grid.size} cells, the domain has {N_LAT * N_LON}")
+        # The forecast for EVERY cell (row-major, row = latitude band from lat_min), as ONE
+        # comma-separated string of 6-significant-digit values: a JSON list would be written
+        # one value per line by indent=2 (~210 KB per forecast). The verifier scores this
+        # grid; default_probability applies only to artifacts without it.
+        artifact["probability_grid"] = ",".join(f"{float(p):.6g}" for p in grid)
+        artifact["forecast_domain"]["grid_order"] = "row_major_lat_then_lon"
+    if operational_meta:
+        artifact["operational_model"] = operational_meta
     replay_path.write_text(
         json.dumps(_make_json_serializable(artifact), indent=2) + "\n",
         encoding="utf-8",
@@ -2075,6 +2164,63 @@ class RiskBandContradiction(RuntimeError):
     """A published cell's risk band disagrees with its published probability."""
 
 
+def attach_operational_receipts(
+    scored: list[dict],
+    *,
+    model_version: str,
+    model_sha256: str,
+    input_sha256: str,
+    issued_at: str,
+    signer=None,
+) -> list[dict]:
+    """Receipt (spec hazardpulse/forecast/v1) for each listed operational cell.
+
+    Binds the published probability to the artifact (``model_sha256``, CRLF-normalised)
+    and to the exact model input (the canonical M5+ rows before the issue time) plus the
+    cell. No calibrator is involved, so ``raw_probability == probability`` and the
+    interval is absent (``uncertainty_class = "no_interval"``) -- nothing is claimed that
+    was not computed. Signed when a signing key is configured, integrity-only otherwise.
+    """
+    from hazardpulse.trust.forecast import RECEIPT_SPEC, sign_forecast_receipt
+
+    for cell in scored:
+        cell_input = hashlib.sha256(
+            f"{input_sha256}|{issued_at}|{cell['row']},{cell['col']}".encode("utf-8")).hexdigest()
+        core = {
+            "spec": RECEIPT_SPEC,
+            "model_version": model_version,
+            "model_sha256": model_sha256,
+            "input_sha256": cell_input,
+            "issued_at": issued_at,
+            "raw_probability": cell["probability"],
+            "probability": cell["probability"],
+            "confidence_lo": None,
+            "confidence_hi": None,
+            "uncertainty_class": "no_interval",
+            "ood_score": None,
+            "ood_flag": False,
+            "abstained": False,
+            "abstain_reason": None,
+            "gateway_mode": "NORMAL",
+            "coverage_target": None,
+        }
+        receipt = sign_forecast_receipt(core, signer)
+        cell["receipt"] = receipt
+        cell["receipt_sha256"] = receipt["receipt_sha256"]
+    return scored
+
+
+def trust_layer_applies(forecaster, served_model_version: str) -> bool:
+    """A calibrator maps ONE model's raw scores; it is bound to that model's version.
+
+    The earthquake calibrator on disk was fitted (2026-10-01) to the deep GRU nowcast's
+    raw outputs (model_version ``eq_coherence_v1_0``); feeding it the operational model's
+    probabilities would replace calibrated numbers with a mapping learned for different
+    inputs.
+    """
+    return forecaster is not None and getattr(forecaster, "model_version", None) == served_model_version
+
+
 def apply_trust_layer(scored: list[dict], forecaster, *, issued_at: str) -> list[dict]:
     """Calibrate every scored cell in place and keep its risk band truthful.
 
@@ -2205,43 +2351,57 @@ def run_pipeline(
         print("  Proceeding with point-based features only")
 
     print()
-    print("Step 3: Scoring active grid cells...")
-    pretrained_eq_gbt = load_pretrained_eq_gbt()
-    eq_forest = load_eq_forest()        # deployable champion; precedence over the GBT when present
-    deep_eq_scorer = load_deep_eq_scorer_model()       # year-ahead regional nowcast (primary)
+    print("Step 3: Operational forecast for every cell, diagnostics for the listed cells...")
+    # FAIL CLOSED: the served probability is the artifact's model; without it nothing is
+    # published (the old tiers are case-control nowcasts of other quantities).
+    artifact = eq_operational.load_artifact(OPERATIONAL_ARTIFACT_PATH)
+    if artifact.model_version != MODEL_VERSION:
+        raise RuntimeError(
+            f"{OPERATIONAL_ARTIFACT_PATH.name} changed while running: "
+            f"{artifact.model_version} != {MODEL_VERSION}")
+    operational = eq_operational.forecast_from_artifact(artifact, history_events, now)
+    print(
+        f"  {artifact.model_version}: {operational['n_input_events']} M5+ inputs since "
+        f"{eq_operational.CATALOG_START[:10]}; expected cells with an M6+ (sum of P) "
+        f"{float(np.sum(operational['probability'])):.2f}; max P {float(np.max(operational['probability'])):.4f}"
+    )
     deep_eq_scorer_st = load_deep_eq_shortterm_model()  # short-term local watch (2nd field)
-    deep_eq_scorer_op = load_deep_eq_operational_model()  # operational forecaster (3rd, the WHERE-skill)
+    deep_eq_scorer_op = load_deep_eq_operational_model()  # M5+/100 km research field (3rd)
     scored = score_grid_cells(
         history_events,
         candidate_events=recent_events,
         grid_fields=grid_fields,
         now=now,
-        pretrained_gbt=pretrained_eq_gbt,
-        eq_forest=eq_forest,
-        deep_scorer=deep_eq_scorer,
         deep_scorer_st=deep_eq_scorer_st,
         deep_scorer_op=deep_eq_scorer_op,
+        operational=operational,
     )
-    print(f"  {len(scored)} cells scored")
+    print(f"  {len(scored)} cells listed")
 
     # Trust layer: calibrate probabilities, attach honest [conf_lo, conf_hi]
     # bands + Ed25519-signed re-runnable receipts. Fails safe — if no calibrator
-    # has been produced yet, forecasts stay raw (uncalibrated) and honest.
+    # has been produced yet, forecasts stay raw (uncalibrated) and honest. A calibrator
+    # fitted to ANOTHER model's scores is never applied (trust_layer_applies).
     try:
         from hazardpulse.trust.scoring import load_forecaster, load_signer
 
         _signer = load_signer()
         _forecaster = load_forecaster("earthquake", signer=_signer)
-        if _forecaster is not None:
+        if not trust_layer_applies(_forecaster, MODEL_VERSION):
+            bound = _forecaster.model_version if _forecaster is not None else "none"
+            attach_operational_receipts(
+                scored, model_version=MODEL_VERSION, model_sha256=artifact.sha256,
+                input_sha256=operational["input_sha256"], issued_at=format_utc_z(now), signer=_signer)
+            print(
+                f"  Trust layer: calibrator bound to {bound}, not the served {MODEL_VERSION}; "
+                "not applied (the operational model is calibrated by its own likelihood fit). "
+                f"Receipts attached to {len(scored)} cells (signed={_signer is not None})."
+            )
+        else:
             apply_trust_layer(scored, _forecaster, issued_at=format_utc_z(now))
             print(
                 f"  Trust layer: calibrated {len(scored)} cells "
                 f"(model {_forecaster.model_version}, signed={_signer is not None})"
-            )
-        else:
-            print(
-                "  Trust layer: no calibrator yet "
-                "(results/models/earthquake_calibration.json); emitting raw forecasts."
             )
     except RiskBandContradiction:
         raise  # never publish a label that contradicts its own probability
@@ -2267,6 +2427,16 @@ def run_pipeline(
         n_recent_events=len(recent_events),
         replay_dir=replay_dir,
         update_index=not skip_replay_index,
+        probability_grid=operational["probability"],
+        operational_meta={
+            "model_version": artifact.model_version,
+            "artifact": "results/models/" + OPERATIONAL_ARTIFACT_PATH.name,
+            "artifact_sha256_lf": artifact.sha256,
+            "n_input_events_m5": operational["n_input_events"],
+            # E[number of cells with an M6+ in the window] = sum of the published probabilities
+            "expected_positive_cells": round(float(np.sum(operational["probability"])), 4),
+            "protocol": "docs/EARTHQUAKE_FORECAST_PROGRAM.md",
+        },
     )
     if not skip_live_pulse:
         write_outputs(scored, now, forecast_id=forecast_id)

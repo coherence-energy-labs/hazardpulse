@@ -103,6 +103,24 @@ def matured_artifacts(artifacts: list[dict], score_as_of: dt.datetime) -> list[d
     return matured
 
 
+def forecast_grid(artifact: dict) -> np.ndarray | None:
+    """The full row-major probability grid of an artifact that publishes one, else None.
+
+    Operational-model artifacts (docs/EARTHQUAKE_FORECAST_PROGRAM.md) carry a probability
+    for every cell; older artifacts list active cells and default the rest.
+    """
+    grid = artifact.get("probability_grid")
+    if grid is None:
+        return None
+    domain = artifact["forecast_domain"]
+    if isinstance(grid, str):             # the scorer's compact form: comma-separated values
+        grid = [float(v) for v in grid.split(",")]
+    arr = np.asarray(grid, dtype=np.float64)
+    if arr.size != int(domain["n_lat"]) * int(domain["n_lon"]):
+        raise ValueError(f"{artifact.get('forecast_id')}: probability_grid has {arr.size} cells")
+    return arr
+
+
 def write_forecast_grid_csv(path: Path, artifact: dict) -> None:
     domain = artifact["forecast_domain"]
     n_lat = int(domain["n_lat"])
@@ -112,6 +130,9 @@ def write_forecast_grid_csv(path: Path, artifact: dict) -> None:
         (int(cell["row"]), int(cell["col"])): float(cell["probability"])
         for cell in artifact.get("active_cells", [])
     }
+    grid = forecast_grid(artifact)
+    if grid is not None:
+        active_probs = {divmod(i, n_lon): float(p) for i, p in enumerate(grid)}
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as handle:
@@ -185,13 +206,16 @@ def _accumulate_calibration(calib_acc: dict, y_score: np.ndarray, y_true: np.nda
             slot[1] += int(p)
 
 
-def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "earthquake") -> Path:
+def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "earthquake",
+                              model_version: str | None = None) -> Path:
     keys = sorted(calib_acc.keys())
     total = [int(calib_acc[k][0]) for k in keys]
     pos = [int(calib_acc[k][1]) for k in keys]
     n = int(sum(total))
     payload = {
         "hazard": hazard,
+        # the ONE model whose forecasts were pooled; fit_calibration binds the calibrator to it
+        "model_version": model_version,
         "n": n,
         "n_groups": len(keys),
         "base_rate": (sum(pos) / n) if n else 0.0,
@@ -247,7 +271,14 @@ def score_single_forecast(
             count_vec[flat] = count
             y_true[flat] = 1.0 if count > 0 else 0.0
 
-    if calib_acc is not None:
+    grid = forecast_grid(artifact)
+    if grid is not None:
+        # The operational model publishes every cell; score what it said, not a default.
+        y_score = grid
+
+    if calib_acc is not None and grid is not None:
+        _accumulate_calibration(calib_acc, grid, y_true)
+    elif calib_acc is not None:
         # Pool the RAW model score (not the deployed/calibrated one) so re-fitting
         # the calibrator never double-calibrates. Before any calibrator exists,
         # raw_probability is absent and equals probability.
@@ -388,6 +419,9 @@ def main(argv: list[str] | None = None) -> int:
             verbose=False,
         )
 
+        # A calibrator maps one model's scores: pool only the forecasts of the model that
+        # issued the most recent matured forecast (a model change starts a new pool).
+        calib_version = matured[-1].get("model_version")
         with open(per_forecast_path, "w", encoding="utf-8") as handle:
             for artifact in matured:
                 issued_at = parse_utc_datetime(artifact["issued_at"])
@@ -398,16 +432,20 @@ def main(argv: list[str] | None = None) -> int:
                     for event in observed_catalog
                     if issued_at <= parse_utc_datetime(event["time"]) < window_end
                 ]
+                pool = calib_acc if artifact.get("model_version") == calib_version else None
                 result = score_single_forecast(
-                    artifact, observed_events, output_dir, calib_acc=calib_acc)
+                    artifact, observed_events, output_dir, calib_acc=pool)
                 if result is None:
                     continue
+                result["model_version"] = artifact.get("model_version")
                 per_forecast_results.append(result)
                 handle.write(json.dumps(result) + "\n")
 
         if calib_acc is not None:
-            calib_path = write_calibration_dataset(output_dir, calib_acc, hazard="earthquake")
+            calib_path = write_calibration_dataset(output_dir, calib_acc, hazard="earthquake",
+                                                   model_version=calib_version)
             summary["calibration_dataset"] = str(calib_path)
+            summary["calibration_model_version"] = calib_version
             summary["calibration_n"] = int(sum(slot[0] for slot in calib_acc.values()))
 
         aucs = [result["auc"] for result in per_forecast_results if math.isfinite(result["auc"])]

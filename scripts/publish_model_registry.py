@@ -188,6 +188,94 @@ def hurricane_stack_entry(stack_path: Path = HU_STACK_PATH, final_path: Path = H
     )
 
 
+EQ_OPERATIONAL_PATH = MODELS_DIR / "earthquake_operational_v1.json"
+EQ_PROGRAM_FINAL_PATH = PROJECT_ROOT / "results" / "earthquake_program" / "final.json"
+
+
+def earthquake_operational_entry(path: Path = EQ_OPERATIONAL_PATH,
+                                 final_path: Path = EQ_PROGRAM_FINAL_PATH) -> dict | None:
+    """The served earthquake probability (docs/EARTHQUAKE_FORECAST_PROGRAM.md) as a registry entry.
+
+    Identity is the artifact's content-bound model_version; the benchmark is the program's
+    read-once FINAL split (2023-2025 issue times, every cell of the grid), bound only when
+    the final report's chosen candidate is the one this artifact serves.
+    """
+    if not path.exists():
+        return None
+    from hazardpulse.earthquake import operational_forecast as eq_op
+
+    art = eq_op.load_artifact(path)
+    candidate = art.gbt["name"] if art.gbt else art.spec.name
+    final = _read_json(final_path)
+    bound = bool(final) and final.get("chosen_on_choose") == candidate
+    res = ((final.get("candidates") or {}).get(candidate) or {}) if bound else {}
+    ref = ((final.get("candidates") or {}).get("A") or {}) if bound else {}
+    if art.gbt:
+        kind = ("boosted trees (LightGBM, scored in NumPy) over its long-term smoothed-seismicity "
+                "rate, an ETAS-style short-term clustering rate and recent catalog counts")
+        calibration = ("none applied: the trees' log-loss fit over every FIT cell-time "
+                       "(negatives sampled 5% at weight 20)")
+    elif art.spec.short is not None:
+        kind = "long-term smoothed seismicity plus ETAS-style short-term clustering"
+        calibration = "none applied: P = 1 - exp(-rate), rates fitted by Bernoulli likelihood"
+    else:
+        kind = "long-term smoothed seismicity"
+        calibration = "none applied: P = 1 - exp(-rate), rates fitted by Bernoulli likelihood"
+
+    def _v(d, k):
+        return (d.get(k) or {}).get("value")
+
+    def _ci(d, k):
+        return (d.get(k) or {}).get("ci95")
+
+    return _make_entry(
+        record_id=f"weights_hazardpulse_{art.model_version}",
+        name=f"HazardPulse Earthquake operational forecast v1 (candidate {candidate}, served)",
+        description=(
+            "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for "
+            f"every cell of the global grid, from {kind} of ComCat M5+ events since 1973 strictly "
+            "before the issue time. Parameters fitted by Bernoulli likelihood on weekly issue times "
+            "2005-2017; chosen on 2018-2020 by a pre-registered information-gain rule with a parsimony "
+            "clause; scored once on 2023-2025 (docs/EARTHQUAKE_FORECAST_PROGRAM.md). The artifact holds "
+            "the parameters and the frozen M5+ catalog; live events after its cutoff come from the "
+            "scorer's USGS fetch."
+            + ("" if bound else " No final-split score is bound to this file.")
+        ),
+        weights_path=path,
+        benchmark={
+            "benchmark_type": "operational forward test on every cell-time of the grid (not case-control)",
+            "benchmark_bound_to_this_artifact": bound,
+            "test_window": "weekly issue times 2023-01-02 .. 2025-12-01, 30-day windows, read once" if bound else None,
+            "test_information_gain_per_target_nats": _v(res, "ig_per_target"),
+            "test_information_gain_ci95": _ci(res, "ig_per_target"),
+            "test_auc": _v(res, "auc"), "test_auc_ci95": _ci(res, "auc"),
+            "test_brier": _v(res, "brier"), "test_bss_vs_uniform": _v(res, "bss"), "test_bss_ci95": _ci(res, "bss"),
+            "test_auc_active_cells": _v(res, "auc_active_cells"),
+            "test_calibration_ratio_sum_p_over_sum_y": _v(res, "calib_ratio"),
+            "reference_A_long_term_ig": _v(ref, "ig_per_target") if candidate != "A" else None,
+            "paired_this_minus_A": ((final.get("paired") or {}).get(f"{candidate}-A") if bound and candidate != "A" else None),
+            "n_test_positive_cell_windows": res.get("n_positive"),
+        },
+        framework="hazardpulse_eq_operational_v1",
+        input_schema={
+            "inputs": "ComCat events M>=5.0 with origin time strictly before the issue time (1973 onward)",
+            "frozen_catalog_events": len(art.frozen),
+            "frozen_catalog_cutoff": art.meta["frozen_catalog"]["cutoff"],
+            "feature_names_path": "src/hazardpulse/earthquake/operational_forecast.py",
+        },
+        output_schema={
+            "outputs": ["m6_probability_30d_every_cell"],
+            "domain": "[0, 1]",
+            "calibration": calibration,
+            "model_version": art.model_version,
+            "rate_model": art.spec.to_dict(),
+            "trees": ({"n_trees": art.gbt["payload"]["n_trees"], "features": art.gbt["feature_names"]}
+                      if art.gbt else None),
+        },
+        paper_url="https://github.com/coherence-energy-labs/hazardpulse",
+    )
+
+
 TORNADO_V3_FILES = {
     "tornado_v3_w.json": "served: 60-min probability (inputs include the live NWS warning state)",
     "tornado_v3.json": "served fallback when the NWS warnings feed is down",
@@ -309,7 +397,12 @@ def main() -> int:
             paper_url="https://github.com/coherence-energy-labs/hazardpulse",
         ))
 
-    # ----- Earthquake GBT v1 -----
+    # ----- Earthquake operational forecast (served) -----
+    eq_op_entry = earthquake_operational_entry()
+    if eq_op_entry is not None:
+        entries.append(eq_op_entry)
+
+    # ----- Earthquake GBT v1 (not served) -----
     eq_path = MODELS_DIR / "earthquake_gbt_v1.json"
     if eq_path.exists():
         bench_path = PROJECT_ROOT / "results" / "earthquake_honest" / "v4_regional_honest_results.json"
@@ -320,8 +413,11 @@ def main() -> int:
         gc = gc_root.get("regional_ensemble", {}) or {}
         entries.append(_make_entry(
             record_id="weights_hazardpulse_earthquake_gbt_v1",
-            name="HazardPulse Earthquake GBT v1 (plus_cft)",
+            name="HazardPulse Earthquake GBT v1 (plus_cft)" + (
+                " -- NOT SERVED" if eq_op_entry is not None else ""),
             description=(
+                ("Not served: the site's earthquake probability is the operational forecast entry "
+                 "(docs/EARTHQUAKE_FORECAST_PROGRAM.md). " if eq_op_entry is not None else "") +
                 "Gradient-boosted tree ensemble for global M6+ earthquake "
                 "probability per 2-degree grid cell, 30-day forward window. "
                 "73 features = Block S (61 seismicity) + Block C (12 "

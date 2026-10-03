@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "publisher": "HazardPulse / Coherence Energy Labs",
-  "generated_at": "2026-10-02T18:04:55.459220Z",
-  "n_entries": 4,
+  "generated_at": "2026-10-03T01:26:41.715657Z",
+  "n_entries": 5,
   "entries": [
     {
       "record_id": "weights_hazardpulse_tornado_gbt_v1",
@@ -55,15 +55,151 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T18:04:55.101942Z",
+      "release_utc": "2026-10-03T01:26:41.123677Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_eq_operational_C0_v1-d28c62a2e35b",
+      "name": "HazardPulse Earthquake operational forecast v1 (candidate C0, served)",
+      "description": "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for every cell of the global grid, from boosted trees (LightGBM, scored in NumPy) over its long-term smoothed-seismicity rate, an ETAS-style short-term clustering rate and recent catalog counts of ComCat M5+ events since 1973 strictly before the issue time. Parameters fitted by Bernoulli likelihood on weekly issue times 2005-2017; chosen on 2018-2020 by a pre-registered information-gain rule with a parsimony clause; scored once on 2023-2025 (docs/EARTHQUAKE_FORECAST_PROGRAM.md). The artifact holds the parameters and the frozen M5+ catalog; live events after its cutoff come from the scorer's USGS fetch.",
+      "weights_uri": "hazardpulse://results/models/earthquake_operational_v1.json",
+      "weights_path": "results\\models\\earthquake_operational_v1.json",
+      "size_bytes": 3299794,
+      "blake3": "4acde0da699c050e7996fc16fd315acf5c23cf6ff87c74bb81bab5b1da119744",
+      "sha256": "d28c62a2e35b9e19decf157cacc7763d9ee7ebd14588d839e6c81eacc6b7fb31",
+      "framework": "hazardpulse_eq_operational_v1",
+      "format": "json",
+      "input_schema": {
+        "inputs": "ComCat events M>=5.0 with origin time strictly before the issue time (1973 onward)",
+        "frozen_catalog_events": 89861,
+        "frozen_catalog_cutoff": "2026-10-01T00:00:00Z",
+        "feature_names_path": "src/hazardpulse/earthquake/operational_forecast.py"
+      },
+      "output_schema": {
+        "outputs": [
+          "m6_probability_30d_every_cell"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "none applied: the trees' log-loss fit over every FIT cell-time (negatives sampled 5% at weight 20)",
+        "model_version": "eq_operational_C0_v1-d28c62a2e35b",
+        "rate_model": {
+          "name": "B",
+          "long": {
+            "kernel_km": 20.0,
+            "declustered": false,
+            "mu": 3.3183619687959984,
+            "eps": 0.014908690984180734
+          },
+          "short": {
+            "d0_km": 5.0,
+            "K": 0.0009226757424746414,
+            "alpha": 0.5334327923770236,
+            "c_days": 0.010090892249896951,
+            "p": 0.7773011016332287
+          }
+        },
+        "trees": {
+          "n_trees": 156,
+          "features": [
+            "log10_lambda_A",
+            "log10_lambda_B",
+            "log10_lambda_short",
+            "n45_cell_7d",
+            "n45_cell_30d",
+            "n45_cell_365d",
+            "n45_cell_5y",
+            "n45_nbr3_30d",
+            "n45_nbr3_365d",
+            "n25_cell_30d",
+            "n25_cell_365d",
+            "maxmag_nbr3_30d",
+            "maxmag_nbr3_365d",
+            "log10_days_since_m6_nbr3",
+            "mag_last_m6_nbr3",
+            "log10_days_since_m7_nbr5",
+            "mag_last_m7_nbr5",
+            "mean_depth_cell_5y",
+            "frac_deep70_cell_5y",
+            "b_value_nbr3_10y",
+            "active"
+          ]
+        }
+      },
+      "benchmark": {
+        "benchmark_type": "operational forward test on every cell-time of the grid (not case-control)",
+        "benchmark_bound_to_this_artifact": true,
+        "test_window": "weekly issue times 2023-01-02 .. 2025-12-01, 30-day windows, read once",
+        "test_information_gain_per_target_nats": 2.5931972184801944,
+        "test_information_gain_ci95": [
+          2.4686426560158417,
+          2.711509870200592
+        ],
+        "test_auc": 0.9680856621300102,
+        "test_auc_ci95": [
+          0.9632623772723998,
+          0.9723249868161139
+        ],
+        "test_brier": 0.0007563565589946233,
+        "test_bss_vs_uniform": 0.020976418229227023,
+        "test_bss_ci95": [
+          0.013449773929628506,
+          0.028250147408685755
+        ],
+        "test_auc_active_cells": 0.7669260522853114,
+        "test_calibration_ratio_sum_p_over_sum_y": 1.1355167492486224,
+        "reference_A_long_term_ig": 2.5326744779119363,
+        "paired_this_minus_A": {
+          "ig_per_target": {
+            "diff": 0.060522740568258016,
+            "ci95": [
+              0.00033452812934928785,
+              0.12004451304499845
+            ],
+            "frac_boot_le_0": 0.0245
+          },
+          "auc": {
+            "diff": 0.0013012638125527998,
+            "ci95": [
+              3.471150494782916e-05,
+              0.002580636852037907
+            ],
+            "frac_boot_le_0": 0.021
+          },
+          "brier": {
+            "diff": -2.9584178373490925e-06,
+            "ci95": [
+              -7.570732172511866e-06,
+              1.3180625715066636e-06
+            ],
+            "frac_boot_le_0": 0.909
+          },
+          "bss": {
+            "diff": 0.0038293590411194733,
+            "ci95": [
+              -0.0017375226633299823,
+              0.009638443958647304
+            ],
+            "frac_boot_le_0": 0.091
+          }
+        },
+        "n_test_positive_cell_windows": 1384
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T01:26:41.694223Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
     },
     {
       "record_id": "weights_hazardpulse_earthquake_gbt_v1",
-      "name": "HazardPulse Earthquake GBT v1 (plus_cft)",
-      "description": "Gradient-boosted tree ensemble for global M6+ earthquake probability per 2-degree grid cell, 30-day forward window. 73 features = Block S (61 seismicity) + Block C (12 coherence field theory). Trained on declustered USGS catalog 2005-2017, validated 2018-2019, tested 2020-2024 (plus_cft variant of trained_models_v3). The benchmark below is a CASE-CONTROL NOWCAST (positives scored at the mainshock setting against controls); as an operational forecaster on a gridded forward test this model scored AUC 0.509 -- no skill (docs/earthquake_nowcast_validation.md).",
+      "name": "HazardPulse Earthquake GBT v1 (plus_cft) -- NOT SERVED",
+      "description": "Not served: the site's earthquake probability is the operational forecast entry (docs/EARTHQUAKE_FORECAST_PROGRAM.md). Gradient-boosted tree ensemble for global M6+ earthquake probability per 2-degree grid cell, 30-day forward window. 73 features = Block S (61 seismicity) + Block C (12 coherence field theory). Trained on declustered USGS catalog 2005-2017, validated 2018-2019, tested 2020-2024 (plus_cft variant of trained_models_v3). The benchmark below is a CASE-CONTROL NOWCAST (positives scored at the mainshock setting against controls); as an operational forecaster on a gridded forward test this model scored AUC 0.509 -- no skill (docs/earthquake_nowcast_validation.md).",
       "weights_uri": "hazardpulse://results/models/earthquake_gbt_v1.json",
       "weights_path": "results\\models\\earthquake_gbt_v1.json",
       "size_bytes": 495610,
@@ -101,7 +237,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T18:04:55.307753Z",
+      "release_utc": "2026-10-03T01:26:41.700552Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -150,7 +286,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T18:04:55.315430Z",
+      "release_utc": "2026-10-03T01:26:41.707300Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -289,7 +425,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T18:04:55.459138Z",
+      "release_utc": "2026-10-03T01:26:41.715538Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -347,15 +483,151 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T18:04:55.101942Z",
+      "release_utc": "2026-10-03T01:26:41.123677Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_eq_operational_C0_v1-d28c62a2e35b",
+      "name": "HazardPulse Earthquake operational forecast v1 (candidate C0, served)",
+      "description": "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for every cell of the global grid, from boosted trees (LightGBM, scored in NumPy) over its long-term smoothed-seismicity rate, an ETAS-style short-term clustering rate and recent catalog counts of ComCat M5+ events since 1973 strictly before the issue time. Parameters fitted by Bernoulli likelihood on weekly issue times 2005-2017; chosen on 2018-2020 by a pre-registered information-gain rule with a parsimony clause; scored once on 2023-2025 (docs/EARTHQUAKE_FORECAST_PROGRAM.md). The artifact holds the parameters and the frozen M5+ catalog; live events after its cutoff come from the scorer's USGS fetch.",
+      "weights_uri": "hazardpulse://results/models/earthquake_operational_v1.json",
+      "weights_path": "results\\models\\earthquake_operational_v1.json",
+      "size_bytes": 3299794,
+      "blake3": "4acde0da699c050e7996fc16fd315acf5c23cf6ff87c74bb81bab5b1da119744",
+      "sha256": "d28c62a2e35b9e19decf157cacc7763d9ee7ebd14588d839e6c81eacc6b7fb31",
+      "framework": "hazardpulse_eq_operational_v1",
+      "format": "json",
+      "input_schema": {
+        "inputs": "ComCat events M>=5.0 with origin time strictly before the issue time (1973 onward)",
+        "frozen_catalog_events": 89861,
+        "frozen_catalog_cutoff": "2026-10-01T00:00:00Z",
+        "feature_names_path": "src/hazardpulse/earthquake/operational_forecast.py"
+      },
+      "output_schema": {
+        "outputs": [
+          "m6_probability_30d_every_cell"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "none applied: the trees' log-loss fit over every FIT cell-time (negatives sampled 5% at weight 20)",
+        "model_version": "eq_operational_C0_v1-d28c62a2e35b",
+        "rate_model": {
+          "name": "B",
+          "long": {
+            "kernel_km": 20.0,
+            "declustered": false,
+            "mu": 3.3183619687959984,
+            "eps": 0.014908690984180734
+          },
+          "short": {
+            "d0_km": 5.0,
+            "K": 0.0009226757424746414,
+            "alpha": 0.5334327923770236,
+            "c_days": 0.010090892249896951,
+            "p": 0.7773011016332287
+          }
+        },
+        "trees": {
+          "n_trees": 156,
+          "features": [
+            "log10_lambda_A",
+            "log10_lambda_B",
+            "log10_lambda_short",
+            "n45_cell_7d",
+            "n45_cell_30d",
+            "n45_cell_365d",
+            "n45_cell_5y",
+            "n45_nbr3_30d",
+            "n45_nbr3_365d",
+            "n25_cell_30d",
+            "n25_cell_365d",
+            "maxmag_nbr3_30d",
+            "maxmag_nbr3_365d",
+            "log10_days_since_m6_nbr3",
+            "mag_last_m6_nbr3",
+            "log10_days_since_m7_nbr5",
+            "mag_last_m7_nbr5",
+            "mean_depth_cell_5y",
+            "frac_deep70_cell_5y",
+            "b_value_nbr3_10y",
+            "active"
+          ]
+        }
+      },
+      "benchmark": {
+        "benchmark_type": "operational forward test on every cell-time of the grid (not case-control)",
+        "benchmark_bound_to_this_artifact": true,
+        "test_window": "weekly issue times 2023-01-02 .. 2025-12-01, 30-day windows, read once",
+        "test_information_gain_per_target_nats": 2.5931972184801944,
+        "test_information_gain_ci95": [
+          2.4686426560158417,
+          2.711509870200592
+        ],
+        "test_auc": 0.9680856621300102,
+        "test_auc_ci95": [
+          0.9632623772723998,
+          0.9723249868161139
+        ],
+        "test_brier": 0.0007563565589946233,
+        "test_bss_vs_uniform": 0.020976418229227023,
+        "test_bss_ci95": [
+          0.013449773929628506,
+          0.028250147408685755
+        ],
+        "test_auc_active_cells": 0.7669260522853114,
+        "test_calibration_ratio_sum_p_over_sum_y": 1.1355167492486224,
+        "reference_A_long_term_ig": 2.5326744779119363,
+        "paired_this_minus_A": {
+          "ig_per_target": {
+            "diff": 0.060522740568258016,
+            "ci95": [
+              0.00033452812934928785,
+              0.12004451304499845
+            ],
+            "frac_boot_le_0": 0.0245
+          },
+          "auc": {
+            "diff": 0.0013012638125527998,
+            "ci95": [
+              3.471150494782916e-05,
+              0.002580636852037907
+            ],
+            "frac_boot_le_0": 0.021
+          },
+          "brier": {
+            "diff": -2.9584178373490925e-06,
+            "ci95": [
+              -7.570732172511866e-06,
+              1.3180625715066636e-06
+            ],
+            "frac_boot_le_0": 0.909
+          },
+          "bss": {
+            "diff": 0.0038293590411194733,
+            "ci95": [
+              -0.0017375226633299823,
+              0.009638443958647304
+            ],
+            "frac_boot_le_0": 0.091
+          }
+        },
+        "n_test_positive_cell_windows": 1384
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T01:26:41.694223Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
     },
     {
       "record_id": "weights_hazardpulse_earthquake_gbt_v1",
-      "name": "HazardPulse Earthquake GBT v1 (plus_cft)",
-      "description": "Gradient-boosted tree ensemble for global M6+ earthquake probability per 2-degree grid cell, 30-day forward window. 73 features = Block S (61 seismicity) + Block C (12 coherence field theory). Trained on declustered USGS catalog 2005-2017, validated 2018-2019, tested 2020-2024 (plus_cft variant of trained_models_v3). The benchmark below is a CASE-CONTROL NOWCAST (positives scored at the mainshock setting against controls); as an operational forecaster on a gridded forward test this model scored AUC 0.509 -- no skill (docs/earthquake_nowcast_validation.md).",
+      "name": "HazardPulse Earthquake GBT v1 (plus_cft) -- NOT SERVED",
+      "description": "Not served: the site's earthquake probability is the operational forecast entry (docs/EARTHQUAKE_FORECAST_PROGRAM.md). Gradient-boosted tree ensemble for global M6+ earthquake probability per 2-degree grid cell, 30-day forward window. 73 features = Block S (61 seismicity) + Block C (12 coherence field theory). Trained on declustered USGS catalog 2005-2017, validated 2018-2019, tested 2020-2024 (plus_cft variant of trained_models_v3). The benchmark below is a CASE-CONTROL NOWCAST (positives scored at the mainshock setting against controls); as an operational forecaster on a gridded forward test this model scored AUC 0.509 -- no skill (docs/earthquake_nowcast_validation.md).",
       "weights_uri": "hazardpulse://results/models/earthquake_gbt_v1.json",
       "weights_path": "results\\models\\earthquake_gbt_v1.json",
       "size_bytes": 495610,
@@ -393,7 +665,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T18:04:55.307753Z",
+      "release_utc": "2026-10-03T01:26:41.700552Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -442,7 +714,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T18:04:55.315430Z",
+      "release_utc": "2026-10-03T01:26:41.707300Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -581,7 +853,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-02T18:04:55.459138Z",
+      "release_utc": "2026-10-03T01:26:41.715538Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
