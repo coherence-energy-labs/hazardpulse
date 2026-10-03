@@ -223,8 +223,15 @@ def _read_json(path: Path, default: dict | list | None = None):
 
 
 def _write_json(path: Path, payload: dict | list) -> None:
+    """LF bytes on every platform, and an unchanged file is not rewritten. Replay and evidence
+    files are hashed and signed (.gitattributes marks them -text); write_text's newline
+    translation made a Windows build rewrite two frozen replays to CRLF (2026-10-03) although
+    their content had not changed."""
+    data = (json.dumps(payload, indent=2) + "\n").encode("utf-8")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    if path.exists() and path.read_bytes() == data:
+        return
+    path.write_bytes(data)
 
 
 def _read_jsonl(path: Path) -> list[dict]:
