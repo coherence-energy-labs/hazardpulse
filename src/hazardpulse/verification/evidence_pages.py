@@ -56,6 +56,22 @@ def _pct(x: float | None, d: int = 1) -> str:
     return "--" if x is None else f"{100.0 * x:.{d}f}%"
 
 
+def _pct_fine(x: float | None) -> str:
+    """A rate readable at any scale (0.010%, 0.13%, 2.3%, 17%); a fixed decimal prints 0.01% as 0.0%."""
+    if x is None:
+        return "--"
+    v = 100.0 * float(x)
+    if v == 0.0:
+        return "0%"
+    if v >= 10.0:
+        return f"{v:.0f}%"
+    if v >= 1.0:
+        return f"{v:.1f}%"
+    if v >= 0.1:
+        return f"{v:.2f}%"
+    return f"{v:.3f}%"
+
+
 def _n(x: Any) -> str:
     try:
         return f"{int(x):,}"
@@ -560,9 +576,11 @@ def tornado_body(ev: dict) -> str:
         for b in rel["bins"]:
             if not b.get("n"):
                 continue
-            rrows.append(f"<tr><td class=\"mono\">{_pct(b['lo'], 2)} &ndash; {_pct(b['hi'], 2)}</td>"
-                         f"<td class=\"mono\">{_n(b['n'])}</td><td class=\"mono\">{_pct(b['mean_forecast'], 2)}</td>"
-                         f"<td class=\"mono\">{_pct(b['observed'], 2)}{(' [' + _pct(b['observed_ci'][0], 2) + ', ' + _pct(b['observed_ci'][1], 2) + ']') if b.get('observed_ci') else ''}</td></tr>")
+            ci = b.get("observed_ci")
+            rrows.append(f"<tr><td class=\"mono\">{_pct_fine(b['lo'])} &ndash; {_pct_fine(b['hi'])}</td>"
+                         f"<td class=\"mono\">{_n(b['n'])}</td><td class=\"mono\">{_pct_fine(b['mean_forecast'])}</td>"
+                         f"<td class=\"mono\">{_pct_fine(b['observed'])}"
+                         f"{(' [' + _pct_fine(ci[0]) + ', ' + _pct_fine(ci[1]) + ']') if ci else ''}</td></tr>")
         parts.append(
             '<section class="section" aria-labelledby="calibration-heading">\n'
             '  <h2 id="calibration-heading">Does 10% mean 10%?</h2>\n  <div class="card">\n'

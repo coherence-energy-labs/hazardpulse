@@ -87,7 +87,11 @@ def test_a_v3_storm_shows_its_measured_outcome_rate_never_an_invented_one(live, 
                       {"input": "p_size", "label": "storm size", "log_odds": -0.21}]}
     html = live._render_storm_rows([_storm(v3)])
     assert "Historical analogs" not in html and "percentile (approx.)" not in html
-    assert "Of the 900 storm observations of 2025" in html and "13.3%" in html
+    assert "Of the 900 storm observations of 2025" in html and "13%" in html
+    assert "between 5.0% and 100%" in html and "[11%, 16%]" in html
+    # the quiet storms: a 0.03% rate is printed as such, never as "0.0%"
+    quiet = live._render_storm_rows([_storm({**v3, "probability_60min": 0.001})])
+    assert "between 0% and 5.0%, 0.030% [0.025%, 0.030%]" in quiet
     assert "low-level rotation (max azimuthal shear) raises the score (+0.84 log-odds)" in html
     assert "storm size lowers the score (-0.21 log-odds)" in html
     assert "AUC 0.970 [0.960, 0.980]" in html
