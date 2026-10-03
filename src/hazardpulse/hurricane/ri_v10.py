@@ -22,6 +22,9 @@ from hazardpulse.tornado import lgbm_payload as lp
 
 SCHEMA = "hazardpulse.hurricane_ri_v10/1"
 MODEL_PATH = ri_model.RESULTS / "models" / "hurricane_ri_v10.json"
+# amendment 3's carried challenger (V5: v10.1's inputs, monotone in the guidance and NOAA's
+# probabilities); same schema and inputs, served in shadow beside v10.1 under its own label
+V10_2_PATH = ri_model.RESULTS / "models" / "hurricane_ri_v10_2.json"
 GATE_AIDS = ("DSHP", "IVCN", "NNIC")
 NOAA_24H = (25, 30, 35, 40)          # the 24-h thresholds NOAA's aids publish
 
@@ -51,7 +54,9 @@ def predict_matrix(art: Mapping, X: np.ndarray, k: float) -> np.ndarray:
 
 def predict(art: Mapping, version: str, records: Iterable, cycle, basin: str,
             ri_pcts: Mapping[tuple[str, str], float | None]) -> dict:
-    """The v10.1 exceedance curve for one cycle, with what produced it."""
+    """The exceedance curve for one cycle, with what produced it -- labelled by the artifact's own
+    ``label`` (v10.1's artifact has none and is "v10.1")."""
+    label = str(art.get("label") or "v10.1")
     records = list(records)
     f = fx.adeck_features(fx.cycle_table(records, cycle), basin)
     f.update(fx.ri_features(ri_pcts))
@@ -63,10 +68,10 @@ def predict(art: Mapping, version: str, records: Iterable, cycle, basin: str,
         d, s = ri_pcts.get(("DTOP", f"{k}/24")), ri_pcts.get(("RIOD", f"{k}/24"))
         noaa[k] = (d if d is not None else s) / 100.0 if (d is not None or s is not None) else None
     if gate_ok:
-        probs, source = model, "v10.1"
+        probs, source = model, label
     else:
         probs = {k: noaa.get(k) for k in art["thresholds_kt"]}
-        source = "DTOPS (v10.1 gate: early guidance missing)"
+        source = f"DTOPS ({label} gate: early guidance missing)"
     return {"probability": None if probs.get(30) is None else round(probs[30], 4),
             "probabilities": {str(k): (None if v is None else round(v, 4)) for k, v in probs.items()},
             "model_probabilities": {str(k): round(v, 4) for k, v in model.items()},

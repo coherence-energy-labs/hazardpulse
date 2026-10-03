@@ -12,7 +12,11 @@ frozen into the output file:
 
 * v9.1  -- 30/24 log loss or Brier vs DTOPS, 97.5% interval wholly below 0, both points <= 0;
 * v10.1 -- the sum of Brier scores over the 25/30/35/40-kt 24-h thresholds vs NOAA's own published
-  values, 98.75% interval wholly below 0, and its 30/24 log loss point <= DTOPS's.
+  values, 98.75% interval wholly below 0, and its 30/24 log loss point <= DTOPS's;
+* v10.2 (amendment 4, the amendment-3 challenger, ``ri_v10_2_shadow``) -- v10.1's rule at 99.375%.
+
+Each entrant's error budget is half the previous one's (2.5%, 1.25%, 0.625%, ...), so however many
+challengers enter, the family's total stays below 5%.
 """
 from __future__ import annotations
 
@@ -39,7 +43,8 @@ LEVEL_AT_LOOK = 0.975
 START = dt.datetime.fromisoformat(ri_v9.PROSPECTIVE_START.replace("Z", ""))
 MULTI = (25, 30, 35, 40)
 ENTRANTS = {"v9_1": {"key": "ri_v9_shadow", "level": 0.975, "metric": "30kt"},
-            "v10_1": {"key": "ri_v10_shadow", "level": 0.9875, "metric": "multi"}}
+            "v10_1": {"key": "ri_v10_shadow", "level": 0.9875, "metric": "multi"},
+            "v10_2": {"key": "ri_v10_2_shadow", "level": 0.99375, "metric": "multi"}}
 
 
 def _iso(s: str) -> dt.datetime:
@@ -144,6 +149,28 @@ def evaluate(scored: list[dict], level: float, metric: str = "30kt") -> dict:
     return res
 
 
+CHALLENGES = (("v10_2", "v10_1"),)        # (challenger, champion) -- descriptive, amendment 4
+
+
+def versus(challenger: list[dict], champion: list[dict]) -> dict:
+    """Challenger minus champion on the cycles both scored: the four-threshold Brier sum per cycle,
+    storm-bootstrap 95% interval. Descriptive: it decides which one the site shows, never a claim."""
+    import hurricane_ri_v9 as v9
+    champ = {(r["storm_id"], r["cycle"]): r for r in champion}
+    pairs = [(r, champ[(r["storm_id"], r["cycle"])]) for r in challenger if (r["storm_id"], r["cycle"]) in champ]
+    if not pairs:
+        return {"n": 0}
+    b = _multi_brier([p for p, _ in pairs], "ours") - _multi_brier([c for _, c in pairs], "ours")
+    groups = np.array([p["storm_id"] for p, _ in pairs])
+    rng = np.random.default_rng(v9.SEED)
+    uniq, inv = np.unique(groups, return_inverse=True)
+    members = [np.flatnonzero(inv == g) for g in range(len(uniq))]
+    draws = [b[np.concatenate([members[g] for g in rng.integers(0, len(uniq), len(uniq))])].mean()
+             for _ in range(v9.REPS)]
+    return {"n": len(pairs), "storms": int(len(uniq)), "d_brier4": float(b.mean()),
+            "d_brier4_ci": [float(np.quantile(draws, 0.025)), float(np.quantile(draws, 0.975))]}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--as-of", default=None, help="YYYY-MM-DD (default: now, UTC)")
@@ -152,12 +179,14 @@ def main(argv=None) -> int:
            else dt.datetime.now(dt.timezone.utc).replace(tzinfo=None))
     prev = json.loads(OUT.read_text(encoding="utf-8")) if OUT.exists() else {}
     tracks: dict = {}
-    out = {"program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendments 1 and 2)", "start": ri_v9.PROSPECTIVE_START,
+    out = {"program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendments 1, 2 and 4)", "start": ri_v9.PROSPECTIVE_START,
            "scored_as_of": now.strftime("%Y-%m-%dT%H:%MZ"), "look_dates": list(LOOKS),
            "note": "running numbers are descriptive; a claim is made only at a look date", "entrants": {}}
+    by_entrant: dict[str, list[dict]] = {}
     for name, spec in ENTRANTS.items():
         records = collect(key=spec["key"])
         scored = score(records, now, tracks=tracks)
+        by_entrant[name] = scored
         looks = dict(((prev.get("entrants") or {}).get(name) or {}).get("looks") or {})
         for day in LOOKS:
             cut = dt.datetime.fromisoformat(day)
@@ -173,6 +202,7 @@ def main(argv=None) -> int:
                  if run.get("n") != 0 else ""))
         for day, lk in looks.items():
             print(f"  look {day}: claim={lk.get('claim')} (n={lk.get('ours', {}).get('n', 0)})")
+    out["challenger_vs_champion"] = {f"{a}_vs_{b}": versus(by_entrant[a], by_entrant[b]) for a, b in CHALLENGES}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(out, indent=1, default=float) + "\n", encoding="utf-8")
     return 0

@@ -298,6 +298,28 @@ def _ours_vs_all_lines(va: dict | None) -> list[tuple[str, str]]:
     return out
 
 
+def _ours_challenger_lines(ch: dict | None) -> list[tuple[str, str]]:
+    """The next model, running in shadow beside the shown one: its development numbers against the
+    shown model's, whether its interval yet excludes zero, and how it can replace it."""
+    if not ch:
+        return []
+    d = ch["dev"]
+    ci = d.get("d_log_loss_ci")
+    settled = bool(ci and ci[1] < 0)
+    vs = ch.get("versus_champion") or {}
+    live = (f"; live so far, {_n(vs['n'])} cycles both scored, four-threshold Brier difference "
+            f"{_signed(vs['d_brier4'])}{_ci(vs.get('d_brier4_ci'), signed=True)}" if vs.get("n") else "")
+    level = (" at " + f"{100 * ch['level']:.3f}".rstrip("0").rstrip(".") + "%") if ch.get("level") else ""
+    return [("Challenger in shadow",
+             f"{_e(ch['model_version'])}: the same inputs, never lowering the odds when the guidance or "
+             f"NOAA&rsquo;s probability rises. 2022&ndash;2025: log loss {_f(d['log_loss'], 4)} vs "
+             f"{_f(d['champion_log_loss'], 4)}{_ci(ci, 4, signed=True)}, four-threshold Brier "
+             f"{_f(d['brier4'], 4)} vs {_f(d['champion_brier4'], 4)}; "
+             + ("better at 95%" if settled else "a gain whose interval still includes zero")
+             + f". Scored live from 2026-10-04 with its own prospective test{level}{live}; it replaces the "
+             "shown model only by the rule written before it scored a cycle")]
+
+
 def ours_hurricane_lines(ours: dict) -> list[tuple[str, str]]:
     """(label, value) lines describing our hurricane RI model, from its bound evidence."""
     d, s26, pr = ours["dev"], ours["season_2026"], ours["prospective"]
@@ -314,6 +336,7 @@ def ours_hurricane_lines(ours: dict) -> list[tuple[str, str]]:
         *_ours_vs_all_lines(ours.get("vs_all")),
         ("2026 so far", f"log loss {_f(s26['log_loss'])} vs DTOPS {_f(s26['dtops_log_loss'])}, AUC {_f(s26['auc'])} "
                         "(a second look at a season that informed its design, so not a proof)"),
+        *_ours_challenger_lines(ours.get("challenger")),
         ("Status", f"{_e(ours['status'])}: shown beside NOAA&rsquo;s number, not instead of it, until the "
                    "pre-registered prospective test on cycles from 2026-10-04 meets its rule (verdicts "
                    + " and ".join(_e(x) for x in pr.get("look_dates") or [])
