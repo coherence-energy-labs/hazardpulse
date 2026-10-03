@@ -53,4 +53,5 @@ def predict(payload: Mapping, version: str, records: Iterable, cycle, basin: str
             "model_probability": round(p_model, 4), "gate_ok": gate_ok, "gate_missing": missing_gate,
             "dtops_pct": dtops, "riod_pct": riod, "cycle": cycle.strftime("%Y-%m-%dT%H:00:00Z"),
             "model_version": version,
-            "inputs_present": int(sum(np.isfinite(fx.vector(f, payload["feature_names"]))))}
+            "inputs_present": int(sum(np.isfinite(fx.vector(f, payload["feature_names"])))),
+            "inputs": fx.record_inputs(f, payload["feature_names"])}

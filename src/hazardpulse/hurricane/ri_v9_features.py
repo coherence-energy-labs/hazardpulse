@@ -170,3 +170,11 @@ def ri_features(pcts: Mapping[tuple[str, str], float | None]) -> dict[str, float
 
 def vector(features: Mapping[str, float], names: Iterable[str]) -> np.ndarray:
     return np.asarray([float(features.get(n, float("nan"))) for n in names], dtype=np.float64)
+
+
+def record_inputs(features: Mapping[str, float], names: Iterable[str]) -> dict[str, float | None]:
+    """The exact input vector a forecast used, for its record: full float precision (a rounded
+    input can cross a tree split and change the output), None for a missing input. ``vector`` of
+    this mapping gives back the model's input row bit for bit, so the record alone recomputes
+    the forecast."""
+    return {n: (v if math.isfinite(v) else None) for n, v in zip(names, vector(features, names).tolist())}
