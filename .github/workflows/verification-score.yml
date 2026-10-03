@@ -97,3 +97,14 @@ jobs:
           Automated prospective scoring of matured forecast replay artifacts.
           Sources: USGS FDSN (earthquake), SPC reports (tornado), NHC ATCF (hurricane)"
           bash scripts/ci/push_with_rebase.sh
+
+      # a bot push does not trigger deploy.yml: the verification page and the model-evidence pages
+      # this job re-renders reach the site only through this step
+      - name: Deploy to Cloudflare Workers
+        if: steps.changes.outputs.changed == 'true'
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          command: deploy

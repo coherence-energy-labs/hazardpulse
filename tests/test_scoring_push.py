@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "ci" / "push_with_rebase.sh"
-SCORERS = ("tornado-score", "earthquake-score", "hurricane-score", "verification-score")
+SCORERS = ("tornado-score", "earthquake-score", "hurricane-score", "verification-score", "cross-modality-analyses")
 
 
 def _bash() -> str | None:
@@ -110,3 +110,15 @@ def test_every_scoring_workflow_checks_out_the_tip_and_pushes_through_the_script
             assert "with:" in block and "ref: ${{ github.ref }}" in block, (name, block)
         assert any(l.strip() == "bash scripts/ci/push_with_rebase.sh" for l in lines), name
         assert not any(l.strip() == "git push" for l in lines), name
+
+
+def test_every_workflow_that_commits_site_files_deploys_them():
+    """A bot push does not trigger deploy.yml, so a workflow that commits dist/ must deploy itself,
+    after its push (found 2026-10-03: the earthquake model switch sat undeployed)."""
+    for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        text = path.read_text(encoding="utf-8")
+        commits_dist = any("git add" in l and "dist/" in l for l in text.splitlines())
+        if not commits_dist:
+            continue
+        assert "cloudflare/wrangler-action@" in text, path.name
+        assert text.index("push_with_rebase.sh") < text.index("cloudflare/wrangler-action@"), path.name
