@@ -447,6 +447,36 @@ def hurricane_evidence(root: Path = ROOT) -> dict | None:
     }
 
 
+def _ours_vs_all(root: Path, dev: dict, prov: dict) -> dict | None:
+    """v10.1 against every public RI aid on the development cases
+    (``results/calibration/hurricane_ri_v10_vs_all.json``), bound to the served artifact: its
+    control V2 log loss must be the artifact's own development log loss, bit for bit, and its gate
+    the artifact's gate -- a file from another model or another gate is refused, not shown."""
+    rep = _read(root, "results/calibration/hurricane_ri_v10_vs_all.json")
+    if rep is None:
+        return None
+    if _finite(rep.get("control_V2_log_loss")) != _finite(dev.get("log_loss")):
+        raise EvidenceError(f"hurricane_ri_v10_vs_all.json control LL {rep.get('control_V2_log_loss')} is not the "
+                            f"served artifact's development LL {dev.get('log_loss')}")
+    gate = list(prov.get("gate_aids") or [])
+    if not gate or any(a not in str(rep.get("model", "")) for a in gate):
+        raise EvidenceError(f"hurricane_ri_v10_vs_all.json describes {rep.get('model')!r}, not the gate {gate}")
+    aids = []
+    for tech, r in (rep.get("aids") or {}).items():
+        w, o, a = r.get("vs_30") or {}, r.get("ours_30") or {}, r.get("aid_30") or {}
+        aids.append({"tech": tech, "label": r.get("label", tech), "n": r.get("n"),
+                     "ours_log_loss": _finite(o.get("log_loss")), "aid_log_loss": _finite(a.get("log_loss")),
+                     "d_log_loss_ci": _ci(w.get("d_log_loss_ci"))})
+    calls = []
+    for name, r in (rep.get("calls") or {}).items():
+        calls.append({"name": name, "label": r.get("label", name), "calls": r.get("calls"),
+                      "aid_pofd": _finite(r.get("aid_pofd")), "aid_pod": _finite(r.get("aid_pod")),
+                      "ours_pod": _finite(r.get("ours_pod")), "d_pod": _finite(r.get("d_pod")),
+                      "d_pod_ci": _ci(r.get("d_pod_ci"))})
+    return {"n": rep.get("n"), "events": rep.get("events"), "seasons": rep.get("seasons") or [],
+            "aids": aids, "calls": calls}
+
+
 def ours_hurricane(root: Path = ROOT) -> dict | None:
     """Our own RI model in prospective verification (docs/HURRICANE_RI_V9_PROGRAM.md, amendment 2):
     its identity and numbers from the frozen artifact's own provenance (bound by its bytes), and the
@@ -464,7 +494,8 @@ def ours_hurricane(root: Path = ROOT) -> dict | None:
     entrant = (pros.get("entrants") or {}).get("v10_1") or {}
     looks = entrant.get("looks") or {}
     claimed = any(bool(l.get("claim")) for l in looks.values())
-    return {"model_version": version, "name": "HazardPulse RI v10.1",
+    vs_all = _ours_vs_all(root, dev, prov)
+    return {"model_version": version, "name": "HazardPulse RI v10.1", "vs_all": vs_all,
             "status": "claim met at a look" if claimed else "in prospective verification",
             "dev": {"log_loss": _finite(dev.get("log_loss")), "auc": _finite(dev.get("auc")),
                     "dtops_log_loss": _finite(dev.get("dtops_log_loss")), "d_log_loss_ci": _ci(dev.get("d_log_loss_ci")),
