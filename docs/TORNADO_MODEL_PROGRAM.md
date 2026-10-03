@@ -194,6 +194,60 @@ on all seven saved LOYO score sets, leaky and corrected); a fit that does not co
 instead of returning a calibration. EF2+ under the fix: a = 0.687, b = -6.535 on the superseded
 scores, mean forecast = base rate. The corrected EF2+ final runs with it; no choice is changed.
 
+## Outcome of the corrected programme (amendments 8-9; 2025 read a second time, once)
+
+Choices on validation 2023, corrected inputs (`scripts/audit_20261001/experiments/avail/`):
+- Blocks (amendment 4's rule): P 0.96105, P+E 0.96159, P+E+H80 0.96173 -- all within 0.001 of
+  the top, so the smallest, **P (ProbSevere's 28 attributes)**, is carried. Timed as it is
+  published, the 80 km HRRR block adds about +0.0001; the +0.0038 measured before amendment 8 was
+  almost entirely the latency leak.
+- Configuration: LightGBM, 40 configurations searched (median 0.96131), carried s_lgbm_28 (0.96215;
+  31 leaves, depth 6, L2 20); Platt; 30 negatives per positive; the per-storm label.
+- Served (amendment 6's decision stands; its figures, from the P+E+H80 leaky era, are superseded):
+  P + the NWS warning state, with P alone as the fallback when the warnings feed is down.
+- Development year 2024: P 0.9683 [0.9623, 0.9732] BSS +0.086; +W 0.9691 [0.9631, 0.9741] BSS
+  +0.114; at the warnings' false-alarm rate P alone -1.0 points [-4.3, +1.5], +W +4.1 [+1.9, +5.4].
+
+Final 2025, every ProbSevere storm observation (from `results/lab_avail/` by
+`scripts/audit_20261001/report_finals.py`; intervals: day bootstrap, 2,000 replicates):
+
+| Final run | AUC [95% CI] | PR-AUC | BSS | n / tornadic |
+|---|---|---|---|---|
+| v3_plus_W (storm_60), served | 0.9702 [0.9636, 0.9758] | 0.1750 | +0.1067 | 1,469,977 / 1,579 |
+| v3_primary (storm_60), fallback | 0.9693 [0.9628, 0.9748] | 0.1664 | +0.0966 | 1,469,977 / 1,579 |
+| v3_plus_W_30 (storm_30) | 0.9743 [0.9675, 0.9795] | 0.1394 | +0.0840 | 1,469,977 / 978 |
+| v3_plus_W_90 (storm_90) | 0.9681 [0.9614, 0.9736] | 0.1894 | +0.1114 | 1,469,977 / 1,993 |
+| v3_plus_W_ef2 (storm_60_ef2) | 0.9942 [0.9891, 0.9971] | 0.1512 | +0.0608 | 1,469,977 / 284 |
+| NOAA ProbTor, as issued | 0.8790 [0.8504, 0.9022] | 0.1257 | -0.1733 | same storms |
+| NOAA ProbTor, ties broken (Platt) | 0.9391 [0.9242, 0.9508] | 0.1287 | +0.0728 | same storms |
+| ProbSevere (Platt) | 0.8709 [0.8312, 0.8997] | 0.0393 | +0.0180 | same storms |
+| STP 80 km (Platt) | 0.8446 [0.8172, 0.8665] | 0.0106 | -0.0119 | same storms |
+| v2, as served | 0.9636 [0.9561, 0.9691] | 0.1247 | +0.0581 | 1,466,605 / 1,576 |
+
+| Paired by day (2025) | label | dAUC [95% CI] | dBrier [95% CI] |
+|---|---|---|---|
+| v3_plus_W - ProbTor as issued | storm_60 | +0.0913 [+0.0718, +0.1152] | -3.00e-04 [-0.000407, -0.000212] |
+| v3_plus_W - ProbTor ties broken | storm_60 | +0.0311 [+0.0222, +0.0425] | -3.64e-05 [-0.000055, -0.000021] |
+| v3_plus_W - v2 | storm_60 | +0.0067 [+0.0034, +0.0104] | -5.23e-05 [-0.000083, -0.000029] |
+| v3_plus_W - v2 (v2's own 40 km event) | nbhd_60 | +0.0011 [-0.0045, +0.0076] | -2.92e-05 [-0.000049, -0.000012] |
+| v3_plus_W - v3_primary | storm_60 | +0.0009 [+0.0002, +0.0017] | -1.08e-05 [-0.000024, +0.000001] |
+| v3_primary - ProbTor ties broken | storm_60 | +0.0302 [+0.0214, +0.0414] | -2.56e-05 [-0.000036, -0.000016] |
+| v3_plus_W_30 - ProbTor as issued | storm_30 | +0.0804 [+0.0617, +0.1054] | -3.80e-04 [-0.000515, -0.000266] |
+| v3_plus_W_90 - ProbTor as issued | storm_90 | +0.0986 [+0.0786, +0.1233] | -2.71e-04 [-0.000373, -0.000191] |
+| v3_plus_W_ef2 - ProbTor as issued | storm_60_ef2 | +0.0176 [+0.0063, +0.0385] | -4.98e-04 [-0.000665, -0.000354] |
+
+At the NWS tornado warnings' own false-alarm rate (threshold re-matched in every replicate,
+multi-day events resampled together): +W catches 30.5% of tornadic storm observations vs the
+warnings' 22.7%, +7.7 points [+3.8, +10.1]; P alone 27.5%, +4.8 [-0.2, +8.5]. With 2024's -1.0
+[-4.3, +1.5], the model WITHOUT the warning input is not distinguishable from the warnings in
+either year; what is shown is that it adds detection on top of them.
+
+Reading, stated plainly: v3 beats NOAA's ProbTor on the same storms in ranking (even after its
+ties are broken) and in Brier; it ties v2 on v2's own event and beats it on the per-storm event
+it was built for; the HRRR environment and the coherence field add nothing measurable once timed
+honestly. All of the above is one test year read once; live verification of the served model
+starts with its first matured forecasts.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-
