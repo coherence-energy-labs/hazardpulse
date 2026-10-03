@@ -1944,10 +1944,12 @@ def render_tornado_page(
     # Storms section (with HTMX auto-refresh wrapper)
     if scored_storms:
         storm_rows = _render_storm_rows(scored_storms)
+        scored_by = (f"scored by the {_esc(tier_label)}" if scoring_tier == "tier1_v3"
+                     else "scored with coherence field analysis")
         storms_html = f"""
       <section class="section" aria-labelledby="systems-heading">
         <h2 id="systems-heading">Active storms by tornado probability</h2>
-        <p class="muted" style="margin-top:-8px;margin-bottom:16px;">ProbSevere storm objects scored with coherence field analysis. Ranked by estimated tornado probability. Click any row to expand details.</p>
+        <p class="muted" style="margin-top:-8px;margin-bottom:16px;">ProbSevere storm objects {scored_by}. Ranked by estimated tornado probability. Click any row to expand details.</p>
 
         <div id="storm-list"
              hx-get="/data/tornado-fragment.html"
