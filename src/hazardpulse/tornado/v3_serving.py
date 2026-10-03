@@ -130,9 +130,10 @@ class V3Suite:
         X = self._columns(model, fv, warning if use_w else None)
         p60 = float(lp.predict_proba(model, X)[0])
         lo, hi = (float(v[0]) for v in lp.predict_interval(model, X))
+        uses_hrrr = any(n.startswith("h80_") for n in model["feature_names"])
         out: dict = {"p60": p60, "model": "v3_w" if use_w else "v3", "model_version": lp.model_version(model),
                      "band": [lo, hi] if np.isfinite(lo) and np.isfinite(hi) else None,
-                     "hrrr_used": h80 is not None, "warning": None if warning is None else
+                     "hrrr_used": h80 is not None and uses_hrrr, "warning": None if warning is None else
                      {"active": bool(warning[0] > 0.5),
                       "minutes_since_issue": None if not np.isfinite(warning[1]) else float(warning[1])}}
         try:
