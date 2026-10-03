@@ -198,7 +198,7 @@
         <div class="grid">
           <div class="card col-4 hazard-eq">
             <h3>Earthquake</h3>
-            <p class="muted">A statistical model that learns from past earthquake patterns to estimate the chance of a significant earthquake in the next 30 days. Global AUC 0.907 | Temporal AUC 0.799.</p>
+            <p class="muted">The chance of a magnitude 6+ earthquake in each 2&deg; cell of the globe over the next 30 days, from where quakes happen in the long run, how they cluster after recent ones, and boosted trees on both. Tested once on 2023&ndash;2025: +2.6 nats of information per quake over a uniform map (the model it replaced scored &minus;13.7). Earthquakes cannot be predicted; this ranks where the odds are higher.</p>
           </div>
           <div class="card col-4 hazard-hu">
             <h3>Hurricane</h3>
@@ -217,14 +217,13 @@
 
         <div class="grid">
           <div class="card col-4 hazard-eq">
-            <h3>Earthquake (hp-etas-v3.2.1)</h3>
-            <div class="kv"><span>Architecture</span><strong>Gradient-boosted ensemble + Bayesian calibration</strong></div>
-            <div class="kv"><span>Features</span><strong>42</strong></div>
-            <div class="kv"><span>Key inputs</span><strong>Seismicity rates, b-value, Coulomb stress, geodetic strain, catalog statistics</strong></div>
-            <div class="kv"><span>Training cutoff</span><strong>2026-02-15</strong></div>
-            <div class="kv"><span>Calibration method</span><strong>Isotonic regression on holdout</strong></div>
-            <div class="kv"><span>Global AUC</span><strong>0.907</strong></div>
-            <div class="kv"><span>Temporal AUC</span><strong>0.799</strong></div>
+            <h3>Earthquake (operational C0 v1)</h3>
+            <div class="kv"><span>Target</span><strong>P(an M6.0+ epicentre in the 2&deg; cell within 30 days), every one of 11,700 cells, issued weekly from events before the issue time only</strong></div>
+            <div class="kv"><span>Architecture</span><strong>Long-term smoothed seismicity + ETAS-style aftershock clustering, combined by gradient-boosted trees (156) scored in NumPy</strong></div>
+            <div class="kv"><span>How it was chosen</span><strong>Pre-registered comparison of smoothed seismicity, clustering, two boosted models and the previous model; chosen on 2018&ndash;2020 (docs/EARTHQUAKE_FORECAST_PROGRAM.md)</strong></div>
+            <div class="kv"><span>Final test 2023&ndash;2025</span><strong>+2.59 [2.47, 2.71] nats per quake over a uniform map; AUC 0.968 over all cells, 0.74&ndash;0.77 among recently active cells; Brier skill +0.021</strong></div>
+            <div class="kv"><span>Replaced</span><strong>The previous model scored &minus;13.7 nats per quake: it gave 0% to every cell outside ~100 active ones, where 74% of 2023&ndash;2025&rsquo;s M6+ quakes struck</strong></div>
+            <div class="kv"><span>Limits</span><strong>Over-forecasts 2023&ndash;2025 by 14% (a quieter period than 2005&ndash;2017); live catalogs are preliminary in the first days after a large quake</strong></div>
           </div>
 
           <div class="card col-4 hazard-hu">
