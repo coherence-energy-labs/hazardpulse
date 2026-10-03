@@ -130,6 +130,39 @@ records at all). The gated model is therefore tested on cycles that have not hap
   switches serving to v9.1; if neither does, DTOPS stays and the result is reported.
 - The model is not refitted, re-tuned or re-gated during the test.
 
+## Amendment 2 -- v10 (2026-10-03, written before any v10 number is computed)
+
+Three things the v9 representation leaves on the table, each a hypothesis to be measured:
+
+1. **The outcome is a number, not a bit.** v9 learns P(dV >= 30) from ~280 events; every one of the
+   ~4,700 development cycles has a measured 24-h change dV. v10 learns the whole exceedance curve
+   P(dV >= k) for k in {15, 20, 25, 30, 35, 40, 45} kt with ONE model on threshold-stacked rows
+   (k is an input, monotone decreasing), so every cycle informs the 30-kt tail and the product is
+   a coherent set of thresholds.
+2. **How the guidance has been doing on THIS storm.** E group, at cycle t, from the a-deck: for X
+   in {DSHP, LGEM, IVCN, HCCA, NNIC, OFCL}, err12_X = V_CARQ(t) - X's forecast made at t-12 h for
+   tau 12, and err24_X likewise from t-24 h for tau 24 (positive = the aid under-forecast); their
+   means over the aids present; dv_past6 = V0 - CARQ(t-6 h). Models that keep under-forecasting a
+   storm are a classic sign that RI has begun and the guidance has not caught it.
+3. **Robustness to missing guidance, in the model, not a gate.** Each training row gets one copy
+   with the early-aid and E features masked (NaN), so the model learns the regime CP01 exposed.
+
+Candidates (LightGBM, the v9 parameters, each the average of seeds 0-4): V1 = v9's inputs + E
+(binary 30 kt); V2 = v9's inputs, threshold-stacked; V3 = v9's inputs + E, stacked; V4 = V3 with
+the masking copies. Reference R0 = v9 D_gbt as frozen. Selection: forward chaining 2022-2025
+exactly as v9; the V with the lowest pooled 30/24 log loss is carried if it beats R0's pooled log
+loss (else v9.1 stays the entrant). Also reported: the sum of Brier scores over the 24-h
+thresholds 25/30/35/40 kt, the thresholds DTOPS publishes.
+
+2026 is a SECOND read for v10, declared: its design was informed by the 2026 read (CP01). It is
+reported, never used to claim.
+
+The claim for v10 is PROSPECTIVE only, beside v9.1, on cycles >= the first cycle v10 runs in
+shadow, at the same looks (2026-12-01, 2027-12-01): primary = the sum of Brier scores over the
+25/30/35/40-kt 24-h thresholds, v10 vs DTOPS's own four published probabilities, paired storm
+bootstrap; claim if its 98.75% interval lies wholly below 0 AND v10's 30/24 log loss point is
+<= DTOPS's (98.75%: two looks for a second entrant, so v9.1 + v10 together stay near 0.05).
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
