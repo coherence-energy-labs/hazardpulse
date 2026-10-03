@@ -189,6 +189,85 @@ amendment 1's gate: **v10.1 = V2 where DSHP, IVCN and NNIC are present, else DTO
 DTOPS's own, SHIPS-RII where DTOPS is missing).** v10.1 enters the prospective test as declared
 above (first cycle = the first it runs in shadow).
 
+### Amendment 2, descriptive addendum -- v10.1 against every public RI aid (2026-10-03)
+
+Descriptive, NOT a claim: the claim for v10.1 is the prospective test above. The selection compared
+v10 with DTOPS alone, because a pre-registered 2020-2024 comparison had found DTOPS NOAA's best. That
+is a statement about other seasons, not a measurement on these cases, so
+`scripts/hurricane_ri_v10_vs_all.py` (-> `results/calibration/hurricane_ri_v10_vs_all.json`)
+compares v10.1 **as served**, V2 with the gate, with every RI probability NOAA publishes, paired by
+storm on the cycles where each aid was issued. The forward chaining is the same as in the selection.
+Two controls stop the run if they fail:
+
+- V2's pooled log loss must equal the selection's, bit for bit.
+- Every gate-closed cycle must carry DTOPS's own value.
+
+The gate was open on 2,825 of the 2,871 cycles (193 RI events).
+
+| NOAA RI aid | cycles | aid 30/24 LL | v10.1 | dLL [95%] | 4-threshold Brier aid / v10.1, d [95%] |
+|---|---|---|---|---|---|
+| SHIPS-RII (RIOD) | 2,871 | 0.1995 | 0.1445 | -0.0551 [-0.0687, -0.0390] | 0.1986 / 0.1555, -0.0431 [-0.0572, -0.0292] |
+| RI logistic (RIOL) | 2,871 | 0.1970 | 0.1445 | -0.0525 [-0.0664, -0.0396] | 0.2048 / 0.1555, -0.0494 [-0.0654, -0.0346] |
+| RI Bayesian (RIOB) | 2,871 | 0.2324 | 0.1445 | -0.0879 [-0.1232, -0.0583] | 0.2093 / 0.1555, -0.0538 [-0.0762, -0.0331] |
+| RI consensus (RIOC) | 2,871 | 0.1834 | 0.1445 | -0.0390 [-0.0506, -0.0275] | 0.1903 / 0.1555, -0.0348 [-0.0487, -0.0219] |
+| DTOPS (DTOP) | 2,740 | 0.1656 | 0.1479 | -0.0177 [-0.0290, -0.0072] | 0.1748 / 0.1594, -0.0154 [-0.0268, -0.0047] |
+
+Every interval lies below zero, both in 30-kt log loss and in the four-threshold Brier
+(MEASURED, development period).
+
+**Intensity forecasts read as yes/no RI calls** (forecast dV24 >= 30 kt). The fair test of a
+probability against a single call: set our threshold so that we raise no more false alarms than the
+call did, then count the RI events each catches. Ties at the threshold count against us. The per-model
+hurricane guidance is not kept in the development table, only its mean and its most aggressive member.
+
+| call | RI calls | its false-alarm rate | its POD | v10.1 POD | d [95%] |
+|---|---|---|---|---|---|
+| NHC official forecast | 94 | 1.32% | 0.342 | 0.353 | +0.011 [-0.116, +0.104] |
+| HCCA | 61 | 0.63% | 0.236 | 0.209 | -0.026 [-0.172, +0.108] |
+| IVCN | 17 | 0.11% | 0.073 | 0.047 | -0.026 [-0.099, +0.070] |
+| SHIPS (DSHP) | 63 | 1.29% | 0.150 | 0.342 | **+0.192 [+0.056, +0.311]** |
+| LGEM | 28 | 0.42% | 0.088 | 0.176 | +0.088 [-0.060, +0.191] |
+| NNIC | 76 | 0.94% | 0.264 | 0.316 | +0.052 [-0.072, +0.107] |
+| GEFS mean | 0 | 0.00% | 0.000 | 0.031 | +0.031 [+0.000, +0.086] |
+| hurricane-model mean | 31 | 0.31% | 0.120 | 0.094 | -0.026 [-0.123, +0.136] |
+| most aggressive hurricane model | 142 | 2.63% | 0.387 | 0.471 | +0.084 [-0.012, +0.216] |
+| global-model mean | 2 | 0.00% | 0.010 | 0.031 | +0.021 [-0.014, +0.079] |
+
+- v10.1 catches significantly more RI than the SHIPS call.
+- It is within noise of every other call. Its point estimate is below on three of them (HCCA, IVCN,
+  hurricane-model mean), by about 5 of 191 events each.
+- These operating points allow 3 to 70 false alarms in four seasons, so the test cannot separate
+  gaps this size. The development data cannot decide whether a variant closes them, and neither can
+  the prospective test for years. So no variant was searched for.
+- What this rules out is the unqualified phrase "beats every forecast". What survives is "beats
+  every RI probability NOAA publishes, and ties the best yes/no calls at their own false-alarm
+  rates".
+
+**Calibration check -- KILLED: "recalibrate v10 upward".**
+- Dev observation: out of sample, v10's 2022-2025 forecasts look under-confident at the top. The
+  45-60% bin verified at 69% (n 61), and the pooled mean is 0.058 against a rate of 0.067.
+- Per season, the logistic calibration of logit(p) is:
+
+  | season | slope | intercept | RI rate |
+  |---|---|---|---|
+  | 2022 | 0.93 | -0.25 | 5.1% |
+  | 2023 | 1.12 | +0.73 | 6.8% |
+  | 2024 | 1.13 | +0.61 | 7.9% |
+  | 2025 | 1.41 | +0.55 | 7.3% |
+
+  The intercept moves with the season's RI rate, which is weather, not a model property.
+- Smallest witness: 2026, the served model. Slope 0.99, intercept -0.19, mean 0.067 against a rate
+  of 0.060. A calibrator fit on 2022-2025 would have moved 2026 the wrong way.
+- Survives narrower: nothing. In-sample the top bin is also compressed (about 0.70 forecast against
+  0.89-1.00 observed), but out of sample its sign changes between seasons (2022: 0.65 against 0.43).
+- Resurrect if: a within-season signal, such as the season's verified RI rate so far, is shown on
+  the development seasons to predict the intercept.
+
+**Open:** the prospective comparison against all five aids. It needs no new recording: each published
+forecast file (`dist/data/replay/hu_fcst_*.json`) keeps, for the cycle the shadow scored, the SHIPS
+text's 30/24 values for RIOD, RIOL, RIOB, RIOC and DTOP (`ri_inputs.ships_text.whole_percent`).
+This was checked on hu_fcst_20261003_1223.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;

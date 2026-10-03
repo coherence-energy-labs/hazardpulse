@@ -257,6 +257,47 @@ def methods_hurricane(ev: dict) -> str:
     return "\n\n".join(out)
 
 
+def _ours_vs_all_lines(va: dict | None) -> list[tuple[str, str]]:
+    """Every public RI probability, then the intensity guidance as yes/no RI calls, each verdict
+    read from its interval: a comparison whose interval straddles zero is reported as a tie."""
+    if not va:
+        return []
+    seasons = va.get("seasons") or []
+    span = f"{min(seasons)}&ndash;{max(seasons)}" if seasons else "the development seasons"
+    out = []
+    aids = [a for a in va.get("aids") or [] if a["ours_log_loss"] is not None and a["d_log_loss_ci"]]
+    if aids:
+        parts = " &middot; ".join(f"{_e(a['label'])} {_f(a['aid_log_loss'])} (ours {_f(a['ours_log_loss'])})"
+                                  for a in aids)
+        better = [a for a in aids if a["d_log_loss_ci"][1] < 0]
+        verdict = ("lower than every one, each paired by storm with its 95% interval below zero"
+                   if len(better) == len(aids) else
+                   "lower at 95% than " + (", ".join(_e(a["label"]) for a in better) or "none of them"))
+        out.append(("Against every RI probability NOAA publishes",
+                    f"{span}, as served, each season predicted from earlier ones; 30-kt log loss {parts}: "
+                    f"ours is {verdict}"))
+    calls = [c for c in va.get("calls") or [] if c["d_pod_ci"] and c["d_pod"] is not None]
+    if calls:
+        def pts(c):
+            return f"{_signed(100 * c['d_pod'], 0)} points{_ci([100 * x for x in c['d_pod_ci']], 0, signed=True)}"
+        more = [c for c in calls if c["d_pod_ci"][0] > 0]
+        fewer = [c for c in calls if c["d_pod_ci"][1] < 0]
+        tied = [c for c in calls if c not in more and c not in fewer]
+        bits = []
+        if more:
+            bits.append("catches more RI events than " + ", ".join(f"{_e(c['label'])} ({pts(c)})" for c in more))
+        if fewer:
+            bits.append("catches fewer than " + ", ".join(f"{_e(c['label'])} ({pts(c)})" for c in fewer))
+        if tied:
+            gaps = [100 * c["d_pod"] for c in tied]
+            bits.append("is within noise of " + " &middot; ".join(_e(c["label"]) for c in tied)
+                        + f" (gaps {_signed(min(gaps), 0)} to {_signed(max(gaps), 0)} points)")
+        out.append(("Against intensity forecasts as yes/no RI calls",
+                    "at each call&rsquo;s own false-alarm rate (a forecast 24-h rise of 30 kt or more), ours "
+                    + "; and ".join(bits)))
+    return out
+
+
 def ours_hurricane_lines(ours: dict) -> list[tuple[str, str]]:
     """(label, value) lines describing our hurricane RI model, from its bound evidence."""
     d, s26, pr = ours["dev"], ours["season_2026"], ours["prospective"]
@@ -270,6 +311,7 @@ def ours_hurricane_lines(ours: dict) -> list[tuple[str, str]]:
                                        f"{_f(d['dtops_log_loss'])} (paired by storm{_ci(d.get('d_log_loss_ci'), signed=True)})"
                                        + (f"; over DTOPS&rsquo;s four 24-h thresholds, Brier {_f(mt.get('ours'))} vs "
                                           f"{_f(mt.get('dtops'))}{_ci(mt.get('d_ci'), signed=True)}" if mt else "")),
+        *_ours_vs_all_lines(ours.get("vs_all")),
         ("2026 so far", f"log loss {_f(s26['log_loss'])} vs DTOPS {_f(s26['dtops_log_loss'])}, AUC {_f(s26['auc'])} "
                         "(a second look at a season that informed its design, so not a proof)"),
         ("Status", f"{_e(ours['status'])}: shown beside NOAA&rsquo;s number, not instead of it, until the "
