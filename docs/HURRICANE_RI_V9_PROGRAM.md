@@ -163,6 +163,32 @@ shadow, at the same looks (2026-12-01, 2027-12-01): primary = the sum of Brier s
 bootstrap; claim if its 98.75% interval lies wholly below 0 AND v10's 30/24 log loss point is
 <= DTOPS's (98.75%: two looks for a second entrant, so v9.1 + v10 together stay near 0.05).
 
+### Amendment 2 outcome (2026-10-03)
+
+Development (forward chaining 2022-2025; control: R0 reproduced v9's pooled LL 0.1459 exactly;
+`results/calibration/hurricane_ri_v10_selection.json`):
+
+| | 30/24 LL | vs R0 | 4-threshold Brier vs DTOPS (0.1722) |
+|---|---|---|---|
+| R0 (v9) | 0.1459 | -- | -- |
+| V1 (+E, binary) | 0.1480 | +0.0021 [-0.0003, +0.0047] | -- |
+| **V2 (stacked)** | **0.1443** | -0.0015 [-0.0057, +0.0027] | **0.1554, -0.0168 [-0.0277, -0.0063]** |
+| V3 (stacked +E) | 0.1446 | -0.0013 | 0.1564, -0.0158 [-0.0269, -0.0053] |
+| V4 (V3 + masking) | 0.1445 | -0.0014 | 0.1568, -0.0154 [-0.0268, -0.0046] |
+
+**Carried: V2.** Killed: the E features (storm-specific guidance errors) add nothing -- DERIVED
+reason: NOAA's interpolated "I" aids are already shifted to the storm's current intensity, so
+their recent error is absorbed before the model sees it. The exceedance representation buys a
+small, non-significant 30-kt gain and the full threshold product.
+
+2026, DECLARED second read (no claim; `hurricane_ri_v10_2026_second_read.json`): V2 LL 0.1291 vs
+DTOPS 0.1495 (dLL -0.0204 [-0.0477, +0.0127]), AUC 0.925, 4-threshold Brier d -0.0202 [-0.0445,
++0.0057]. On the 54 CP01 cycles without guidance V2 scored 0.2408 vs DTOPS 0.1305 (V4's masking:
+0.1951) -- the fragility is narrowed by masking but not closed, so v10 is served live with
+amendment 1's gate: **v10.1 = V2 where DSHP, IVCN and NNIC are present, else DTOPS (each threshold
+DTOPS's own, SHIPS-RII where DTOPS is missing).** v10.1 enters the prospective test as declared
+above (first cycle = the first it runs in shadow).
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
