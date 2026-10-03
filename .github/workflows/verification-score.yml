@@ -24,7 +24,11 @@ jobs:
 
     steps:
       - name: Checkout
+        # the branch tip at job start, not the commit that triggered the run: a run that waited in
+        # the scoring concurrency queue otherwise starts stale and its push is rejected
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -88,4 +92,4 @@ jobs:
 
           Automated prospective scoring of matured forecast replay artifacts.
           Sources: USGS FDSN (earthquake), SPC reports (tornado), NHC ATCF (hurricane)"
-          git push
+          bash scripts/ci/push_with_rebase.sh
