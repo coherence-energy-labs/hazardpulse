@@ -1,0 +1,61 @@
+{
+ "primary": {
+  "name": "v3_primary",
+  "model": "lgbm",
+  "params": {
+   "learning_rate": 0.03,
+   "num_leaves": 31,
+   "min_child_samples": 500,
+   "feature_fraction": 0.85,
+   "bagging_fraction": 0.6,
+   "lambda_l2": 20.0,
+   "min_split_gain": 0.01,
+   "max_depth": 6
+  },
+  "blocks": [
+   "P"
+  ],
+  "calibration": "platt",
+  "neg_per_pos": 30,
+  "label": "storm_60",
+  "seed": 0,
+  "validation_auc": 0.9621546986010743,
+  "validation_bss": 0.06646564464115168
+ },
+ "secondary_with_warnings": {
+  "name": "v3_plus_W",
+  "same_as_primary_except": {
+   "blocks": [
+    "P",
+    "W"
+   ]
+  },
+  "why_secondary": "amendment 3 / 6: served by the owner's decision when the NWS feed answers"
+ },
+ "steps": {
+  "calibration_brier": {
+   "none": 0.05237237489706784,
+   "platt": 0.001205354224742713,
+   "venn_abers": 0.0012983571140994905
+  },
+  "negatives_auc": {
+   "10": 0.9619889160356874,
+   "30": 0.9621546986010743,
+   "100": 0.9616872559404394
+  },
+  "label_auc": {
+   "storm_60": 0.9621546986010743,
+   "nbhd_60": 0.9563169296220263
+  },
+  "ensembles_ci": {
+   "e_ens5": [
+    -0.0011240221420204869,
+    0.0001700374366975863
+   ],
+   "e_fam4": [
+    -0.001215439357160255,
+    0.0005516032352804475
+   ]
+  }
+ }
+}

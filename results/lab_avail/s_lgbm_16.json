@@ -1,0 +1,67 @@
+{
+ "exp": {
+  "name": "s_lgbm_16",
+  "model": "lgbm",
+  "blocks_from": "best",
+  "params": {
+   "learning_rate": 0.01,
+   "num_leaves": 15,
+   "min_child_samples": 500,
+   "feature_fraction": 1.0,
+   "bagging_fraction": 1.0,
+   "lambda_l2": 1.0,
+   "min_split_gain": 0.0,
+   "max_depth": -1
+  },
+  "calibration": "platt",
+  "neg_per_pos": 30,
+  "save_preds": true,
+  "eval_dev": false,
+  "blocks": [
+   "P"
+  ],
+  "drop": []
+ },
+ "n_features": 28,
+ "train_rows": 89125,
+ "train_pos": 2875,
+ "fit": {
+  "best_iteration": 1026
+ },
+ "val": {
+  "auc": 0.9609290998654682,
+  "auc_ci": [
+   0.9522545548738177,
+   0.9686248944414653
+  ],
+  "pr_auc": 0.10882407338472325,
+  "brier": 0.0012080040272609046,
+  "bss": 0.06441340005207563,
+  "base_rate": 0.0012928443077170413,
+  "mean_forecast": 0.0012962009395489481,
+  "n": 1194266,
+  "pos": 1544,
+  "reliability": {
+   "predicted": [
+    0.0010120135542384806,
+    0.13775112171576445,
+    0.22572096909889156,
+    0.32413872786037284
+   ],
+   "observed": [
+    0.0009715074809431844,
+    0.15362035225048923,
+    0.2693877551020408,
+    0.4
+   ],
+   "counts": [
+    1191962,
+    2044,
+    245,
+    15
+   ]
+  },
+  "auc_raw_score": 0.961063915796977
+ },
+ "seconds": 55.1
+}

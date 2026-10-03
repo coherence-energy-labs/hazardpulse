@@ -1,0 +1,66 @@
+{
+ "exp": {
+  "model": "lgbm",
+  "params": {
+   "learning_rate": 0.03,
+   "num_leaves": 31,
+   "min_child_samples": 500,
+   "feature_fraction": 0.85,
+   "bagging_fraction": 0.6,
+   "lambda_l2": 20.0,
+   "min_split_gain": 0.01,
+   "max_depth": 6
+  },
+  "blocks_from": "best",
+  "name": "l_train_nbhd60_eval_nbhd60",
+  "calibration": "platt",
+  "neg_per_pos": 30,
+  "label": "nbhd_60",
+  "eval_label": "nbhd_60",
+  "save_preds": true,
+  "eval_dev": false,
+  "blocks": [
+   "P"
+  ],
+  "drop": []
+ },
+ "n_features": 28,
+ "train_rows": 151466,
+ "train_pos": 4886,
+ "fit": {
+  "best_iteration": 397
+ },
+ "val": {
+  "auc": 0.9289132698734832,
+  "auc_ci": [
+   0.9165212289742477,
+   0.940859810916323
+  ],
+  "pr_auc": 0.07898249439100453,
+  "brier": 0.001998572415086064,
+  "bss": 0.04364813953211333,
+  "base_rate": 0.0020941733248706737,
+  "mean_forecast": 0.002103913562054602,
+  "n": 1194266,
+  "pos": 2501,
+  "reliability": {
+   "predicted": [
+    0.0018737085501227685,
+    0.1328984982947138,
+    0.2182443498393455
+   ],
+   "observed": [
+    0.0017966377208367198,
+    0.17197125256673512,
+    0.26373626373626374
+   ],
+   "counts": [
+    1192227,
+    1948,
+    91
+   ]
+  },
+  "auc_raw_score": 0.9294341756569955
+ },
+ "seconds": 43.0
+}
