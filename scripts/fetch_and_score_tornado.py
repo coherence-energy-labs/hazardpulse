@@ -814,6 +814,8 @@ def score_storms(
         }
         if v3_out is not None:
             entry["model_version"] = v3_out["model_version"]      # the model that scored THIS storm
+            if v3_out.get("band"):
+                entry["confidence_lo"], entry["confidence_hi"] = (round(float(v), 4) for v in v3_out["band"])
             entry["v3"] = {
                 "event": "a tornado report within 10 km of this storm's tracked radar polygon",
                 "probability_60min": v3_out["p60"],
@@ -1141,7 +1143,18 @@ def get_action_recommendation(risk_band: str, prob: float) -> str:
 
 
 def _simple_why_sentence(s: dict) -> str:
-    """Build a one-sentence plain-English explanation of the storm's risk."""
+    """Build a one-sentence plain-English explanation of the storm's risk.
+
+    A v3 storm is explained by ITS model's own attribution (the inputs that raised its score most),
+    not by fixed thresholds the model does not use."""
+    v3 = s.get("v3") or {}
+    up = [d["label"] for d in v3.get("drivers", []) if (d.get("log_odds") or 0) > 0][:3]
+    if v3:
+        warn = v3.get("nws_warning") or {}
+        lead = "An NWS tornado warning is in effect. " if warn.get("active") else ""
+        if up:
+            return lead + "What raises this storm's risk most: " + ", ".join(up) + "."
+        return lead + "No input raises this storm's risk above the background rate."
     cape = float(s.get("mucape", 0) or 0)
     srh = float(s.get("srh01", 0) or 0)
     maxllaz = float(s.get("maxllaz", 0) or 0)
@@ -1165,6 +1178,18 @@ def _simple_why_sentence(s: dict) -> str:
 def _storm_watch_items(s: dict) -> list[str]:
     """Return compact watch items for the storm detail card."""
     items: list[str] = []
+    v3 = s.get("v3") or {}
+    if v3:
+        horizon = [(k, v3.get(f)) for k, f in (("30 min", "probability_30min"), ("90 min", "probability_90min"))]
+        hz = [f"{k}: {_pct(float(v))}" for k, v in horizon if v is not None]
+        if hz:
+            items.append("Within " + ", ".join(hz))
+        if v3.get("probability_ef2plus_60min") is not None:
+            items.append(f"Strong (EF2+) tornado within 60 min: {_pct(float(v3['probability_ef2plus_60min']))}")
+        warn = v3.get("nws_warning") or {}
+        if warn.get("active"):
+            m = warn.get("minutes_since_issue")
+            items.append("NWS tornado warning in effect" + (f" ({m:.0f} min)" if m is not None else ""))
     cape = float(s.get("mucape", 0) or 0)
     srh = float(s.get("srh01", 0) or 0)
     maxllaz = float(s.get("maxllaz", 0) or 0)
@@ -1385,7 +1410,7 @@ def _render_storm_rows(storms: list[dict]) -> str:
             f"AzShear {float(s.get('maxllaz', 0) or 0):.4f}"
         )
         simple_subline = (
-            f"{_pct(prob)} tornado risk in the next 24 hours | "
+            f"{_pct(prob)} chance this storm produces a tornado in the next hour | "
             f"{_format_time(s.get('valid_time', ''))}"
         )
 
@@ -2633,7 +2658,7 @@ def _legacy_render_homepage_cards(
             </div>
             <div class="card col-4">
               <h3>2. Analyze</h3>
-              <p class="muted">Helmholtz PDE solved on HRRR grid. Coherence amplitude (tau), gradient, torsion, alignment, singularity conditions extracted. Gradient-boosted trees (41 features), Platt-calibrated on a held-out year, produce the storm probability.</p>
+              <p class="muted">For every storm ProbSevere tracks: its 28 radar/lightning/NOAA attributes, 33 trends along its own track, 12 fields of the most recent HRRR analysis already published at the storm&rsquo;s time, and whether it sits inside a live NWS tornado warning. A LightGBM model (v3, chosen by a pre-registered program and tested once on all of 2025) gives the chance this storm produces a tornado within 60 minutes, with 30/90-minute and EF2+ versions, an uncertainty band and the storm&rsquo;s top drivers. The coherence field was tested fairly and added nothing measurable, so it is not used.</p>
             </div>
             <div class="card col-4">
               <h3>3. Predict</h3>
@@ -4227,10 +4252,13 @@ def main() -> None:
             )
             _forecaster = None
         if _forecaster is not None and scored:
-            enrich_cells(scored, _forecaster, prob_key="tornado_probability",
+            # only the storms the calibrator's own model scored: with v3, storms can come from the
+            # +W model or the fallback, and a curve fitted for one is wrong for the other
+            mine = [s for s in scored if s.get("model_version") == _forecaster.model_version]
+            enrich_cells(mine, _forecaster, prob_key="tornado_probability",
                          issued_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
             print(
-                f"  Trust layer: calibrated {len(scored)} storms "
+                f"  Trust layer: calibrated {len(mine)} of {len(scored)} storms "
                 f"(model {_forecaster.model_version}, signed={_signer is not None})"
             )
         elif scored:
