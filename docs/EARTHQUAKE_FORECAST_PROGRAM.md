@@ -413,6 +413,19 @@ python -m pytest -q tests/test_earthquake_operational_forecast.py \
 - The global total is reported, so the rate's unit is checked (shallow M >= 5.95, per year).
 - G_c is then scaled to the 30-day window.
 
+**Correction of G's definition (2026-10-03, after the unit check and before any outcome was
+read).** The unit check above failed on the first stream.
+- Summing all bins gave a total of 5.6e-6. Weighting by cell area gave 576 per year, about 5x
+  GEAR1's expected order (~10^2 per year).
+- Cause, from pyCSEP's `read_GEAR1_format` ("Original GEAR1 format provides cumulative rates per
+  meter**2"): the 31 columns are **cumulative** rate densities. Each is the M >= bin rate per m^2
+  per year, not an incremental count per cell.
+- **G_c is therefore the first column (M >= 5.95) times each 0.1-degree cell's exact spherical
+  area (m^2), summed into `c`.**
+- The run now stops unless the global total lies in [50, 500] per year.
+- No candidate was fitted and no outcome was read before this correction. The wrong map was
+  deleted.
+
 **Leakage, stated in advance.**
 - GEAR1 was built from GCMT 1977-2013 and GSRM v2.1. It is not causal for any issue time before
   2014, so **nothing is fitted on FIT**.
