@@ -2495,6 +2495,10 @@ def build_verification_rollups() -> dict:
     pulse = _read_json(LIVE_PULSE_PATH, {"updated_at": None, "hazards": []})
     summary = _build_verification_summary(pulse)
     _render_verification_page(summary)
+    # the prospective summaries this workflow just rewrote also feed the model-evidence blocks
+    # (e.g. a challenger's error budget and matured count); re-render them in the same commit, or
+    # main stays inconsistent with its own results until some other scorer runs a full build
+    _render_model_evidence_blocks()
     return summary
 
 

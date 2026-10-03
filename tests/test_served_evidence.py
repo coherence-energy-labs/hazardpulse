@@ -248,6 +248,30 @@ def test_a_changed_result_makes_the_page_stale_and_a_render_fixes_it(tmp_path):
     assert "AUC 0.500" in (dist / "methods/index.html").read_text(encoding="utf-8")
 
 
+def test_the_verification_workflow_re_renders_and_commits_the_evidence_pages(tmp_path, monkeypatch):
+    """The verification workflow rewrites the prospective summaries that feed the evidence blocks,
+    so its rebuild must re-render them and its commit must carry them -- else main fails its own
+    fixed point between scorer runs (found 2026-10-03: a challenger's error budget appeared in the
+    results but not on the page)."""
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / "scripts"))
+    import build_site_artifacts as bsa
+    calls = []
+    pulse = tmp_path / "pulse.json"
+    pulse.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(bsa, "LIVE_PULSE_PATH", pulse)
+    monkeypatch.setattr(bsa, "_build_verification_summary", lambda p: {"hazards": []})
+    monkeypatch.setattr(bsa, "_render_verification_page", lambda s: None)
+    monkeypatch.setattr(bsa, "_render_model_evidence_blocks", lambda: calls.append("evidence"))
+    bsa.build_verification_rollups()
+    assert calls == ["evidence"]
+    wf = (ROOT / ".github" / "workflows" / "verification-score.yml").read_text(encoding="utf-8")
+    detect = wf.split("Check for changes", 1)[1].split("Commit and push", 1)[0]
+    commit = wf.split("Commit and push", 1)[1]
+    for page in ep.BLOCKS:
+        assert f"dist/{page}" in detect and f"dist/{page}" in commit, page
+
+
 def test_a_page_without_its_block_or_with_it_twice_is_an_error():
     with pytest.raises(ep.PageBlockError):
         ep.apply_block("<p>no markers</p>", "methods-simple", "x")
