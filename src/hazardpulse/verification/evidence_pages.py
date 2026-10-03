@@ -327,14 +327,20 @@ def _ours_challenger_lines(ch: dict | None) -> list[tuple[str, str]]:
     vs = ch.get("versus_champion") or {}
     live = (f"; live so far, {_n(vs['n'])} cycles both scored, four-threshold Brier difference "
             f"{_signed(vs['d_brier4'])}{_ci(vs.get('d_brier4_ci'), signed=True)}" if vs.get("n") else "")
-    level = (" at " + f"{100 * ch['level']:.3f}".rstrip("0").rstrip(".") + "%") if ch.get("level") else ""
-    return [("Challenger in shadow",
-             f"{_e(ch['model_version'])}: the same inputs, never lowering the odds when the guidance or "
-             f"NOAA&rsquo;s probability rises. 2022&ndash;2025: log loss {_f(d['log_loss'], 4)} vs "
-             f"{_f(d['champion_log_loss'], 4)}{_ci(ci, 4, signed=True)}, four-threshold Brier "
-             f"{_f(d['brier4'], 4)} vs {_f(d['champion_brier4'], 4)}; "
+    level = (" at " + f"{100 * ch['level']:.4f}".rstrip("0").rstrip(".") + "%") if ch.get("level") else ""
+    against = _e(ch.get("against") or "the shown model")
+    s26 = ch.get("season_2026") or {}
+    y26 = (f"; 2026 (a later look at a season that informed the design, not a proof): {_f(s26['log_loss'], 4)} vs "
+           f"{_f(s26['champion_log_loss'], 4)}{_ci(s26.get('d_log_loss_ci'), 4, signed=True)}"
+           if s26.get("log_loss") is not None and s26.get("champion_log_loss") is not None else "")
+    what = ch.get("what") or ("the same inputs, never lowering the odds when the guidance or "
+                              "NOAA&rsquo;s probability rises")
+    return [(f"Challenger in shadow ({_e(ch.get('label') or '')})".replace(" ()", ""),
+             f"{_e(ch['model_version'])}: {what}. 2022&ndash;2025 against {against}: log loss "
+             f"{_f(d['log_loss'], 4)} vs {_f(d['champion_log_loss'], 4)}{_ci(ci, 4, signed=True)}, four-threshold "
+             f"Brier {_f(d['brier4'], 4)} vs {_f(d['champion_brier4'], 4)}; "
              + ("better at 95%" if settled else "a gain whose interval still includes zero")
-             + f". Scored live from 2026-10-04 with its own prospective test{level}{live}; it replaces the "
+             + f"{y26}. Scored live with its own prospective test{level}{live}; it replaces the "
              "shown model only by the rule written before it scored a cycle")]
 
 
@@ -354,7 +360,8 @@ def ours_hurricane_lines(ours: dict) -> list[tuple[str, str]]:
         *_ours_vs_all_lines(ours.get("vs_all")),
         ("2026 so far", f"log loss {_f(s26['log_loss'])} vs DTOPS {_f(s26['dtops_log_loss'])}, AUC {_f(s26['auc'])} "
                         "(a second look at a season that informed its design, so not a proof)"),
-        *_ours_challenger_lines(ours.get("challenger")),
+        *[line for ch in (ours.get("challengers") or ([ours["challenger"]] if ours.get("challenger") else []))
+          for line in _ours_challenger_lines(ch)],
         ("Status", f"{_e(ours['status'])}: shown beside NOAA&rsquo;s number, not instead of it, until the "
                    "pre-registered prospective test on cycles from 2026-10-04 meets its rule (verdicts "
                    + " and ".join(_e(x) for x in pr.get("look_dates") or [])

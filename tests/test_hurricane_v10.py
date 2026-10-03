@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 import gzip
+import math
 import importlib.util
 import json
 import sys
@@ -146,7 +147,7 @@ def test_each_entrant_spends_half_the_previous_error_budget():
     p = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(p)
     alphas = [1 - e["level"] for e in p.ENTRANTS.values()]
-    assert alphas == pytest.approx([0.025, 0.0125, 0.00625])
+    assert alphas == pytest.approx([0.025, 0.0125, 0.00625, 0.003125])
     assert all(b == pytest.approx(a / 2) for a, b in zip(alphas, alphas[1:])) and sum(alphas) < 0.05
     assert p.ENTRANTS["v10_2"]["key"] == "ri_v10_2_shadow"
     # challenger minus champion on shared cycles, by hand: one cycle, dV 32 kt
@@ -268,3 +269,122 @@ def test_an_artifact_of_another_schema_is_refused(tmp_path):
     p.write_bytes(ri_v10.canonical_bytes(art))
     with pytest.raises(ValueError):
         ri_v10.load(p)
+
+
+# ---------------------------------------------------------------------------
+# v10.3 (amendments 5-6): V5 + IR structure from GMGSI
+# ---------------------------------------------------------------------------
+
+v10_3_present = pytest.mark.skipif(not ri_v10.V10_3_PATH.exists(), reason="v10.3 artifact not built")
+
+
+@pytest.fixture(scope="module")
+def v10_3():
+    art, version = ri_v10.load(ri_v10.V10_3_PATH)
+    return {"artifact": art, "model_version": version}
+
+
+def _fixture_ir(sid, cyc, records):
+    """The IR features from the fixture storm's real crops (the ones training used)."""
+    from hazardpulse.hurricane import ir_features
+
+    def crop(tag):
+        p = FIX / "ir" / f"{sid}_{cyc:%Y%m%d%H}_{tag}.npz"
+        if not p.exists():
+            return None
+        z = np.load(p)
+        return {"counts": z["counts"], "lat": z["lat"], "lon": z["lon"], "centre": tuple(z["centre"])}
+    return ir_features.features(crop("p2"), crop("m4"))
+
+
+@v10_3_present
+def test_the_ir_challenger_reproduces_the_labs_curve_from_the_same_crops(fs, v10, v10_3):
+    exp = json.loads((FIX / "expected.json").read_text(encoding="utf-8"))
+    assert ri_v10.needs_ir(v10_3["artifact"]) and not ri_v10.needs_ir(v10["artifact"])
+    for c in exp["cases"]:
+        out = fs.shadow_forecasts(_case(c["dtg"]), None, v10, ships_raw_fetcher=_ships(c["ships_text"]),
+                                  adeck_fetcher=lambda sid: _records(), challengers={"ri_v10_3_shadow": v10_3},
+                                  ir_fetcher=_fixture_ir)
+        ch = out["ri_v10_3_shadow"]
+        assert ch["source"] == "v10.3" and ch["ir"] == "ok"
+        assert ch["ir_inputs"]["ir_mean_50_200"] is not None
+        for k, want in c["v10_3"].items():
+            assert ch["probabilities"][k] == pytest.approx(want, abs=5e-5)           # live == lab
+        assert "ir" not in out["ri_v10_shadow"]                                          # v10.1 never reads IR
+
+
+@v10_3_present
+def test_an_ir_failure_touches_only_the_ir_model(fs, v10, v10_2, v10_3):
+    c = json.loads((FIX / "expected.json").read_text(encoding="utf-8"))["cases"][0]
+
+    def broken(*a):
+        raise OSError("bucket down")
+    out = fs.shadow_forecasts(_case(c["dtg"]), None, v10, ships_raw_fetcher=_ships(c["ships_text"]),
+                              adeck_fetcher=lambda sid: _records(),
+                              challengers={"ri_v10_2_shadow": v10_2, "ri_v10_3_shadow": v10_3}, ir_fetcher=broken)
+    assert out["ri_v10_3_shadow"]["status"] == "ok" and out["ri_v10_3_shadow"]["ir"].startswith("error: OSError")
+    assert all(v is None for v in out["ri_v10_3_shadow"]["ir_inputs"].values())        # NaN inputs, as in training
+    assert out["ri_v10_shadow"]["probability"] is not None and out["ri_v10_2_shadow"]["probability"] is not None
+
+
+def test_live_ir_crops_like_training_and_downloads_each_hour_once(fs, monkeypatch):
+    """The live path crops a full image with ir_source exactly as the collector did, and two storms
+    at the same cycle share the two downloads."""
+    from hazardpulse.hurricane import ir_features, ir_source
+    lat = np.linspace(72.7, -72.7, 2001)
+    lon = np.linspace(-180.0, 179.9, 5000)
+    rng = np.random.default_rng(1)
+    counts = rng.integers(60, 230, size=(lat.size, lon.size)).astype(np.uint8)
+    calls = []
+
+    def fake_fetch(hour):
+        calls.append(hour)
+        return "key", counts, lat, lon
+    monkeypatch.setattr(ir_source, "fetch_image", fake_fetch)
+    fs._IR_IMAGES.clear()
+    recs = _records()
+    cyc = dt.datetime(2026, 6, 16, 12)
+    got = fs.live_ir_features("AL012026", cyc, recs)
+    cen = ir_source.centres(recs, cyc)
+    want = ir_features.features(ir_source.crop(counts, lat, lon, cen["p2"][1]), ir_source.crop(counts, lat, lon, cen["m4"][1]))
+    assert got.keys() == want.keys() and all(
+        (math.isnan(got[k]) and math.isnan(want[k])) or got[k] == want[k] for k in got)
+    fs.live_ir_features("AL012026", cyc, recs)                                           # same hours: cached
+    assert sorted(calls) == sorted({cen["p2"][0], cen["m4"][0]}) and len(calls) == 2
+    fs._IR_IMAGES.clear()
+
+
+@v10_3_present
+def test_an_ir_model_is_not_scored_without_its_reader_and_the_reader_is_a_dependency(fs, monkeypatch):
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert '"h5py' in pyproject.split("dependencies = [", 1)[1].split("]", 1)[0]
+    assert "ri_v10_3_shadow" in fs.load_challengers()                     # this environment has it
+    monkeypatch.setattr(fs, "ir_reader_available", lambda: False)
+    got = fs.load_challengers()
+    assert "ri_v10_3_shadow" not in got and "ri_v10_2_shadow" in got     # never v10.3 without IR
+
+
+def test_the_loader_accepts_only_the_two_registered_input_sets(tmp_path):
+    art = json.loads(ri_v10.MODEL_PATH.read_text(encoding="utf-8"))
+    sets = ri_v10.allowed_feature_sets()
+    assert art["feature_names"] == sets["ONH"]
+    bad = dict(art, feature_names=sets["ONH+IR"][::-1])                                    # reordered inputs
+    p = tmp_path / "bad.json"
+    p.write_bytes(ri_v10.canonical_bytes(bad))
+    with pytest.raises(ValueError):
+        ri_v10.load(p)
+
+
+@v10_3_present
+def test_the_ir_challenger_is_bound_to_the_model_it_was_selected_against(tmp_path):
+    from hazardpulse.verification import served_evidence as se
+    root = _root_copy(tmp_path)
+    for p in (ri_v10.V10_2_PATH, ri_v10.V10_3_PATH):
+        (root / "results/models" / p.name).write_bytes(p.read_bytes())
+    chs = se.ours_hurricane(root)["challengers"]
+    assert [c["label"] for c in chs] == ["v10.2", "v10.3"] and chs[1]["against"] == "v10.2"
+    art = json.loads(ri_v10.V10_3_PATH.read_text(encoding="utf-8"))
+    art["provenance"]["dev_2022_2025"]["champion_log_loss"] = chs[0]["dev"]["champion_log_loss"]   # v10.1's, not v10.2's
+    (root / "results/models" / ri_v10.V10_3_PATH.name).write_bytes(ri_v10.canonical_bytes(art))
+    with pytest.raises(se.EvidenceError):
+        se.ours_hurricane(root)

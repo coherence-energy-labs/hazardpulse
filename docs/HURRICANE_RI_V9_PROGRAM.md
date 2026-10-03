@@ -359,6 +359,100 @@ The 2026 DTOPS reference is LL 0.1495 and Brier4 0.1476 (586 cycles, third read)
 
   The switch is made by a commit at the look, citing the scorer's frozen output.
 
+## Amendment 5 -- convective structure from geostationary IR (2026-10-03, before any IR feature is compared with an outcome)
+
+**Why.** Amendment 3 exhausted the cheap levers on our inputs, so the next gain needs new
+information (`docs/MODEL_IMPROVEMENT_LEDGER.md`, H1). Satellite convective structure enters
+NOAA's RI aids through their GOES predictors. Here it becomes a direct input.
+
+**Source:** NOAA GMGSI longwave IR, `s3://noaa-gmgsi-pds/GMGSI_LW/`.
+- Global, hourly, at about 0.072 degrees (8 km); 8-bit counts, where higher means colder.
+- Archived from **2021-07-12**, and live about 35-40 minutes after each hour.
+- The product's file naming changed between 2024 and 2025 (to `v3r0_blend`). The grid, the
+  encoding and the label are the same; drift is checked below.
+
+**Images and centre.**
+- Two images per cycle t:
+  - **t + 2 h**, the newest image certain to exist when the live forecast runs at t + 3 h 30;
+  - **t - 4 h**, six hours earlier, for trends.
+- The centre is the CARQ position at t, extrapolated along the t - 6 h -> t motion to each image's
+  hour.
+- Crops are +-4 degrees (`scripts/hurricane_ir_crops.py`). A missing image gives NaN.
+
+**IR features (14):** `src/hazardpulse/hurricane/ir_features.py`, the same code for training and
+live. All are in counts. A region with fewer than 50% valid pixels is NaN.
+- Means in the 0-50, 50-200 and 200-300 km rings.
+- Std of 50-200 km.
+- Fraction of pixels with count >= 195 in 50-200 km and in 0-300 km.
+- Fraction >= 215 in 0-100 km.
+- Azimuthal asymmetry: the std of the eight octant means in 50-200 km.
+- Eye contrast: the 25-75 km mean minus the 0-25 km minimum.
+- Max count in 0-50 km.
+- The t+2h minus t-4h change of the 0-50 km mean, the 50-200 km mean, the 50-200 km cold
+  fraction, and the asymmetry.
+
+**Candidate:** **V8 = V5 + IR**, with V5's settings and monotone set (the IR features are
+unconstrained). Training rows before 2021-07-12 carry NaN IR. Every scored fold (2022-2025) has IR.
+
+**Control:** V5, recomputed by the same script, must reproduce its amendment-3 log loss
+(0.14360848294226844, from `hurricane_ri_v10_challengers.json`), or the run stops. The value was
+first typed here as "0.143633..."; it was corrected in a separate commit before any IR result.
+
+**Carried rule (amendment 3's):** V8 is carried iff its pooled 30/24 log loss AND its pooled
+four-threshold Brier are both below V5's.
+- Reported: paired 95% intervals vs V5, and POD at the HCCA call's false-alarm rate.
+- Reported: a **drift check**. For each IR feature, the 2025 median minus the 2022-2024 median, in
+  pooled-SD units; a shift above 1 SD is flagged. This is descriptive and cannot change the rule.
+
+**2026:** a declared fourth read (no claim).
+
+**A carried V8 (v10.3):** runs in shadow with the IR read live at hour t + 2 h. It enters the
+prospective test at half of v10.2's error budget (99.6875%), under amendment 4's display rule.
+
+### Amendment 5 outcome (2026-10-03)
+
+**Data.** `scripts/hurricane_ir_crops.py` made 8,185 crops from 2,431 image hours. 21 hours have
+no image in NOAA's archive, and those cycles are NaN as registered.
+- IR is present on 2,829 of the 2,871 scored development cycles, and on all 586 cycles of 2026.
+- Refactor control: the crop code was moved into the library (`hazardpulse.hurricane.ir_source`)
+  that the live scorer uses. A stored crop was reproduced bit for bit from a fresh fetch.
+
+**Control:** V5 reproduced 0.14360848294226844.
+
+| | dev 30/24 LL | dev Brier4 | AUC | POD at HCCA's FAR (HCCA 0.236) | 2026 LL (4th read) | 2026 Brier4 |
+|---|---|---|---|---|---|---|
+| V5 (v10.2) | 0.1436 | 0.1544 | 0.9322 | 0.215 | 0.1262 | -- |
+| **V8 = V5 + IR** | **0.1418** | **0.1527** | **0.9334** | 0.209 | **0.1178** | -- |
+
+**V8 - V5:**
+- dev: dLL -0.0018 [-0.0054, +0.0015], dBrier4 -0.0016 [-0.0062, +0.0026];
+- 2026: **dLL -0.0084 [-0.0152, -0.0018]**, dBrier4 -0.0076 [-0.0151, -0.0006].
+
+**Drift check:** no feature is flagged. The largest 2025-vs-2022-2024 median shift is 0.20 SD.
+
+**Carried: V8 -> v10.3.**
+- IR is the first new-information gain, 2.5x the monotone gain on dev.
+- On 2026, the season trained with the most IR history, it is the largest gain of any challenger.
+  Its interval excludes 0 there. It is a declared fourth read, so it supports the result without
+  being a claim.
+- The top-end gap to the HCCA call is not closed by IR either (0.209 vs 0.236). Ledger H6 stays
+  open.
+
+## Amendment 6 -- v10.3 in the prospective test (2026-10-03, before v10.3 scores any cycle)
+
+- **v10.3** = V8 with v10.1's gate. Artifact `results/models/hurricane_ri_v10_3.json`, label
+  "v10.3", inputs ONH + IR.
+- **Live IR.** The scorer reads GMGSI at hour t + 2 h and t - 4 h, once per hour per run. It crops
+  and featurises them with the training code (`ir_source`, `ir_features`).
+  - A missing image or a fetch error gives NaN inputs, as a missing image did in training. It is
+    recorded in the shadow as `ir`.
+  - A missing IR *reader* (h5py) means v10.3 is **not scored**. Recording forecasts without IR
+    under its name would be a silently different model.
+- **Its claim** is v10.1's rule at **99.6875%**, half of v10.2's error budget, at the same looks.
+  Its first scored cycle is the first after it is deployed.
+- **Descriptive comparisons:** v10.3 vs v10.1 and v10.3 vs v10.2 on shared cycles. Amendment 4's
+  display rule applies unchanged: the newest carried challenger is v10.3.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
