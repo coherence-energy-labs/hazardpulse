@@ -828,6 +828,8 @@ def score_storms(
                 "hrrr_analysis": hrrr_label if v3_out.get("hrrr_used") else None,
                 "coherence_clipped": v3_out.get("coherence_clipped", []),
                 "drivers": v3_out.get("drivers", []),
+                "model_version": v3_out["model_version"],
+                "inputs": v3_out.get("inputs"),
             }
 
         # Include geometry for frontend polygon rendering

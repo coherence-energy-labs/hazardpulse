@@ -58,6 +58,10 @@ jobs:
       - name: Audit the hurricane forecast records
         run: python scripts/audit_hurricane_records.py --strict
 
+      # every tornado v3 forecast that stored its inputs recomputes exactly from them
+      - name: Audit the tornado forecast records
+        run: python scripts/audit_tornado_records.py --strict
+
       - name: Fit probability calibrators from matured forecasts
         # Turns the platform's own predictions-vs-outcomes into per-hazard
         # calibration constants (results/models/<hazard>_calibration.json). The
