@@ -53,6 +53,8 @@ from hazardpulse.hurricane.operational_ri import (  # noqa: E402
 )
 from hazardpulse.hurricane import ri_model  # noqa: E402
 from hazardpulse.hurricane import ri_stack, ships_text  # noqa: E402
+from hazardpulse.hurricane import ri_v9  # noqa: E402
+from hazardpulse.hurricane import ri_v9_features as v9fx  # noqa: E402
 
 DIST = Path(__file__).resolve().parents[1] / "dist"
 RESULTS = Path(__file__).resolve().parents[1] / "results"
@@ -674,6 +676,52 @@ def stack_forecast(
                   "ships_text": ships_text.summary(ri), "url": ships_text.url_for(sid, cycle), **info}
 
 
+def load_v9_model() -> dict[str, object] | None:
+    """The frozen v9.1 model for SHADOW scoring (docs/HURRICANE_RI_V9_PROGRAM.md, amendment 1),
+    or None when its artifact is absent. Never the published forecast until its claim is met."""
+    if not ri_v9.MODEL_PATH.exists():
+        print("  v9.1 shadow: no artifact; not scored")
+        return None
+    payload, version = ri_v9.load()
+    print(f"  v9.1 shadow {version}: {payload['n_trees']} trees, {len(payload['feature_names'])} inputs "
+          "(recorded beside the published number, not published)")
+    return {"payload": payload, "model_version": version}
+
+
+def fetch_ships_raw(storm_id: str, cycle: dt.datetime) -> tuple[str | None, str]:
+    """``(SHIPS text, file name)`` for the storm's cycle, or ``(None, why)``."""
+    name = ships_text.filename_for(storm_id, cycle)
+    try:
+        return fetch_text(ships_text.STEXT_ROOT + name, namespace="ships_text", use_cache=False), name
+    except Exception as exc:  # 404 (not yet published), network
+        return None, f"absent ({type(exc).__name__})"
+
+
+def v9_shadow(case: dict[str, object], v9: dict[str, object], ships_raw_fetcher=None,
+              adeck_fetcher=None) -> dict[str, object]:
+    """The v9.1 forecast for an NHC a-deck case: every RI threshold of the cycle's SHIPS text and the
+    storm's a-deck, through the same feature builder as training (ri_v9_features)."""
+    sid = str(case["storm_id"]).upper()
+    if sid[:2] not in NHC_BASINS or case.get("analysis_model") == "JTWC":
+        return {"status": "not an NHC a-deck case"}
+    cycle = dt.datetime.fromisoformat(str(case["issue_time"]))
+    raw, name = (ships_raw_fetcher or fetch_ships_raw)(sid, cycle)
+    pcts: dict[tuple[str, str], float] = {}
+    if raw is not None:
+        for th in v9fx.THRESHOLDS:
+            try:
+                ri = ships_text.parse_ships_text(raw, filename=name, threshold=th)
+            except ships_text.ShipsTextError:
+                continue
+            for tech in v9fx.RI_TECHS:
+                v = ri.whole_percent.get(tech)
+                if v is not None:
+                    pcts[(tech, th)] = v
+    records = (adeck_fetcher or fetch_realtime_adeck)(sid)
+    out = ri_v9.predict(v9["payload"], str(v9["model_version"]), records, cycle, sid[:2], pcts)
+    return {"status": "ok", "ships_text": name if raw is not None else f"ships_text_{name}", **out}
+
+
 def ri_source_label(storm: dict[str, object]) -> str:
     """What produced a storm's number, for people: 'NOAA DTOPS', 'NOAA SHIPS-RII', 'HazardPulse v8.2'."""
     if storm.get("ri_source") != RI_SOURCE_STACK:
@@ -688,6 +736,9 @@ def score_live_cases(
     live_cases: list[dict[str, object]],
     stack: dict[str, object] | None = None,
     ships_fetcher=None,
+    v9: dict[str, object] | None = None,
+    ships_raw_fetcher=None,
+    adeck_fetcher=None,
 ) -> list[dict[str, object]]:
     """Score live cases with the pinned artifacts. No training happens here.
 
@@ -749,6 +800,13 @@ def score_live_cases(
                     "ri_inputs": inputs,
                     "v8_2": {k: v82[k] for k in ("ri_probability", "model_version")},
                 })
+        if v9 is not None:
+            # shadow: recorded for the prospective test, never the published number; a failure here
+            # is written down and must not touch the forecast that is published
+            try:
+                storm["ri_v9_shadow"] = v9_shadow(case, v9, ships_raw_fetcher, adeck_fetcher)
+            except Exception as exc:  # noqa: BLE001
+                storm["ri_v9_shadow"] = {"status": f"error: {type(exc).__name__}: {exc}"}
         storm["ri_source_label"] = ri_source_label(storm)
         scored.append(storm)
 
@@ -1168,6 +1226,7 @@ def main() -> None:
     print("Step 0: Loading the pinned model artifacts...")
     model = load_serving_model()
     stack = load_stack_model()
+    v9 = load_v9_model()
     note = ri_sources_note(stack)
     print()
 
@@ -1212,6 +1271,8 @@ def main() -> None:
     print()
     print("Step 2: Building feature cases from ATCF + JTWC data...")
     live_cases: list[dict[str, object]] = []
+    # each storm's a-deck as fetched here, reused by the v9.1 shadow (one download per storm per run)
+    adeck_by_storm: dict[str, list[ATCFRecord]] = {}
 
     # NHC-tracked storms from ATCF a-deck
     # A file not modified since well before the activity window cannot hold a recent
@@ -1227,6 +1288,7 @@ def main() -> None:
             continue
         print(f"  Fetching ATCF a-deck for {sid}...")
         records = fetch_realtime_adeck(sid)
+        adeck_by_storm[str(sid).upper()] = records
         if not records:
             print(f"    No records for {sid}, skipping")
             continue
@@ -1279,7 +1341,8 @@ def main() -> None:
     print()
     print(f"Step 3-4: Scoring {len(live_cases)} active storms: NOAA aids ({stack['model_version']}) where the "
           f"cycle's SHIPS text has them, else {model['model_version']}...")
-    scored = score_live_cases(model, live_cases, stack=stack)
+    scored = score_live_cases(model, live_cases, stack=stack, v9=v9,
+                              adeck_fetcher=lambda s: adeck_by_storm.get(str(s).upper(), []))
 
     for s in scored:
         ri = s.get("ri_probability", 0) or 0
