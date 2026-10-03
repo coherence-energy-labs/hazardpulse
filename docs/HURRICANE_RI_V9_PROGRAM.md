@@ -111,6 +111,25 @@ DTOPS 0.1305; on the 532 cycles with the aids, dLL -0.0291 [-0.0475, -0.0087], d
 [-0.0163, -0.0040]. The model is good where its inputs exist and poor where they do not -- a gate,
 designed after this read, needs its own unseen test (v9.1 below).
 
+## Amendment 1 -- v9.1, a PROSPECTIVE test (2026-10-03, after the 2026 read; fixed before any cycle it scores)
+
+No untouched past season exists: DTOPS has no e-deck record before 2020 (the 2019 e-decks hold no RI
+records at all). The gated model is therefore tested on cycles that have not happened yet.
+
+- **v9.1** = D_gbt exactly as refitted for the final (2020-2025, 166 trees, `results/models/
+  hurricane_ri_v9.json`, scored in NumPy) wherever the cycle has the early aids it was trained on --
+  all three of DSHP, IVCN and NNIC have a 24-h forecast at the cycle; otherwise DTOPS 30/24 (SHIPS-RII
+  where DTOPS is missing). The gate was designed after the 2026 read; that is why this test exists.
+- **Serving until the claim**: DTOPS stays the published number. v9.1 runs in SHADOW on every live
+  NHC cycle (computed after the advisory, t + 3 h 30 min, so the official forecast exists as in
+  training), is written into the forecast record and its replay, and is never shown as the forecast.
+- **Test set**: every NHC-basin numbered-storm cycle with synoptic time >= 2026-10-04 00Z that the
+  live scorer forecast in shadow, scored against the best track at t and t + 24 h.
+- **Two looks**: the end of the 2026 season (2026-12-01) and the end of 2027 (2027-12-01). At each,
+  the claim rule above with 97.5% intervals (two looks at 0.025 each). The first look that meets it
+  switches serving to v9.1; if neither does, DTOPS stays and the result is reported.
+- The model is not refitted, re-tuned or re-gated during the test.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
