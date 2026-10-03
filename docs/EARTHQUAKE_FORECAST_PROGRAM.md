@@ -391,3 +391,57 @@ python scripts/earthquake_program/build_artifact.py         # served artifact + 
 python -m pytest -q tests/test_earthquake_operational_forecast.py \
     tests/test_earthquake_operational_serving.py tests/test_earthquake_program_metrics.py
 ```
+
+## 10. Amendment E1 -- GEAR1 as a challenger to C0 (registered 2026-10-03, before any GEAR1 number is computed)
+
+**Why.**
+- C0 has been compared with smoothed seismicity and with ETAS-style clustering, never with the
+  strongest public global long-term forecast.
+- Most of the skill is long-term (section 9.6: A alone gives 2.53 nats per target).
+- GEAR1 (Bird, Jackson, Kagan, Kreemer and Stein 2015, BSSA,
+  doi:10.1785/0120150058) adds geodetic strain rates (GSRM v2.1) to smoothed seismicity. It is
+  the place-where-quakes-can-happen information our causal catalog maps lack where a fault has
+  been quiet. (`docs/MODEL_IMPROVEMENT_LEDGER.md`, E1.)
+
+**G, the GEAR1 map on this grid.**
+- Source: `GEAR1.dat` from Zenodo record 7086053 (CC-BY-4.0). It is a CSV of 0.1 x 0.1 degree
+  cells, each with shallow-seismicity rates in 31 magnitude bins centred 6.00 .. 9.00.
+- Its SHA-256 is computed while it is streamed and recorded. The file is not kept.
+- G_c = the sum over all bins and over every 0.1-degree cell whose centre falls in grid cell `c`.
+  Assignment is by `operational_forecast.cell_index`, the verifier's rule: edge rows take
+  everything beyond 70N and 60S.
+- The global total is reported, so the rate's unit is checked (shallow M >= 5.95, per year).
+- G_c is then scaled to the 30-day window.
+
+**Leakage, stated in advance.**
+- GEAR1 was built from GCMT 1977-2013 and GSRM v2.1. It is not causal for any issue time before
+  2014, so **nothing is fitted on FIT**.
+- Everything is fitted on CHOOSE (2018-2020), which is out of sample for both GEAR1 and C0.
+- DEV (2021-2022) decides. FINAL (2023-2025) is a declared SECOND read: reported, never used to
+  decide.
+
+**Candidates.** Each is fitted on CHOOSE by maximum Bernoulli likelihood, pooled over all
+cell-times, on C0's cached CHOOSE forecasts:
+
+- **S0, the control:** `logit p = a + c logit(p_C0)`. This is C0 recalibrated on CHOOSE. Without
+  S0, a gain from G could be a gain from recalibration.
+- **S1, the challenger:** `logit p = a + c logit(p_C0) + b log10(max(G_c, 1e-7))`.
+- **AG, descriptive only** (is GEAR1 a better long-term map than ours?):
+  - AG: `P = 1 - exp(-mu ((1 - eps) G_c / sum G + eps / 11700))`;
+  - against A_ch: A's own causal map `s_t` with its `mu`, `eps` refitted on CHOOSE in the same
+    form;
+  - both compared on DEV.
+
+**Carried rule (on DEV, month-block paired intervals as in section 4).** S1 replaces C0 as the
+served model iff BOTH hold:
+
+- the 95% interval of `IG(S1) - IG(S0)` lies entirely above 0;
+- the point `IG(S1) - IG(C0)` is >= 0.
+
+Otherwise C0 stays and "GEAR1 adds to C0" is recorded as killed, with the interval as its
+witness. If S0 itself beats C0 on DEV, that is recorded as a separate open branch (recalibration),
+not adopted here.
+
+**Reported:** IG, AUC, BSS and `sum p / sum y` for C0, S0, S1, A_ch and AG on DEV, then on FINAL
+(declared second read), plus the fitted coefficients.
+
