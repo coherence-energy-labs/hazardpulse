@@ -395,7 +395,8 @@ live. All are in counts. A region with fewer than 50% valid pixels is NaN.
 unconstrained). Training rows before 2021-07-12 carry NaN IR. Every scored fold (2022-2025) has IR.
 
 **Control:** V5, recomputed by the same script, must reproduce its amendment-3 log loss
-(0.143633...), or the run stops.
+(0.14360848294226844, from `hurricane_ri_v10_challengers.json`), or the run stops. The value was
+first typed here as "0.143633..."; it was corrected in a separate commit before any IR result.
 
 **Carried rule (amendment 3's):** V8 is carried iff its pooled 30/24 log loss AND its pooled
 four-threshold Brier are both below V5's.
