@@ -461,12 +461,77 @@ def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "
     return path
 
 
-def label_storms(artifact: dict, tornado_reports: list[dict]) -> dict:
+V3_PREFIX = "tornado_v3"
+
+
+class TrackUnavailable(RuntimeError):
+    """The ProbSevere archive needed to rebuild a storm's track could not be read: the forecast
+    is unscorable for now (retried next run), never labelled with another event."""
+
+
+class TrackSource:
+    """Storm tracks from the ProbSevere archive -- the same fetch, parser and slot cadence that built
+    the v3 training labels. ``fetch(date_str) -> steps``; cached per UTC day."""
+
+    def __init__(self, fetch=None):
+        if fetch is None:
+            from hazardpulse.data.probsevere import fetch_probsevere_day
+            fetch = fetch_probsevere_day
+        self._fetch = fetch
+        self._days: dict[str, dict[str, list]] = {}
+
+    def _day(self, d: str) -> dict[str, list]:
+        if d not in self._days:
+            try:
+                steps = self._fetch(d)
+            except Exception as exc:
+                raise TrackUnavailable(f"ProbSevere {d}: {exc}") from exc
+            if not steps:
+                raise TrackUnavailable(f"ProbSevere {d}: no objects")
+            from hazardpulse.tornado.definitive_model import parse_probsevere_valid_time
+            tracks: dict[str, list] = {}
+            for st in steps:
+                tv = parse_probsevere_valid_time(st.get("valid_time", ""))
+                if tv is None:
+                    continue
+                for s in st.get("storms", []):
+                    tracks.setdefault(str(s.get("id")), []).append((tv.timestamp(), s))
+            self._days[d] = tracks
+        return self._days[d]
+
+    def track(self, storm_id, t: dt.datetime) -> list:
+        """Every slot of ``storm_id`` on t's UTC day and the next (a label may use the future)."""
+        out = []
+        for d in (t, t + dt.timedelta(days=1)):
+            out.extend(self._day(d.strftime("%Y%m%d")).get(str(storm_id), []))
+        return out
+
+
+def _label_v3_storm(storm: dict, storm_time: dt.datetime, reports_in_window: list, tracks: TrackSource) -> float:
+    """The event v3 forecasts (storm_features.labels, the training definition): a tornado report
+    within 10 km of THIS storm's tracked polygon within 60 min."""
+    from hazardpulse.tornado import storm_features as sf
+
+    sid = storm.get("storm_id", storm.get("id"))
+    like = {"id": sid, "lat": storm.get("lat"), "lon": storm.get("lon"),
+            "motion_east": storm.get("motion_east", 0.0), "motion_south": storm.get("motion_south", 0.0),
+            "geometry": storm.get("geometry"), "size": storm.get("size", 0.0)}
+    t0 = storm_time.replace(tzinfo=dt.timezone.utc).timestamp()
+    reps = [{"slat": r["lat"], "slon": r["lon"], "time_utc": rt.replace(tzinfo=dt.timezone.utc).timestamp(),
+             "mag": r.get("mag", -1)} for rt, r in reports_in_window]
+    track = tracks.track(sid, storm_time) or [(t0, like)]
+    lab, _, _ = sf.labels(like, t0, reps, track=track)
+    return float(lab[sf.LABEL_NAMES.index("storm_60")])
+
+
+def label_storms(artifact: dict, tornado_reports: list[dict], tracks: TrackSource | None = None) -> dict:
     """Label every storm of one forecast against UTC-timed reports.
 
-    A storm is positive when a report lies within MATCH_RADIUS_KM of it and
-    within MATCH_WINDOW_HOURS of its valid time, counting only reports inside
-    the forecast window [issued_at, issued_at + horizon].
+    A v3 storm (model_version tornado_v3-...) is labelled with the event its model forecasts --
+    the training definition, via the storm's archived track (raises TrackUnavailable if the
+    archive cannot be read). Earlier models keep their own definition: a report within
+    MATCH_RADIUS_KM of the storm and MATCH_WINDOW_HOURS of its valid time, inside the
+    forecast window [issued_at, issued_at + horizon].
     """
     issued_at = parse_utc(artifact["issued_at"])
     horizon_hours = int(artifact.get("forecast_horizon_hours", 24))
@@ -491,6 +556,11 @@ def label_storms(artifact: dict, tornado_reports: list[dict]) -> dict:
         storm_lat = float(storm.get("lat", 0))
         storm_lon = float(storm.get("lon", 0))
         storm_time = parse_utc(storm.get("valid_time", artifact["issued_at"]))
+        if str(storm.get("model_version", "")).startswith(V3_PREFIX):
+            if tracks is None:
+                tracks = TrackSource()
+            y_true[i] = _label_v3_storm(storm, storm_time, reports_in_window, tracks)
+            continue
         for rtime, report in reports_in_window:
             dist = haversine_km(storm_lat, storm_lon, report["lat"], report["lon"])
             dt_hours = abs((rtime - storm_time).total_seconds()) / 3600.0
@@ -771,13 +841,17 @@ def main(argv: list[str] | None = None) -> int:
 
     calib_acc: dict | None = None
     if args.emit_calibration:
-        # Calibration data is pooled for the model being SERVED now.
-        served = REPO_ROOT / "results" / "models" / "tornado_gbt_v1.json"
-        calib_acc = {
-            _CALIB_VERSION_KEY: (
-                model_version_of_payload(served) if served.exists() else LEGACY_MODEL_VERSION
-            )
-        }
+        # Calibration data is pooled for the model being SERVED now: the v3 headline model (the
+        # +W model, else its fallback) when its payload exists, else the legacy v2 payload.
+        models = REPO_ROOT / "results" / "models"
+        v3 = next((models / f for f in ("tornado_v3_w.json", "tornado_v3.json") if (models / f).exists()), None)
+        if v3 is not None:
+            from hazardpulse.tornado import lgbm_payload as _lp
+            served_version = _lp.model_version(_lp.load(v3))
+        else:
+            served = models / "tornado_gbt_v1.json"
+            served_version = model_version_of_payload(served) if served.exists() else LEGACY_MODEL_VERSION
+        calib_acc = {_CALIB_VERSION_KEY: served_version}
 
     per_forecast_path = output_dir / "per_forecast_scores.jsonl"
 
@@ -794,8 +868,15 @@ def main(argv: list[str] | None = None) -> int:
         scored: list[tuple[dict, dict, dict]] = []
         unavailable: list[str] = []
         with open(per_forecast_path, "w", encoding="utf-8") as handle:
+            tracks = TrackSource()
             for artifact in matured:
-                labels = label_storms(artifact, all_reports)
+                try:
+                    labels = label_storms(artifact, all_reports, tracks=tracks)
+                except TrackUnavailable as exc:
+                    # v3 storms need their archived track; without it: unscorable, never "no tornado"
+                    print(f"  {artifact['forecast_id']}: {exc} -- left for the next run")
+                    unavailable.append(artifact["forecast_id"])
+                    continue
                 if window_overlaps_failed_days(labels["issued_at"], labels["window_end"], failed_days):
                     # No outcome file for part of the window: unscorable, never "no tornado".
                     unavailable.append(artifact["forecast_id"])
