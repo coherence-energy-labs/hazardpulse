@@ -30,7 +30,7 @@ Read it before starting model work, and update it when a branch is decided.
 
 | hazard | published | ours, shown or in shadow | evidence |
 |---|---|---|---|
-| Hurricane RI, NHC basins | NOAA DTOPS | v10.1 shown beside it; **v10.2 challenger** in shadow | `docs/HURRICANE_RI_V9_PROGRAM.md` amendments 2-4 |
+| Hurricane RI, NHC basins | NOAA DTOPS | v10.1 shown beside it; challengers **v10.2** (monotone) and **v10.3** (+ satellite IR) in shadow | `docs/HURRICANE_RI_V9_PROGRAM.md` amendments 2-6 |
 | Tornado | v3 (+NWS warning state) | -- | `docs/TORNADO_MODEL_PROGRAM.md` |
 | Earthquake M6+ | **S1 = C0 + GEAR1** (since 2026-10-03) | -- | `docs/EARTHQUAKE_FORECAST_PROGRAM.md` section 10 |
 
@@ -40,20 +40,23 @@ Read it before starting model work, and update it when a branch is decided.
 
 The cheap levers on the current inputs are exhausted (amendment 3): monotone constraints gave
 -0.0007 in log loss, and revisions -0.0002. **The next material gain must be new information.**
+The first one, satellite IR (H1), delivered.
 
-1. **H1. Convective structure from geostationary IR, one code path for training and live.**
-   - Source: NOAA GMGSI longwave IR global mosaic (`s3://noaa-gmgsi-pds/GMGSI_LW/`). It is hourly
-     and archived from 2021. The 12Z image landed at 12:39Z, well before our t + 3 h 30 run.
-     Files are ~7.5 MB.
-   - Features at t: annular brightness-temperature statistics around the CARQ centre at 0-50,
-     50-200 and 100-300 km (mean, std, fraction colder than -50 C and -70 C), azimuthal symmetry,
-     and their 6-h trend. These are the quantities SHIPS's GOES predictors summarise. Here they are
-     direct inputs, not filtered through NOAA's probabilities.
-   - Decides: whether satellite convective structure adds to NOAA's RI probabilities.
-   - Experiment: V5 + IR on folds 2022-2025, training from 2021. A control is required: V5 must
-     reproduce itself on the 2021+ training window.
-   - Cost: about 4,000 cycles x 7.5 MB, streamed (crop, then delete). Never keep the images (see
-     the scratchpad disk-bomb law).
+**Ops note (2026-10-03):** the earthquake and verification scorers commit without deploying (bot
+pushes do not trigger `deploy.yml`). Their changes reach the site only at the next hurricane or
+tornado deploy or merge. Cheap fix: give `earthquake-score.yml` the same deploy step as
+`hurricane-score.yml`.
+
+1. **H1. DONE (2026-10-03): v10.3 = V5 + satellite IR, carried and in shadow** (amendments 5-6).
+   - Data: NOAA GMGSI longwave, hourly, archived from 2021-07-12. Crops are made by the same
+     library code for training and live.
+   - Result: dev log loss 0.1418 vs V5 0.1436 (-0.0018 [-0.0054, +0.0015]). On 2026 (fourth read)
+     0.1178 vs 0.1262 (**-0.0084 [-0.0152, -0.0018]**), the first new-information gain.
+   - Lesson: one bucket connection gives ~0.9 MB/s and eight give ~10, so parallelise any bulk
+     S3 pull.
+   - Next from it: a finer inner core. GMGSI is 8 km, so native GOES ABI band 13 (2 km, on AWS,
+     real-time) would resolve eyes and rings properly. Also a learned representation (a small CNN
+     on the crops) in place of the 14 hand-made statistics, with the same controls.
 2. **H2. Environment from GFS analyses** (`s3://noaa-gfs-bdp-pds`, 2021+, real-time).
    - Features: 850-200 hPa shear, 700-500 hPa RH, SST and potential intensity at t, computed by one
      code for training and live.
