@@ -18,6 +18,7 @@ LIVE_TORNADOES_PATH = DIST / "data" / "live-tornadoes.json"
 LIVE_STORMS_PATH = DIST / "data" / "live-storms.json"
 EQ_LEDGER_PATH = DIST / "data" / "earthquake-ledger.jsonl"
 TO_LEDGER_PATH = DIST / "data" / "tornado-ledger.jsonl"
+HU_LEDGER_PATH = DIST / "data" / "hurricane-ledger.jsonl"
 REPLAY_DIR = DIST / "data" / "replay"
 VERIFICATION_SUMMARY_PATH = DIST / "data" / "verification-summary.json"
 VERIFICATION_DATA_DIR = DIST / "data" / "verification"
@@ -525,6 +526,7 @@ def _collect_prediction_entries(pulse: dict, replay_index: dict) -> list[dict]:
         )
 
     seen_hurricane: set[str] = set()
+    hu_chain = {row.get("forecast_id"): row for row in _read_jsonl(HU_LEDGER_PATH)}
     for item in replay_index.get("items", []):
         forecast_id = item.get("forecast_id", "")
         if not forecast_id.startswith("hu_fcst_") or forecast_id in seen_hurricane:
@@ -534,7 +536,8 @@ def _collect_prediction_entries(pulse: dict, replay_index: dict) -> list[dict]:
         if not replay_path.exists():
             continue
         artifact = _read_replay_cached(replay_path)
-        entry_hash = f"sha256:{_canonical_hash(artifact)}"
+        chained = hu_chain.get(forecast_id)       # forecasts since the hurricane ledger began are chained
+        entry_hash = f"sha256:{chained['hash']}" if chained else f"sha256:{_canonical_hash(artifact)}"
         seen_hurricane.add(forecast_id)
         entries.append(
             {
@@ -542,7 +545,7 @@ def _collect_prediction_entries(pulse: dict, replay_index: dict) -> list[dict]:
                 "hazard": "hurricane",
                 "issued_at": artifact.get("issued_at", _format_utc_z(_parse_utc(artifact.get("issued_at")))),
                 "hash": entry_hash,
-                "prev_hash": None,
+                "prev_hash": f"sha256:{chained['prev_hash']}" if chained else None,
                 "model_version": artifact.get("model_version"),
                 "probability": artifact.get("top_probability", 0.0),
                 "replay_artifact": replay_artifact,
@@ -1025,6 +1028,7 @@ def _build_verification_summary(pulse: dict) -> dict:
     replay_groups = _load_replay_artifacts_by_hazard()
     eq_rows, eq_mismatches = _count_link_mismatches(EQ_LEDGER_PATH)
     to_rows, to_mismatches = _count_link_mismatches(TO_LEDGER_PATH)
+    hu_rows, hu_mismatches = _count_link_mismatches(HU_LEDGER_PATH)
     live_map = {hazard.get("key"): hazard for hazard in pulse.get("hazards", [])}
     eq_related = _earthquake_related_benchmark()
     to_related = _tornado_related_benchmark()
@@ -1216,10 +1220,11 @@ def _build_verification_summary(pulse: dict) -> dict:
                 "next_mature_at": next_mature_at(hu_artifacts),
             },
             "ledger": {
-                "supported": False,
-                "path": None,
-                "n_rows": 0,
-                "prev_hash_mismatches": 0,
+                "supported": hu_rows > 0,
+                "path": "/data/hurricane-ledger.jsonl" if hu_rows > 0 else None,
+                "n_rows": hu_rows,
+                "prev_hash_mismatches": hu_mismatches,
+                "since": "2026-10-03 (earlier hurricane forecasts are kept as replay files, unchained)",
             },
             "prospective": {
                 **hu_binding["prospective"],

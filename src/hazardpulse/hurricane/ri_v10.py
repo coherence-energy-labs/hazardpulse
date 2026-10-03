@@ -60,6 +60,13 @@ def load(path: str | Path = MODEL_PATH) -> tuple[dict, str]:
     return art, f"{art['model_name']}-{digest[:12]}"
 
 
+def recompute(art: Mapping, inputs: Mapping[str, float | None]) -> dict[str, float]:
+    """The model's exceedance curve from a forecast record's stored inputs alone (None = missing),
+    for auditing a past forecast against the artifact its record names."""
+    row = np.array([[np.nan if inputs.get(n) is None else float(inputs[n]) for n in art["feature_names"]]])
+    return {str(int(k)): float(predict_matrix(art, row, k)[0]) for k in art["thresholds_kt"]}
+
+
 def predict_matrix(art: Mapping, X: np.ndarray, k: float) -> np.ndarray:
     Xk = np.hstack([np.asarray(X, np.float64), np.full((len(X), 1), float(k))])
     return np.mean([lp.predict_proba(m, Xk) for m in art["members"]], axis=0)
@@ -96,6 +103,7 @@ def predict(art: Mapping, version: str, records: Iterable, cycle, basin: str,
             "gate_missing": [a for a in GATE_AIDS if not math.isfinite(f[f"dv24_{a}"])],
             "dtops_pct": ri_pcts.get(("DTOP", "30/24")), "riod_pct": ri_pcts.get(("RIOD", "30/24")),
             "cycle": cycle.strftime("%Y-%m-%dT%H:00:00Z"), "model_version": version,
+            "inputs": fx.record_inputs(f, art["feature_names"]),
             **({"ir_inputs": {n: (round(float(f[n]), 4) if math.isfinite(float(f.get(n, math.nan))) else None)
                               for n in art["feature_names"] if n.startswith(("ir_", "d_ir_"))}}
                if needs_ir(art) else {})}

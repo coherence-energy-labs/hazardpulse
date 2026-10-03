@@ -53,6 +53,11 @@ jobs:
         # running record until a look date (2026-12-01, 2027-12-01); the claim is made only at a look
         run: python scripts/score_hurricane_v9_prospective.py
 
+      # every hurricane record: the hash chain holds, each entry still matches its replay file, and
+      # every shadow recomputes from its stored inputs; a broken record fails this job
+      - name: Audit the hurricane forecast records
+        run: python scripts/audit_hurricane_records.py --strict
+
       - name: Fit probability calibrators from matured forecasts
         # Turns the platform's own predictions-vs-outcomes into per-hazard
         # calibration constants (results/models/<hazard>_calibration.json). The

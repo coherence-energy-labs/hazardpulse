@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import datetime as dt
 import gzip
+import hashlib
 import json
 import re
 import sys
@@ -828,6 +829,57 @@ def shadow_forecasts(case: dict[str, object], v9: dict[str, object] | None, v10:
     return out
 
 
+HU_LEDGER_PATH = DIST / "data" / "hurricane-ledger.jsonl"
+
+
+def _canonical_sha256(obj) -> str:
+    return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def forecast_content_sha256(forecast_id: str, storms: list[dict]) -> str:
+    """SHA-256 of what a forecast said -- its id and every storm record (published number, every
+    shadow, every stored input). The site build rewrites the replay's envelope, never its storms,
+    so this is recomputable from the replay file at any later time."""
+    return _canonical_sha256({"forecast_id": forecast_id, "storms": storms})
+
+
+def append_hurricane_ledger(forecast_id: str, now: dt.datetime, model_version: str, storms: list[dict],
+                            path: Path | None = None) -> dict:
+    """Append one hash-chained entry per forecast (the earthquake and tornado ledgers' scheme:
+    ``hash`` = SHA-256 of the entry without ``hash``, ``prev_hash`` = the previous entry's hash).
+    The entry carries the forecast's content hash, so editing any stored storm record, shadow or
+    input afterwards breaks the chain's agreement with the replay file. One writer at a time: every
+    scoring workflow shares the ``hazardpulse-scoring`` concurrency group."""
+    # resolved from DIST at call time, not import time: a run (or a test) that points DIST elsewhere
+    # must write its ledger there too, never into the real one
+    path = DIST / "data" / HU_LEDGER_PATH.name if path is None else path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    prev_hash = "0" * 64
+    if path.exists():
+        lines = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        if lines:
+            prev_hash = json.loads(lines[-1])["hash"]
+    entry = {
+        "timestamp": now.isoformat() + "Z",
+        "forecast_id": forecast_id,
+        "model_version": model_version,
+        "content_sha256": forecast_content_sha256(forecast_id, storms),
+        "storms": [{
+            "id": s.get("storm_id"), "issue_time": s.get("issue_time"),
+            "published": s.get("ri_probability"), "source": s.get("ri_source_label") or s.get("ri_source"),
+            "published_model_version": s.get("model_version"),
+            "shadows": {k: {"model_version": v.get("model_version"), "probability": v.get("probability")}
+                        for k, v in s.items() if k.endswith("_shadow") and isinstance(v, dict)
+                        and v.get("status") == "ok"},
+        } for s in storms],
+        "prev_hash": prev_hash,
+    }
+    entry["hash"] = _canonical_sha256(entry)
+    with open(path, "a", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(entry, sort_keys=True, separators=(",", ":")) + "\n")
+    return entry
+
+
 def ri_source_label(storm: dict[str, object]) -> str:
     """What produced a storm's number, for people: 'NOAA DTOPS', 'NOAA SHIPS-RII', 'HazardPulse v8.2'."""
     if storm.get("ri_source") != RI_SOURCE_STACK:
@@ -1008,6 +1060,8 @@ def write_outputs(
     }
     replay_path.write_text(json.dumps(replay_payload, indent=2) + "\n", encoding="utf-8")
     print(f"  Wrote {replay_path}")
+    entry = append_hurricane_ledger(forecast_id, now, model_version, scored_storms)
+    print(f"  Ledger: {HU_LEDGER_PATH.name} +1 (hash {entry['hash'][:12]}, prev {entry['prev_hash'][:12]})")
 
     # Update live-pulse.json hurricane entry
     pulse_path = DIST / "data" / "live-pulse.json"
