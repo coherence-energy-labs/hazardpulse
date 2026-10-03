@@ -40,16 +40,47 @@ O_NAMES = (
 )
 N_NAMES = tuple(f"ri_{tech}_{th.replace('/', '_')}" for tech in RI_TECHS for th in THRESHOLDS)
 H_NAMES = ("ofcl_dv24", "ofcl_dv12")
-GROUPS = {"O": O_NAMES, "N": N_NAMES, "H": H_NAMES}
+# v10 (amendment 2): how the guidance has been doing on THIS storm -- observed minus forecast
+ERROR_AIDS = ("DSHP", "LGEM", "IVCN", "HCCA", "NNIC", "OFCL")
+E_NAMES = (*(f"err12_{a}" for a in ERROR_AIDS), *(f"err24_{a}" for a in ERROR_AIDS),
+           "err12_mean", "err24_mean", "dv_past6")
+GROUPS = {"O": O_NAMES, "N": N_NAMES, "H": H_NAMES, "E": E_NAMES}
+# what a feed without the early guidance loses (the masking copies of amendment 2)
+GUIDANCE_NAMES = tuple(n for n in O_NAMES if n.startswith("dv24_") or n == "frac_ge30") + E_NAMES
 
 
 def names_for(groups: str) -> tuple[str, ...]:
-    """``"ON"`` -> O_NAMES + N_NAMES, in the fixed order."""
+    """``"ON"`` -> O_NAMES + N_NAMES, in the fixed order (O, N, H, E)."""
     out: list[str] = []
-    for g in "ONH":
+    for g in "ONHE":
         if g in groups:
             out.extend(GROUPS[g])
     return tuple(out)
+
+
+def error_features(records: Iterable, cycle, v0: float | None) -> dict[str, float]:
+    """Group E: each aid's error on THIS storm -- V_CARQ(t) minus the aid's forecast for t made
+    12 h and 24 h earlier -- their means, and the CARQ 6-h tendency. NaN where absent."""
+    import datetime as _dt
+    f: dict[str, float] = {k: float("nan") for k in E_NAMES}
+    if v0 is None or not math.isfinite(v0):
+        return f
+    t0 = cycle_table(records, cycle)
+    past6 = t0.get(("CARQ", -6))
+    if past6 is not None and past6.vmax is not None:
+        f["dv_past6"] = float(v0) - float(past6.vmax)
+    for lead in (12, 24):
+        prev = cycle_table(records, cycle - _dt.timedelta(hours=lead))
+        errs = []
+        for a in ERROR_AIDS:
+            fx_ = prev.get((a, lead))
+            if fx_ is not None and fx_.vmax is not None:
+                e = float(v0) - float(fx_.vmax)
+                f[f"err{lead}_{a}"] = e
+                errs.append(e)
+        if errs:
+            f[f"err{lead}_mean"] = float(np.mean(errs))
+    return f
 
 
 def threshold_key(th: str) -> tuple[int, int]:

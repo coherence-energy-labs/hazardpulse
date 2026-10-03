@@ -1,0 +1,77 @@
+"""v10.1 rapid-intensification forecast (docs/HURRICANE_RI_V9_PROGRAM.md, amendment 2).
+
+The whole 24-h exceedance curve P(dV >= k), k = 15..45 kt, from one threshold-stacked model (five
+seed members, each a NumPy LightGBM payload, averaged) wherever the cycle has the early guidance it
+was trained on (DSHP, IVCN and NNIC); otherwise each threshold is NOAA DTOPS's own published value
+(SHIPS-RII where DTOPS is missing; none where NOAA publishes no 24-h value at that threshold).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+from pathlib import Path
+from typing import Iterable, Mapping
+
+import numpy as np
+
+from hazardpulse.hurricane import ri_model
+from hazardpulse.hurricane import ri_v9_features as fx
+from hazardpulse.tornado import lgbm_payload as lp
+
+SCHEMA = "hazardpulse.hurricane_ri_v10/1"
+MODEL_PATH = ri_model.RESULTS / "models" / "hurricane_ri_v10.json"
+GATE_AIDS = ("DSHP", "IVCN", "NNIC")
+NOAA_24H = (25, 30, 35, 40)          # the 24-h thresholds NOAA's aids publish
+
+
+def canonical_bytes(art: Mapping) -> bytes:
+    return json.dumps(art, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+
+
+def load(path: str | Path = MODEL_PATH) -> tuple[dict, str]:
+    art = json.loads(Path(path).read_bytes().decode("utf-8"))
+    if art.get("schema") != SCHEMA:
+        raise ValueError(f"{path}: schema {art.get('schema')!r}, expected {SCHEMA!r}")
+    names = list(fx.names_for("ONH"))
+    if art["feature_names"] != names:
+        raise ValueError(f"{path}: inputs are not the v9/v10 feature set")
+    for m in art["members"]:
+        if m["feature_names"] != names + ["threshold_kt"]:
+            raise ValueError(f"{path}: a member's inputs are not the feature set + threshold")
+    digest = hashlib.sha256(canonical_bytes(art)).hexdigest()
+    return art, f"{art['model_name']}-{digest[:12]}"
+
+
+def predict_matrix(art: Mapping, X: np.ndarray, k: float) -> np.ndarray:
+    Xk = np.hstack([np.asarray(X, np.float64), np.full((len(X), 1), float(k))])
+    return np.mean([lp.predict_proba(m, Xk) for m in art["members"]], axis=0)
+
+
+def predict(art: Mapping, version: str, records: Iterable, cycle, basin: str,
+            ri_pcts: Mapping[tuple[str, str], float | None]) -> dict:
+    """The v10.1 exceedance curve for one cycle, with what produced it."""
+    records = list(records)
+    f = fx.adeck_features(fx.cycle_table(records, cycle), basin)
+    f.update(fx.ri_features(ri_pcts))
+    gate_ok = all(math.isfinite(f[f"dv24_{a}"]) for a in GATE_AIDS)
+    X = fx.vector(f, art["feature_names"])[None, :]
+    model = {int(k): float(predict_matrix(art, X, k)[0]) for k in art["thresholds_kt"]}
+    noaa = {}
+    for k in NOAA_24H:
+        d, s = ri_pcts.get(("DTOP", f"{k}/24")), ri_pcts.get(("RIOD", f"{k}/24"))
+        noaa[k] = (d if d is not None else s) / 100.0 if (d is not None or s is not None) else None
+    if gate_ok:
+        probs, source = model, "v10.1"
+    else:
+        probs = {k: noaa.get(k) for k in art["thresholds_kt"]}
+        source = "DTOPS (v10.1 gate: early guidance missing)"
+    return {"probability": None if probs.get(30) is None else round(probs[30], 4),
+            "probabilities": {str(k): (None if v is None else round(v, 4)) for k, v in probs.items()},
+            "model_probabilities": {str(k): round(v, 4) for k, v in model.items()},
+            "noaa_24h": {str(k): (None if v is None else round(v, 4)) for k, v in noaa.items()},
+            "source": source, "gate_ok": gate_ok,
+            "gate_missing": [a for a in GATE_AIDS if not math.isfinite(f[f"dv24_{a}"])],
+            "dtops_pct": ri_pcts.get(("DTOP", "30/24")), "riod_pct": ri_pcts.get(("RIOD", "30/24")),
+            "cycle": cycle.strftime("%Y-%m-%dT%H:00:00Z"), "model_version": version}

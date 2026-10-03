@@ -2106,6 +2106,34 @@ def _render_evidence_page(
     EVIDENCE_PAGE_PATH.write_text(page, encoding="utf-8")
 
 
+def _ours_cell(storm: dict) -> str:
+    """Our own RI model's 24-h probability for a storm (v10.1 shadow), or why there is none."""
+    sh = storm.get("ri_v10_shadow") or {}
+    if sh.get("status") != "ok":
+        return '<span class="muted">--</span>' if not sh else '<span class="muted">not available</span>'
+    if sh.get("probability") is None:
+        return '<span class="muted">no guidance</span>'
+    note = "" if sh.get("gate_ok") else ' <span class="muted">(NOAA DTOPS: guidance missing)</span>'
+    return f"{_pct(sh['probability'])}{note}"
+
+
+def _ours_note() -> str:
+    """What the experimental column is, from our model's bound evidence (served_evidence)."""
+    from hazardpulse.verification import evidence_pages, served_evidence
+
+    try:
+        ours = (served_evidence.hurricane_evidence() or {}).get("ours")
+    except served_evidence.EvidenceError:
+        ours = None
+    if not ours:
+        return ""
+    items = "".join(f"<li><strong>{label}:</strong> {value}</li>" for label, value in evidence_pages.ours_hurricane_lines(ours))
+    return ('<div class="card" style="margin-top:12px;"><p class="muted" style="margin:0 0 6px;">'
+            f"<strong>HazardPulse model ({html.escape(ours['model_version'])})</strong> &mdash; our own "
+            "rapid-intensification forecast, shown for comparison. The published number is NOAA&rsquo;s until the "
+            f"pre-registered test below is passed.</p><ul class=\"muted\" style=\"margin:0;\">{items}</ul></div>")
+
+
 def _render_live_hurricane_page() -> None:
     storms = _read_json(LIVE_STORMS_PATH, {})
     updated_at = _parse_utc(storms.get("updated_at"))
@@ -2126,22 +2154,27 @@ def _render_live_hurricane_page() -> None:
                 f"<td>{_esc(storm.get('lat', '--'))}, {_esc(storm.get('lon', '--'))}</td>"
                 f"<td>{_pct(storm.get('ri_probability', 0))}</td>"
                 f"<td>{_esc(storm.get('ri_source_label') or 'HazardPulse v8.2')}</td>"
+                f"<td>{_ours_cell(storm)}</td>"
                 f"<td>{_esc(storm.get('vmax_kt', '--'))} kt</td>"
                 f"</tr>"
             )
         storms_html = (
-            "<table><thead><tr><th>Storm</th><th>Status</th><th>Location</th><th>RI 24h</th><th>Source</th><th>Wind</th></tr></thead>"
-            f"<tbody>{''.join(rows)}</tbody></table>"
+            "<table><thead><tr><th>Storm</th><th>Status</th><th>Location</th><th>RI 24h (published)</th>"
+            "<th>Source</th><th>HazardPulse model (experimental)</th><th>Wind</th></tr></thead>"
+            f"<tbody>{''.join(rows)}</tbody></table>" + _ours_note()
         )
         top = sorted_storms[0]
         summary_html = (
             '<div class="card hazard-hu">'
             '<h2 style="margin-top:0;">Top storm</h2>'
             f'<div class="metric">{_pct(top.get("ri_probability", 0))}</div>'
-            '<div class="metric-label">Rapid intensification in 24h</div>'
+            '<div class="metric-label">Rapid intensification in 24h'
+            f' ({_esc(top.get("ri_source_label") or "HazardPulse v8.2")})</div>'
             f'<div class="kv"><span>Name</span><strong>{_esc(top.get("storm_name", top.get("storm_id", "Storm")))}</strong></div>'
             f'<div class="kv"><span>Status</span><strong>{_esc(top.get("category", "--"))} &middot; {_esc(top.get("vmax_kt", "--"))} kt</strong></div>'
-            "</div>"
+            + (f'<div class="kv"><span>HazardPulse model (experimental)</span><strong>{_ours_cell(top)}</strong></div>'
+               if (top.get("ri_v10_shadow") or {}).get("status") == "ok" else "")
+            + "</div>"
         )
     else:
         storms_html = (

@@ -443,7 +443,36 @@ def hurricane_evidence(root: Path = ROOT) -> dict | None:
         "claims": claims,
         "adversary": {"verdict": adv.get("verdict"), "statement": adv.get("surviving_statement")} if adv else None,
         "other_basins": other_basins,
+        "ours": ours_hurricane(root),
     }
+
+
+def ours_hurricane(root: Path = ROOT) -> dict | None:
+    """Our own RI model in prospective verification (docs/HURRICANE_RI_V9_PROGRAM.md, amendment 2):
+    its identity and numbers from the frozen artifact's own provenance (bound by its bytes), and the
+    prospective record so far. Shown beside NOAA's published number, never instead of it, until a
+    look date's claim rule is met."""
+    from hazardpulse.hurricane import ri_v10
+
+    path = root / "results" / "models" / "hurricane_ri_v10.json"
+    if not path.exists():
+        return None
+    art, version = ri_v10.load(path)
+    prov = art.get("provenance") or {}
+    dev, s26 = prov.get("dev_2022_2025") or {}, prov.get("season_2026_second_read") or {}
+    pros = _read(root, "results/hurricane_prospective/v9_shadow.json") or {}
+    entrant = (pros.get("entrants") or {}).get("v10_1") or {}
+    looks = entrant.get("looks") or {}
+    claimed = any(bool(l.get("claim")) for l in looks.values())
+    return {"model_version": version, "name": "HazardPulse RI v10.1",
+            "status": "claim met at a look" if claimed else "in prospective verification",
+            "dev": {"log_loss": _finite(dev.get("log_loss")), "auc": _finite(dev.get("auc")),
+                    "dtops_log_loss": _finite(dev.get("dtops_log_loss")), "d_log_loss_ci": _ci(dev.get("d_log_loss_ci")),
+                    "multi_threshold": dev.get("multi_threshold")},
+            "season_2026": {"log_loss": _finite(s26.get("log_loss")), "auc": _finite(s26.get("auc")),
+                            "dtops_log_loss": _finite(s26.get("dtops_log_loss")), "declared": s26.get("declared")},
+            "prospective": {"matured_and_scored": entrant.get("matured_and_scored", 0),
+                            "look_dates": pros.get("look_dates") or [], "looks": looks}}
 
 
 def all_evidence(root: Path = ROOT, errors: list[str] | None = None) -> dict[str, dict | None]:
