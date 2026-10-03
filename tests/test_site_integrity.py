@@ -399,17 +399,22 @@ def test_worker_api_smoke() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_tornado_scoring_runs_ml_when_trained_model_exists() -> None:
-    """Guard against silent regression to physics-only fallback.
+def test_tornado_scoring_runs_the_best_trained_model_present() -> None:
+    """Guard against silent regression to a weaker tier.
 
-    The pre-trained GBT at results/models/tornado_gbt_v1.json must be used
-    whenever it exists. If the latest tornado replay artifact shows
-    scoring_tier = "tier2_analytic" or "tier3_ps_only" while the model file
-    is present, the ML path is broken.
+    The newest tornado replay must come from the best trained model in the repo: the v3 suite
+    (results/models/tornado_v3_w.json or tornado_v3.json, docs/TORNADO_MODEL_PROGRAM.md) when its
+    payloads exist, else the GBT at results/models/tornado_gbt_v1.json. A replay from a lower tier
+    while a better model is present means the serving path is broken. (Until 2026-10-03 this
+    demanded tier1_ml whenever the GBT existed, so v3 going live failed it.)
     """
-    model_path = ROOT / "results" / "models" / "tornado_gbt_v1.json"
-    if not model_path.exists():
-        return  # No model file → nothing to validate
+    models = ROOT / "results" / "models"
+    if (models / "tornado_v3_w.json").exists() or (models / "tornado_v3.json").exists():
+        want, prefix = "tier1_v3", "tornado_v3-"
+    elif (models / "tornado_gbt_v1.json").exists():
+        want, prefix = "tier1_ml", None
+    else:
+        return  # no trained model -> nothing to validate
 
     replay_dir = ROOT / "dist" / "data" / "replay"
     replays = sorted(replay_dir.glob("to_fcst_*.json"))
@@ -417,12 +422,13 @@ def test_tornado_scoring_runs_ml_when_trained_model_exists() -> None:
 
     latest = json.loads(replays[-1].read_text(encoding="utf-8"))
     tier = latest.get("scoring_tier")
-    assert tier == "tier1_ml", (
-        f"Tornado replay {replays[-1].name} has scoring_tier={tier!r} but "
-        "results/models/tornado_gbt_v1.json exists. The trained GBT should "
-        "be running. Likely causes: HRRR unreachable, operational_storm "
-        "import failed, or tier-selection regression."
+    assert tier == want, (
+        f"Tornado replay {replays[-1].name} has scoring_tier={tier!r}, expected {want!r} for the "
+        "trained models present. Likely causes: a payload failed to load, the warnings and fallback "
+        "paths both failed, or a tier-selection regression."
     )
+    if prefix:
+        assert str(latest.get("model_version", "")).startswith(prefix), latest.get("model_version")
 
 
 def test_hurricane_training_data_present() -> None:

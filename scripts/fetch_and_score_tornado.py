@@ -1241,6 +1241,21 @@ def _pct(p: float) -> str:
     return f"{p * 100:.1f}%"
 
 
+def _pct_fine(p: float) -> str:
+    """A rate with enough digits to read at any scale (0.010%, 0.13%, 2.3%, 17%): one decimal
+    printed the 2025 outcome rate of the lowest bin, 0.01%, as "0.0% [0.0%, 0.0%]"."""
+    v = 100.0 * float(p)
+    if v == 0.0:
+        return "0%"
+    if v >= 10.0:
+        return f"{v:.0f}%"
+    if v >= 1.0:
+        return f"{v:.1f}%"
+    if v >= 0.1:
+        return f"{v:.2f}%"
+    return f"{v:.3f}%"
+
+
 def _format_time(ts: str) -> str:
     """Format a timestamp string for display."""
     if not ts:
@@ -1728,11 +1743,11 @@ def _render_storm_rows(storms: list[dict]) -> str:
             b = served_evidence.reliability_bin(table, p_model)
             if b is not None:
                 ci = b.get("observed_ci")
-                ci_txt = f" [{_pct(ci[0])}, {_pct(ci[1])}]" if ci else ""
+                ci_txt = f" [{_pct_fine(ci[0])}, {_pct_fine(ci[1])}]" if ci else ""
                 lines.append(
                     f'              <div class="kv"><span>Observed rate</span><strong>Of the {b["n"]:,} storm observations '
-                    f'of 2025 this model scored between {_pct(b["lo"])} and {_pct(b["hi"])}, {_pct(b["observed"])}{ci_txt} '
-                    f'were followed by a tornado from that storm within 60 min</strong></div>')
+                    f'of 2025 this model scored between {_pct_fine(b["lo"])} and {_pct_fine(b["hi"])}, '
+                    f'{_pct_fine(b["observed"])}{ci_txt} were followed by a tornado from that storm within 60 min</strong></div>')
             elif table is None:
                 lines.append('              <div class="kv"><span>Observed rate</span><strong>No 2025 calibration table is '
                              'bound to this model in this build</strong></div>')
