@@ -268,6 +268,48 @@ forecast file (`dist/data/replay/hu_fcst_*.json`) keeps, for the cycle the shado
 text's 30/24 values for RIOD, RIOL, RIOB, RIOC and DTOP (`ri_inputs.ships_text.whole_percent`).
 This was checked on hu_fcst_20261003_1223.
 
+## Amendment 3 -- challengers to v10.1 (2026-10-03, written before any challenger number is computed)
+
+Standing rule (Josh, 2026-10-03): a win is a checkpoint, not a stop. From here on, every
+improvement is a CHALLENGER to the live champion (v10.1). It is selected on the development seasons
+under a rule fixed in advance. It then earns any promotion on cycles it never saw.
+
+**What motivates these two** (the descriptive addendum above): at the false-alarm rates of the
+HCCA, IVCN and hurricane-model-mean RI calls, v10.1 only ties them. The top of its ranking is
+where it is weakest.
+
+- **M -- monotone constraints.** A higher guidance forecast or a higher NOAA probability may never
+  lower ours. The constraint is +1 on every guidance dV24 (DSHP, LGEM, IVCN, HCCA, NNIC, AEMI,
+  hurricane-model mean and max, global mean), on frac_ge30, on OFCL dV24 and dV12, and on all 30
+  NOAA RI logits. The threshold column stays -1, and every other feature is unconstrained.
+- **R -- revisions since the previous cycle** (t - 6 h, same storm). Twelve features:
+  - for DSHP, LGEM, IVCN, HCCA, NNIC, the hurricane-model mean and OFCL: dV24(t) - dV24(t-6);
+  - frac_ge30(t) - frac_ge30(t-6);
+  - logit(t) - logit(t-6) of DTOPS, SHIPS-RII and the RI consensus at 30/24;
+  - the observed dV over the past 6 h (CARQ).
+  - A missing previous cycle gives NaN. Live, everything at t-6 comes from that cycle's a-deck and
+    SHIPS text, both public well before t.
+
+**Candidates:** V5 = V2 + M; V6 = V2 + R; V7 = V2 + R + M. Data, folds (2022-2025), seeds,
+LightGBM settings and stacking are V2's.
+
+**Control:** V2, recomputed by the same script, must reproduce its selection log loss
+(0.1443435895033004), or the run stops.
+
+**Carried rule:** the candidate with the lowest pooled 30/24 log loss, among those whose pooled
+30/24 log loss AND pooled four-threshold Brier (25/30/35/40) are both below V2's. An exact tie goes
+to the earlier in V5, V6, V7. If none qualifies, V2 stays champion and the candidates are recorded
+as kills.
+
+**Reported for every candidate:** paired dLL vs V2 (95%, storm bootstrap), and POD at the HCCA
+call's false-alarm rate.
+
+**2026:** a declared THIRD read. It is reported and no claim is made from it.
+
+**A carried candidate (v10.2)** runs live in shadow beside v10.1. Its promotion over v10.1 is
+decided only on cycles it never saw, under a rule written (amendment 4) before it scores its first
+cycle.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
