@@ -515,7 +515,8 @@ def tornado_body(ev: dict) -> str:
     vs = to.get("vs_probtor")
     s = _probtor_sentence(to)
     if s:
-        comp.append(f"<li><strong>NOAA ProbTor:</strong> {s} over {_n(vs.get('n_days'))} days; Brier "
+        comp.append(f"<li><strong>NOAA ProbTor</strong> {s.replace('NOAA ProbTor ', '', 1)} over "
+                    f"{_n(vs.get('n_days'))} days; Brier "
                     f"{_signed(vs['delta_brier'], 6)}{_ci(vs['delta_brier_ci'], 6, signed=True)}. The issued product "
                     "is an integer percent and 0 for most storms, so its ties are broken by ProbSevere&rsquo;s own "
                     "severe probability for a fair ranking comparison.</li>")

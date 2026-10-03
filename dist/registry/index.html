@@ -109,6 +109,10 @@
   <h3>Hurricane model</h3>
   <p class="muted">For storms the National Hurricane Center tracks, we serve NOAA&rsquo;s own DTOPS guidance: in a pre-registered test on the 2025 season it beat every alternative, including our own model, ranking a forecast cycle that went on to intensify rapidly above one that did not 93% of the time.</p>
 </div>
+<div class="card col-6 hazard-to">
+  <h3>Tornado model (storm-level)</h3>
+  <p class="muted">Scores every thunderstorm NOAA tracks for the chance it produces a tornado in the next hour. On every storm of 2025, scored once, it ranked a storm that went on to produce a tornado above one that did not 97% of the time.</p>
+</div>
 <!-- /hp-evidence:registry-simple -->
             <div class="card col-6 hazard-to">
               <h3>Tornado model (day-ahead)</h3>
@@ -130,6 +134,11 @@
 <tr><td><strong>eq_operational_C0_v1-d28c62a2e35b</strong></td><td>Earthquake (30 d, M6+)</td><td><span class="chip good">active</span></td><td>2023&ndash;2025</td><td class="mono">0.968 [0.963, 0.972]</td><td class="mono">IG +2.59 nats/quake</td><td>Smoothed seismicity + ETAS-style clustering + boosted trees</td></tr>
 <tr><td><strong>hurricane_ri_stack_v1-35938d6c09b7</strong></td><td>Hurricane RI (NHC basins)</td><td><span class="chip good">active</span></td><td>2025</td><td class="mono">0.928 [0.890, 0.966]</td><td class="mono">BSS +0.311</td><td>NOAA DTOPS as issued (SHIPS-RII fallback)</td></tr>
 <tr><td><strong>hurricane_ri_v8_2</strong></td><td>Hurricane RI (other basins)</td><td><span class="chip good">active</span></td><td>2022&ndash;2024</td><td class="mono">0.847 [0.821, 0.874]</td><td class="mono">BSS +0.145</td><td>GBT + logistic ensemble, Newton-calibrated</td></tr>
+<tr><td><strong>tornado_v3-05a06c843c87</strong></td><td>Tornado (storm, 60 min)</td><td><span class="chip good">active</span></td><td>2025</td><td class="mono">0.970 [0.964, 0.976]</td><td class="mono">BSS +0.107</td><td>LightGBM, 339 trees, 30 inputs</td></tr>
+<tr><td><strong>tornado_v3-9005905f08b7</strong></td><td>Tornado (no NWS feed)</td><td><span class="chip neutral">fallback</span></td><td>2025</td><td class="mono">0.969 [0.963, 0.975]</td><td class="mono">BSS +0.097</td><td>LightGBM, 339 trees, 28 inputs</td></tr>
+<tr><td><strong>tornado_v3-c45167a49056</strong></td><td>Tornado within 30 min</td><td><span class="chip good">active</span></td><td>2025</td><td class="mono">0.974 [0.968, 0.979]</td><td class="mono">BSS +0.084</td><td>LightGBM, 301 trees</td></tr>
+<tr><td><strong>tornado_v3-58208efc4bb4</strong></td><td>Tornado within 90 min</td><td><span class="chip good">active</span></td><td>2025</td><td class="mono">0.968 [0.961, 0.974]</td><td class="mono">BSS +0.111</td><td>LightGBM, 312 trees</td></tr>
+<tr><td><strong>tornado_v3-a4413fadb32c</strong></td><td>EF2+ tornado within 60 min</td><td><span class="chip good">active</span></td><td>2025</td><td class="mono">0.994 [0.989, 0.997]</td><td class="mono">BSS +0.061</td><td>LightGBM, 371 trees</td></tr>
 <!-- /hp-evidence:registry-active -->
             <tr>
               <td><strong>hp-tornado-meso-v1.4.2</strong></td>
@@ -152,6 +161,9 @@
           <thead><tr><th>Date</th><th>Action</th><th>Model</th><th>Reason</th></tr></thead>
           <tbody>
 <!-- hp-evidence:registry-history -->
+<tr><td>2026-10</td><td><span class="chip good">promote</span></td><td>tornado_v3-05a06c843c87</td><td>Pre-registered programme, 2025 read once: AUC 0.970 [0.964, 0.976]; vs NOAA ProbTor +0.031 [+0.022, +0.042] (paired by day)</td></tr>
+<tr><td>2026-10</td><td><span class="chip neutral">retire</span></td><td>tornado_gbt_v2</td><td>Superseded by v3: on 2025, v3 &minus; v2 +0.007 [+0.003, +0.010] AUC on the same storms and event</td></tr>
+<tr><td>2026-10</td><td><span class="chip neutral">retire</span></td><td>hp-tornado-coherence-v1</td><td>Its published 0.894 was measured on a 5:1-downsampled split with labels on the wrong clock (docs/AUDIT_2026-10-01.md)</td></tr>
 <tr><td>2026-10</td><td><span class="chip good">promote</span></td><td>eq_operational_C0_v1-d28c62a2e35b</td><td>Pre-registered, 2023&ndash;2025 read once: +2.59 nats per quake, AUC 0.968</td></tr>
 <tr><td>2026-10</td><td><span class="chip neutral">retire</span></td><td>eq_coherence_v1_0</td><td>&minus;13.67 nats per quake on the same test (worse than a uniform map)</td></tr>
 <tr><td>2026-10</td><td><span class="chip good">promote</span></td><td>hurricane_ri_stack_v1-35938d6c09b7</td><td>NOAA DTOPS served for NHC basins: 2025 AUC 0.928; beats NOAA SHIPS-RII, NOAA RIOC consensus, our previous model (v8.2)</td></tr>

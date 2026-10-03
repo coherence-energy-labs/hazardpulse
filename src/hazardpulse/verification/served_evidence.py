@@ -54,10 +54,10 @@ _TORNADO_NOT_USED = (
      "kind": "val_auc_difference", "with": "b_PE_H80", "without": "b_PE", "dir": TORNADO_RESULTS},
     {"what": "the coherence field (80 km) on top of those HRRR fields",
      "kind": "paired", "file": "results/lab/compare_b_PE_H80_C80_vs_b_PE_H80_val_storm_60.json",
-     "note": "measured before amendment 8 corrected the HRRR timing (both arms alike)"},
+     "note": "measured before amendment 8 corrected the HRRR timing, which both arms shared"},
     {"what": "the coherence PDE solution against a Gaussian-smoothing control (9 km)",
      "kind": "paired", "file": "results/lab/compare_b_all_C9pde_vs_b_all_C9gauss_val_storm_60.json",
-     "note": "measured before amendment 8 corrected the HRRR timing (both arms alike)"},
+     "note": "measured before amendment 8 corrected the HRRR timing, which both arms shared"},
 )
 
 EARTHQUAKE_SERVED = "results/models/earthquake_operational_v1.json"

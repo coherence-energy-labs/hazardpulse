@@ -1,13 +1,262 @@
 {
   "schema_version": 1,
   "publisher": "HazardPulse / Coherence Energy Labs",
-  "generated_at": "2026-10-03T01:26:41.715657Z",
-  "n_entries": 5,
+  "generated_at": "2026-10-03T03:30:19.636753Z",
+  "n_entries": 10,
   "entries": [
     {
+      "record_id": "weights_hazardpulse_tornado_v3-05a06c843c87",
+      "name": "HazardPulse Tornado v3 (served)",
+      "description": "served: 60-min probability (inputs include the live NWS warning state). P(a tornado from THIS storm within 60 min); inputs include NWS warning state. Event: a tornado report starts within 10 km of THIS storm's tracked polygon within 60 min. LightGBM (339 trees) exported to a NumPy payload; Platt on leave-one-year-out scores; trained 2020-10-15..2024-12-31, fixed rounds chosen by early stopping on validation 2023; scored once on 2025.",
+      "weights_uri": "hazardpulse://results/models/tornado_v3_w.json",
+      "weights_path": "results\\models\\tornado_v3_w.json",
+      "size_bytes": 1073406,
+      "blake3": "04ccabd09ce82c0a057f5a272e11110e7746c9b6853fdd5b01208b575a9cbf1b",
+      "sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+      "framework": "hazardpulse_lgbm_payload/1",
+      "format": "json",
+      "input_schema": {
+        "n_features": 30,
+        "blocks": [
+          "P",
+          "W"
+        ],
+        "feature_names_path": "results/models/tornado_v3_w.json (feature_names)"
+      },
+      "output_schema": {
+        "outputs": [
+          "storm_60"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "Platt on leave-one-year-out scores; Venn-Abers band",
+        "model_version": "tornado_v3-05a06c843c87"
+      },
+      "benchmark": {
+        "test_window": "every ProbSevere storm observation of 2025 (read once by the final pipeline)",
+        "test_auc": 0.970247810812761,
+        "test_auc_ci": [
+          0.9635708817450787,
+          0.975789228589924
+        ],
+        "test_bss": 0.10670600619258641,
+        "test_pr_auc": 0.1749710817781056,
+        "n_test_samples": 1469977,
+        "n_test_positive": 1579,
+        "program": "docs/TORNADO_MODEL_PROGRAM.md"
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T03:30:18.986243Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_tornado_v3-9005905f08b7",
+      "name": "HazardPulse Tornado v3 (served fallback when the NWS warnings feed is down)",
+      "description": "served fallback when the NWS warnings feed is down. P(a tornado from THIS storm within 60 min); no NWS input (fallback). Event: a tornado report starts within 10 km of THIS storm's tracked polygon within 60 min. LightGBM (339 trees) exported to a NumPy payload; Platt on leave-one-year-out scores; trained 2020-10-15..2024-12-31, fixed rounds chosen by early stopping on validation 2023; scored once on 2025.",
+      "weights_uri": "hazardpulse://results/models/tornado_v3.json",
+      "weights_path": "results\\models\\tornado_v3.json",
+      "size_bytes": 1116027,
+      "blake3": "3de2986a283901616582b629aea1aacc25eb812c5af419c81e2e9fe5780df2db",
+      "sha256": "9005905f08b71b640a8e9dfe143be93e9ecee2606740c9a361f6c1999f75ac79",
+      "framework": "hazardpulse_lgbm_payload/1",
+      "format": "json",
+      "input_schema": {
+        "n_features": 28,
+        "blocks": [
+          "P"
+        ],
+        "feature_names_path": "results/models/tornado_v3.json (feature_names)"
+      },
+      "output_schema": {
+        "outputs": [
+          "storm_60"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "Platt on leave-one-year-out scores; Venn-Abers band",
+        "model_version": "tornado_v3-9005905f08b7"
+      },
+      "benchmark": {
+        "test_window": "every ProbSevere storm observation of 2025 (read once by the final pipeline)",
+        "test_auc": 0.9693152081267481,
+        "test_auc_ci": [
+          0.9627864751426389,
+          0.974832537374192
+        ],
+        "test_bss": 0.09659971609617568,
+        "test_pr_auc": 0.1664243994006584,
+        "n_test_samples": 1469977,
+        "n_test_positive": 1579,
+        "program": "docs/TORNADO_MODEL_PROGRAM.md"
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T03:30:19.016621Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_tornado_v3-c45167a49056",
+      "name": "HazardPulse Tornado v3 (served product)",
+      "description": "served product: 30-min probability. P(a tornado from THIS storm within 30 min). Event: a tornado report starts within 10 km of THIS storm's tracked polygon within 30 min. LightGBM (301 trees) exported to a NumPy payload; Platt on leave-one-year-out scores; trained 2020-10-15..2024-12-31, fixed rounds chosen by early stopping on validation 2023; scored once on 2025.",
+      "weights_uri": "hazardpulse://results/models/tornado_v3_w_30.json",
+      "weights_path": "results\\models\\tornado_v3_w_30.json",
+      "size_bytes": 837238,
+      "blake3": "b0630f58e90c318bb522d2d517d51f03834736dc107427beef27763481a199ed",
+      "sha256": "c45167a49056eb64fe01c1eecfb8acd8e35f2cae95d9e4f84a01913782864676",
+      "framework": "hazardpulse_lgbm_payload/1",
+      "format": "json",
+      "input_schema": {
+        "n_features": 30,
+        "blocks": [
+          "P",
+          "W"
+        ],
+        "feature_names_path": "results/models/tornado_v3_w_30.json (feature_names)"
+      },
+      "output_schema": {
+        "outputs": [
+          "storm_30"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "Platt on leave-one-year-out scores; Venn-Abers band",
+        "model_version": "tornado_v3-c45167a49056"
+      },
+      "benchmark": {
+        "test_window": "every ProbSevere storm observation of 2025 (read once by the final pipeline)",
+        "test_auc": 0.9743128937913959,
+        "test_auc_ci": [
+          0.9675163768823757,
+          0.9794856976195109
+        ],
+        "test_bss": 0.08395941995147549,
+        "test_pr_auc": 0.1393515628960252,
+        "n_test_samples": 1469977,
+        "n_test_positive": 978,
+        "program": "docs/TORNADO_MODEL_PROGRAM.md"
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T03:30:19.038315Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_tornado_v3-58208efc4bb4",
+      "name": "HazardPulse Tornado v3 (served product)",
+      "description": "served product: 90-min probability. P(a tornado from THIS storm within 90 min). Event: a tornado report starts within 10 km of THIS storm's tracked polygon within 90 min. LightGBM (312 trees) exported to a NumPy payload; Platt on leave-one-year-out scores; trained 2020-10-15..2024-12-31, fixed rounds chosen by early stopping on validation 2023; scored once on 2025.",
+      "weights_uri": "hazardpulse://results/models/tornado_v3_w_90.json",
+      "weights_path": "results\\models\\tornado_v3_w_90.json",
+      "size_bytes": 1014707,
+      "blake3": "a91c7ece6a0faea87fb1f316b352824edced56995b50e621dba0e7e85a481093",
+      "sha256": "58208efc4bb403bb62f6fe630581588c1342eeaf0ccde867c180bafbadca74fa",
+      "framework": "hazardpulse_lgbm_payload/1",
+      "format": "json",
+      "input_schema": {
+        "n_features": 30,
+        "blocks": [
+          "P",
+          "W"
+        ],
+        "feature_names_path": "results/models/tornado_v3_w_90.json (feature_names)"
+      },
+      "output_schema": {
+        "outputs": [
+          "storm_90"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "Platt on leave-one-year-out scores; Venn-Abers band",
+        "model_version": "tornado_v3-58208efc4bb4"
+      },
+      "benchmark": {
+        "test_window": "every ProbSevere storm observation of 2025 (read once by the final pipeline)",
+        "test_auc": 0.9681260954912128,
+        "test_auc_ci": [
+          0.9613780960495075,
+          0.9735512104408639
+        ],
+        "test_bss": 0.11136491727407305,
+        "test_pr_auc": 0.18940639304030257,
+        "n_test_samples": 1469977,
+        "n_test_positive": 1993,
+        "program": "docs/TORNADO_MODEL_PROGRAM.md"
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T03:30:19.064881Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_tornado_v3-a4413fadb32c",
+      "name": "HazardPulse Tornado v3 (served product)",
+      "description": "served product: EF2+ tornado within 60 min. P(an EF2+ tornado from THIS storm within 60 min). Event: an EF2+ tornado report starts within 10 km of THIS storm's tracked polygon within 60 min. LightGBM (371 trees) exported to a NumPy payload; Platt on leave-one-year-out scores; trained 2020-10-15..2024-12-31, fixed rounds chosen by early stopping on validation 2023; scored once on 2025.",
+      "weights_uri": "hazardpulse://results/models/tornado_v3_w_ef2.json",
+      "weights_path": "results\\models\\tornado_v3_w_ef2.json",
+      "size_bytes": 565019,
+      "blake3": "9d067f8b73f2069c86ba8705d077cfd0e3ce8a2c95f99ef81094d3926bb78f03",
+      "sha256": "a4413fadb32cf904dfe3eb7bab0c64a666737be6083d0f3dc5cb6f396dbfd442",
+      "framework": "hazardpulse_lgbm_payload/1",
+      "format": "json",
+      "input_schema": {
+        "n_features": 30,
+        "blocks": [
+          "P",
+          "W"
+        ],
+        "feature_names_path": "results/models/tornado_v3_w_ef2.json (feature_names)"
+      },
+      "output_schema": {
+        "outputs": [
+          "storm_60_ef2"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "Platt on leave-one-year-out scores; Venn-Abers band",
+        "model_version": "tornado_v3-a4413fadb32c"
+      },
+      "benchmark": {
+        "test_window": "every ProbSevere storm observation of 2025 (read once by the final pipeline)",
+        "test_auc": 0.9942334680166941,
+        "test_auc_ci": [
+          0.9891313131300252,
+          0.9970818818728813
+        ],
+        "test_bss": 0.060807432686797336,
+        "test_pr_auc": 0.1512001064981734,
+        "n_test_samples": 1469977,
+        "n_test_positive": 284,
+        "program": "docs/TORNADO_MODEL_PROGRAM.md"
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T03:30:19.088854Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
       "record_id": "weights_hazardpulse_tornado_gbt_v1",
-      "name": "HazardPulse Tornado GBT v1 (definitive)",
-      "description": "Gradient-boosted trees for storm-object tornado probability over CONUS: P(tornado report within 40 km in the next 60 min | ProbSevere storm object). 41 features (Block P ProbSevere + Block E evolution + Block H HRRR atm + Block C coherence field theory). Train 2021-2022, validation/calibration 2023, test 2024 (1,004,531 storm objects, base rate 0.0032). Labels on absolute UTC instants.",
+      "name": "HazardPulse Tornado GBT v1 (definitive) -- SUPERSEDED by v3",
+      "description": "Superseded by the v3 suite (served); kept as the legacy path and the v3 benchmark. Gradient-boosted trees for storm-object tornado probability over CONUS: P(tornado report within 40 km in the next 60 min | ProbSevere storm object). 41 features (Block P ProbSevere + Block E evolution + Block H HRRR atm + Block C coherence field theory). Train 2021-2022, validation/calibration 2023, test 2024 (1,004,531 storm objects, base rate 0.0032). Labels on absolute UTC instants.",
       "weights_uri": "hazardpulse://results/models/tornado_gbt_v1.json",
       "weights_path": "results\\models\\tornado_gbt_v1.json",
       "size_bytes": 552973,
@@ -55,7 +304,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-03T01:26:41.123677Z",
+      "release_utc": "2026-10-03T03:30:19.152514Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -191,7 +440,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-03T01:26:41.694223Z",
+      "release_utc": "2026-10-03T03:30:19.594979Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -237,7 +486,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-03T01:26:41.700552Z",
+      "release_utc": "2026-10-03T03:30:19.620574Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -286,7 +535,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-03T01:26:41.707300Z",
+      "release_utc": "2026-10-03T03:30:19.631597Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -425,7 +674,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-03T01:26:41.715538Z",
+      "release_utc": "2026-10-03T03:30:19.636665Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -433,9 +682,258 @@
   ],
   "models": [
     {
+      "record_id": "weights_hazardpulse_tornado_v3-05a06c843c87",
+      "name": "HazardPulse Tornado v3 (served)",
+      "description": "served: 60-min probability (inputs include the live NWS warning state). P(a tornado from THIS storm within 60 min); inputs include NWS warning state. Event: a tornado report starts within 10 km of THIS storm's tracked polygon within 60 min. LightGBM (339 trees) exported to a NumPy payload; Platt on leave-one-year-out scores; trained 2020-10-15..2024-12-31, fixed rounds chosen by early stopping on validation 2023; scored once on 2025.",
+      "weights_uri": "hazardpulse://results/models/tornado_v3_w.json",
+      "weights_path": "results\\models\\tornado_v3_w.json",
+      "size_bytes": 1073406,
+      "blake3": "04ccabd09ce82c0a057f5a272e11110e7746c9b6853fdd5b01208b575a9cbf1b",
+      "sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+      "framework": "hazardpulse_lgbm_payload/1",
+      "format": "json",
+      "input_schema": {
+        "n_features": 30,
+        "blocks": [
+          "P",
+          "W"
+        ],
+        "feature_names_path": "results/models/tornado_v3_w.json (feature_names)"
+      },
+      "output_schema": {
+        "outputs": [
+          "storm_60"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "Platt on leave-one-year-out scores; Venn-Abers band",
+        "model_version": "tornado_v3-05a06c843c87"
+      },
+      "benchmark": {
+        "test_window": "every ProbSevere storm observation of 2025 (read once by the final pipeline)",
+        "test_auc": 0.970247810812761,
+        "test_auc_ci": [
+          0.9635708817450787,
+          0.975789228589924
+        ],
+        "test_bss": 0.10670600619258641,
+        "test_pr_auc": 0.1749710817781056,
+        "n_test_samples": 1469977,
+        "n_test_positive": 1579,
+        "program": "docs/TORNADO_MODEL_PROGRAM.md"
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T03:30:18.986243Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_tornado_v3-9005905f08b7",
+      "name": "HazardPulse Tornado v3 (served fallback when the NWS warnings feed is down)",
+      "description": "served fallback when the NWS warnings feed is down. P(a tornado from THIS storm within 60 min); no NWS input (fallback). Event: a tornado report starts within 10 km of THIS storm's tracked polygon within 60 min. LightGBM (339 trees) exported to a NumPy payload; Platt on leave-one-year-out scores; trained 2020-10-15..2024-12-31, fixed rounds chosen by early stopping on validation 2023; scored once on 2025.",
+      "weights_uri": "hazardpulse://results/models/tornado_v3.json",
+      "weights_path": "results\\models\\tornado_v3.json",
+      "size_bytes": 1116027,
+      "blake3": "3de2986a283901616582b629aea1aacc25eb812c5af419c81e2e9fe5780df2db",
+      "sha256": "9005905f08b71b640a8e9dfe143be93e9ecee2606740c9a361f6c1999f75ac79",
+      "framework": "hazardpulse_lgbm_payload/1",
+      "format": "json",
+      "input_schema": {
+        "n_features": 28,
+        "blocks": [
+          "P"
+        ],
+        "feature_names_path": "results/models/tornado_v3.json (feature_names)"
+      },
+      "output_schema": {
+        "outputs": [
+          "storm_60"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "Platt on leave-one-year-out scores; Venn-Abers band",
+        "model_version": "tornado_v3-9005905f08b7"
+      },
+      "benchmark": {
+        "test_window": "every ProbSevere storm observation of 2025 (read once by the final pipeline)",
+        "test_auc": 0.9693152081267481,
+        "test_auc_ci": [
+          0.9627864751426389,
+          0.974832537374192
+        ],
+        "test_bss": 0.09659971609617568,
+        "test_pr_auc": 0.1664243994006584,
+        "n_test_samples": 1469977,
+        "n_test_positive": 1579,
+        "program": "docs/TORNADO_MODEL_PROGRAM.md"
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T03:30:19.016621Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_tornado_v3-c45167a49056",
+      "name": "HazardPulse Tornado v3 (served product)",
+      "description": "served product: 30-min probability. P(a tornado from THIS storm within 30 min). Event: a tornado report starts within 10 km of THIS storm's tracked polygon within 30 min. LightGBM (301 trees) exported to a NumPy payload; Platt on leave-one-year-out scores; trained 2020-10-15..2024-12-31, fixed rounds chosen by early stopping on validation 2023; scored once on 2025.",
+      "weights_uri": "hazardpulse://results/models/tornado_v3_w_30.json",
+      "weights_path": "results\\models\\tornado_v3_w_30.json",
+      "size_bytes": 837238,
+      "blake3": "b0630f58e90c318bb522d2d517d51f03834736dc107427beef27763481a199ed",
+      "sha256": "c45167a49056eb64fe01c1eecfb8acd8e35f2cae95d9e4f84a01913782864676",
+      "framework": "hazardpulse_lgbm_payload/1",
+      "format": "json",
+      "input_schema": {
+        "n_features": 30,
+        "blocks": [
+          "P",
+          "W"
+        ],
+        "feature_names_path": "results/models/tornado_v3_w_30.json (feature_names)"
+      },
+      "output_schema": {
+        "outputs": [
+          "storm_30"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "Platt on leave-one-year-out scores; Venn-Abers band",
+        "model_version": "tornado_v3-c45167a49056"
+      },
+      "benchmark": {
+        "test_window": "every ProbSevere storm observation of 2025 (read once by the final pipeline)",
+        "test_auc": 0.9743128937913959,
+        "test_auc_ci": [
+          0.9675163768823757,
+          0.9794856976195109
+        ],
+        "test_bss": 0.08395941995147549,
+        "test_pr_auc": 0.1393515628960252,
+        "n_test_samples": 1469977,
+        "n_test_positive": 978,
+        "program": "docs/TORNADO_MODEL_PROGRAM.md"
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T03:30:19.038315Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_tornado_v3-58208efc4bb4",
+      "name": "HazardPulse Tornado v3 (served product)",
+      "description": "served product: 90-min probability. P(a tornado from THIS storm within 90 min). Event: a tornado report starts within 10 km of THIS storm's tracked polygon within 90 min. LightGBM (312 trees) exported to a NumPy payload; Platt on leave-one-year-out scores; trained 2020-10-15..2024-12-31, fixed rounds chosen by early stopping on validation 2023; scored once on 2025.",
+      "weights_uri": "hazardpulse://results/models/tornado_v3_w_90.json",
+      "weights_path": "results\\models\\tornado_v3_w_90.json",
+      "size_bytes": 1014707,
+      "blake3": "a91c7ece6a0faea87fb1f316b352824edced56995b50e621dba0e7e85a481093",
+      "sha256": "58208efc4bb403bb62f6fe630581588c1342eeaf0ccde867c180bafbadca74fa",
+      "framework": "hazardpulse_lgbm_payload/1",
+      "format": "json",
+      "input_schema": {
+        "n_features": 30,
+        "blocks": [
+          "P",
+          "W"
+        ],
+        "feature_names_path": "results/models/tornado_v3_w_90.json (feature_names)"
+      },
+      "output_schema": {
+        "outputs": [
+          "storm_90"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "Platt on leave-one-year-out scores; Venn-Abers band",
+        "model_version": "tornado_v3-58208efc4bb4"
+      },
+      "benchmark": {
+        "test_window": "every ProbSevere storm observation of 2025 (read once by the final pipeline)",
+        "test_auc": 0.9681260954912128,
+        "test_auc_ci": [
+          0.9613780960495075,
+          0.9735512104408639
+        ],
+        "test_bss": 0.11136491727407305,
+        "test_pr_auc": 0.18940639304030257,
+        "n_test_samples": 1469977,
+        "n_test_positive": 1993,
+        "program": "docs/TORNADO_MODEL_PROGRAM.md"
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T03:30:19.064881Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
+      "record_id": "weights_hazardpulse_tornado_v3-a4413fadb32c",
+      "name": "HazardPulse Tornado v3 (served product)",
+      "description": "served product: EF2+ tornado within 60 min. P(an EF2+ tornado from THIS storm within 60 min). Event: an EF2+ tornado report starts within 10 km of THIS storm's tracked polygon within 60 min. LightGBM (371 trees) exported to a NumPy payload; Platt on leave-one-year-out scores; trained 2020-10-15..2024-12-31, fixed rounds chosen by early stopping on validation 2023; scored once on 2025.",
+      "weights_uri": "hazardpulse://results/models/tornado_v3_w_ef2.json",
+      "weights_path": "results\\models\\tornado_v3_w_ef2.json",
+      "size_bytes": 565019,
+      "blake3": "9d067f8b73f2069c86ba8705d077cfd0e3ce8a2c95f99ef81094d3926bb78f03",
+      "sha256": "a4413fadb32cf904dfe3eb7bab0c64a666737be6083d0f3dc5cb6f396dbfd442",
+      "framework": "hazardpulse_lgbm_payload/1",
+      "format": "json",
+      "input_schema": {
+        "n_features": 30,
+        "blocks": [
+          "P",
+          "W"
+        ],
+        "feature_names_path": "results/models/tornado_v3_w_ef2.json (feature_names)"
+      },
+      "output_schema": {
+        "outputs": [
+          "storm_60_ef2"
+        ],
+        "domain": "[0, 1]",
+        "calibration": "Platt on leave-one-year-out scores; Venn-Abers band",
+        "model_version": "tornado_v3-a4413fadb32c"
+      },
+      "benchmark": {
+        "test_window": "every ProbSevere storm observation of 2025 (read once by the final pipeline)",
+        "test_auc": 0.9942334680166941,
+        "test_auc_ci": [
+          0.9891313131300252,
+          0.9970818818728813
+        ],
+        "test_bss": 0.060807432686797336,
+        "test_pr_auc": 0.1512001064981734,
+        "n_test_samples": 1469977,
+        "n_test_positive": 284,
+        "program": "docs/TORNADO_MODEL_PROGRAM.md"
+      },
+      "paper_doi": null,
+      "paper_url": "https://github.com/coherence-energy-labs/hazardpulse",
+      "license": "Apache-2.0",
+      "publisher": "HazardPulse / Coherence Energy Labs",
+      "publisher_url": "https://hazardpulse.com",
+      "release_utc": "2026-10-03T03:30:19.088854Z",
+      "rf_npe_compatible": false,
+      "modality": "natural_hazard_prediction",
+      "source": "hazardpulse_publish"
+    },
+    {
       "record_id": "weights_hazardpulse_tornado_gbt_v1",
-      "name": "HazardPulse Tornado GBT v1 (definitive)",
-      "description": "Gradient-boosted trees for storm-object tornado probability over CONUS: P(tornado report within 40 km in the next 60 min | ProbSevere storm object). 41 features (Block P ProbSevere + Block E evolution + Block H HRRR atm + Block C coherence field theory). Train 2021-2022, validation/calibration 2023, test 2024 (1,004,531 storm objects, base rate 0.0032). Labels on absolute UTC instants.",
+      "name": "HazardPulse Tornado GBT v1 (definitive) -- SUPERSEDED by v3",
+      "description": "Superseded by the v3 suite (served); kept as the legacy path and the v3 benchmark. Gradient-boosted trees for storm-object tornado probability over CONUS: P(tornado report within 40 km in the next 60 min | ProbSevere storm object). 41 features (Block P ProbSevere + Block E evolution + Block H HRRR atm + Block C coherence field theory). Train 2021-2022, validation/calibration 2023, test 2024 (1,004,531 storm objects, base rate 0.0032). Labels on absolute UTC instants.",
       "weights_uri": "hazardpulse://results/models/tornado_gbt_v1.json",
       "weights_path": "results\\models\\tornado_gbt_v1.json",
       "size_bytes": 552973,
@@ -483,7 +981,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-03T01:26:41.123677Z",
+      "release_utc": "2026-10-03T03:30:19.152514Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -619,7 +1117,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-03T01:26:41.694223Z",
+      "release_utc": "2026-10-03T03:30:19.594979Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -665,7 +1163,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-03T01:26:41.700552Z",
+      "release_utc": "2026-10-03T03:30:19.620574Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -714,7 +1212,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-03T01:26:41.707300Z",
+      "release_utc": "2026-10-03T03:30:19.631597Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -853,7 +1351,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-03T01:26:41.715538Z",
+      "release_utc": "2026-10-03T03:30:19.636665Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"

@@ -207,7 +207,7 @@
 </div>
 <div class="card col-4 hazard-to">
   <h3>Tornado</h3>
-  <p class="muted">No final test is bound to the served tornado model in this repository.</p>
+  <p class="muted">Scores every thunderstorm NOAA&rsquo;s ProbSevere tracks: the chance that this storm produces a tornado within the next hour, from NOAA&rsquo;s own storm attributes (radar, lightning, satellite, environment) and the live NWS tornado-warning state. On every storm observation of 2025, scored once after training: AUC 0.970 (NOAA ProbTor 0.879).</p>
 </div>
 <!-- /hp-evidence:methods-simple -->
         </div>
@@ -262,8 +262,15 @@
 
 <!-- hp-evidence:methods-tornado -->
 <div class="card col-4 hazard-to">
-  <h3>Tornado storm-object</h3>
-  <p class="muted">No final test is bound to the served tornado model.</p>
+  <h3>Tornado storm-object (tornado_v3-05a06c843c87)</h3>
+  <div class="kv"><span>Target</span><strong>A tornado report starts within 10 km of THIS storm&#x27;s tracked polygon within 60 min (also served: tornado within 30 min, tornado within 90 min, ef2+ tornado within 60 min)</strong></div>
+  <div class="kv"><span>Architecture</span><strong>LightGBM (339 trees), exported to a JSON payload scored in pure NumPy; Platt calibration on leave-one-year-out scores; Venn&ndash;Abers band per storm</strong></div>
+  <div class="kv"><span>Inputs (30)</span><strong>28 ProbSevere storm attributes, 2 NWS tornado-warning state</strong></div>
+  <div class="kv"><span>How it was chosen</span><strong>Pre-registered programme: every choice on 2023; development test 2024; refit 2020&ndash;2024; final test 2025 read once (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/TORNADO_MODEL_PROGRAM.md" rel="noopener">docs/TORNADO_MODEL_PROGRAM.md</a>)</strong></div>
+  <div class="kv"><span>Final test 2025</span><strong>AUC 0.970 [0.964, 0.976] on all 1,469,977 storm observations (1,579 tornadic); Brier skill +0.107. 2024: 0.969</strong></div>
+  <div class="kv"><span>Against NOAA</span><strong>NOAA ProbTor scores 0.879 as issued and 0.939 with its integer ties broken; the model is +0.031 [+0.022, +0.042] AUC above the tie-broken version, paired by day; at the NWS warnings&rsquo; own false-alarm rate it catches 30.5% of tornadic storm observations vs the warnings&rsquo; 22.7% (+7.7 [+3.8, +10.1] points, using the warning state as an input); without that input it catches 27.5% (+4.7 [&minus;0.2, +8.5] points)</strong></div>
+  <div class="kv"><span>Coherence field</span><strong>Tested on top of the HRRR fields: &minus;0.0011 [&minus;0.0032, +0.0007] validation AUC (paired); no lift, so not served</strong></div>
+  <div class="kv"><span>Status</span><strong>Live</strong></div>
 </div>
 <!-- /hp-evidence:methods-tornado -->
         </div>

@@ -238,7 +238,7 @@ Final 2025, every ProbSevere storm observation (from `results/lab_avail/` by
 
 At the NWS tornado warnings' own false-alarm rate (threshold re-matched in every replicate,
 multi-day events resampled together): +W catches 30.5% of tornadic storm observations vs the
-warnings' 22.7%, +7.7 points [+3.8, +10.1]; P alone 27.5%, +4.8 [-0.2, +8.5]. With 2024's -1.0
+warnings' 22.7%, +7.7 points [+3.8, +10.1]; P alone 27.5%, +4.7 [-0.2, +8.5]. With 2024's -1.0
 [-4.3, +1.5], the model WITHOUT the warning input is not distinguishable from the warnings in
 either year; what is shown is that it adds detection on top of them.
 
