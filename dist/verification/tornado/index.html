@@ -267,210 +267,14 @@
     <section class="hero">
       <div class="eyebrow">Verification &rsaquo; Tornado</div>
       <h1>Tornado prediction accuracy</h1>
-      <p class="subtitle">
-        Definitive out-of-sample results for HazardPulse Tornado Coherence v1.
-        Every number on this page comes from a single, locked evaluation on 2024 test data
-        that the model never saw during training or tuning.
-      </p>
+<!-- hp-evidence:tornado-hero -->
+<p class="subtitle">No final test is bound to the served tornado model in this repository.</p>
+<!-- /hp-evidence:tornado-hero -->
     </section>
 
-    <!-- Section 1: System Overview -->
-    <section class="section" aria-labelledby="overview-heading">
-      <h2 id="overview-heading">System overview</h2>
-      <div class="card">
-        <div class="overview-grid">
-          <div>
-            <div class="kv"><span>Model</span><strong>HazardPulse Tornado Coherence v1</strong></div>
-            <div class="kv"><span>Architecture</span><strong>GBT on ProbSevere v3 + HRRR + Coherence Field Theory (Helmholtz PDE)</strong></div>
-            <div class="kv"><span>Trees / depth / lr</span><strong>37 trees, depth 4, lr 0.05 (early-stopped)</strong></div>
-            <div class="kv"><span>Label window</span><strong>40 km radius, 60 min forward</strong></div>
-          </div>
-          <div>
-            <div class="kv"><span>Training</span><strong>2021&ndash;2022 (6,120 storms, 1,020 positive)</strong></div>
-            <div class="kv"><span>Validation</span><strong>2023 (2,880 storms, 480 positive)</strong></div>
-            <div class="kv"><span>Test</span><strong>2024 (5,310 storms, 885 positive) &mdash; fully out-of-sample</strong></div>
-            <div class="kv">
-              <span>Audit</span>
-              <strong>
-                <span class="audit-badge pass">Zero leakage confirmed</span>
-              </strong>
-            </div>
-          </div>
-        </div>
-        <p class="muted" style="margin-top:12px;font-size:12px;">
-          Strict temporal split. No meta-stacker. No hyperparameter tuning on test set.
-          Single test evaluation. Unknown-timing labels excluded (n=0 after filtering).
-          All code at <a href="https://github.com/Jphilbrick10/hazardpulse">github.com/Jphilbrick10/hazardpulse</a>.
-        </p>
-      </div>
-    </section>
-
-    <!-- Section 2: Definitive Results -->
-    <section class="section" aria-labelledby="results-heading">
-      <h2 id="results-heading">Definitive results (2024 test set)</h2>
-      <div class="card">
-        <table class="results-table">
-          <thead>
-            <tr>
-              <th>Model variant</th>
-              <th>AUC</th>
-              <th>95% CI</th>
-              <th>PR-AUC</th>
-              <th>Brier</th>
-              <th>BSS</th>
-              <th>Significance</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Baseline (ProbSevere only)</td>
-              <td class="mono">0.803</td>
-              <td class="mono">[0.792, 0.819]</td>
-              <td class="mono">0.355</td>
-              <td class="mono">0.125</td>
-              <td class="mono">+0.099</td>
-              <td>&mdash;</td>
-            </tr>
-            <tr>
-              <td>Enhanced (+HRRR atmosphere)</td>
-              <td class="mono">0.878</td>
-              <td class="mono">[0.867, 0.889]</td>
-              <td class="mono">0.561</td>
-              <td class="mono">0.113</td>
-              <td class="mono">+0.187</td>
-              <td>+0.075 over baseline, p&lt;0.0001</td>
-            </tr>
-            <tr class="best-row">
-              <td>Full (+Coherence Field Theory)</td>
-              <td class="mono">0.894</td>
-              <td class="mono">[0.883, 0.904]</td>
-              <td class="mono">0.606</td>
-              <td class="mono">0.114</td>
-              <td class="mono">+0.180</td>
-              <td>+0.016 over enhanced, p&lt;0.0001</td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="muted" style="margin-top:12px;font-size:12px;">
-          Source: <a href="/data/definitive_results.json"><code>definitive_results.json</code></a>.
-          Bootstrap CIs from 1,000 resamples. p-values from paired bootstrap DeLong test.
-          Base rate: 16.7% (885/5,310).
-        </p>
-      </div>
-    </section>
-
-    <!-- Section 3: Theory Test Results -->
-    <section class="section" aria-labelledby="theory-heading">
-      <h2 id="theory-heading">Theory test results</h2>
-      <div class="card">
-        <p class="muted" style="margin-bottom:12px;">
-          Each model variant is a strict superset of the previous one.
-          The lift is measured as the AUC difference on the same held-out 2024 test set.
-        </p>
-        <ul class="theory-list">
-          <li>
-            <strong>HRRR atmospheric features add +0.075 AUC over ProbSevere alone</strong>
-            <br>95% CI: [0.062, 0.083], p&lt;0.0001. Adding 3D atmospheric state from HRRR (shear, CAPE, moisture, STP)
-            substantially improves discrimination. This is expected and validates the feature engineering.
-          </li>
-          <li>
-            <strong>Coherence Field Theory adds +0.016 AUC over HRRR</strong>
-            <br>95% CI: [0.012, 0.020], p&lt;0.0001. The CFT features (tau, alignment, grad_tau, S/Gamma, Da)
-            provide statistically significant additional signal beyond conventional meteorology.
-            The effect is real but modest &mdash; we do not overclaim.
-          </li>
-          <li>
-            <strong>4 of the top 15 features in the full model are from CFT</strong>
-            <br>
-            <span class="feature-rank">1</span> srh01 (conventional)
-            <span class="feature-rank cft">2</span> tau (CFT)
-            <span class="feature-rank cft">3</span> alignment (CFT)
-            <span class="feature-rank">4</span> storm_speed_ms
-            <span class="feature-rank cft">5</span> alignment&times;CAPE (CFT)
-            <br style="margin-bottom:6px;">
-            <span style="font-size:12px;color:var(--muted,#6b7280);">
-              grad_tau ranks #15. Feature importance is split frequency (not causal attribution).
-            </span>
-          </li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- Section 4: Comparison to Published Systems -->
-    <section class="section" aria-labelledby="comparison-heading">
-      <h2 id="comparison-heading">Comparison to published systems</h2>
-      <div class="card">
-        <table class="results-table">
-          <thead>
-            <tr>
-              <th>System</th>
-              <th>AUC / Score</th>
-              <th>Data used</th>
-              <th>Published</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr class="best-row">
-              <td><strong>HazardPulse (ours)</strong></td>
-              <td><span class="mono">0.894</span> AUC</td>
-              <td>ProbSevere + HRRR + CFT</td>
-              <td>2026</td>
-              <td>Storm-object, 60-min forward, 2024 test</td>
-            </tr>
-            <tr>
-              <td>TorNet CNN (MIT)</td>
-              <td><span class="mono">0.874</span> AUC</td>
-              <td>Full dual-pol radar imagery</td>
-              <td>AIES 2025</td>
-              <td>+0.020 AUC advantage; we need no radar imagery</td>
-            </tr>
-            <tr>
-              <td>ProbSevere v3 tornado</td>
-              <td>~0.85*</td>
-              <td>Radar + satellite + lightning + NWP</td>
-              <td>WAF 2024</td>
-              <td>+0.044 AUC advantage; we add coherence physics</td>
-            </tr>
-            <tr>
-              <td>TORP (NSSL)</td>
-              <td>POD 57%, FAR 50%</td>
-              <td>Single-radar rotation tracks</td>
-              <td>WAF 2023</td>
-              <td>Different target (rotation); complementary approach</td>
-            </tr>
-            <tr>
-              <td>NWS tornado warnings</td>
-              <td>POD ~75%, FAR ~70%</td>
-              <td>Human forecasters + all data</td>
-              <td>Operational</td>
-              <td>13-min lead time vs. our 60-min storm-object window</td>
-            </tr>
-            <tr>
-              <td>WoFS (NSSL)</td>
-              <td>Ensemble guidance</td>
-              <td>3 km NWP with radar DA</td>
-              <td>WAF 2023</td>
-              <td>Different product entirely; 0&ndash;6 h ensemble, not storm-object</td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="muted" style="margin-top:6px;font-size:12px;">
-          *ProbSevere v3 tornado-specific AUC is not published; Cintineo et al. (WAF 2024) report
-          "modest improvement over v2." Our 0.85 estimate is approximate.
-        </p>
-      </div>
-      <div class="caveat-box">
-        <strong>Important caveat on cross-system comparisons.</strong>
-        Direct comparison across these systems is approximate. Each uses different test sets, time periods,
-        prediction targets, and evaluation methodologies. Our AUC of 0.894 was evaluated on 2024 ProbSevere
-        storm objects with strict temporal labeling (40 km, 60 min forward window). TorNet uses radar imagery
-        classification on a different storm sample. ProbSevere v3 evaluates on its own operational dataset.
-        NWS warnings target imminent tornadoes with 13-minute average lead time.
-        These systems are <strong>complementary, not directly comparable</strong>.
-        We present this table for context, not to claim superiority.
-      </div>
-    </section>
+<!-- hp-evidence:tornado-body -->
+<section class="section"><div class="card"><p class="muted">No final test is bound to the served tornado model in this repository, so no result is shown.</p></div></section>
+<!-- /hp-evidence:tornado-body -->
 
     <!-- Section 5: Live Prediction Ledger -->
     <section class="section" aria-labelledby="ledger-heading">
@@ -481,27 +285,8 @@
       </p>
 
       <div class="card" id="ledger-container">
-        <div class="ledger-row ledger-header">
-          <div>Timestamp (UTC)</div>
-          <div>Storms</div>
-          <div>Scoring tier</div>
-          <div>Top P(tor)</div>
-          <div>Hash (SHA-256)</div>
-        </div>
-        <div id="ledger-rows">
-        <div class="ledger-row"><div>2026-03-31T04:08:22.080151Z</div><div>86</div><div>ML</div><div>50.1%</div><div class="hash-mono">b458797b..2f832d7b</div></div>
-        <div class="ledger-row"><div>2026-03-31T03:52:04.624978Z</div><div>76</div><div>ML</div><div>50.5%</div><div class="hash-mono">a11d6418..19fa9e90</div></div>
-        <div class="ledger-row"><div>2026-03-23T13:16:25.719175Z</div><div>7</div><div>ML</div><div>22.6%</div><div class="hash-mono">61cb1457..90f38b33</div></div>
-        <div class="ledger-row"><div>2026-03-23T07:16:47.304049Z</div><div>37</div><div>ML</div><div>35.1%</div><div class="hash-mono">2b3e06d5..34f082e1</div></div>
-        <div class="ledger-row"><div>2026-03-23T01:15:14.531846Z</div><div>52</div><div>ML</div><div>37.8%</div><div class="hash-mono">475a206b..70f33b65</div></div>
-        <div class="ledger-row"><div>2026-03-22T23:14:51.707439Z</div><div>41</div><div>ML</div><div>45.9%</div><div class="hash-mono">f66a0fa7..b4cbe36b</div></div>
-        <div class="ledger-row"><div>2026-03-22T18:42:26.273935Z</div><div>11</div><div>ML</div><div>36.6%</div><div class="hash-mono">a645618b..a7243c7d</div></div>
-        <div class="ledger-row"><div>2026-03-22T12:59:34.773629Z</div><div>18</div><div>ML</div><div>57.4%</div><div class="hash-mono">afd4984f..2ea6d424</div></div>
-        <div class="ledger-row"><div>2026-03-22T06:57:08.910052Z</div><div>7</div><div>ML</div><div>41.6%</div><div class="hash-mono">94922256..dbdba297</div></div>
-        <div class="ledger-row"><div>2026-03-22T05:40:17.318866Z</div><div>4</div><div>ML</div><div>9.4%</div><div class="hash-mono">004314c4..1f9a70ef</div></div>
-        <div class="ledger-row"><div>2026-03-22T05:12:29.861938Z</div><div>5</div><div>ML</div><div>9.7%</div><div class="hash-mono">a793fdf4..66484a45</div></div>
-        <div class="ledger-row"><div>2026-03-22T04:11:35.843464Z</div><div>6</div><div>ML</div><div>10.9%</div><div class="hash-mono">dd40cf57..a2f3b3ee</div></div>
-        </div>
+<!-- hp-ledger:rows -->
+<!-- /hp-ledger:rows -->
       </div>
 
       <div class="card" style="margin-top:16px;">
@@ -511,11 +296,8 @@
           Verify independently by downloading the ledger and recomputing.
         </p>
         <div id="hash-chain">
-        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-03-31T04:08:22.080151Z</strong></div><div class="hash-mono">hash: b458797b56f70a3b2a03939bd689c2f87ad558c21398d2a306e4bb342f832d7b</div><div class="hash-mono">prev: a11d6418..19fa9e90</div></div>
-        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-03-31T03:52:04.624978Z</strong></div><div class="hash-mono">hash: a11d6418c7b906c842bc62b63530f3db6cf855f6ac28213b6895935319fa9e90</div><div class="hash-mono">prev: 61cb1457..90f38b33</div></div>
-        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-03-23T13:16:25.719175Z</strong></div><div class="hash-mono">hash: 61cb1457f5bf3898fd2d961222c36441657d164b28b508e831abc8f190f38b33</div><div class="hash-mono">prev: 2b3e06d5..34f082e1</div></div>
-        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-03-23T07:16:47.304049Z</strong></div><div class="hash-mono">hash: 2b3e06d5e3e74864f307c90df538a3a9d87911ce248cd06f0d36e84c34f082e1</div><div class="hash-mono">prev: 475a206b..70f33b65</div></div>
-        <div style="padding:8px 0;border-bottom:1px solid var(--border,#e5e7eb);font-size:12px;"><div><strong>2026-03-23T01:15:14.531846Z</strong></div><div class="hash-mono">hash: 475a206bd17d9a6be6a54c75717f342e527ea2324f5720cf7b5f949c70f33b65</div><div class="hash-mono">prev: f66a0fa7..b4cbe36b</div></div>
+<!-- hp-ledger:chain -->
+<!-- /hp-ledger:chain -->
         </div>
       </div>
     </section>
@@ -540,50 +322,31 @@
     <!-- Section 6: What Makes This Different -->
     <section class="section" aria-labelledby="different-heading">
       <h2 id="different-heading">What makes this different</h2>
-      <div class="card">
-        <ul class="diff-list">
-          <li>
-            <strong>Coherence Field Theory</strong>
-            <p>
-              First tornado prediction system grounded in a unified physics framework.
-              The coherence field (S_One) generates a Helmholtz PDE whose solutions produce
-              tau (coherence time), alignment (field-flow coupling), and gradient features
-              that capture mesoscale organization beyond what conventional indices measure.
-            </p>
-          </li>
-          <li>
-            <strong>Honest by design</strong>
-            <p>
-              Zero-leakage architecture verified by audit. Strict temporal split with no data
-              from the future leaking into training. No meta-stacker. No ensemble of ensembles.
-              A single gradient-boosted tree per variant, early-stopped on validation loss.
-            </p>
-          </li>
-          <li>
-            <strong>Transparent</strong>
-            <p>
-              Every prediction is logged with a SHA-256 hash chain. The full results JSON,
-              feature importances, and model configuration are published. All code is open-source.
-              We publish our false alarm rate and do not hide failures.
-            </p>
-          </li>
-          <li>
-            <strong>Self-aware limitations</strong>
-            <p>
-              The CFT contribution is +0.016 AUC &mdash; real but modest. We do not claim to replace
-              NWS warnings, ProbSevere, or radar-based systems. This system adds
-              a new physics-based signal. It works best as a complement to existing tools.
-            </p>
-          </li>
-        </ul>
-      </div>
+<!-- hp-evidence:tornado-different -->
+<div class="card">
+  <ul class="diff-list">
+    <li>
+      <strong>Pre-registered and read once</strong>
+      <p>Every modelling choice was fixed on 2023 and checked on 2024 before 2025 was scored, once. The protocol and its dated amendments are public, including the ones that corrected our own earlier numbers.</p>
+    </li>
+    <li>
+      <strong>Scored against NOAA on the same storms</strong>
+      <p>The comparison with NOAA ProbTor and the NWS warnings uses the same storm observations, the same event and intervals paired by day.</p>
+    </li>
+    <li>
+      <strong>Open and reproducible</strong>
+      <p>The served model is a JSON file in the repository, scored in pure NumPy; its identity is the hash of its bytes, and every live forecast is appended to a hash-chained ledger.</p>
+    </li>
+  </ul>
+</div>
 
-      <div class="link-row">
-        <a href="https://github.com/Jphilbrick10/hazardpulse" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;" rel="noopener">GitHub Repository</a>
-        <a href="/data/definitive_results.json" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">Definitive Results JSON</a>
-        <a href="/data/tornado-ledger.jsonl" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">Prediction Ledger (JSONL)</a>
-        <a href="/verification/" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">All Verification Scores</a>
-      </div>
+<div class="link-row">
+  <a href="https://github.com/coherence-energy-labs/hazardpulse" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;" rel="noopener">GitHub repository</a>
+  <a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/TORNADO_MODEL_PROGRAM.md" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;" rel="noopener">Model programme</a>
+  <a href="/data/tornado-ledger.jsonl" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">Prediction ledger (JSONL)</a>
+  <a href="/verification/" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;">All verification scores</a>
+</div>
+<!-- /hp-evidence:tornado-different -->
     </section>
 
   </main>

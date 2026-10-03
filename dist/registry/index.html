@@ -100,21 +100,19 @@
         <div class="card">
           <p style="font-size:15px;line-height:1.6;margin:0 0 12px;">HazardPulse uses four prediction models, each specialized for a different type of hazard:</p>
           <div class="grid">
-            <div class="card col-6 hazard-eq">
-              <h3>Earthquake model</h3>
-              <p class="muted">Uses patterns in past earthquake activity to estimate future risk. Global AUC 0.907, temporal AUC 0.799.</p>
-            </div>
-            <div class="card col-6 hazard-hu">
-              <h3>Hurricane model</h3>
-              <p class="muted">Uses ocean temperature, wind patterns, and satellite data to predict rapid intensification. 94% accuracy at ranking risk levels.</p>
-            </div>
+<!-- hp-evidence:registry-simple -->
+<div class="card col-6 hazard-eq">
+  <h3>Earthquake model</h3>
+  <p class="muted">Combines where large quakes happen in the long run with how they cluster after recent ones. On 2023&ndash;2025, scored once, it ranked a cell that went on to have an M6+ quake above one that did not 97% of the time across the globe, and 77% among cells with recent quakes, the harder question.</p>
+</div>
+<div class="card col-6 hazard-hu">
+  <h3>Hurricane model</h3>
+  <p class="muted">For storms the National Hurricane Center tracks, we serve NOAA&rsquo;s own DTOPS guidance: in a pre-registered test on the 2025 season it beat every alternative, including our own model, ranking a forecast cycle that went on to intensify rapidly above one that did not 93% of the time.</p>
+</div>
+<!-- /hp-evidence:registry-simple -->
             <div class="card col-6 hazard-to">
               <h3>Tornado model (day-ahead)</h3>
-              <p class="muted">Uses weather parameters to predict tornado environments 12-24 hours ahead. 64% accuracy (this is a hard problem).</p>
-            </div>
-            <div class="card col-6 hazard-to">
-              <h3>Tornado model (storm-level)</h3>
-              <p class="muted">Scores individual thunderstorms using radar rotation and atmospheric physics. 89% accuracy at ranking risk. Accumulating live verification data.</p>
+              <p class="muted">Uses weather parameters to predict tornado environments 12-24 hours ahead. It ranks a tornado environment above a non-tornado one 64% of the time (AUC 0.644; this is a hard problem).</p>
             </div>
           </div>
           <p class="muted" style="margin:12px 0 0;font-size:13px;">Models are only promoted after they beat the previous version on holdout data. Models that fail quality checks are rejected.</p>
@@ -126,43 +124,21 @@
       <h2 id="active-heading">Active models</h2>
       <div class="card">
         <table>
-          <thead><tr><th>Model</th><th>Hazard</th><th>Status</th><th>Promoted</th><th>AUC</th><th>Brier</th><th>Architecture</th></tr></thead>
+          <thead><tr><th>Model</th><th>Hazard</th><th>Status</th><th>Final test</th><th>AUC [95% CI]</th><th>Skill</th><th>Architecture</th></tr></thead>
           <tbody>
-            <tr>
-              <td><strong>hp-etas-v3.2.1</strong></td>
-              <td>Earthquake</td>
-              <td><span class="chip good">active</span></td>
-              <td>2026-02-28</td>
-              <td class="mono">0.907 / 0.799</td>
-              <td class="mono">0.182</td>
-              <td>GBM + Bayesian cal.</td>
-            </tr>
-            <tr>
-              <td><strong>hp-hurricane-ri-v8.1</strong></td>
-              <td>Hurricane RI</td>
-              <td><span class="chip good">active</span></td>
-              <td>2026-03-13</td>
-              <td class="mono">0.938</td>
-              <td class="mono">0.034</td>
-              <td>50-bag logistic + histogram GBT (d3+d4) + Platt cal.</td>
-            </tr>
+<!-- hp-evidence:registry-active -->
+<tr><td><strong>eq_operational_C0_v1-d28c62a2e35b</strong></td><td>Earthquake (30 d, M6+)</td><td><span class="chip good">active</span></td><td>2023&ndash;2025</td><td class="mono">0.968 [0.963, 0.972]</td><td class="mono">IG +2.59 nats/quake</td><td>Smoothed seismicity + ETAS-style clustering + boosted trees</td></tr>
+<tr><td><strong>hurricane_ri_stack_v1-35938d6c09b7</strong></td><td>Hurricane RI (NHC basins)</td><td><span class="chip good">active</span></td><td>2025</td><td class="mono">0.928 [0.890, 0.966]</td><td class="mono">BSS +0.311</td><td>NOAA DTOPS as issued (SHIPS-RII fallback)</td></tr>
+<tr><td><strong>hurricane_ri_v8_2</strong></td><td>Hurricane RI (other basins)</td><td><span class="chip good">active</span></td><td>2022&ndash;2024</td><td class="mono">0.847 [0.821, 0.874]</td><td class="mono">BSS +0.145</td><td>GBT + logistic ensemble, Newton-calibrated</td></tr>
+<!-- /hp-evidence:registry-active -->
             <tr>
               <td><strong>hp-tornado-meso-v1.4.2</strong></td>
               <td>Tornado (day-ahead)</td>
               <td><span class="chip good">active</span></td>
-              <td>2026-03-05</td>
+              <td>2025 spring holdout (its own record)</td>
               <td class="mono">0.644</td>
-              <td class="mono">0.231</td>
+              <td class="mono">Brier 0.231</td>
               <td>Random forest + Platt cal.</td>
-            </tr>
-            <tr>
-              <td><strong>hp-tornado-coherence-v1</strong></td>
-              <td>Tornado (storm-object)</td>
-              <td><span class="chip neutral">research</span></td>
-              <td>2026-03-15</td>
-              <td class="mono">0.894</td>
-              <td>--</td>
-              <td>Coherence Field Theory + Platt cal. (41 features)</td>
             </tr>
           </tbody>
         </table>
@@ -175,6 +151,11 @@
         <table>
           <thead><tr><th>Date</th><th>Action</th><th>Model</th><th>Reason</th></tr></thead>
           <tbody>
+<!-- hp-evidence:registry-history -->
+<tr><td>2026-10</td><td><span class="chip good">promote</span></td><td>eq_operational_C0_v1-d28c62a2e35b</td><td>Pre-registered, 2023&ndash;2025 read once: +2.59 nats per quake, AUC 0.968</td></tr>
+<tr><td>2026-10</td><td><span class="chip neutral">retire</span></td><td>eq_coherence_v1_0</td><td>&minus;13.67 nats per quake on the same test (worse than a uniform map)</td></tr>
+<tr><td>2026-10</td><td><span class="chip good">promote</span></td><td>hurricane_ri_stack_v1-35938d6c09b7</td><td>NOAA DTOPS served for NHC basins: 2025 AUC 0.928; beats NOAA SHIPS-RII, NOAA RIOC consensus, our previous model (v8.2)</td></tr>
+<!-- /hp-evidence:registry-history -->
             <tr><td>2026-03-05</td><td><span class="chip good">promote</span></td><td>hp-tornado-meso-v1.4.2</td><td>+0.02 AUC, improved sharpness on 2025 spring holdout</td></tr>
             <tr><td>2026-03-05</td><td><span class="chip neutral">retire</span></td><td>hp-tornado-meso-v1.4.1</td><td>Superseded by hp-tornado-meso-v1.4.2</td></tr>
             <tr><td>2026-03-13</td><td><span class="chip good">promote</span></td><td>hp-hurricane-ri-v8.1</td><td>Advisory-time eval: AUC 0.938 avg (0.910-0.957), BSS +0.29, +0.009 delta vs OFCL across 5 holdouts. 65 features, real NOAA SST, Platt calibration.</td></tr>

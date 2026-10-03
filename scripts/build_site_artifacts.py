@@ -134,6 +134,50 @@ def _hurricane_stack_benchmark(model_version: str) -> dict | None:
     }
 
 
+def _served_benchmark(hazard: str, model_version: str) -> dict | None:
+    """The pre-registered, read-once final test of EXACTLY the live model version, from
+    hazardpulse.verification.served_evidence (bound to the served artifact's bytes); None for any
+    other version -- the homepage never shows one model's score beside another's forecasts."""
+    from hazardpulse.verification import served_evidence as se
+
+    try:
+        ev = {"earthquake": se.earthquake_evidence, "tornado": se.tornado_evidence}[hazard]()
+    except se.EvidenceError as exc:
+        print(f"  Warning: {hazard} evidence not bound: {exc}")
+        return None
+    if not ev or not model_version:
+        return None
+    candidates = [ev] + ([ev["fallback"]] if hazard == "tornado" and ev.get("fallback") else [])
+    match = next((c for c in candidates if c.get("model_version") == model_version), None)
+    if match is None:
+        return None
+    t = match["test"]
+    if hazard == "earthquake":
+        ig = t["ig_per_target"]["value"]
+        return {
+            "availability": "exact_model_benchmark",
+            "label": (f"Pre-registered programme ({ev['program']}): scored once on {t['when']} "
+                      f"({t['n_issue_times']} issue times, {t['n_positive']} M6+ cell-windows); "
+                      f"{ig:+.2f} nats of information per quake over a uniform map."),
+            "model_version": model_version,
+            "auc": round(float(t["auc"]["value"]), 4),
+            "auc_ci95": [round(float(x), 4) for x in (t["auc"]["ci"] or [])],
+            "brier_skill_score": round(float(t["bss"]["value"]), 4),
+            "information_gain_per_event": round(float(ig), 4),
+            "n_cases": int(t["n_cell_times"]),
+        }
+    return {
+        "availability": "exact_model_benchmark",
+        "label": (f"Pre-registered programme ({ev['program']}): every choice made on 2023, development test "
+                  f"2024, scored once on every 2025 storm observation ({t['n']:,}; {t['pos']:,} tornadic)."),
+        "model_version": model_version,
+        "auc": round(float(t["auc"]), 4),
+        "auc_ci95": [round(float(x), 4) for x in (t["auc_ci"] or [])],
+        "brier_skill_score": round(float(t["bss"]), 4),
+        "n_cases": int(t["n"]),
+    }
+
+
 def _hurricane_heldout_benchmark(model_version: str) -> dict | None:
     if model_version.startswith(HURRICANE_STACK_PREFIX):
         return _hurricane_stack_benchmark(model_version)
@@ -1014,6 +1058,17 @@ def _build_verification_summary(pulse: dict) -> dict:
         eq_status_label = "No live earthquake replay artifacts are present."
 
     eq_latest = eq_artifacts[-1] if eq_artifacts else {}
+    # The live record is THIS version's only: the pooled means mix every version that ever served
+    # (2026-10: the replaced model's 600 windows, mean AUC 0.697, shown beside the new model).
+    eq_version = str(eq_hazard.get("model_version") or "")
+    eq_exact = _served_benchmark("earthquake", eq_version)
+    eq_live = ((eq_prospective_summary.get("by_model_version") or {}).get(eq_version) or {}) if eq_scored > 0 else {}
+    eq_live_n = int(eq_live.get("n_matured_forecasts", 0) or 0)
+    eq_live_text = (
+        f"Live record of this version: {eq_live_n} matured 30-day windows scored"
+        + (f", mean AUC {_fmt_float(eq_live.get('mean_auc'))}." if eq_live.get("mean_auc") is not None else ".")
+        if eq_live_n else "This version's live record starts when its first 30-day windows mature."
+    )
     hazards.append(
         {
             "key": "eq",
@@ -1027,18 +1082,23 @@ def _build_verification_summary(pulse: dict) -> dict:
                 "no_live_artifacts": "Missing",
             }.get(eq_status, "Status"),
             "verification_status_label": eq_status_label,
-            "metric_source": "prospective_live" if eq_scored > 0 else "no_exact_model_benchmark",
-            "metric_source_label": (
-                "Computed from matured live forecasts."
-                if eq_scored > 0
-                else "The current live earthquake model does not yet have an exact benchmark in this repo."
+            "metric_source": (
+                "retrospective_holdout_exact_model" if eq_exact
+                else ("prospective_live" if eq_live_n else "no_exact_model_benchmark")
             ),
-            "auc": eq_prospective_summary.get("mean_auc") if eq_scored > 0 else None,
-            "brier": eq_prospective_summary.get("mean_brier") if eq_scored > 0 else None,
+            "metric_source_label": (
+                (eq_exact["label"] + " " + eq_live_text) if eq_exact
+                else (eq_live_text if eq_live_n
+                      else "The current live earthquake model does not yet have an exact benchmark in this repo.")
+            ),
+            "auc": eq_exact["auc"] if eq_exact else (eq_live.get("mean_auc") if eq_live_n else None),
+            "brier": None if eq_exact else (eq_live.get("mean_brier") if eq_live_n else None),
+            "brier_skill_score": eq_exact.get("brier_skill_score") if eq_exact else None,
             "homepage_line": (
-                f"{eq_scored} matured windows scored"
-                if eq_scored > 0
-                else f"{len(eq_artifacts)} frozen forecasts · {eq_backlog} matured backlog"
+                f"AUC {_fmt_float(eq_exact['auc'])} pre-registered final test"
+                if eq_exact
+                else (f"{eq_live_n} matured windows of this model scored" if eq_live_n
+                      else f"{len(eq_artifacts)} frozen forecasts · {eq_backlog} matured backlog")
             ),
             "forecast_storage": {
                 "n_replay_artifacts": len(eq_artifacts),
@@ -1064,8 +1124,9 @@ def _build_verification_summary(pulse: dict) -> dict:
                 "scored_as_of": eq_prospective_summary.get("scored_as_of"),
                 "message": eq_prospective_summary.get("message"),
                 "top_5_hit_rate": eq_prospective_summary.get("top_5_hit_rate"),
+                "this_model_version": eq_live or None,
             },
-            "exact_model_benchmark": None,
+            "exact_model_benchmark": eq_exact,
             "related_benchmark": eq_related,
             "recommended_action": (
                 "Keep freezing every earthquake forecast. Once the first 30-day windows mature, run the prospective scorer and use those scores to tune thresholds and calibration."
@@ -1205,31 +1266,34 @@ def _build_verification_summary(pulse: dict) -> dict:
     # reference. Summaries written before pooled scoring existed only carry
     # per-forecast means; those are shown as AUC/Brier with no BSS rather than
     # promoting a mean of per-forecast in-sample skill scores to a headline.
-    to_pooled = (to_prospective_summary.get("pooled") or {}) if to_scored > 0 else {}
-    to_served = (to_prospective_summary.get("pooled_by_served_mode") or {}) if to_scored > 0 else {}
+    # ...and only the live model version's own storms: the summary's "pooled" mixes every version
+    # that ever served (a summary without the per-version split shows no live skill at all).
+    to_version = str(to_hazard.get("model_version") or "")
+    to_exact = _served_benchmark("tornado", to_version)
+    to_pooled = (((to_prospective_summary.get("pooled_by_model_version") or {}).get(to_version) or {})
+                 if to_scored > 0 else {})
+    if not to_pooled.get("n_storm_forecasts"):
+        to_pooled = {}
+    # (the raw-vs-calibrated split is not separated by version either, so it is not quoted)
+    to_served: dict = {}
     if to_pooled:
         to_auc = to_pooled.get("auc")
         to_brier = to_pooled.get("brier")
         to_bss = to_pooled.get("bss_vs_causal_climatology")
         to_bss_reference = "causal_climatology"
         to_metric_label = (
-            f"Pooled over {int(to_pooled.get('n_storm_forecasts', 0) or 0)} storm forecasts from {to_scored} matured live "
-            f"forecasts against SPC reports; base rate {_fmt_float(to_pooled.get('base_rate'), 5)}, mean forecast "
+            f"Live record of this version: pooled over {int(to_pooled.get('n_storm_forecasts', 0) or 0)} storm forecasts "
+            f"from {int(to_pooled.get('n_forecasts', 0) or 0)} matured live forecasts against SPC reports; base rate "
+            f"{_fmt_float(to_pooled.get('base_rate'), 5)}, mean forecast "
             f"{_fmt_float(to_pooled.get('mean_forecast_probability'), 5)}. BSS reference: base rate of outcomes that had "
             "matured before each forecast was issued."
         )
-    elif to_scored > 0:
-        to_auc = to_prospective_summary.get("mean_auc")
-        to_brier = to_prospective_summary.get("mean_brier")
-        to_bss = None
-        to_bss_reference = None
-        to_metric_label = (
-            "Per-forecast mean AUC/Brier from a scorer summary that predates pooled skill; "
-            "no Brier skill score is reported until the next scoring run."
-        )
     else:
         to_auc = to_brier = to_bss = to_bss_reference = None
-        to_metric_label = "No matured tornado forecast has been scored yet."
+        to_metric_label = ("No storm forecast of this model version has been scored yet."
+                           if to_scored > 0 else "No matured tornado forecast has been scored yet.")
+    if to_exact:
+        to_metric_label = to_exact["label"] + " " + to_metric_label
     to_served_lines = []
     for mode_key, mode_label in (("raw_model_probability", "raw model"), ("calibrated_probability", "calibrated")):
         mode = to_served.get(mode_key) or {}
@@ -1249,17 +1313,29 @@ def _build_verification_summary(pulse: dict) -> dict:
             "verification_status": to_status,
             "status_badge": VERIFICATION_STATUS_BADGES.get(to_status, "Status"),
             "verification_status_label": to_status_label,
-            "metric_source": "prospective_live" if to_scored > 0 else "no_exact_model_benchmark",
+            "metric_source": (
+                "retrospective_holdout_exact_model" if to_exact
+                else ("prospective_live" if to_pooled else "no_exact_model_benchmark")
+            ),
             "metric_source_label": to_metric_label,
-            "auc": to_auc,
-            "brier": to_brier,
-            "brier_skill_score": to_bss,
-            "brier_skill_score_reference": to_bss_reference,
+            "auc": to_exact["auc"] if to_exact else to_auc,
+            "brier": None if to_exact else to_brier,
+            "brier_skill_score": to_exact["brier_skill_score"] if to_exact else to_bss,
+            "brier_skill_score_reference": "test_year_base_rate" if to_exact else to_bss_reference,
+            "live_this_version": (
+                {"auc": to_auc, "brier": to_brier, "brier_skill_score": to_bss,
+                 "n_storm_forecasts": int(to_pooled.get("n_storm_forecasts", 0) or 0)} if to_pooled else None
+            ),
             "homepage_line": (
-                f"{to_scored} matured forecasts scored"
-                + (f" · BSS {_fmt_float(to_bss, 2)} vs climatology" if to_bss is not None else "")
-                if to_scored > 0
-                else f"{len(to_artifacts)} frozen forecasts · {to_backlog} matured backlog"
+                f"AUC {_fmt_float(to_exact['auc'])} pre-registered 2025 test"
+                + (f" · live BSS {_fmt_float(to_bss, 2)}" if to_bss is not None else "")
+                if to_exact
+                else (
+                    f"{int(to_pooled.get('n_forecasts', 0) or 0)} matured forecasts of this model scored"
+                    + (f" · BSS {_fmt_float(to_bss, 2)} vs climatology" if to_bss is not None else "")
+                    if to_pooled
+                    else f"{len(to_artifacts)} frozen forecasts · {to_backlog} matured backlog"
+                )
             ),
             "forecast_storage": {
                 "n_replay_artifacts": len(to_artifacts),
@@ -1294,8 +1370,9 @@ def _build_verification_summary(pulse: dict) -> dict:
                     else None
                 ),
                 "skill_reference": to_prospective_summary.get("skill_reference") if to_scored > 0 else None,
+                "pooled_model_version": to_version if to_pooled else None,
             },
-            "exact_model_benchmark": None,
+            "exact_model_benchmark": to_exact,
             "related_benchmark": to_related,
             "recommended_action": (
                 "Judge the live tornado model on the pooled BSS against causal climatology (and its served-probability "
@@ -2307,6 +2384,7 @@ def build_site_artifacts() -> dict:
     _render_verification_page(verification_summary)
     _write_sitemap_and_feed(pulse)
     _render_cross_hazard_pages()
+    _render_model_evidence_blocks()
     _normalize_html_accessibility_labels()
 
     return {
@@ -2317,6 +2395,20 @@ def build_site_artifacts() -> dict:
         "gate_decisions": gate_decisions,
         "replay_index": replay_index,
     }
+
+
+def _render_model_evidence_blocks() -> None:
+    """The methods / registry / tornado-verification pages' model numbers, re-rendered from the
+    results files bound to each SERVED artifact (hazardpulse.verification.evidence_pages) -- they
+    were typed by hand until 2026-10 and had drifted to five different superseded models."""
+    from hazardpulse.verification import evidence_pages, served_evidence
+
+    errors: list[str] = []
+    changed = evidence_pages.render_pages(DIST, ev=served_evidence.all_evidence(errors=errors))
+    for e in errors:
+        print(f"  Warning: model evidence not bound ({e}); the page says so instead of quoting it")
+    if changed:
+        print(f"  Re-rendered model evidence on: {', '.join(changed)}")
 
 
 def _render_cross_hazard_pages() -> None:

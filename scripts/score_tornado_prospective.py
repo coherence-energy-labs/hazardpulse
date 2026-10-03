@@ -567,6 +567,10 @@ def label_storms(artifact: dict, tornado_reports: list[dict], tracks: TrackSourc
             if dist <= MATCH_RADIUS_KM and dt_hours <= MATCH_WINDOW_HOURS:
                 y_true[i] = 1.0
                 break
+    # which model scored each storm (a v3 forecast mixes the +NWS model and its fallback), so the
+    # live record is reported per model version and never pools a replaced model under a new one
+    versions = np.array([str(s.get("model_version") or artifact.get("model_version") or "unknown")
+                         for s in storms], dtype=object)
     return {
         "issued_at": issued_at,
         "window_end": window_end,
@@ -574,6 +578,7 @@ def label_storms(artifact: dict, tornado_reports: list[dict], tracks: TrackSourc
         "y_score": y_score,
         "y_raw": y_raw,
         "calibrated": calibrated,
+        "model_versions": versions,
         "n_reports_in_window": len(reports_in_window),
     }
 
@@ -692,6 +697,25 @@ def summarize(
         "calibrated_probability": _pool(lambda a, lab, r: lab["calibrated"]),
     }
 
+    def _versions(lab: dict) -> np.ndarray:
+        v = lab.get("model_versions")
+        return v if v is not None else np.full(lab["y_true"].size, "unknown", dtype=object)
+
+    all_versions = sorted({str(v) for _, lab, _ in scored for v in _versions(lab)})
+    pooled_by_model_version = {
+        ver: {**_pool(lambda a, lab, r, ver=ver: _versions(lab) == ver),
+              "n_forecasts": sum(1 for _, lab, _ in scored if np.any(_versions(lab) == ver)),
+              "first_issued_at": min((lab["issued_at"] for _, lab, _ in scored if np.any(_versions(lab) == ver)),
+                                     default=None),
+              "last_issued_at": max((lab["issued_at"] for _, lab, _ in scored if np.any(_versions(lab) == ver)),
+                                    default=None)}
+        for ver in all_versions
+    }
+    for rec in pooled_by_model_version.values():
+        for k in ("first_issued_at", "last_issued_at"):
+            if isinstance(rec.get(k), dt.datetime):
+                rec[k] = rec[k].strftime("%Y-%m-%dT%H:%M:%SZ")
+
     aucs = [r["auc"] for r in rows]
     briers = [r["brier"] for r in rows]
     bss_vals = [r["brier_skill_score"] for r in rows]
@@ -755,6 +779,7 @@ def summarize(
         "pooled": pooled,
         "pooled_by_tier": pooled_by_tier,
         "pooled_by_served_mode": pooled_by_served_mode,
+        "pooled_by_model_version": pooled_by_model_version,
         # Per-forecast means: diagnostics, NOT skill headlines (see module docstring).
         "mean_auc": _finite_mean(aucs),
         "median_auc": _finite_median(aucs),

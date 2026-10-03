@@ -348,6 +348,33 @@ def score_single_forecast(
     return result
 
 
+def live_record_by_version(results: list[dict]) -> dict[str, dict]:
+    """The live record of EACH model version on its own. The pooled means above mix every version
+    that ever served; a page quoting them under the current model would show the replaced model's
+    record (2026-10: 600 matured windows, mean AUC 0.697, information gain -14.6 per event -- all
+    from eq_coherence_v1_0 -- beside the newly served C0)."""
+    groups: dict[str, list[dict]] = {}
+    for r in results:
+        groups.setdefault(str(r.get("model_version") or "unknown"), []).append(r)
+    out: dict[str, dict] = {}
+    for version, rs in groups.items():
+        aucs = [r["auc"] for r in rs if math.isfinite(r["auc"])]
+        active = [r["auc_active_cells"] for r in rs if math.isfinite(r["auc_active_cells"])]
+        n_events = sum(r["n_observed_events"] for r in rs)
+        out[version] = {
+            "n_matured_forecasts": len(rs),
+            "first_issued_at": min(r.get("issued_at", "") for r in rs) or None,
+            "last_issued_at": max(r.get("issued_at", "") for r in rs) or None,
+            "n_observed_events": int(n_events),
+            "mean_auc": float(np.mean(aucs)) if aucs else None,
+            "mean_auc_active_cells": float(np.mean(active)) if active else None,
+            "mean_brier": float(np.mean([r["brier"] for r in rs])),
+            "event_weighted_information_gain_per_event": float(
+                sum(r["poisson_log_likelihood"] - r["uniform_log_likelihood"] for r in rs) / max(1, n_events)),
+        }
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Score matured earthquake replay artifacts.",
@@ -513,6 +540,7 @@ def main(argv: list[str] | None = None) -> int:
                 "top_20_hit_rate": float(
                     np.mean([result["top_20_hit"] for result in per_forecast_results])
                 ),
+                "by_model_version": live_record_by_version(per_forecast_results),
             }
         )
     else:
