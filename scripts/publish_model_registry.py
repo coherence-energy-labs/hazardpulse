@@ -188,12 +188,65 @@ def hurricane_stack_entry(stack_path: Path = HU_STACK_PATH, final_path: Path = H
     )
 
 
+TORNADO_V3_FILES = {
+    "tornado_v3_w.json": "served: 60-min probability (inputs include the live NWS warning state)",
+    "tornado_v3.json": "served fallback when the NWS warnings feed is down",
+    "tornado_v3_w_30.json": "served product: 30-min probability",
+    "tornado_v3_w_90.json": "served product: 90-min probability",
+    "tornado_v3_w_ef2.json": "served product: EF2+ tornado within 60 min",
+}
+
+
+def tornado_v3_entries(models_dir: Path = MODELS_DIR) -> list[dict]:
+    """The v3 tornado suite (docs/TORNADO_MODEL_PROGRAM.md), one entry per served payload. Identity,
+    inputs and the final-season numbers come from the payload itself (its provenance is written by
+    export_v3_payload.py, which refuses to export a payload that does not reproduce its final run)."""
+    from hazardpulse.tornado import lgbm_payload as lp
+
+    out = []
+    for fname, role in TORNADO_V3_FILES.items():
+        path = models_dir / fname
+        if not path.exists():
+            continue
+        payload = lp.load(path)
+        version = lp.model_version(payload)
+        prov = payload.get("provenance") or {}
+        f = prov.get("final_2025") or {}
+        out.append(_make_entry(
+            record_id=f"weights_hazardpulse_{version}",
+            name=f"HazardPulse Tornado v3 ({role.split(':')[0]})",
+            description=(
+                f"{role}. {prov.get('forecasts', '')}. Event: {prov.get('event', '')}. LightGBM "
+                f"({payload['n_trees']} trees) exported to a NumPy payload; Platt on leave-one-year-out "
+                f"scores; trained {prov.get('trained', '')}; scored once on 2025."),
+            weights_path=path,
+            benchmark={
+                "test_window": "every ProbSevere storm observation of 2025 (read once by the final pipeline)",
+                "test_auc": f.get("auc"), "test_auc_ci": f.get("auc_ci"), "test_bss": f.get("bss"),
+                "test_pr_auc": f.get("pr_auc"), "n_test_samples": f.get("n"), "n_test_positive": f.get("pos"),
+                "program": prov.get("program"),
+            },
+            framework=payload["schema"],
+            input_schema={"n_features": len(payload["feature_names"]), "blocks": prov.get("blocks"),
+                          "feature_names_path": f"results/models/{fname} (feature_names)"},
+            output_schema={"outputs": [prov.get("label")], "domain": "[0, 1]",
+                           "calibration": "Platt on leave-one-year-out scores; Venn-Abers band"
+                           if payload.get("interval") else "Platt on leave-one-year-out scores",
+                           "model_version": version},
+            paper_url="https://github.com/coherence-energy-labs/hazardpulse",
+        ))
+    return out
+
+
 def main() -> int:
     if not MODELS_DIR.exists():
         print(f"  ERROR: {MODELS_DIR} does not exist.")
         return 1
 
     entries: list[dict] = []
+
+    # ----- Tornado v3 suite (served) -----
+    entries.extend(tornado_v3_entries())
 
     # ----- Tornado GBT v1 -----
     tornado_path = MODELS_DIR / "tornado_gbt_v1.json"
@@ -212,8 +265,11 @@ def main() -> int:
         # split, not the population the model is served on.
         entries.append(_make_entry(
             record_id="weights_hazardpulse_tornado_gbt_v1",
-            name="HazardPulse Tornado GBT v1 (definitive)",
+            name="HazardPulse Tornado GBT v1 (definitive)" + (" -- SUPERSEDED by v3" if any(
+                (MODELS_DIR / f).exists() for f in TORNADO_V3_FILES) else ""),
             description=(
+                ("Superseded by the v3 suite (served); kept as the legacy path and the v3 benchmark. "
+                 if any((MODELS_DIR / f).exists() for f in TORNADO_V3_FILES) else "") +
                 "Gradient-boosted trees for storm-object tornado probability "
                 "over CONUS: P(tornado report within 40 km in the next 60 min "
                 "| ProbSevere storm object). 41 features (Block P ProbSevere + "
