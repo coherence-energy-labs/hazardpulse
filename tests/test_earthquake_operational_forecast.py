@@ -28,6 +28,9 @@ from hazardpulse.earthquake.coherence_engine import N_LON, latlon_to_grid_cell
 
 REPO = Path(__file__).resolve().parents[1]
 SERVED = REPO / "results" / "models" / "earthquake_operational_v1.json"
+# the served artifact's rate grids at its parity issue times (written by building them from the
+# artifact's frozen catalog and refusing unless each matched the artifact's recorded sha256)
+RATE_FIXTURE = REPO / "tests" / "fixtures" / "earthquake_rate_parity.npz"
 DAY = 86400.0
 
 SPEC_B = of.ModelSpec(
@@ -379,10 +382,17 @@ def test_the_served_artifact_reproduces_the_forecasts_the_program_scored():
     checks = art.meta["provenance"]["parity"]
     assert len(checks) >= 3
     engine = of.RateEngine(art.frozen, art.spec)
-    for rec in checks:
+    # The record pins each grid by the sha256 of its float64 bytes, exact only on the platform that
+    # built it: libm's exp/log differ in the last bits across platforms, so Linux CI recomputed a
+    # different sha from the same code and data (2026-10-03). The fixture holds the grids THEMSELVES,
+    # bound to the record by that sha; the recomputation is compared to them to ulp-level tolerance.
+    fx = np.load(RATE_FIXTURE)
+    assert [str(s) for s in fx["issue_times"]] == [rec["issue_time"] for rec in checks]
+    for rec, ref in zip(checks, fx["grids"]):
+        assert _sha64(ref) == rec["rate_sha256_float64"]           # the fixture IS the grid the program scored
         t = of._parse_time(rec["issue_time"])
         p = engine.rates(t)["probability"]
-        assert _sha64(p) == rec["rate_sha256_float64"]
+        np.testing.assert_allclose(p, ref, rtol=1e-10, atol=0)
         if art.gbt is not None:
             rows = rec["tree_rows"]
             X = np.asarray([[np.nan if v is None else v for v in row] for row in rows["X_float32"]], dtype=np.float32)
@@ -390,6 +400,6 @@ def test_the_served_artifact_reproduces_the_forecasts_the_program_scored():
             got = of.gbt_probability(art.gbt["payload"], X)
             np.testing.assert_allclose(got, rows["probability"], rtol=0, atol=1e-12)
         else:
-            assert _sha64(p) == rec["sha256_float64"]
+            assert rec["sha256_float64"] == rec["rate_sha256_float64"]   # a rate-only artifact serves the grid
             for cell, val in rec["samples"].items():
-                assert p[int(cell)] == val
+                assert p[int(cell)] == pytest.approx(val, rel=1e-10, abs=0)

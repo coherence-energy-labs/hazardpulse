@@ -1251,14 +1251,33 @@ def paired_cluster_bootstrap_test(
 # to the real base rate (b absorbs the prior shift, a any over- or
 # under-confidence). It is monotone, so AUC is untouched.
 
-def fit_platt(F: np.ndarray, y: np.ndarray, max_iter: int = 100) -> dict:
-    """Maximum-likelihood fit of ``p = sigmoid(a * F + b)`` (Newton's method)."""
+class PlattNotConverged(ValueError):
+    """The Platt maximum-likelihood fit did not converge; no calibration is returned."""
+
+
+def _platt_loss(F: np.ndarray, y: np.ndarray, a: float, b: float) -> float:
+    z = a * F + b
+    return float(np.mean(np.logaddexp(0.0, z) - y * z))
+
+
+def fit_platt(F: np.ndarray, y: np.ndarray, max_iter: int = 200) -> dict:
+    """Maximum-likelihood fit of ``p = sigmoid(a * F + b)``: Newton's method with a backtracking
+    line search on the (convex) log-loss.
+
+    The full Newton step is taken whenever it does not increase the loss -- the iterates are then
+    exactly plain Newton's -- and halved until it does otherwise. Plain Newton DIVERGED on the rare
+    EF2+ label (leave-one-year-out scores, 2026-10-03: a = 3.1e16, b = -1.1e16, so every
+    probability was 0 or 1 and the 2025 Brier skill was -57.7); its 60/30/90-min fits converged.
+    A fit that does not converge raises ``PlattNotConverged`` instead of returning a calibration.
+    """
     F = np.asarray(F, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
     if len(y) == 0 or y.min() == y.max():
         raise ValueError("Platt calibration needs both classes")
     a, b = 1.0, float(np.log(y.mean() / (1.0 - y.mean())) - np.mean(F))
     ridge = 1e-9
+    cur = _platt_loss(F, y, a, b)
+    converged = False
     for _ in range(max_iter):
         z = np.clip(a * F + b, -60.0, 60.0)
         p = 1.0 / (1.0 + np.exp(-z))
@@ -1270,10 +1289,24 @@ def fit_platt(F: np.ndarray, y: np.ndarray, max_iter: int = 100) -> dict:
             [np.sum(w * F), np.sum(w) + ridge],
         ])
         step = np.linalg.solve(h, g)
-        a -= step[0]
-        b -= step[1]
-        if np.max(np.abs(step)) < 1e-10:
+        t = 1.0
+        while True:
+            na, nb = a - t * step[0], b - t * step[1]
+            new = _platt_loss(F, y, na, nb)
+            # rounding-level increases near the optimum are accepted, so a converging fit keeps
+            # plain Newton's iterates bit for bit
+            if np.isfinite(new) and new <= cur + 1e-12 * max(1.0, abs(cur)):
+                break
+            t *= 0.5
+            if t < 1e-12:
+                raise PlattNotConverged(f"no descent along the Newton direction at a={a!r}, b={b!r}")
+        a, b, cur = na, nb, new
+        if np.max(np.abs(t * step)) < 1e-10:
+            converged = True
             break
+    if not converged:
+        raise PlattNotConverged(f"Platt fit did not converge in {max_iter} Newton steps "
+                                f"(a={a!r}, b={b!r}; separable scores have no finite maximum)")
     return {"method": "platt", "a": float(a), "b": float(b)}
 
 

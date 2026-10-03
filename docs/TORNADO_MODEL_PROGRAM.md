@@ -178,6 +178,22 @@ Reporting fixes adopted from the same pass:
 - the NWS-warnings bar re-estimates the matched threshold inside every bootstrap replicate and
   resamples multi-day events (consecutive tornado days), not single UTC days.
 
+## Amendment 9 (2026-10-03, before the corrected EF2+ final): the Platt fit is the maximum-likelihood fit
+
+On the EF2+ product's leave-one-year-out scores, `definitive_model.fit_platt` (plain Newton) DIVERGED:
+a = 3.1e16, b = -1.1e16. The superseded (pre-amendment-8) EF2+ final therefore served probabilities
+of 0 or 1 and scored a 2025 Brier skill of -57.7 -- found by reading that superseded final. The
+mechanism: the starting intercept logit(base rate) - mean(score) assumes the scores sit near the
+right scale; EF2+'s negatives sit near -10 with a heavy right tail, so the first step overshoots
+(log-loss 0.063 -> 1.68) and the iterates oscillate away.
+
+The method is unchanged (Platt by maximum likelihood); the implementation now finds the maximum:
+Newton with a backtracking line search on the convex log-loss, keeping the full step whenever it
+does not increase the loss, so every fit that converged before is reproduced bit for bit (checked
+on all seven saved LOYO score sets, leaky and corrected); a fit that does not converge raises
+instead of returning a calibration. EF2+ under the fix: a = 0.687, b = -6.535 on the superseded
+scores, mean forecast = base rate. The corrected EF2+ final runs with it; no choice is changed.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-
