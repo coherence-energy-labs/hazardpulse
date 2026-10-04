@@ -81,8 +81,9 @@ def _sources(d: SiteData) -> str:
            + (f", and beat {_join([esc(b) for b in beaten])} on the same cycles" if beaten else "") + ".</p>")
     other = ("<p><strong>West Pacific, Indian Ocean and Southern Hemisphere</strong>, where no public "
              "rapid-intensification guidance exists, and any NHC cycle without usable SHIPS text: our v8.2 model"
-             + (f", which ranked held-out {fmt.years(ob.get('when', ''))} cases correctly "
-                f"{fmt.pct(ob.get('auc'), 1)} of the time" if ob.get("auc") is not None else "") + ".</p>")
+             + (f". Its test, on held-out {fmt.years(ob.get('when', ''))} Atlantic and East Pacific cases, ranked "
+                f"them correctly {fmt.pct(ob.get('auc'), 1)} of the time; it has not been tested in the basins where it "
+                "now publishes" if ob.get("auc") is not None else "") + ".</p>")
     return nhc + other + '<p><a href="/methods/#hurricane">Read the full test</a></p>'
 
 
@@ -126,8 +127,8 @@ def page(d: SiteData) -> str:
         meta=[("Updated", fmt.time_tag(hu.get("updated_at"))),
               ("Active storms", f"{len(storms):,}"),
               ("Sources in use", esc(", ".join(srcs)) if srcs else "&mdash;")])
-    notices = common.gate_notice(head) + common.official_notice(HURRICANE, "For tracks, warnings and evacuation "
-                                                                           "decisions, follow")
+    notices = (common.forecast_age(hu.get("updated_at"), 24 * 60, HURRICANE.schedule) + common.gate_notice(head)
+               + common.official_notice(HURRICANE, "For tracks, warnings and evacuation decisions, follow"))
     if storms:
         proj = maps.WORLD
         marks = "".join(maps.storm(proj, s["lat"], s["lon"], storm_name(s), href=f"#storm-{esc(s.get('storm_id'))}",

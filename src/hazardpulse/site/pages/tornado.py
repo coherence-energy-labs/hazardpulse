@@ -157,13 +157,14 @@ def page(d: SiteData) -> str:
     hero = common.hero(
         "Tornado &middot; contiguous US &middot; next 60 minutes",
         "The tornado chance of every tracked storm",
-        "For every thunderstorm NOAA&rsquo;s ProbSevere system is tracking over the contiguous United States, the chance "
-        "that it produces a tornado within the next 60 minutes. This is not a warning: if the National Weather Service "
-        "issues a tornado warning for your area, take shelter.",
+        "For every thunderstorm NOAA&rsquo;s ProbSevere system is tracking on radar over and near the contiguous United "
+        "States, the chance that it produces a tornado within the next 60 minutes. This is not a warning: if the "
+        "National Weather Service issues a tornado warning for your area, take shelter.",
         meta=[("Updated", fmt.time_tag(to.get("updated_at"))),
               ("Storms tracked", f"{len(storms):,}"),
               ("Under an NWS tornado warning", f"{n_warned:,}")])
-    notices = common.gate_notice(head) + common.official_notice(TORNADO, "For tornado warnings, follow")
+    notices = (common.forecast_age(to.get("updated_at"), 60, TORNADO.schedule) + common.gate_notice(head)
+               + common.official_notice(TORNADO, "For tornado warnings, follow"))
     proj = maps.CONUS
     marks = [maps.dot(proj, s["lat"], s["lon"], cls=f"dot-to {fmt.level(s.get('tornado_probability'))}",
                       title=f"{describe_us(s['lat'], s['lon'])}: {fmt.pct_plain(s.get('tornado_probability'))}", r=4.5)
@@ -177,8 +178,9 @@ def page(d: SiteData) -> str:
                               "coloured by its chance of producing a tornado within 60 minutes. Numbered markers "
                               "are the storms listed below.",
                          legend=fmt.legend("Chance of a tornado within 60 minutes"),
-                         caption="Numbered markers match the list below. Storms over Mexico and the Gulf are "
-                                 "tracked too when NOAA&rsquo;s radar sees them.")
+                         caption="Numbered markers match the list below. Storms over northern Mexico and the Gulf "
+                                 "are tracked too when NOAA&rsquo;s radar sees them; tornado reports, and so the "
+                                 "test results, cover the US only.")
     rows = "".join(_row(i, s, d) for i, s in enumerate(storms[:N_DETAILED], 1))
     listing = (f'<ol class="rows">{rows}</ol>' + _all_storms(storms)) if storms else (
         '<p class="empty">No thunderstorms are being tracked over the US right now.</p>')
@@ -201,7 +203,7 @@ def _about(d: SiteData) -> str:
         return common.facts([("Model version", f"<code>{version}</code>"),
                              ("Test", "No final test is bound to the served model in this build.")])
     t = to["test"]
-    pt = ((to.get("probtor_final") or {}).get("probtor_raw") or {}).get("auc")
+    pt = ((to.get("probtor_final") or {}).get("probtor_tiebroken") or {}).get("auc")
     nws = to.get("vs_nws_warnings") or {}
     rows = [
         ("What the model is", "Gradient-boosted trees on NOAA ProbSevere&rsquo;s storm attributes &mdash; radar, "
@@ -211,7 +213,8 @@ def _about(d: SiteData) -> str:
                           f"{int(t.get('pos') or 0):,} were followed by a tornado), scored once after every choice was "
                           f"fixed: a storm that went on to produce a tornado was ranked above one that did not "
                           f"{fmt.pct(t.get('auc'), 1)} of the time"
-                          + (f"; NOAA&rsquo;s ProbTor, on the same storms: {fmt.pct(pt, 1)}" if pt is not None else "")),
+                          + (f"; NOAA&rsquo;s ProbTor on the same storms, its whole-percent ties broken: "
+                             f"{fmt.pct(pt, 1)}" if pt is not None else "")),
         ("What counts as a tornado", esc(str(to.get("event") or "a tornado report near the storm within 60 minutes").replace("THIS", "this"))),
         ("Model version", f"<code>{version}</code>"),
         ("Full results", '<a href="/verification/tornado/">Tornado model test results</a>'),

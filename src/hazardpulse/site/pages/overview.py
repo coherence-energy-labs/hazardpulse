@@ -62,7 +62,7 @@ def hazard_cards(d: SiteData) -> str:
     tstorms = d.tornadoes.get("storms") or []
     to_card = _card(
         "to", d,
-        label="Highest chance a tracked US thunderstorm produces a tornado",
+        label="Highest chance a tracked thunderstorm produces a tornado",
         where=esc(d.headlines["to"].where),
         count=fmt.plural(len(tstorms), "storm") + " tracked",
         empty="No thunderstorms are being tracked over the US right now.")
@@ -96,7 +96,7 @@ def world_map(d: SiteData, ident: str = "world-map") -> str:
            '<li><span class="key-swatch heat h3" aria-hidden="true"></span>Earthquake chance by cell (shaded)</li>'
            '<li><span class="key-pin pin-eq" aria-hidden="true">1</span>Highest earthquake cells</li>'
            '<li><span class="key-storm" aria-hidden="true"></span>Tropical cyclone</li>'
-           '<li><span class="key-dot dot-to" aria-hidden="true"></span>Tracked US thunderstorm</li></ul>')
+           '<li><span class="key-dot dot-to" aria-hidden="true"></span>Tracked thunderstorm</li></ul>')
     return maps.figure(
         proj, "".join(marks), ident=ident,
         title="Map of the current forecasts",
@@ -120,8 +120,11 @@ def _proofs(d: SiteData) -> str:
         auc = (t.get("auc") or {}).get("value")
         when = str(t.get("when") or t.get("period") or "").replace("-", "&ndash;")
         how = "a second look at those years" if t.get("second_read") else "scored once"
+        ref = ((eq.get("vs") or {}).get("A") or {}).get("auc") or {}
+        ref_auc = auc - ref["diff"] if auc is not None and ref.get("diff") is not None else None
         cards.append(("eq", fmt.pct(auc, 0) if auc is not None else "&mdash;",
-                      "of the time, a cell that went on to have an M6+ earthquake was ranked above one that did not",
+                      "of the time, a cell that went on to have an M6+ earthquake was ranked above one that did not"
+                      + (f" (a long-term seismicity map alone: {fmt.pct(ref_auc, 1)})" if ref_auc is not None else ""),
                       f"Every 2&deg; cell, {when} ({how})"))
     hu = ev.get("hurricane")
     if hu:
@@ -129,17 +132,19 @@ def _proofs(d: SiteData) -> str:
         beaten = [c["against"] for c in hu.get("claims", []) if c.get("better")]
         name = esc(hu["candidate_name"].split(" (")[0])
         cards.append(("hu", fmt.pct(t.get("auc"), 0) if t.get("auc") is not None else "&mdash;",
-                      f"ranking accuracy of {name}, the probability we publish for the Atlantic and Pacific"
-                      + (f"; in the same test it beat {fmt.join([esc(b) for b in beaten])}" if beaten else ""),
-                      f"The {esc(t.get('when'))} season, read once, {t.get('n', 0):,} forecast cycles"))
+                      f"ranking accuracy of {name}, the probability we publish for the Atlantic, East and Central "
+                      "Pacific" + (f"; in the same test it beat {fmt.join([esc(b) for b in beaten])}" if beaten else "")
+                      + ". Elsewhere we publish our v8.2 model, which has no test in those basins",
+                      f"The {esc(t.get('when'))} season, scored once, {t.get('n', 0):,} forecast cycles"))
     to = ev.get("tornado")
     if to:
         t = to["test"]
-        pt = ((to.get("probtor_final") or {}).get("probtor_raw") or {}).get("auc")
+        pt = ((to.get("probtor_final") or {}).get("probtor_tiebroken") or {}).get("auc")
         cards.append(("to", fmt.pct(t.get("auc"), 0) if t.get("auc") is not None else "&mdash;",
                       "of the time, a storm that went on to produce a tornado was ranked above one that did not"
-                      + (f" (NOAA&rsquo;s ProbTor: {fmt.pct(pt, 0)})" if pt is not None else ""),
-                      "Every US storm NOAA tracked in 2025, scored once"))
+                      + (f" (NOAA&rsquo;s ProbTor on the same storms: {fmt.pct(pt, 0)}, its whole-percent ties broken)"
+                         if pt is not None else ""),
+                      "Every storm NOAA tracked in 2025, scored once"))
     if not cards:
         return '<p class="muted">No final test is bound to the served models in this build.</p>'
     items = "".join(
@@ -160,7 +165,8 @@ STEPS = (
     ("Public data in", "Earthquake catalogs from the USGS, tropical cyclone guidance from NOAA&rsquo;s National "
                        "Hurricane Center, and NOAA&rsquo;s live storm tracking and National Weather Service warnings."),
     ("A fixed, versioned model", "Each model was chosen by a test written down before the data was scored, and is "
-                                 "identified by the hash of its file. Changing it means a new version and a new test."),
+                                 "recorded in the registry with the hash of its file. Changing it means a new "
+                                 "version and a new test."),
     ("Checked before it is published", "Automatic quality checks run on every forecast: fresh inputs, a valid "
                                        "schema, sane values, a complete record. A failed blocking check stops it."),
     ("Frozen, then scored", "Every forecast is saved with its inputs and hashes, chained into a ledger that shows "
@@ -174,7 +180,7 @@ def home(d: SiteData) -> str:
         "Research forecasts &middot; not an official warning service",
         "Hazard forecasts you can verify.",
         "The chance of a magnitude 6+ earthquake in the next 30 days, of a hurricane strengthening rapidly in the "
-        "next 24 hours, and of a US thunderstorm producing a tornado in the next hour &mdash; each traceable to "
+        "next 24 hours, and of a tracked thunderstorm producing a tornado in the next hour &mdash; each traceable to "
         "the data, the model and the track record behind it.",
         extra=('<div class="cta-row"><a class="btn btn-primary" href="/live/">See the live forecasts</a>'
                '<a class="btn btn-secondary" href="/verification/">How the forecasts score</a></div>'),
@@ -188,9 +194,10 @@ def home(d: SiteData) -> str:
         "proof", "How the forecasts have tested", _proofs(d) +
         '<p class="section-foot"><a href="/verification/">The full track record</a> &middot; '
         '<a href="/methods/">How each test was designed</a></p>',
-        intro="Each figure is read from the results of a test fixed before the data was scored, for the exact "
-              "model version that publishes the live number. Ranking accuracy (AUC) is 50% for a coin flip and "
-              "100% for a perfect ranking.")
+        intro="Each figure is read from the results files of the model version that publishes the number, in "
+              "tests written down before the data was scored; the earthquake figure is a later second look at "
+              "its test years, and says so. Ranking accuracy (AUC) is 50% for a coin flip and 100% for a perfect "
+              "ranking.")
     steps = "".join(f'<li class="step"><h3>{t}</h3><p>{b}</p></li>' for t, b in STEPS)
     how = common.section("how", "How a forecast is made", f'<ol class="steps">{steps}</ol>')
     area = ('<section class="section your-area-section" aria-labelledby="your-area-heading" aria-live="polite">'
@@ -269,5 +276,6 @@ def live(d: SiteData) -> str:
     body += common.section(
         "tornado", "Tornadoes: highest chances", _to_table(d) +
         '<p class="section-foot"><a href="/live/tornado/">Every tracked storm</a></p>',
-        intro="The chance that a thunderstorm tracked over the contiguous US produces a tornado within 60 minutes.")
+        intro="The chance that a thunderstorm tracked by NOAA ProbSevere, over and near the contiguous US, "
+              "produces a tornado within 60 minutes.")
     return f'<main id="main" class="page page-live">{hero}{body}</main>'

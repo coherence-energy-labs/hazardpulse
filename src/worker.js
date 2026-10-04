@@ -19,6 +19,7 @@ const ALLOWED_ORIGINS = new Set([
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 120;
 const _rateLimitMap = new Map();
+let _rateLimitLastPrune = 0;
 
 // Everything the site loads comes from this origin: self-hosted fonts, no map tiles, no inline style or script.
 const HTML_CONTENT_SECURITY_POLICY =
@@ -188,6 +189,13 @@ function _checkRateLimit(request) {
     _rateLimitMap.set(ip, entry);
   }
   entry.count++;
+  // forget every address whose minute is over: a count lives no longer than it is needed
+  if (now - _rateLimitLastPrune > RATE_LIMIT_WINDOW_MS) {
+    for (const [key, value] of _rateLimitMap) {
+      if (now - value.start > RATE_LIMIT_WINDOW_MS) _rateLimitMap.delete(key);
+    }
+    _rateLimitLastPrune = now;
+  }
   if (_rateLimitMap.size > 10000) _rateLimitMap.clear();
   return entry.count <= RATE_LIMIT_MAX_REQUESTS;
 }
@@ -529,6 +537,30 @@ class UserMarkerHandler {
   }
 }
 
+// a live page is rendered when its forecast is published; when it is viewed after the forecast's own window
+// has passed (a 60-minute tornado forecast seen three hours later), the page says so
+class ForecastAgeHandler {
+  constructor(now = new Date()) {
+    this.now = now;
+  }
+
+  element(el) {
+    const issued = Date.parse(el.getAttribute("data-issued") || "");
+    const windowMin = Number(el.getAttribute("data-window-minutes"));
+    if (!Number.isFinite(issued) || !Number.isFinite(windowMin) || windowMin <= 0) return;
+    const ageMin = (this.now.getTime() - issued) / 60000;
+    if (ageMin <= windowMin) return;
+    const schedule = escapeHtml(el.getAttribute("data-schedule") || "");
+    const ago = ageMin >= 120 ? `${Math.floor(ageMin / 60)} hours` : `${Math.round(ageMin)} minutes`;
+    const span = windowMin >= 120 ? `${Math.round(windowMin / 60)}-hour` : `${windowMin}-minute`;
+    el.setInnerContent(
+      `<strong>This forecast was issued ${ago} ago, so its ${span} window has passed.</strong> ` +
+        `A new one is published ${schedule || "on schedule"}; until then, treat these numbers as out of date.`,
+      { html: true }
+    );
+  }
+}
+
 class EmergencyBannerHandler {
   constructor(area) {
     this.area = area;
@@ -637,20 +669,25 @@ class YourAreaHandler {
   }
 }
 
-async function buildOpsSnapshot(env, request) {
-  const pulse = await fetchAssetJson(env, "/data/live-pulse.json", request);
-  const storms = await fetchAssetJson(env, "/data/live-storms.json", request);
-  const tornadoes = await fetchAssetJson(env, "/data/live-tornadoes.json", request);
+// The live status: each hazard's latest forecast, its age now, whether it is overdue, and its quality-check
+// outcome, from the index the site build writes (hazardpulse.site.build.status_index). It used to answer
+// status "ok" unconditionally.
+function opsSnapshot(index, now = new Date()) {
+  const hazards = (index && Array.isArray(index.hazards) ? index.hazards : []).map((h) => {
+    const issued = h.issued_at ? Date.parse(h.issued_at) : NaN;
+    const ageHours = Number.isFinite(issued) ? (now.getTime() - issued) / 3600000 : null;
+    const overdue = ageHours === null || ageHours > Number(h.overdue_after_hours);
+    return { ...h, age_hours: ageHours === null ? null : Math.round(ageHours * 10) / 10, overdue };
+  });
+  let status = "ok";
+  if (!hazards.length) status = "unknown";
+  else if (hazards.some((h) => h.overdue || h.quality_checks === "block")) status = "delayed";
+  else if (hazards.some((h) => h.quality_checks !== "pass")) status = "published_with_warnings";
+  return { status, as_of: now.toISOString(), domain: PRIMARY_DOMAIN, hazards };
+}
 
-  return {
-    status: "ok",
-    domain: PRIMARY_DOMAIN,
-    updated_at: pulse && pulse.updated_at ? pulse.updated_at : null,
-    hazard_count: pulse && Array.isArray(pulse.hazards) ? pulse.hazards.length : 0,
-    active_hurricanes: storms && typeof storms.n_active_storms === "number" ? storms.n_active_storms : 0,
-    active_tornado_objects:
-      tornadoes && typeof tornadoes.n_active_storms === "number" ? tornadoes.n_active_storms : 0,
-  };
+async function buildOpsSnapshot(env, request) {
+  return opsSnapshot(await fetchAssetJson(env, "/data/status.json", request));
 }
 
 async function handleApiRequest(request, env) {
@@ -825,7 +862,7 @@ async function handleApiRequest(request, env) {
 
   if (path === "/api/v1/ops/status") {
     const snapshot = await buildOpsSnapshot(env, request);
-    return jsonResponse(apiEnvelope(snapshot, 300), 200, "public, max-age=300");
+    return jsonResponse(apiEnvelope(snapshot, 60), 200, "public, max-age=60");
   }
 
   return null;
@@ -941,6 +978,7 @@ export default {
       .on(".user-marker", new UserMarkerHandler(geo))
       .on(".emergency-banner", new EmergencyBannerHandler(area))
       .on(".your-area-section", new YourAreaHandler(area, geo))
+      .on(".forecast-age", new ForecastAgeHandler())
       .transform(response);
 
     return withSecurityHeaders(new Response(transformed.body, transformed), {
@@ -960,6 +998,8 @@ if (typeof globalThis !== "undefined") {
     EmergencyBannerHandler,
     YourAreaHandler,
     summarizeArea,
+    opsSnapshot,
+    ForecastAgeHandler,
     earthquakeCell,
     officialCenter,
     hasReliableGeo,

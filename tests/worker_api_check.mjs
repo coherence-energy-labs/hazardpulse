@@ -353,6 +353,38 @@ assertHtmlSecurityHeaders(missingResponse, 404, "no-store");
 assert.equal(missingResponse.headers.get("X-Robots-Tag"), "noindex, nofollow");
 assert.match(await missingResponse.text(), /Page not found/);
 
+// the live status is computed at request time from the build's index, never a constant "ok"
+const statusIndex = { hazards: [
+  { key: "eq", forecast_id: "eq_fcst_1", issued_at: "2026-10-04T06:00:00Z", quality_checks: "pass", overdue_after_hours: 12 },
+  { key: "to", forecast_id: "to_fcst_1", issued_at: "2026-10-04T07:00:00Z", quality_checks: "degrade", overdue_after_hours: 6 },
+] };
+const fresh = workerTest.opsSnapshot(statusIndex, new Date("2026-10-04T09:00:00Z"));
+assert.equal(fresh.status, "published_with_warnings");
+assert.deepEqual(fresh.hazards.map((h) => h.overdue), [false, false]);
+assert.equal(fresh.hazards[1].age_hours, 2);
+const late = workerTest.opsSnapshot(statusIndex, new Date("2026-10-04T14:00:00Z"));
+assert.equal(late.status, "delayed");
+assert.deepEqual(late.hazards.map((h) => h.overdue), [false, true]);
+assert.equal(workerTest.opsSnapshot(null).status, "unknown");
+await expectJsonRoute("/api/v1/ops/status", (data) => {
+  assert.ok(Array.isArray(data.hazards) && data.hazards.length === 3);
+  assert.ok(["ok", "published_with_warnings", "delayed"].includes(data.status));
+});
+
+// a live page viewed after its forecast's window says so; within the window it says nothing
+function ageNote(now) {
+  let html = "";
+  new workerTest.ForecastAgeHandler(new Date(now)).element({
+    getAttribute: (n) => ({ "data-issued": "2026-10-04T07:43:44Z", "data-window-minutes": "60",
+                            "data-schedule": "every 2 hours" })[n] ?? null,
+    setInnerContent: (h) => { html = h; },
+  });
+  return html;
+}
+assert.equal(ageNote("2026-10-04T08:30:00Z"), "");
+assert.match(ageNote("2026-10-04T11:00:00Z"), /issued 3 hours ago, so its 60-minute window has passed/);
+assert.match(ageNote("2026-10-04T08:50:00Z"), /issued 66 minutes ago/);
+
 // the API documentation page is a page, not an API route (it 404ed once pages ran through the Worker)
 const apiDocs = await worker.fetch(new Request("https://hazardpulse.com/api/"), env);
 assertHtmlSecurityHeaders(apiDocs);

@@ -167,9 +167,9 @@ def page(d: SiteData) -> str:
                              intro=f"The {min(N_LISTED, len(cells))} cells with the highest 30-day chance. Open a row to "
                                    "see what drives its number.")
             + common.section("model", "About this forecast", _model_box(d),
-                             intro="A 20% chance in a cell is not an alarm. In the most active zones of the world "
-                                   "odds that high are normal, and a 20% chance still means four months in five "
-                                   "without an M6+ earthquake in that cell.")
+                             intro="A chance is not an alarm: a 20% chance still means that, of five such 30-day "
+                                   "periods, four would pass without an M6+ earthquake in that cell. Compare a cell "
+                                   "with others, and with what drives its number.")
             + common.section("check", "Check this forecast", common.check_this(
                 replay.get("forecast_id"),
                 scored_note="How this model scored on past years, and how its live forecasts score as their 30-day "

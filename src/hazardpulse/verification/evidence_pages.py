@@ -160,7 +160,8 @@ def methods_simple(ev: dict) -> str:
             + f"in a test written down in advance and run once on {_when(t)}: AUC {_f(t['auc'])}"
             + (f", against {_f(same.get('auc'))} for our v8.2 model on the same cycles" if same.get("auc") is not None else "")
             + "."
-            + (f" Everywhere else we publish v8.2 (AUC {_f(ob.get('auc'))} on held-out {_when(ob)} cases)."
+            + (f" Everywhere else we publish v8.2 (AUC {_f(ob.get('auc'))} on held-out {_when(ob)} Atlantic and "
+               "East Pacific cases; it has not been tested in the basins where it publishes)."
                if ob.get("auc") is not None else "")
             + " Each storm says which."
             + (f" Our newer model, v10.1, scored better than DTOPS over 2022&ndash;2025, each season forecast only "
@@ -295,11 +296,12 @@ def methods_hurricane(ev: dict) -> str:
                 _kv("Key inputs", "Analysis intensity and pressure (CARQ) and their 6&ndash;24 h tendencies, "
                                   "aid-model intensity forecasts, climatological potential intensity, motion, storm age"),
                 _kv("AUC", f"{_f(o['auc'])}{_ci(o['auc_ci'])} on {_n(o['n'])} held-out "
-                           f"{_when(o)} NHC cases"
+                           f"{_when(o)} NHC cases (Atlantic and East Pacific)"
                     + (f"; {_f((hu.get('v8_2_same_cases') or {}).get('auc'))} on the 2025 NHC cycles above"
                        if (hu.get("v8_2_same_cases") or {}).get("auc") is not None else "")),
                 _kv("Used for", "West Pacific, Indian Ocean and Southern Hemisphere storms (no public RI guidance), "
                                 "and NHC cycles without SHIPS text"),
+                _kv("Not yet tested", "In the basins where it publishes: its test cases are NHC&rsquo;s"),
             ])))
     return "\n\n".join(out)
 
@@ -555,7 +557,7 @@ def registry_active(ev: dict) -> str:
         if ob:
             o = ob["test"]
             rows.append(_registry_row(ob["model"], "Hurricane RI (other basins)", "published",
-                                      _when(o), f"{_f(o['auc'])}{_ci(o['auc_ci'])}",
+                                      f"{_when(o)} (NHC cases only)", f"{_f(o['auc'])}{_ci(o['auc_ci'])}",
                                       f"BSS {_signed(o['bss'])}", "GBT + logistic ensemble, Newton-calibrated"))
     if to:
         t = to["test"]
@@ -595,11 +597,14 @@ def registry_history(ev: dict) -> str:
                         f"Pre-registered programme, 2025 scored once: AUC {_f(t['auc'])}{_ci(t['auc_ci'])}"
                         + (f"; against NOAA ProbTor {_signed(vs['delta_auc'])}{_ci(vs['delta_auc_ci'], signed=True)} "
                            "(paired by day)" if vs else "")))
+        rows.append(row("retire", "tornado_storm_v1_0",
+                        "Published from March 2026 until v3 replaced it on 3 Oct 2026; its live record is on the "
+                        "track record page"))
         v2 = to.get("vs_v2")
-        rows.append(row("retire", "tornado_gbt_v2",
-                        "Replaced by v3" + (f": on 2025, v3 &minus; v2 {_signed(v2['delta_auc'])}"
-                                             f"{_ci(v2['delta_auc_ci'], signed=True)} AUC on the same storms and event"
-                                             if v2 else "")))
+        rows.append(row("supersede", "tornado_gbt_v2",
+                        "Overtaken by v3 before it published" + (f": on 2025, v3 &minus; v2 {_signed(v2['delta_auc'])}"
+                                                                 f"{_ci(v2['delta_auc_ci'], signed=True)} AUC on the "
+                                                                 "same storms and event" if v2 else "")))
         rows.append(row("retire", "hp-tornado-coherence-v1",
                         "Its published AUC of 0.894 was measured on a 5:1-downsampled split with labels on the wrong "
                         "clock (docs/AUDIT_2026-10-01.md)"))
@@ -651,7 +656,7 @@ _STRATA = {
     "region_plains": "Plains (105&deg;W to 94&deg;W, north of 30&deg;N)",
     "region_midwest": "Midwest (94&deg;W to 80&deg;W, north of 37&deg;N)",
     "region_southeast": "Southeast (94&deg;W to 75&deg;W, south of 37&deg;N)",
-    "region_elsewhere": "Everywhere else",
+    "region_elsewhere": "Outside these three regions",
     "season_DJF": "Winter (Dec&ndash;Feb)", "season_MAM": "Spring (Mar&ndash;May)",
     "season_JJA": "Summer (Jun&ndash;Aug)", "season_SON": "Autumn (Sep&ndash;Nov)",
     "local_night": "Night (20:00&ndash;06:00 local solar time)", "local_day": "Day (06:00&ndash;20:00 local solar time)",
@@ -751,10 +756,12 @@ def tornado_body(ev: dict) -> str:
 
     st = to.get("stress")
     if st:
+        order = {k: i for i, k in enumerate(_STRATA)}
+        strata = sorted(st["strata"], key=lambda r: order.get(r["stratum"], len(order)))
         srows = [f"<tr><td>{_STRATA.get(r['stratum'], _e(r['stratum'].replace('_', ' ')))}</td>"
                  f"<td class=\"num\">{_n(r['n'])} / {_n(r['pos'])}</td>"
                  f"<td class=\"num\">{_f(r['auc'])}{_ci(r['auc_ci'])}</td>"
-                 f"<td class=\"num\">{_f(r['probtor_auc'])}{_ci(r['probtor_ci'])}</td></tr>" for r in st["strata"]]
+                 f"<td class=\"num\">{_f(r['probtor_auc'])}{_ci(r['probtor_ci'])}</td></tr>" for r in strata]
         parts.append(_section(
             "strata", "By region, season, time of day, storm size and lead time",
             _table(["Group", "Storm observations / tornadic", "Model AUC", "ProbTor (calibrated) AUC"], srows,

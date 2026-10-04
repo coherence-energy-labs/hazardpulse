@@ -48,6 +48,16 @@ GATE_WORDS = {
 }
 
 
+def forecast_age(issued_at, window_minutes: int, schedule: str) -> str:
+    """An empty notice the edge worker fills when the forecast is older than its own window at the moment the
+    page is viewed (a static page cannot know that); empty, it is not shown."""
+    stamp = fmt.iso(issued_at)
+    if not stamp:
+        return ""
+    return (f'<p class="notice notice-warn forecast-age" data-issued="{stamp}" data-window-minutes="{window_minutes}" '
+            f'data-schedule="{esc(schedule)}"></p>')
+
+
 def gate_chip(gate: str) -> str:
     word, cls = GATE_WORDS.get(gate, GATE_WORDS["unknown"])
     return f'<span class="chip {cls}">{word}</span>'
@@ -92,8 +102,8 @@ def check_this(forecast_id: str | None, *, scored_note: str) -> str:
             f'<a class="card card-link" href="/verification/"><h3>See the track record</h3><p>{scored_note}</p>'
             '<span class="card-cta">Open the track record</span></a>'
             f'<a class="card card-link" href="/data/replay/{fid}.json"><h3>Re-run it yourself</h3>'
-            "<p>Download this forecast&rsquo;s frozen record, with everything needed to reproduce the published "
-            "numbers.</p>"
+            "<p>Download this forecast&rsquo;s frozen record: the published numbers, the model version, and the "
+            "inputs it used (for earthquakes, the catalog window and its hash).</p>"
             f'<span class="card-cta">Download {fid}.json</span></a></div>')
 
 

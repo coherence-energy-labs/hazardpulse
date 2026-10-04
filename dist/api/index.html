@@ -10,7 +10,7 @@
   <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://hazardpulse.com/api/">
   <link rel="preload" href="/assets/fonts/inter-latin.woff2?v=3100e775e8" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/assets/styles.css?v=81a1512ecf">
+  <link rel="stylesheet" href="/assets/styles.css?v=0bc7973123">
   <script src="/assets/site-shell.js?v=79cd26787c"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=95b74caff8">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=afff227e57">
@@ -85,8 +85,8 @@
         <table>
           <thead><tr><th>Endpoint</th><th>Returns</th><th>Cache</th></tr></thead>
           <tbody>
-            <tr><td><code>/api/v1/forecast/{forecast_id}</code></td><td>One forecast as issued, for example <code>eq_fcst_20261004_0600</code></td><td>1 year</td></tr>
-            <tr><td><code>/api/v1/replay/{forecast_id}</code></td><td>The frozen record with the inputs needed to re-run it</td><td>1 year</td></tr>
+            <tr><td><code>/api/v1/forecast/{forecast_id}</code></td><td>One forecast&rsquo;s frozen record, for example <code>eq_fcst_20261004_0600</code>: the published numbers, the model version and the inputs it used (for earthquakes, the catalog window and its hash)</td><td>1 year</td></tr>
+            <tr><td><code>/api/v1/replay/{forecast_id}</code></td><td>The same record, under its older name</td><td>1 year</td></tr>
             <tr><td><code>/api/v1/evidence/{provenance_id}</code></td><td>Input and output hashes and the sources used (<code>prov_{forecast_id}</code>)</td><td>1 year</td></tr>
             <tr><td><code>/api/v1/gates/{gate_decision_id}</code></td><td>The automatic checks the forecast passed before publication (<code>gdec_{forecast_id}</code>)</td><td>1 year</td></tr>
           </tbody>
@@ -104,7 +104,7 @@
             <tr><td><code>/api/v1/verification/tornado-recovery</code></td><td>The tornado model&rsquo;s live scoring, run by run</td><td>10 min</td></tr>
             <tr><td><code>/api/v1/registry/models</code></td><td>Every model that produces a live number, with its version, how it was chosen and where its forecasts are kept</td><td>1 hour</td></tr>
             <tr><td><code>/api/v1/laic/summary</code></td><td>Results of the population-scale precursor tests on the <a href="/verification/cross-modality/">research page</a></td><td>1 hour</td></tr>
-            <tr><td><code>/api/v1/ops/status</code></td><td>When each forecast last published</td><td>5 min</td></tr>
+            <tr><td><code>/api/v1/ops/status</code></td><td>Each hazard&rsquo;s latest forecast, its age and whether it is overdue, worked out when you ask</td><td>1 min</td></tr>
           </tbody>
         </table>
       </div>
@@ -137,7 +137,7 @@
           <h3>Fair use</h3>
           <ul class="check-list">
             <li>No key is needed. Please keep to 120 requests a minute from one address; above that the API may answer <code>429</code> with an error you can retry after a minute.</li>
-            <li>Responses are cached at the edge for the times above, so polling faster than the cache window returns the same data.</li>
+            <li>Each response carries the cache lifetime above. The data behind it changes only when a forecast is published, so polling faster than that gains nothing.</li>
           </ul>
         </div>
       </div>

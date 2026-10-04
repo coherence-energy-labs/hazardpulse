@@ -47,7 +47,8 @@ TORNADO = Hazard(
     key="to", name="Tornado", path="/live/tornado/",
     event="a tornado from a tracked thunderstorm",
     window="60 minutes", window_short="60 min",
-    coverage="every thunderstorm NOAA&rsquo;s ProbSevere system tracks over the contiguous United States",
+    coverage=("every thunderstorm NOAA&rsquo;s ProbSevere system tracks on radar over and near the contiguous "
+              "United States"),
     schedule="every 2 hours", max_age_hours=6,
     official=(("National Weather Service", "https://www.weather.gov/"),
               ("Storm Prediction Center", "https://www.spc.noaa.gov/")),

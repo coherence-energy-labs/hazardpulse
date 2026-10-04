@@ -325,8 +325,22 @@ def _hazard_label(value: object) -> str:
 
 
 def _load_replay_index() -> dict:
+    """The replay index, completed from the replay directory itself (the record of truth).
+
+    It used to be only upserted with the current forecasts, so every replay written any other way (a
+    backfill, a run whose index write was lost) was missing from it: 2,422 listed against 2,543 files on
+    2026-10-04. Every file in the directory is listed now. The index is append-only (CI's
+    check_append_only_monotonic), so an entry is never dropped, even if its file is absent from this
+    checkout."""
     payload = _read_json(REPLAY_INDEX_PATH, {"generated_at": None, "items": []})
-    payload.setdefault("items", [])
+    listed = {str(i.get("forecast_id")): i for i in payload.get("items", []) if i.get("forecast_id")}
+    on_disk = {p.stem: p for p in REPLAY_DIR.glob("*_fcst_*.json")} if REPLAY_DIR.exists() else {}
+    items = list(listed.values()) + [{"forecast_id": fid, "replay_artifact": _asset_ref(path)}
+                                     for fid, path in on_disk.items() if fid not in listed]
+    items.sort(key=lambda item: item.get("forecast_id", ""))
+    if [i.get("forecast_id") for i in items] != sorted(listed):
+        payload["generated_at"] = _format_utc_z(dt.datetime.now(dt.timezone.utc))
+    payload["items"] = items
     return payload
 
 
@@ -1421,7 +1435,7 @@ def _build_verification_summary(pulse: dict) -> dict:
     return summary
 
 
-def _stamp_gate_status(pulse: dict, gate_decisions: list[dict]) -> bool:
+def _stamp_pulse_from_records(pulse: dict, gate_decisions: list[dict]) -> bool:
     """Write each current forecast's REAL quality-check outcome into the live pulse.
 
     The scorers stamped ``gate_status = "pass"`` on every forecast before the checks had run, so the
@@ -1435,6 +1449,23 @@ def _stamp_gate_status(pulse: dict, gate_decisions: list[dict]) -> bool:
         status = str(decision.get("decision")) if decision else "unknown"
         if hazard.get("gate_status") != status:
             hazard["gate_status"] = status
+            changed = True
+    # ...and its "delta" by the pages' one definition: the headline chance minus the same headline in the
+    # previous frozen forecast of that hazard (the scorers' own deltas disagreed with the ledger)
+    src = str(ROOT / "src")
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    from hazardpulse.site.data import SiteData
+
+    heads = SiteData(root=ROOT, dist=DIST).headlines
+    for hazard in pulse.get("hazards", []):
+        head = heads.get(hazard.get("key"))
+        if head is None or head.forecast_id != hazard.get("forecast_id"):
+            continue
+        delta = (round(head.probability - head.previous, 4)
+                 if head.probability is not None and head.previous is not None else None)
+        if hazard.get("delta") != delta:
+            hazard["delta"] = delta
             changed = True
     return changed
 
@@ -1498,7 +1529,7 @@ def build_site_artifacts() -> dict:
             "decisions": gate_decisions,
         },
     )
-    if _stamp_gate_status(pulse, gate_decisions):
+    if _stamp_pulse_from_records(pulse, gate_decisions):
         _write_json(LIVE_PULSE_PATH, pulse)
     _render_site()
 

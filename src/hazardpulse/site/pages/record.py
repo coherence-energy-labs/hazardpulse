@@ -100,15 +100,16 @@ def _hazard_record_card(d: SiteData, key: str) -> str:
     rows = [("Published model", f"<code>{esc(version)}</code>")]
     if key == "hu":
         rows[0] = ("Published numbers", "NOAA DTOPS (SHIPS-RII as fallback) for the Atlantic, East and Central "
-                                        "Pacific; HazardPulse v8.2 elsewhere")
+                                        "Pacific; HazardPulse v8.2 elsewhere, tested only on Atlantic and East "
+                                        "Pacific cases")
     rows.append(("Window", h.window))
     # the test result, from the evidence bound to the served artifact
     if ev:
         t = ev["test"]
         if key == "eq":
             auc = (t.get("auc") or {})
-            rows.append((f"Test, {fmt.years(t.get('when'))}"
-                         + (" (second look)" if t.get("second_read") else " (scored once)"),
+            rows.append(((f"Second look at {fmt.years(t.get('when'))}" if t.get("second_read")
+                          else f"Test, {fmt.years(t.get('when'))} (scored once)"),
                          f"ranking accuracy {fmt.pct(auc.get('value'), 1)}; information gain "
                          f"{fmt.num((t.get('ig_per_target') or {}).get('value'), 2)} nats per quake over a uniform map"))
         elif key == "hu":
@@ -302,7 +303,8 @@ def evidence(d: SiteData) -> str:
         "Each published forecast is saved with the data it used, the model version, cryptographic hashes of its inputs "
         "and output, and the result of the automatic quality checks. Download any forecast&rsquo;s replay file to "
         "check it or reproduce it.",
-        meta=[("Forecasts recorded", f"{len(d.ledger_entries):,}"), ("Replay files", f"{len(index):,}")])
+        meta=[("Replay files", f"{sum(len(v) for v in d.replay_ids.values()):,}"),
+              ("Ledger entries", f"{len(d.ledger_entries):,}")])
     current = common.table(["Hazard", "Forecast and model", "Issued", "Hashes (SHA-256)", "Quality checks"],
                            _current_rows(d), caption="The forecasts on the site now")
     gates = (_gate_summary(d)
@@ -335,7 +337,8 @@ def evidence(d: SiteData) -> str:
               "(<code>/api/v1/evidence/prov_&lt;forecast id&gt;</code>).</li>"
               "<li>Check that the ledger entry for the forecast carries the same hash and that each entry&rsquo;s "
               "<code>prev_hash</code> matches the entry before it.</li>"
-              + ("<li>Verify the signature on each forecast receipt with our Ed25519 public key: "
+              + ("<li>Where a forecast carries a signed receipt (earthquake and tornado forecasts do), verify "
+                 "its signature with our Ed25519 public key: "
                  f'<a href="/data/evidence/public-key.json"><code>{esc(str(key.get("public_key_hex", ""))[:16])}&hellip;</code></a>.</li>'
                  if key.get("public_key_hex") else "")
               + "</ol><p>The scripts that do this are in the "
@@ -386,7 +389,8 @@ def status(d: SiteData) -> str:
     hero = common.hero(
         "Status", "System status",
         "Whether each forecast is current, and what the quality checks found. This page is rebuilt every time a "
-        "forecast is published; for a live answer at any moment, ask the API: "
+        "forecast is published, and scheduled runs can start late, so a forecast is flagged only once it passes the "
+        "limit shown. For the answer at this moment, ask the API: "
         '<a href="/api/v1/ops/status"><code>/api/v1/ops/status</code></a>.',
         meta=[("As of", fmt.time_tag(now.isoformat()))])
     body = (common.section("forecasts", "Forecasts", banner + common.table(

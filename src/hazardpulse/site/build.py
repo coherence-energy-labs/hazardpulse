@@ -183,6 +183,23 @@ def area_index(d: SiteData) -> str:
     return json.dumps(payload, separators=(",", ":"), allow_nan=False) + "\n"
 
 
+STATUS_INDEX = "data/status.json"
+
+
+def status_index(d: SiteData) -> str:
+    """Each hazard's latest forecast, its quality-check outcome and when it becomes overdue: the edge worker
+    answers /api/v1/ops/status from this at request time, so the API's answer is live where the status
+    page's is as of its last build."""
+    from hazardpulse.site.hazards import HAZARDS
+    hazards = []
+    for key, h in HAZARDS.items():
+        head = d.headlines[key]
+        hazards.append({"key": key, "hazard": h.name.lower(), "forecast_id": head.forecast_id,
+                        "issued_at": fmt.iso(head.issued_at) or None, "quality_checks": head.gate,
+                        "schedule": h.schedule, "overdue_after_hours": h.max_age_hours})
+    return json.dumps({"hazards": hazards}, separators=(",", ":"), allow_nan=False) + "\n"
+
+
 def evidence_blocks(d: SiteData, dist: Path) -> list[str]:
     from hazardpulse.verification import evidence_pages
     present = [rel for rel in EVIDENCE_PAGES if (dist / rel).exists()]
@@ -210,8 +227,9 @@ def build_site(dist: Path | None = None, root: Path | None = None) -> list[str]:
         if _write(page_file(dist, path), html):
             changed.append(path)
     changed += evidence_blocks(d, dist)
-    if _write(dist / AREA_INDEX, area_index(d)):
-        changed.append(AREA_INDEX)
+    for rel, text in ((AREA_INDEX, area_index(d)), (STATUS_INDEX, status_index(d))):
+        if _write(dist / rel, text):
+            changed.append(rel)
     changed += shell.rewrap_static_pages(dist)
     changed += sitemap_and_feed(d, dist)
     return changed
@@ -234,9 +252,9 @@ def check_site(dist: Path | None = None, root: Path | None = None) -> list[str]:
     from hazardpulse.verification import evidence_pages
     ev = {k: v for k, v in d.evidence.items() if not k.startswith("_")}
     stale += [f"/{rel}" for rel in evidence_pages.check_pages(dist, root, ev=ev)]
-    idx = dist / AREA_INDEX
-    if not idx.exists() or idx.read_text(encoding="utf-8") != area_index(d):
-        stale.append(f"/{AREA_INDEX}")
+    for rel, text in ((AREA_INDEX, area_index(d)), (STATUS_INDEX, status_index(d))):
+        if not (dist / rel).exists() or (dist / rel).read_text(encoding="utf-8") != text:
+            stale.append(f"/{rel}")
     f = dist / LEDGER_PAGE
     if f.exists() and _apply_ledger(d, f.read_text(encoding="utf-8")) != f.read_text(encoding="utf-8"):
         stale.append(f"/{LEDGER_PAGE} (ledger)")
