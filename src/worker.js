@@ -10,7 +10,6 @@ const API_VERSION = "v1";
 const PRIMARY_DOMAIN = "https://hazardpulse.com";
 const INTERNAL_ASSET_HEADER = "x-hazardpulse-internal-asset";
 const THEME_COOKIE_NAME = "hp_theme";
-const ALERT_THRESHOLDS = { critical: 50, severe: 150, warning: 400, watch: 800 };
 const HTML_CACHE_CONTROL = "private, no-cache, no-store, must-revalidate";
 const ALLOWED_ORIGINS = new Set([
   "https://hazardpulse.com",
@@ -20,27 +19,17 @@ const ALLOWED_ORIGINS = new Set([
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 120;
 const _rateLimitMap = new Map();
+let _rateLimitLastPrune = 0;
 
+// Everything the site loads comes from this origin: self-hosted fonts, no map tiles, no inline style or script.
 const HTML_CONTENT_SECURITY_POLICY =
   "default-src 'self'; " +
   "script-src 'self'; " +
-  "style-src 'self' https://fonts.googleapis.com; " +
-  "img-src 'self' data: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com; " +
-  "font-src 'self' data: https://fonts.gstatic.com; " +
-  "connect-src 'self' https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://noaa-mrms-pds.s3.amazonaws.com; " +
+  "style-src 'self'; " +
+  "img-src 'self' data:; " +
+  "font-src 'self'; " +
+  "connect-src 'self'; " +
   "frame-ancestors 'none'; base-uri 'self'; form-action 'self' mailto:; object-src 'none'; upgrade-insecure-requests";
-
-const AGENCY_LINKS = {
-  earthquake:
-    '<a href="https://earthquake.usgs.gov/" rel="noopener">USGS</a> &middot; ' +
-    '<a href="https://www.emsc-csem.org/" rel="noopener">EMSC</a>',
-  hurricane:
-    '<a href="https://www.nhc.noaa.gov/" rel="noopener">NHC</a> &middot; ' +
-    '<a href="https://www.metoc.navy.mil/jtwc/jtwc.html" rel="noopener">JTWC</a>',
-  tornado:
-    '<a href="https://www.spc.noaa.gov/" rel="noopener">SPC</a> &middot; ' +
-    '<a href="https://www.weather.gov/" rel="noopener">NWS</a>',
-};
 
 function isFiniteCoordinate(value) {
   return typeof value === "number" && Number.isFinite(value);
@@ -108,7 +97,11 @@ function withSecurityHeaders(
   secured.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   secured.headers.set("X-Content-Type-Options", "nosniff");
   secured.headers.set("X-Frame-Options", "DENY");
-  secured.headers.set("X-Build-Mode", "observatory-v7");
+  // _headers is not applied to a response the Worker returns, so every header a page needs is set here
+  const type = secured.headers.get("Content-Type") || "";
+  if (type.includes("text/html")) {
+    secured.headers.set("Speculation-Rules", '"/speculation-rules.json"');
+  }
   if (cacheControl) secured.headers.set("Cache-Control", cacheControl);
   if (cacheControl && cacheControl.includes("no-store")) {
     secured.headers.set("CDN-Cache-Control", "no-store");
@@ -181,14 +174,6 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return radiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function eqProjectX(lon, mapWidth) {
-  return ((lon + 180) / 360) * mapWidth;
-}
-
-function eqProjectY(lat, mapHeight) {
-  return ((90 - lat) / 180) * mapHeight;
-}
-
 function _corsOrigin(request) {
   const origin = request && request.headers && request.headers.get("Origin");
   if (origin && ALLOWED_ORIGINS.has(origin)) return origin;
@@ -204,6 +189,13 @@ function _checkRateLimit(request) {
     _rateLimitMap.set(ip, entry);
   }
   entry.count++;
+  // forget every address whose minute is over: a count lives no longer than it is needed
+  if (now - _rateLimitLastPrune > RATE_LIMIT_WINDOW_MS) {
+    for (const [key, value] of _rateLimitMap) {
+      if (now - value.start > RATE_LIMIT_WINDOW_MS) _rateLimitMap.delete(key);
+    }
+    _rateLimitLastPrune = now;
+  }
   if (_rateLimitMap.size > 10000) _rateLimitMap.clear();
   return entry.count <= RATE_LIMIT_MAX_REQUESTS;
 }
@@ -323,110 +315,182 @@ async function fetchAssetText(env, pathname, baseRequest) {
   return response.text();
 }
 
-function computeThreatLevel(userLat, userLon, zones) {
-  if (!zones.length) {
-    return { alertLevel: "none", nearest: null, nearestDist: null };
+// ---------------------------------------------------------------------------------------------
+// Personalisation at the edge: the visitor's approximate location (request.cf), used for this one
+// response and never stored. Everything below is factual -- distances, names and published chances --
+// and never an instruction: official agencies issue warnings, HazardPulse does not.
+// ---------------------------------------------------------------------------------------------
+
+const AREA = {
+  hurricaneBannerKm: 500, // an active tropical cyclone this close puts a notice at the top of every page
+  tornadoBannerKm: 50, // ...as does a tracked storm this close under an NWS tornado warning
+  tornadoBannerChance: 0.1, // ...or with at least this chance of a tornado within 60 minutes
+  stormNearbyKm: 2000, // "Near you" names the nearest tropical cyclone within this distance
+  tornadoNearbyKm: 300, // ...and the nearest tracked thunderstorm within this distance
+};
+
+// the site's one chance scale (hazardpulse.site.fmt.LEVELS)
+const LEVELS = [
+  [0.5, "p6"],
+  [0.3, "p5"],
+  [0.15, "p4"],
+  [0.05, "p3"],
+  [0.01, "p2"],
+  [0, "p1"],
+];
+const COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+
+function chanceLevel(p) {
+  const v = Number(p) || 0;
+  for (const [lo, cls] of LEVELS) if (v >= lo) return cls;
+  return "p1";
+}
+
+function formatChance(p) {
+  const v = Number(p);
+  if (!Number.isFinite(v)) return "&mdash;";
+  if (v <= 0) return "0%";
+  if (v < 0.001) return "&lt;0.1%";
+  if (v >= 1) return "100%";
+  return `${(v * 100).toFixed(1)}%`;
+}
+
+function chanceHtml(p) {
+  return `<span class="chance ${chanceLevel(p)}">${formatChance(p)}</span>`;
+}
+
+function bearing(fromLat, fromLon, toLat, toLon) {
+  const p1 = (fromLat * Math.PI) / 180;
+  const p2 = (toLat * Math.PI) / 180;
+  const dl = ((toLon - fromLon) * Math.PI) / 180;
+  const x = Math.sin(dl) * Math.cos(p2);
+  const y = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  const deg = ((Math.atan2(x, y) * 180) / Math.PI + 360) % 360;
+  return COMPASS[Math.floor((deg + 11.25) / 22.5) % 16];
+}
+
+function distanceText(km) {
+  const k = km >= 100 ? Math.round(km / 10) * 10 : Math.round(km);
+  const mi = Math.round(km / 1.609344);
+  return `${k.toLocaleString("en-US")} km (${mi.toLocaleString("en-US")} mi)`;
+}
+
+function stormName(storm) {
+  const name = String(storm.storm_name || "").trim();
+  if (!name || ["INVEST", "UNNAMED", "NONAME"].includes(name.toUpperCase())) {
+    return String(storm.storm_id || "An unnamed storm");
   }
+  return name === name.toUpperCase() ? name.charAt(0) + name.slice(1).toLowerCase() : name;
+}
 
-  let nearest = null;
-  let nearestDist = Infinity;
-
-  for (const zone of zones) {
-    const dist = haversineKm(userLat, userLon, zone.lat, zone.lon);
-    if (dist < nearestDist) {
-      nearestDist = dist;
-      nearest = zone;
-    }
+// the agency that issues the official forecast where the storm is now (an East Pacific storm west of
+// 140 W has passed to the Central Pacific Hurricane Center)
+function officialCenter(storm) {
+  const basin = String(storm.basin || "").toUpperCase();
+  const lon = Number(storm.lon);
+  if (basin === "AL" || ((basin === "EP" || basin === "CP") && lon >= -140)) {
+    return ["National Hurricane Center", "https://www.nhc.noaa.gov/"];
   }
-
-  let alertLevel = "none";
-  if (nearestDist < ALERT_THRESHOLDS.critical && nearest.prob >= 80) {
-    alertLevel = "critical";
-  } else if (nearestDist < ALERT_THRESHOLDS.severe && nearest.prob >= 51) {
-    alertLevel = "severe";
-  } else if (nearestDist < ALERT_THRESHOLDS.warning && nearest.prob >= 20) {
-    alertLevel = "warning";
-  } else if (nearestDist < ALERT_THRESHOLDS.watch && nearest.prob >= 5) {
-    alertLevel = "watch";
+  if (basin === "EP" || basin === "CP") {
+    return ["Central Pacific Hurricane Center", "https://www.nhc.noaa.gov/?cpac"];
   }
+  return ["Joint Typhoon Warning Center", "https://www.metoc.navy.mil/jtwc/jtwc.html"];
+}
 
+// one small file the site build writes for this purpose (hazardpulse.site.build.area_index): the earthquake
+// grid and the storm positions, ~0.15 MB, instead of parsing 1.5 MB of forecast files on every page view
+async function loadAreaData(env, request) {
+  const idx = await fetchAssetJson(env, "/data/area-index.json", request);
+  if (!idx) return { eq: null, eqGate: null, storms: [], tornadoes: [] };
+  const eq = idx.eq && idx.eq.forecast_domain && idx.eq.probability_grid ? idx.eq : null;
   return {
-    alertLevel,
-    nearest,
-    nearestDist: nearest ? Math.round(nearestDist) : null,
+    eq,
+    eqGate: eq ? eq.gate : null,
+    storms: Array.isArray(idx.storms) ? idx.storms : [],
+    tornadoes: Array.isArray(idx.tornadoes) ? idx.tornadoes : [],
   };
 }
 
-class BodyHandler {
-  constructor(geo, threat) {
-    this.geo = geo;
-    this.threat = threat;
-  }
-
-  element(el) {
-    try {
-      const { geo, threat } = this;
-      el.setAttribute("data-alert", threat.alertLevel);
-      el.setAttribute("data-geo-valid", geo.isReliable ? "true" : "false");
-      el.setAttribute(
-        "data-lat",
-        geo.isReliable && geo.latitude !== null ? geo.latitude : ""
-      );
-      el.setAttribute(
-        "data-lon",
-        geo.isReliable && geo.longitude !== null ? geo.longitude : ""
-      );
-      el.setAttribute("data-city", escapeHtml(geo.city) || "");
-      el.setAttribute("data-country", escapeHtml(geo.country) || "");
-      el.setAttribute("data-continent", escapeHtml(geo.continent) || "");
-      if (threat.nearest) {
-        el.setAttribute(
-          "data-nearest-hazard",
-          `${threat.nearest.type}:${escapeHtml(threat.nearest.name)}`
-        );
-      }
-
-      const mapW = 960;
-      const mapH = 480;
-      const hasCoords =
-        geo.isReliable && geo.latitude !== null && geo.longitude !== null;
-      const ux = hasCoords ? eqProjectX(geo.longitude, mapW).toFixed(1) : "-9999";
-      const uy = hasCoords ? eqProjectY(geo.latitude, mapH).toFixed(1) : "-9999";
-
-      el.setAttribute(
-        "style",
-        `--user-x:${ux}px;--user-y:${uy}px;--user-lat:${
-          hasCoords ? geo.latitude : ""
-        };--user-lon:${hasCoords ? geo.longitude : ""}`
-      );
-    } catch {
-      // noop
-    }
-  }
+// the visitor's own grid cell in the earthquake forecast: the value the forecast publishes for it
+function earthquakeCell(lat, lon, replay) {
+  if (!replay) return null;
+  const d = replay.forecast_domain;
+  const row = Math.floor((lat - Number(d.lat_min)) / Number(d.dlat));
+  const col = Math.floor((lon - Number(d.lon_min)) / Number(d.dlon));
+  if (row < 0 || row >= Number(d.n_lat) || col < 0 || col >= Number(d.n_lon)) return { outside: true };
+  const values = String(replay.probability_grid).split(",");
+  const p = Number(values[row * Number(d.n_lon) + col]);
+  if (!Number.isFinite(p)) return null;
+  return {
+    p,
+    lat: Number(d.lat_min) + (row + 0.5) * Number(d.dlat),
+    lon: Number(d.lon_min) + (col + 0.5) * Number(d.dlon),
+  };
 }
 
-class UserMarkerHandler {
-  constructor(geo) {
-    this.geo = geo;
+function nearest(lat, lon, items, maxKm) {
+  let best = null;
+  for (const item of items) {
+    const ilat = Number(item.lat);
+    const ilon = Number(item.lon);
+    if (!Number.isFinite(ilat) || !Number.isFinite(ilon)) continue;
+    const km = haversineKm(lat, lon, ilat, ilon);
+    if (km <= maxKm && (!best || km < best.km)) best = { item, km };
+  }
+  return best;
+}
+
+function tornadoWarned(storm) {
+  if (!storm) return false;
+  if (typeof storm.warned === "boolean") return storm.warned;
+  return Boolean(storm.v3 && storm.v3.nws_warning && storm.v3.nws_warning.active);
+}
+
+function summarizeArea(geo, data) {
+  if (!geo.isReliable) return { reliable: false };
+  const lat = geo.latitude;
+  const lon = geo.longitude;
+  const out = {
+    reliable: true,
+    lat,
+    lon,
+    eqCell: data.eqGate === "block" ? null : earthquakeCell(lat, lon, data.eq),
+    storm: nearest(lat, lon, data.storms, AREA.stormNearbyKm),
+    tornado: nearest(lat, lon, data.tornadoes, AREA.tornadoNearbyKm),
+    banner: null,
+  };
+  const near = nearest(lat, lon, data.storms, AREA.hurricaneBannerKm);
+  if (near) {
+    out.banner = { kind: "hurricane", ...near };
+  } else {
+    const close = data.tornadoes
+      .map((s) => ({ item: s, km: haversineKm(lat, lon, Number(s.lat), Number(s.lon)) }))
+      .filter(
+        (x) =>
+          Number.isFinite(x.km) &&
+          x.km <= AREA.tornadoBannerKm &&
+          (tornadoWarned(x.item) || Number(x.item.tornado_probability) >= AREA.tornadoBannerChance)
+      )
+      .sort((a, b) => Number(b.item.tornado_probability) - Number(a.item.tornado_probability));
+    if (close.length) out.banner = { kind: "tornado", ...close[0] };
+  }
+  return out;
+}
+
+function placeText(geo) {
+  const city = escapeHtml(geo.city || geo.region || "");
+  const country = escapeHtml(geo.country || "");
+  return [city, country].filter(Boolean).join(", ") || "your area";
+}
+
+class ThemeRootHandler {
+  constructor(themePreference) {
+    this.themePreference = themePreference;
   }
 
   element(el) {
-    try {
-      const { geo } = this;
-      const hasCoords =
-        geo.isReliable && geo.latitude !== null && geo.longitude !== null;
-      if (!hasCoords) return;
-      const mapW = 960;
-      const mapH = 480;
-      const ux = eqProjectX(geo.longitude, mapW).toFixed(1);
-      const uy = eqProjectY(geo.latitude, mapH).toFixed(1);
-      el.setAttribute("transform", `translate(${ux} ${uy})`);
-      el.setAttribute(
-        "aria-label",
-        `Your approximate location: ${geo.latitude.toFixed(2)}, ${geo.longitude.toFixed(2)}`
-      );
-    } catch {
-      // noop
+    if (this.themePreference === "dark" || this.themePreference === "light") {
+      el.setAttribute("data-theme", this.themePreference);
     }
   }
 }
@@ -437,269 +501,198 @@ class ThemeToggleHandler {
   }
 
   element(el) {
+    const dark = this.themePreference === "dark";
+    el.setAttribute("aria-pressed", dark ? "true" : "false");
+    el.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
+  }
+}
+
+// places the visitor marker on a map; the map's projection travels on the marker itself
+// (data-lon0 / data-lat0 / data-sx / data-sy: x = (lon - lon0) * sx, y = (lat0 - lat) * sy)
+class UserMarkerHandler {
+  constructor(geo) {
+    this.geo = geo;
+  }
+
+  element(el) {
     try {
-      if (this.themePreference === "dark") {
-        el.setAttribute("checked", "checked");
-        el.setAttribute("aria-label", "Switch to light mode");
-      } else {
-        el.setAttribute("aria-label", "Switch to dark mode");
-      }
+      const { geo } = this;
+      if (!geo.isReliable) return;
+      const raw = ["data-lon0", "data-lat0", "data-sx", "data-sy"].map((n) => el.getAttribute(n));
+      // Number(null) is 0: a missing attribute must not become a projection
+      if (raw.some((v) => v === null || String(v).trim() === "")) return;
+      const [lon0, lat0, sx, sy] = raw.map(Number);
+      if (![lon0, lat0, sx, sy].every(Number.isFinite)) return;
+      const x = (geo.longitude - lon0) * sx;
+      const y = (lat0 - geo.latitude) * sy;
+      if (x < 0 || y < 0) return;
+      el.setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+      el.setAttribute(
+        "aria-label",
+        `Your approximate location: ${geo.latitude.toFixed(1)}, ${geo.longitude.toFixed(1)}`
+      );
     } catch {
-      // noop
+      // a marker that cannot be placed stays hidden off the map
     }
+  }
+}
+
+// a live page is rendered when its forecast is published; when it is viewed after the forecast's own window
+// has passed (a 60-minute tornado forecast seen three hours later), the page says so
+class ForecastAgeHandler {
+  constructor(now = new Date()) {
+    this.now = now;
+  }
+
+  element(el) {
+    const issued = Date.parse(el.getAttribute("data-issued") || "");
+    const windowMin = Number(el.getAttribute("data-window-minutes"));
+    if (!Number.isFinite(issued) || !Number.isFinite(windowMin) || windowMin <= 0) return;
+    const ageMin = (this.now.getTime() - issued) / 60000;
+    if (ageMin <= windowMin) return;
+    const schedule = escapeHtml(el.getAttribute("data-schedule") || "");
+    const ago = ageMin >= 120 ? `${Math.floor(ageMin / 60)} hours` : `${Math.round(ageMin)} minutes`;
+    const span = windowMin >= 120 ? `${Math.round(windowMin / 60)}-hour` : `${windowMin}-minute`;
+    el.setInnerContent(
+      `<strong>This forecast was issued ${ago} ago, so its ${span} window has passed.</strong> ` +
+        `A new one is published ${schedule || "on schedule"}; until then, treat these numbers as out of date.`,
+      { html: true }
+    );
   }
 }
 
 class EmergencyBannerHandler {
-  constructor(threat, geo) {
-    this.threat = threat;
-    this.geo = geo;
+  constructor(area) {
+    this.area = area;
   }
 
   element(el) {
-    try {
-      const { threat, geo } = this;
-      if (!geo.isReliable) {
-        return;
-      }
-      if (
-        !threat.nearest ||
-        threat.alertLevel === "none" ||
-        threat.alertLevel === "watch" ||
-        threat.alertLevel === "warning"
-      ) {
-        return;
-      }
-
-      const hz = threat.nearest;
-      const typeLabel =
-        hz.type === "hurricane"
-          ? "Hurricane/Typhoon"
-          : hz.type.charAt(0).toUpperCase() + hz.type.slice(1);
-      const agencies = AGENCY_LINKS[hz.type] || "";
-
-      const detailHtml = `<strong>${escapeHtml(typeLabel)}: ${escapeHtml(
-        hz.name
-      )}</strong> - ${hz.prob}% probability (${escapeHtml(
-        hz.detail
-      )}). You are approximately ${threat.nearestDist} km from this hazard zone.`;
-
-      const titles = {
-        critical: "Imminent danger - take action now",
-        severe: "Significant hazard near your location",
-        warning: "Hazard advisory for your region",
-        watch: "Hazard being monitored near your area",
-      };
-      const actions = {
-        critical: `A major ${escapeHtml(
-          typeLabel.toLowerCase()
-        )} signal is very close to your location. Follow official evacuation or shelter guidance immediately.`,
-        severe: `A significant ${escapeHtml(
-          typeLabel.toLowerCase()
-        )} signal is near your location. Monitor official sources closely and be ready to act.`,
-        warning: "An active hazard is in your broader region. Stay informed via official channels.",
-        watch: "A hazard is being monitored in your general area. No action is needed yet.",
-      };
-
-      el.setInnerContent(
-        `
-        <div class="emergency-pulse"></div>
-        <div class="emergency-body">
-          <h2 class="emergency-title">${titles[threat.alertLevel] || "Hazard information"}</h2>
-          <p class="emergency-location">Detected location: ${escapeHtml(
-            geo.city || "Unknown"
-          )}, ${escapeHtml(geo.country || "Unknown")}</p>
-          <p class="emergency-detail">${detailHtml}</p>
-          <p class="emergency-action">${actions[threat.alertLevel] || ""}</p>
-          <div class="emergency-links">Official sources: ${agencies}</div>
-        </div>
-      `,
-        { html: true }
-      );
-    } catch {
-      // noop
+    const b = this.area && this.area.banner;
+    if (!b) return;
+    let html = "";
+    if (b.kind === "hurricane") {
+      const s = b.item;
+      const [center, url] = officialCenter(s);
+      const strength = escapeHtml(s.category || "");
+      html =
+        `<strong class="emergency-title">Tropical cyclone nearby.</strong> ${escapeHtml(stormName(s))}` +
+        (strength ? ` (${strength})` : "") +
+        ` is about ${distanceText(b.km)} ${bearing(this.area.lat, this.area.lon, s.lat, s.lon)} of your ` +
+        `approximate location. For its track and any warnings for your area, follow the ` +
+        `<a href="${url}" rel="noopener">${center}</a> and your local officials.`;
+    } else if (b.kind === "tornado") {
+      const s = b.item;
+      const warned = tornadoWarned(s);
+      html =
+        `<strong class="emergency-title">${warned ? "Tornado warning nearby." : "Storm nearby."}</strong> ` +
+        `A thunderstorm about ${distanceText(b.km)} from your approximate location ` +
+        (warned
+          ? "is under a National Weather Service tornado warning. "
+          : `has a ${formatChance(s.tornado_probability)} chance of producing a tornado in the next hour ` +
+            "(HazardPulse research forecast). ") +
+        `Check <a href="https://www.weather.gov/" rel="noopener">weather.gov</a> for the warnings in effect where you are.`;
     }
+    if (!html) return;
+    el.setInnerContent(
+      `<div class="container emergency-inner"><span class="emergency-dot" aria-hidden="true"></span><p>${html}</p></div>`,
+      { html: true }
+    );
   }
 }
 
 class YourAreaHandler {
-  constructor(threat, geo) {
-    this.threat = threat;
+  constructor(area, geo) {
+    this.area = area;
     this.geo = geo;
   }
 
   element(el) {
-    try {
-      const { threat, geo } = this;
-      if (!geo.isReliable) {
-        el.setInnerContent(
-          `
-          <h2 id="your-area-heading">Your area</h2>
-          <p class="muted">Approximate location is currently unavailable, so local distance estimates are hidden for this session.</p>
-          <div class="card"><p class="muted">The global hazard view is still live. We only render a personal location marker when edge geolocation resolves cleanly.</p></div>
-        `,
-          { html: true }
-        );
-        return;
-      }
+    const { area, geo } = this;
+    if (!area || !area.reliable) return; // the section stays empty, and hidden
+    const cards = [];
 
-      const coordLabel =
-        geo.latitude !== null && geo.longitude !== null
-          ? `${geo.latitude.toFixed(2)}, ${geo.longitude.toFixed(2)}`
-          : "your area";
-      const city = escapeHtml(geo.city) || escapeHtml(geo.region) || coordLabel;
-      const country = escapeHtml(geo.country) || "";
-      const locationStr = country ? `${city}, ${country}` : city;
-
-      if (!threat.nearest) {
-        el.setInnerContent(
-          `
-          <h2 id="your-area-heading">Your area</h2>
-          <p class="muted">We detected your approximate location as <strong>${locationStr}</strong>.</p>
-          <div class="card"><p class="muted">No significant hazards are currently active near your location. Stay informed via official sources.</p></div>
-        `,
-          { html: true }
-        );
-        return;
-      }
-
-      const hz = threat.nearest;
-      const typeLabel =
-        hz.type === "hurricane"
-          ? "Hurricane/Typhoon"
-          : hz.type.charAt(0).toUpperCase() + hz.type.slice(1);
-      const distStr =
-        threat.nearestDist < 100
-          ? `${threat.nearestDist} km`
-          : `~${Math.round(threat.nearestDist / 10) * 10} km`;
-
-      el.setInnerContent(
-        `
-        <h2 id="your-area-heading">Your area - ${locationStr}</h2>
-        <p class="muted">Based on your approximate location. Distances are estimates.</p>
-        <div class="grid">
-          <div class="card col-4">
-            <div class="metric">${distStr}</div>
-            <div class="metric-label">to nearest active hazard</div>
-            <div class="kv"><span>Hazard</span><strong>${escapeHtml(typeLabel)}: ${escapeHtml(
-              hz.name
-            )}</strong></div>
-            <div class="kv"><span>Probability</span><strong>${hz.prob}%</strong></div>
-            <div class="kv"><span>Detail</span><strong>${escapeHtml(hz.detail)}</strong></div>
-          </div>
-          <div class="card col-4">
-            <div class="kv"><span>Your location</span><strong>${locationStr}</strong></div>
-            <div class="kv"><span>Alert level</span><strong style="text-transform:capitalize;">${escapeHtml(
-              threat.alertLevel
-            )}</strong></div>
-            <div class="kv"><span>Continent</span><strong>${escapeHtml(
-              geo.continent || "Unknown"
-            )}</strong></div>
-            <div class="kv"><span>Timezone</span><strong>${escapeHtml(
-              geo.timezone || "Unknown"
-            )}</strong></div>
-          </div>
-          <div class="card col-4">
-            <h3>What to do</h3>
-            <p class="muted">${
-              threat.alertLevel === "critical" || threat.alertLevel === "severe"
-                ? "Monitor official sources. Have an emergency plan ready. Follow all government directives for your area."
-                : "No immediate action is needed. Stay aware of conditions and rely on official guidance."
-            }</p>
-            <a href="${escapeHtml(hz.link)}" class="btn btn-secondary" style="margin-top:8px;">View full detail &rarr;</a>
-          </div>
-        </div>
-      `,
-        { html: true }
+    const c = area.eqCell;
+    if (c && !c.outside) {
+      cards.push(
+        `<div class="card hz-eq"><span class="hazard-tag eq"><span class="hazard-dot eq" aria-hidden="true"></span>Earthquake</span>` +
+          `<p class="area-figure">${chanceHtml(c.p)}</p>` +
+          `<p>chance of a magnitude 6+ earthquake in your 2&deg; grid cell in the next 30 days.</p>` +
+          `<a class="card-cta" href="/live/earthquake/">Earthquake forecast</a></div>`
       );
-    } catch {
-      // noop
+    } else if (c && c.outside) {
+      cards.push(
+        `<div class="card hz-eq"><span class="hazard-tag eq"><span class="hazard-dot eq" aria-hidden="true"></span>Earthquake</span>` +
+          `<p>Your location is outside the forecast&rsquo;s grid (60&deg;S to 70&deg;N).</p></div>`
+      );
     }
+
+    const s = area.storm;
+    if (s) {
+      const [center, url] = officialCenter(s.item);
+      cards.push(
+        `<div class="card hz-hu"><span class="hazard-tag hu"><span class="hazard-dot hu" aria-hidden="true"></span>Tropical cyclone</span>` +
+          `<p class="area-figure">${distanceText(s.km)}</p>` +
+          `<p>to ${escapeHtml(stormName(s.item))}${s.item.category ? ` (${escapeHtml(s.item.category)})` : ""}, the nearest active tropical cyclone. ` +
+          `Official forecast: <a href="${url}" rel="noopener">${center}</a>.</p>` +
+          `<a class="card-cta" href="/live/hurricane/">Hurricane forecast</a></div>`
+      );
+    } else {
+      cards.push(
+        `<div class="card hz-hu"><span class="hazard-tag hu"><span class="hazard-dot hu" aria-hidden="true"></span>Tropical cyclone</span>` +
+          `<p>No active tropical cyclone within ${AREA.stormNearbyKm.toLocaleString("en-US")} km.</p></div>`
+      );
+    }
+
+    const t = area.tornado;
+    if (t) {
+      cards.push(
+        `<div class="card hz-to"><span class="hazard-tag to"><span class="hazard-dot to" aria-hidden="true"></span>Thunderstorms</span>` +
+          `<p class="area-figure">${chanceHtml(t.item.tornado_probability)}</p>` +
+          `<p>chance of a tornado within the next hour from the nearest tracked thunderstorm, about ${distanceText(t.km)} away` +
+          (tornadoWarned(t.item) ? ", which is under a National Weather Service tornado warning" : "") +
+          `.</p><a class="card-cta" href="/live/tornado/">Tornado forecast</a></div>`
+      );
+    } else {
+      cards.push(
+        `<div class="card hz-to"><span class="hazard-tag to"><span class="hazard-dot to" aria-hidden="true"></span>Thunderstorms</span>` +
+          `<p>No thunderstorm tracked within ${AREA.tornadoNearbyKm} km. Tornado forecasts cover the contiguous US.</p></div>`
+      );
+    }
+
+    el.setInnerContent(
+      `<div class="container"><div class="section-head"><div><h2 id="your-area-heading">Near you</h2>` +
+        `<p>Based on your approximate location, ${placeText(geo)}, worked out for this page view only and never stored. ` +
+        `For warnings, follow your local officials.</p></div></div>` +
+        `<div class="your-area-grid">${cards.join("")}</div></div>`,
+      { html: true }
+    );
   }
 }
 
-async function loadLiveEarthquakeZones(env, request) {
-  const pulse = await fetchAssetJson(env, "/data/live-pulse.json", request);
-  if (!pulse || !Array.isArray(pulse.hazards)) return [];
-
-  const eq = pulse.hazards.find((hazard) => hazard.key === "eq");
-  const forecastId = eq && eq.forecast_id;
-  if (!forecastId) return [];
-
-  const replay = await fetchAssetJson(env, `/data/replay/${forecastId}.json`, request);
-  if (!replay || !Array.isArray(replay.active_cells)) return [];
-
-  return replay.active_cells.slice(0, 12).map((cell, index) => ({
-    lat: Number(cell.lat || 0),
-    lon: Number(cell.lon || 0),
-    r: 250,
-    type: "earthquake",
-    name: `Hotspot ${index + 1} (${Number(cell.lat || 0).toFixed(1)}°, ${Number(
-      cell.lon || 0
-    ).toFixed(1)}°)`,
-    prob: Math.round(Number(cell.probability || 0) * 1000) / 10,
-    country: "",
-    detail: "M6.0+ in 30 days",
-    link: "/live/earthquake/",
-  }));
-}
-
-async function loadLiveHurricaneZones(env, request) {
-  const data = await fetchAssetJson(env, "/data/live-storms.json", request);
-  if (!data || !Array.isArray(data.storms)) return [];
-
-  return data.storms.map((storm, index) => ({
-    lat: Number(storm.lat || 0),
-    lon: Number(storm.lon || 0),
-    r: 300,
-    type: "hurricane",
-    name: `${storm.category || ""} ${storm.storm_name || storm.storm_id || "Storm"}`.trim(),
-    prob: Math.round(Number(storm.ri_probability || 0) * 1000) / 10,
-    country: storm.basin || "",
-    detail: "Rapid intensification in 24 hours",
-    link: "/live/hurricane/",
-  }));
-}
-
-async function loadLiveTornadoZones(env, request) {
-  const data = await fetchAssetJson(env, "/data/live-tornadoes.json", request);
-  if (!data || !Array.isArray(data.storms)) return [];
-
-  return data.storms.slice(0, 20).map((storm) => ({
-    lat: Number(storm.lat || 0),
-    lon: Number(storm.lon || 0),
-    r: 120,
-    type: "tornado",
-    name: `Storm ${storm.storm_id || "--"}`,
-    prob: Math.round(Number(storm.tornado_probability || 0) * 1000) / 10,
-    country: "",
-    detail: "Tornado formation in 24 hours",
-    link: "/live/tornado/",
-  }));
+// The live status: each hazard's latest forecast, its age now, whether it is overdue, and its quality-check
+// outcome, from the index the site build writes (hazardpulse.site.build.status_index). It used to answer
+// status "ok" unconditionally.
+function opsSnapshot(index, now = new Date()) {
+  const hazards = (index && Array.isArray(index.hazards) ? index.hazards : []).map((h) => {
+    const issued = h.issued_at ? Date.parse(h.issued_at) : NaN;
+    const ageHours = Number.isFinite(issued) ? (now.getTime() - issued) / 3600000 : null;
+    const overdue = ageHours === null || ageHours > Number(h.overdue_after_hours);
+    return { ...h, age_hours: ageHours === null ? null : Math.round(ageHours * 10) / 10, overdue };
+  });
+  let status = "ok";
+  if (!hazards.length) status = "unknown";
+  else if (hazards.some((h) => h.overdue || h.quality_checks === "block")) status = "delayed";
+  else if (hazards.some((h) => h.quality_checks !== "pass")) status = "published_with_warnings";
+  return { status, as_of: now.toISOString(), domain: PRIMARY_DOMAIN, hazards };
 }
 
 async function buildOpsSnapshot(env, request) {
-  const pulse = await fetchAssetJson(env, "/data/live-pulse.json", request);
-  const storms = await fetchAssetJson(env, "/data/live-storms.json", request);
-  const tornadoes = await fetchAssetJson(env, "/data/live-tornadoes.json", request);
-
-  return {
-    status: "ok",
-    domain: PRIMARY_DOMAIN,
-    updated_at: pulse && pulse.updated_at ? pulse.updated_at : null,
-    hazard_count: pulse && Array.isArray(pulse.hazards) ? pulse.hazards.length : 0,
-    active_hurricanes: storms && typeof storms.n_active_storms === "number" ? storms.n_active_storms : 0,
-    active_tornado_objects:
-      tornadoes && typeof tornadoes.n_active_storms === "number" ? tornadoes.n_active_storms : 0,
-  };
+  return opsSnapshot(await fetchAssetJson(env, "/data/status.json", request));
 }
 
 async function handleApiRequest(request, env) {
   if (!_checkRateLimit(request)) {
-    return jsonResponse(
-      { error: "rate_limit_exceeded", message: "Too many requests. Try again shortly." },
-      429, "no-store", request,
-    );
+    return errorEnvelope("rate_limited", "Too many requests from this address. Try again in a minute.", 429);
   }
 
   const url = new URL(request.url);
@@ -869,7 +862,7 @@ async function handleApiRequest(request, env) {
 
   if (path === "/api/v1/ops/status") {
     const snapshot = await buildOpsSnapshot(env, request);
-    return jsonResponse(apiEnvelope(snapshot, 300), 200, "public, max-age=300");
+    return jsonResponse(apiEnvelope(snapshot, 60), 200, "public, max-age=60");
   }
 
   return null;
@@ -919,7 +912,8 @@ export default {
       );
     }
 
-    if (pathname.startsWith("/api/")) {
+    // /api/ itself is the API's documentation page; everything below it is the API
+    if (pathname.startsWith("/api/") && pathname !== "/api/" && pathname !== "/api/index.html") {
       const apiResponse = await handleApiRequest(request, env);
       return apiResponse || errorEnvelope("not_found", "Unknown API endpoint.");
     }
@@ -975,25 +969,16 @@ export default {
 
     const geo = normalizeGeo(request.cf || {});
     const themePreference = readThemePreference(request);
-
-    const [earthquakeZones, hurricaneZones, tornadoZones] = await Promise.all([
-      loadLiveEarthquakeZones(env, request),
-      loadLiveHurricaneZones(env, request),
-      loadLiveTornadoZones(env, request),
-    ]);
-    const allZones = [...earthquakeZones, ...hurricaneZones, ...tornadoZones];
-
-    let threat = { alertLevel: "none", nearest: null, nearestDist: null };
-    if (geo.isReliable) {
-      threat = computeThreatLevel(geo.latitude, geo.longitude, allZones);
-    }
+    // the hazard data is read only when there is a location to compare it with
+    const area = geo.isReliable ? summarizeArea(geo, await loadAreaData(env, request)) : { reliable: false };
 
     const transformed = new HTMLRewriter()
-      .on("body", new BodyHandler(geo, threat))
+      .on("html", new ThemeRootHandler(themePreference))
       .on(".theme-toggle", new ThemeToggleHandler(themePreference))
       .on(".user-marker", new UserMarkerHandler(geo))
-      .on(".emergency-banner", new EmergencyBannerHandler(threat, geo))
-      .on(".your-area-section", new YourAreaHandler(threat, geo))
+      .on(".emergency-banner", new EmergencyBannerHandler(area))
+      .on(".your-area-section", new YourAreaHandler(area, geo))
+      .on(".forecast-age", new ForecastAgeHandler())
       .transform(response);
 
     return withSecurityHeaders(new Response(transformed.body, transformed), {
@@ -1007,10 +992,16 @@ export default {
 
 if (typeof globalThis !== "undefined") {
   globalThis.__hazardpulse_worker_test = {
-    BodyHandler,
+    ThemeRootHandler,
     ThemeToggleHandler,
     UserMarkerHandler,
+    EmergencyBannerHandler,
     YourAreaHandler,
+    summarizeArea,
+    opsSnapshot,
+    ForecastAgeHandler,
+    earthquakeCell,
+    officialCenter,
     hasReliableGeo,
     normalizeGeo,
     readThemePreference,

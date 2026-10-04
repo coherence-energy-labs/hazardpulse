@@ -103,7 +103,10 @@ def test_key_public_pages_have_structural_basics() -> None:
         text = _read_text(rel_path)
         assert "<title>" in text, rel_path
         assert '<meta name="description"' in text, rel_path
-        assert '<link rel="canonical"' in text, rel_path
+        if rel_path == "dist/404.html":
+            assert '<meta name="robots" content="noindex">' in text   # a 404 is never indexed or canonical
+        else:
+            assert '<link rel="canonical"' in text, rel_path
         assert '<meta property="og:title"' in text, rel_path
         assert '<meta name="twitter:title"' in text, rel_path
         assert 'class="skip-link"' in text, rel_path
@@ -122,7 +125,10 @@ def test_key_surfaces_publish_structured_data_and_prefetch_rules() -> None:
     ]:
         text = _read_text(rel_path)
         assert 'type="application/ld+json"' in text, rel_path
-        assert 'type="speculationrules"' in text, rel_path
+        # prefetch rules travel in a header, not an inline script the CSP would have to allow
+        assert 'type="speculationrules"' not in text, rel_path
+    assert 'Speculation-Rules: "/speculation-rules.json"' in _read_text("dist/_headers")
+    assert json.loads(_read_text("dist/speculation-rules.json"))["prefetch"]
 
 
 def test_key_public_pages_have_no_encoding_garbage() -> None:
@@ -151,14 +157,12 @@ def test_key_public_pages_have_no_encoding_garbage() -> None:
 
 
 def test_stylesheet_uses_encoding_safe_generated_labels() -> None:
+    """Generated content is written as CSS escapes, never raw non-ASCII a mis-decoded file would garble."""
     text = _read_text("dist/assets/styles.css")
-    for fragment in [
-        'content: " \\25BE";',
-        'content: "\\26A0\\00A0ALERT";',
-        'content: "\\26A0\\00A0NEARBY HAZARD";',
-        'content: "\\26A0\\00A0ADVISORY";',
-    ]:
-        assert fragment in text, fragment
+    assert text.isascii()
+    contents = re.findall(r'content:\s*"([^"]*)"', text)
+    assert contents and all(c.isascii() for c in contents)
+    assert 'content: "\\2192"' in text            # the card arrow, as an escape
 
 
 def test_worker_is_in_deploy_path() -> None:
@@ -166,6 +170,18 @@ def test_worker_is_in_deploy_path() -> None:
     assert worker_path.exists(), "src/worker.js must exist for production deploys"
     wrangler_toml = _read_text("wrangler.toml")
     assert 'main = "./src/worker.js"' in wrangler_toml
+
+
+def test_pages_run_through_the_worker_and_static_files_do_not() -> None:
+    """Workers serve a file that matches an asset without running the Worker, so the edge personalisation
+    and the pages' own headers never ran in production until this routing existed (2026-10-04)."""
+    import tomllib
+    cfg = tomllib.loads(_read_text("wrangler.toml"))
+    patterns = cfg["assets"]["run_worker_first"]
+    assert "/*" in patterns
+    for static in ("!/assets/*", "!/data/*", "!/speculation-rules.json", "!/sitemap.xml", "!/feed.xml",
+                   "!/robots.txt"):
+        assert static in patterns, static
 
 
 def test_personalized_live_pages_are_not_publicly_cached() -> None:
@@ -189,7 +205,7 @@ def test_live_earthquake_forecast_references_existing_replay() -> None:
     assert f"/data/replay/{forecast_id}.json" in earthquake_page
 
     index_page = _read_text("dist/index.html")
-    assert forecast_id in index_page
+    assert f'data-forecast="{forecast_id}"' in index_page
 
 
 def test_live_forecast_ids_reference_existing_replay_artifacts() -> None:
@@ -339,35 +355,40 @@ def test_public_pages_ship_theme_bootstrap_assets() -> None:
         "dist/verification/tornado/index.html",
     ]:
         text = _read_text(rel_path)
-        assert '<script src="/assets/site-shell.js?v=2"></script>' in text, rel_path
-        assert '<link rel="stylesheet" href="/assets/styles.css?v=9">' in text, rel_path
+        # versioned by content hash (tests/test_site_pages.py checks each hash against its file)
+        assert re.search(r'<script src="/assets/site-shell\.js\?v=[0-9a-f]{10}"></script>', text), rel_path
+        assert re.search(r'<link rel="stylesheet" href="/assets/styles\.css\?v=[0-9a-f]{10}">', text), rel_path
 
 
 def test_map_surfaces_include_user_marker_svg_node() -> None:
+    """Each map carries the visitor marker, with its projection for the edge worker to place it."""
     for rel_path in [
-        "dist/assets/world-map-base.svg",
-        "dist/assets/world-map-inline.svg",
+        "dist/index.html",
+        "dist/live/index.html",
         "dist/live/earthquake/index.html",
+        "dist/live/hurricane/index.html",
         "dist/live/tornado/index.html",
     ]:
         text = _read_text(rel_path)
         assert 'class="user-marker"' in text, rel_path
         assert 'class="user-pin"' in text, rel_path
         assert 'class="user-ring"' in text, rel_path
+        assert re.search(r'class="user-marker"[^>]*data-lon0="-?[\d.]+" data-lat0="-?[\d.]+" data-sx="[\d.]+" '
+                         r'data-sy="[\d.]+"', text), rel_path
 
 
-def test_depth_toggle_hides_root_sections_without_leaving_ghost_layout() -> None:
-    stylesheet = _read_text("dist/assets/styles.css")
-    assert '.depth-content > section[data-depth="simple"]' in stylesheet
-    assert '.depth-content > section[data-depth="technical"]' in stylesheet
-    assert '.depth-content > div[data-depth="simple"]' in stylesheet
-    assert '.depth-content > div[data-depth="technical"]' in stylesheet
-    assert "display: none;" in stylesheet
+def test_no_page_hides_content_behind_a_depth_toggle() -> None:
+    """The old Simple/Technical toggle hid the legal terms and half of every page by default; every page now
+    leads with plain language and puts detail in labelled disclosures."""
+    for html_path in (ROOT / "dist").rglob("*.html"):
+        text = html_path.read_text(encoding="utf-8")
+        assert "data-depth=" not in text and 'id="depth-technical"' not in text, html_path
 
 
 def test_stylesheet_dark_mode_uses_theme_attribute() -> None:
     stylesheet = _read_text("dist/assets/styles.css")
-    assert 'body[data-theme="dark"]' in stylesheet
+    assert ':root[data-theme="dark"]' in stylesheet
+    assert ':root:not([data-theme="light"])' in stylesheet          # the system setting, unless overridden
     assert "body:has(.theme-toggle:checked)" not in stylesheet
 
 

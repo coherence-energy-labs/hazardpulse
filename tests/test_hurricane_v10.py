@@ -161,13 +161,16 @@ def test_each_entrant_spends_half_the_previous_error_budget():
 
 
 def test_the_site_shows_our_model_beside_the_published_number_with_its_bound_evidence():
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import build_site_artifacts as b
+    from hazardpulse.site.pages import hurricane as page
     from hazardpulse.verification import evidence_pages as ep
     from hazardpulse.verification import served_evidence as se
-    assert b._ours_cell({"ri_v10_shadow": {"status": "ok", "probability": 0.6123, "gate_ok": True}}) == "61.2%"
-    assert "guidance missing" in b._ours_cell({"ri_v10_shadow": {"status": "ok", "probability": 0.45, "gate_ok": False}})
-    assert "--" in b._ours_cell({})
+    storm = {"storm_id": "EP012026", "storm_name": "TEST", "basin": "EP", "lat": 15.0, "lon": -110.0,
+             "vmax_kt": 80.0, "ri_probability": 0.2, "ri_source": "noaa_aid_stack", "ri_source_label": "NOAA DTOPS"}
+    card = page._storm_card({**storm, "ri_v10_shadow": {"status": "ok", "probability": 0.6123, "gate_ok": True}})
+    assert "61.2%" in card and "Our experimental model (v10.1)" in card and "equals NOAA" not in card
+    fallback = page._storm_card({**storm, "ri_v10_shadow": {"status": "ok", "probability": 0.45, "gate_ok": False}})
+    assert "45.0%" in fallback and "guidance was missing" in fallback
+    assert "experimental" not in page._storm_card(storm)                # no model output, no row
     ours = se.hurricane_evidence()["ours"]
     art, version = ri_v10.load()
     assert ours["model_version"] == version

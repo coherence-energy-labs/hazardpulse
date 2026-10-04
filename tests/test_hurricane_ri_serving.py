@@ -493,7 +493,6 @@ def test_main_scores_active_storms_without_training(monkeypatch):
     captured: dict = {}
     monkeypatch.setattr(fas, "write_outputs",
                         lambda scored, now, version, **_k: captured.update(scored=scored, version=version))
-    monkeypatch.setattr(fas, "render_hurricane_page", lambda *a, **k: None)
     monkeypatch.setattr(fas, "build_site_artifacts", lambda: None)
     monkeypatch.setattr(fas, "DIST", REPO / "nonexistent-dist-for-test")
 

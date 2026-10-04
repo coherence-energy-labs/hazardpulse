@@ -3,125 +3,64 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Live Hurricane Forecasts - HazardPulse</title>
-  <meta name="description" content="Static live hurricane page built from the current tropical cyclone feed and HazardPulse rapid-intensification model output.">
-  <meta name="theme-color" content="#f6f9ff">
+  <title>Hurricane rapid intensification, next 24 hours — HazardPulse</title>
+  <meta name="description" content="For each active tropical cyclone, the chance it strengthens by 30 knots or more in 24 hours: NOAA&#x27;s guidance where it exists, our model elsewhere.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://hazardpulse.com/live/hurricane/">
-  <script src="/assets/site-shell.js?v=2"></script>
-  <link rel="stylesheet" href="/assets/styles.css?v=9">
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="preload" href="/assets/fonts/inter-latin.woff2?v=3100e775e8" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/styles.css?v=0bc7973123">
+  <script src="/assets/site-shell.js?v=79cd26787c"></script>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=95b74caff8">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=afff227e57">
+  <link rel="alternate" type="application/rss+xml" title="HazardPulse" href="/feed.xml">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Live Hurricane Forecasts - HazardPulse">
-  <meta property="og:description" content="Static live hurricane page built from the current tropical cyclone feed and HazardPulse rapid-intensification model output.">
+  <meta property="og:site_name" content="HazardPulse">
+  <meta property="og:title" content="Hurricane rapid intensification, next 24 hours — HazardPulse">
+  <meta property="og:description" content="For each active tropical cyclone, the chance it strengthens by 30 knots or more in 24 hours: NOAA&#x27;s guidance where it exists, our model elsewhere.">
   <meta property="og:url" content="https://hazardpulse.com/live/hurricane/">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Live Hurricane Forecasts - HazardPulse">
-  <meta name="twitter:description" content="Static live hurricane page built from the current tropical cyclone feed and HazardPulse rapid-intensification model output.">
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "Dataset",
-    "name": "HazardPulse Live Hurricane Forecasts",
-    "url": "https://hazardpulse.com/live/hurricane/",
-    "description": "Static live hurricane page built from the current tropical cyclone feed and HazardPulse rapid-intensification model output."
-  }
-  </script>
-  <script type="speculationrules">
-  {
-    "prefetch": [
-      { "source": "list", "urls": ["/", "/live/", "/live/earthquake/", "/live/tornado/", "/evidence/", "/verification/"] }
-    ]
-  }
-  </script>
+  <meta property="og:image" content="https://hazardpulse.com/assets/og-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="HazardPulse — hazard forecasts you can verify">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Hurricane rapid intensification, next 24 hours — HazardPulse">
+  <meta name="twitter:description" content="For each active tropical cyclone, the chance it strengthens by 30 knots or more in 24 hours: NOAA&#x27;s guidance where it exists, our model elsewhere.">
+  <meta name="twitter:image" content="https://hazardpulse.com/assets/og-card.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Dataset","name":"Hurricane rapid intensification, next 24 hours","description":"For each active tropical cyclone, the chance it strengthens by 30 knots or more in 24 hours: NOAA's guidance where it exists, our model elsewhere.","url":"https://hazardpulse.com/live/hurricane/","creator":{"@type":"Organization","name":"HazardPulse","url":"https://hazardpulse.com/","logo":"https://hazardpulse.com/assets/apple-touch-icon.png","email":"josh@coherenceenergylabs.com"},"isAccessibleForFree":true,"license":"https://hazardpulse.com/legal/terms/","distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://hazardpulse.com/data/live-storms.json"}],"dateModified":"2026-10-04T13:39:38.003756Z"}]}</script>
 </head>
 <body>
-  <div class="live-bar"></div>
-  <div class="emergency-banner" role="alert" aria-live="assertive"></div>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="topbar" role="banner">
-    <div class="container topbar-inner">
-      <a href="/" class="brand" aria-label="HazardPulse home">
-        <img src="/assets/hp-logo.png" alt="" class="brand-logo" width="30" height="30">
-        HazardPulse
-      </a>
-      <input type="checkbox" id="nav-toggle" class="nav-hamburger-input" aria-label="Toggle navigation">
-      <label for="nav-toggle" class="nav-hamburger" aria-hidden="true">
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-      </label>
-      <nav class="nav" aria-label="Primary navigation">
-        <div class="nav-dropdown">
-          <a href="/live/" aria-current="page">Live</a>
-          <div class="nav-dropdown-menu">
-            <a href="/live/earthquake/"><span class="hazard-dot eq"></span> Earthquake</a>
-            <a href="/live/hurricane/"><span class="hazard-dot hu"></span> Hurricane</a>
-            <a href="/live/tornado/"><span class="hazard-dot to"></span> Tornado</a>
-          </div>
-        </div>
-        <a href="/verification/">Verification</a>
-        <a href="/evidence/">Evidence</a>
-        <a href="/methods/">Methods</a>
-        <a href="/registry/">Registry</a>
-        <a href="/api/">API</a>
-      </nav>
-      <div class="theme-switch">
-        <input id="theme-toggle" class="theme-toggle" type="checkbox" aria-label="Switch to dark mode">
-        <label for="theme-toggle">Dark</label>
-      </div>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="emergency-banner" role="alert" aria-live="polite"></div>
+<header class="site-header" role="banner">
+  <div class="container header-inner">
+    <a class="brand" href="/" aria-label="HazardPulse home"><img class="brand-logo" src="/assets/hp-mark.svg?v=d54bd3e626" alt="" width="28" height="28"><span>HazardPulse</span></a>
+    <nav class="site-nav" aria-label="Primary"><div class="nav-group"><a class="nav-link" href="/live/" aria-current="page">Live</a><div class="nav-sub"><a href="/live/earthquake/"><span class="hazard-dot eq" aria-hidden="true"></span>Earthquake</a><a href="/live/hurricane/" aria-current="page"><span class="hazard-dot hu" aria-hidden="true"></span>Hurricane</a><a href="/live/tornado/"><span class="hazard-dot to" aria-hidden="true"></span>Tornado</a></div></div><a class="nav-link" href="/verification/">Track record</a><a class="nav-link" href="/evidence/">Evidence</a><a class="nav-link" href="/methods/">Methods</a><a class="nav-link" href="/registry/">Models</a><a class="nav-link" href="/api/">API</a></nav>
+    <div class="header-actions">
+      <button class="theme-toggle" type="button" aria-label="Switch colour theme" aria-pressed="false"><svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+      <details class="mobile-nav">
+        <summary aria-label="Menu"><span class="menu-bars" aria-hidden="true"></span></summary>
+        <nav class="mobile-nav-panel" aria-label="Mobile"><div class="nav-group"><a class="nav-link" href="/live/" aria-current="page">Live</a><div class="nav-sub"><a href="/live/earthquake/"><span class="hazard-dot eq" aria-hidden="true"></span>Earthquake</a><a href="/live/hurricane/" aria-current="page"><span class="hazard-dot hu" aria-hidden="true"></span>Hurricane</a><a href="/live/tornado/"><span class="hazard-dot to" aria-hidden="true"></span>Tornado</a></div></div><a class="nav-link" href="/verification/">Track record</a><a class="nav-link" href="/evidence/">Evidence</a><a class="nav-link" href="/methods/">Methods</a><a class="nav-link" href="/registry/">Models</a><a class="nav-link" href="/api/">API</a></nav>
+      </details>
     </div>
-  </header>
-  <main id="main" class="container">
-    <section class="hero">
-      <div class="eyebrow">Hurricane live page</div>
-      <h1>Current tropical cyclone view</h1>
-      <p class="subtitle">
-        This page is rendered from the current tropical cyclone feed. When there are no active storms,
-        it says so plainly instead of showing synthetic examples.
-      </p>
-      <p class="muted">Updated 2026-10-04T09:59:43Z &middot; Model: hurricane_ri_v8_2 &middot; Independent hazard intelligence platform</p>
-    </section>
-    <section class="section">
-      <div class="grid">
-        <div class="col-4">
-          <div class="card hazard-hu"><h2 style="margin-top:0;">Top storm</h2><div class="metric">1.8%</div><div class="metric-label">Rapid intensification in 24h (HazardPulse v8.2)</div><div class="kv"><span>Name</span><strong>Choi-Wan</strong></div><div class="kv"><span>Status</span><strong>Category 4 &middot; 125.0 kt</strong></div></div>
-        </div>
-        <div class="card col-8">
-          <h2 style="margin-top:0;">Active tropical systems</h2>
-          <table><thead><tr><th>Storm</th><th>Status</th><th>Location</th><th>RI 24h (published)</th><th>Source</th><th>HazardPulse model (experimental)</th><th>Wind</th></tr></thead><tbody><tr><td>Choi-Wan</td><td>Category 4</td><td>22.9, 147.0</td><td>1.8%</td><td>HazardPulse v8.2</td><td><span class="muted">not available</span></td><td>125.0 kt</td></tr><tr><td>NOLO</td><td>Category 2</td><td>23.5, -175.9</td><td>1.0%</td><td>NOAA DTOPS</td><td>3.2%</td><td>95.0 kt</td></tr><tr><td>RACHEL</td><td>Category 1</td><td>20.1, -113.0</td><td>1.0%</td><td>NOAA DTOPS</td><td>0.4%</td><td>80.0 kt</td></tr></tbody></table><div class="card" style="margin-top:12px;"><p class="muted" style="margin:0 0 6px;"><strong>HazardPulse model (hurricane_ri_v10-8a5ba5896731)</strong> &mdash; our own rapid-intensification forecast, shown for comparison. The published number is NOAA&rsquo;s until the pre-registered test below is passed.</p><ul class="muted" style="margin:0;"><li><strong>What it is:</strong> Our own model: one exceedance curve P(a rise of k kt in 24 h), k = 15&ndash;45, from the early intensity guidance (NOAA&rsquo;s statistical models, the hurricane and global models, NHC&rsquo;s consensus aids), NOAA&rsquo;s RI probabilities at six thresholds and the official forecast; NOAA&rsquo;s DTOPS wherever that guidance is missing</li><li><strong>Each season 2022&ndash;2025:</strong> predicted from earlier seasons only: log loss 0.144 vs DTOPS 0.165 (paired by storm [&minus;0.031, &minus;0.010]); over DTOPS&rsquo;s four 24-h thresholds, Brier 0.155 vs 0.172 [&minus;0.028, &minus;0.006]</li><li><strong>Against every RI probability NOAA publishes:</strong> 2022&ndash;2025, as served, each season predicted from earlier ones; 30-kt log loss SHIPS-RII 0.200 (ours 0.144) &middot; RI logistic 0.197 (ours 0.144) &middot; RI Bayesian 0.232 (ours 0.144) &middot; RI consensus 0.183 (ours 0.144) &middot; DTOPS 0.166 (ours 0.148): ours is lower than every one, each paired by storm with its 95% interval below zero</li><li><strong>Against intensity forecasts as yes/no RI calls:</strong> at each call&rsquo;s own false-alarm rate (a forecast 24-h rise of 30 kt or more), ours catches more RI events than SHIPS (DSHP) (+19 points [+6, +31]); and is within noise of NHC official forecast &middot; HCCA &middot; IVCN &middot; LGEM &middot; NNIC &middot; GEFS mean &middot; hurricane-model mean &middot; most aggressive hurricane model &middot; global-model mean (gaps &minus;3 to +9 points)</li><li><strong>2026 so far:</strong> log loss 0.129 vs DTOPS 0.150, AUC 0.925 (a second look at a season that informed its design, so not a proof)</li><li><strong>Challenger in shadow (v10.2):</strong> hurricane_ri_v10_2-3e9c1b766454: the same inputs, never lowering the odds when the guidance or NOAA&rsquo;s probability rises. 2022&ndash;2025 against v10.1: log loss 0.1436 vs 0.1443 [&minus;0.0022, +0.0008], four-threshold Brier 0.1544 vs 0.1554; a gain whose interval still includes zero; 2026 (a later look at a season that informed the design, not a proof): 0.1262 vs 0.1291. Scored live with its own prospective test at 99.375%; it replaces the shown model only by the rule written before it scored a cycle</li><li><strong>Challenger in shadow (v10.3):</strong> hurricane_ri_v10_3-f941a72e2682: v10.2 plus the storm&rsquo;s cloud-top structure from satellite infrared (NOAA GMGSI, two hours after the cycle and six hours earlier). 2022&ndash;2025 against v10.2: log loss 0.1418 vs 0.1436 [&minus;0.0054, +0.0015], four-threshold Brier 0.1527 vs 0.1544; a gain whose interval still includes zero; 2026 (a later look at a season that informed the design, not a proof): 0.1178 vs 0.1262 [&minus;0.0152, &minus;0.0018]. Scored live with its own prospective test at 99.6875%; it replaces the shown model only by the rule written before it scored a cycle</li><li><strong>Status:</strong> in prospective verification: shown beside NOAA&rsquo;s number, not instead of it, until the pre-registered prospective test on cycles from 2026-10-04 meets its rule (verdicts 2026-12-01 and 2027-12-01); cycles scored so far: 0</li></ul></div>
-          <p class="muted" style="margin-top:12px;">Where the RI number comes from: Atlantic, East and Central Pacific: NOAA&#x27;s rapid-intensification guidance read from NHC&#x27;s SHIPS text for the same cycle -- DTOPS as issued, and SHIPS-RII where DTOPS is missing -- chosen by a pre-registered comparison on 2020-2024 and scored once on 2025 (docs/HURRICANE_RI_PROGRAM.md). West Pacific, Indian Ocean, Southern Hemisphere (no public RI guidance) and any NHC cycle without a usable SHIPS text: HazardPulse v8.2.</p>
-          <p class="muted" style="margin-top:12px;">Source feed: <a href="/data/live-storms.json">/data/live-storms.json</a>. Always follow official advisories from the National Hurricane Center and local authorities.</p>
-        </div>
+  </div>
+</header>
+<main id="main" class="page page-hu"><header class="page-hero "><div class="container"><p class="eyebrow">Hurricane &middot; next 24 hours</p><h1>Rapid intensification: the chance in the next 24 hours</h1><p class="lede">Rapid intensification means a tropical cyclone&rsquo;s maximum sustained winds rise by 30 knots or more within 24 hours &mdash; the kind of change official forecasts find hardest to anticipate. For each active storm we publish the best available probability: NOAA&rsquo;s own guidance where it exists, our model elsewhere. Each storm names its source.</p><dl class="hero-meta"><div><dt>Updated</dt><dd><time datetime="2026-10-04T09:59:43Z">4 Oct 2026, 09:59 UTC</time></dd></div><div><dt>Active storms</dt><dd>3</dd></div><div><dt>Sources in use</dt><dd>HazardPulse v8.2, NOAA DTOPS</dd></div></dl></div></header><section class="section " aria-labelledby="storms"><div class="container"><div class="section-head"><div><h2 id="storms">Active storms</h2></div></div><p class="notice notice-warn forecast-age" data-issued="2026-10-04T09:59:43Z" data-window-minutes="1440" data-schedule="every 6 hours, after each forecast cycle"></p><div class="notice notice-warn"><p><strong>Quality checks: Published with warnings.</strong> The forecast is published; a non-blocking check flagged the following. <a href="/api/v1/gates/gdec_hu_fcst_20261004_0959">Full check record</a></p><ul><li>Hashes missing for: model file, input data, receipt</li><li>Calibration on live forecasts not yet measured (too few closed forecasts with events)</li></ul></div><p class="notice notice-official"><span class="notice-icon" aria-hidden="true"></span><span>For tracks, warnings and evacuation decisions, follow the <a href="https://www.nhc.noaa.gov/" rel="noopener">National Hurricane Center</a>, <a href="https://www.nhc.noaa.gov/?cpac" rel="noopener">Central Pacific Hurricane Center</a> and <a href="https://www.metoc.navy.mil/jtwc/jtwc.html" rel="noopener">Joint Typhoon Warning Center</a>. HazardPulse publishes research forecasts, not warnings.</span></p><figure class="map map-world"><svg class="map-svg" viewBox="0 0 960 373.3" role="img" aria-labelledby="hu-map-title hu-map-desc" preserveAspectRatio="xMidYMid meet"><title id="hu-map-title">Map of active tropical cyclones</title><desc id="hu-map-desc">Each ringed marker is an active tropical cyclone, labelled with its name and coloured by its chance of rapid intensification. The cards below give each storm.</desc><rect class="map-ocean" width="960" height="373.3"/><use class="map-graticule" href="/assets/maps/world.svg?v=1627039af1#graticule"/><use class="map-land" href="/assets/maps/world.svg?v=1627039af1#land"/><g class="map-markers"><a class="storm p2" href="#storm-WP262026"><title>Choi-Wan: 1.8%</title><g transform="translate(872.0 152.3)"><circle class="storm-halo" r="10"/><circle class="storm-eye" r="4.5"/><text x="-11" dy="0.35em" text-anchor="end">Choi-Wan</text></g></a><a class="storm p2" href="#storm-EP152026"><title>Nolo: 1.0%</title><g transform="translate(10.9 150.7)"><circle class="storm-halo" r="10"/><circle class="storm-eye" r="4.5"/><text x="11" dy="0.35em" text-anchor="start">Nolo</text></g></a><a class="storm p2" href="#storm-EP182026"><title>Rachel: 1.0%</title><g transform="translate(178.7 159.7)"><circle class="storm-halo" r="10"/><circle class="storm-eye" r="4.5"/><text x="11" dy="0.35em" text-anchor="start">Rachel</text></g></a></g><g class="user-marker" transform="translate(-100 -100)" data-lon0="-180" data-lat0="80" data-sx="2.66667" data-sy="2.66667" aria-label="Your approximate location"><circle class="user-ring" r="9"/><circle class="user-pin" r="4"/></g></svg><figcaption><div class="legend" role="group" aria-label="Chance of rapid intensification, next 24 hours colour scale"><span class="legend-title">Chance of rapid intensification, next 24 hours</span><ul><li><span class="swatch p1" aria-hidden="true"></span>under 1%</li><li><span class="swatch p2" aria-hidden="true"></span>1&ndash;5%</li><li><span class="swatch p3" aria-hidden="true"></span>5&ndash;15%</li><li><span class="swatch p4" aria-hidden="true"></span>15&ndash;30%</li><li><span class="swatch p5" aria-hidden="true"></span>30&ndash;50%</li><li><span class="swatch p6" aria-hidden="true"></span>50% or more</li></ul></div></figcaption></figure><div class="storm-cards"><article class="card storm-card" id="storm-WP262026"><div class="storm-card-head"><div><h3>Choi-Wan</h3><p class="muted">West Pacific &middot; WP262026</p></div><div class="storm-card-figure"><span class="chance chance-big p2">1.8%</span><span>chance of rapid intensification, next 24 hours &middot; source: HazardPulse v8.2</span></div></div><dl class="facts "><div><dt>Strength</dt><dd>Category 4: 125 kt maximum sustained winds</dd></div><div><dt>Position</dt><dd>22.9°N 147.0°E, 1,080 km NNE of Agana, Guam</dd></div><div><dt>Forecast cycle</dt><dd><time datetime="2026-10-04T06:00:00Z">4 Oct 2026, 06:00 UTC</time></dd></div><div><dt>Where the number comes from</dt><dd>HazardPulse v8.2: NOAA publishes no rapid-intensification guidance for this basin</dd></div><div><dt>Official forecast</dt><dd><a href="https://www.metoc.navy.mil/jtwc/jtwc.html" rel="noopener">Joint Typhoon Warning Center</a></dd></div></dl></article><article class="card storm-card" id="storm-EP152026"><div class="storm-card-head"><div><h3>Nolo</h3><p class="muted">Central Pacific &middot; EP152026</p></div><div class="storm-card-figure"><span class="chance chance-big p2">1.0%</span><span>chance of rapid intensification, next 24 hours &middot; source: NOAA DTOPS</span></div></div><dl class="facts "><div><dt>Strength</dt><dd>Category 2: 95 kt maximum sustained winds, 963 hPa</dd></div><div><dt>Position</dt><dd>23.5°N 175.9°W, 1,870 km W of Honolulu, HI</dd></div><div><dt>Forecast cycle</dt><dd><time datetime="2026-10-04T06:00:00Z">4 Oct 2026, 06:00 UTC</time></dd></div><div><dt>Where the number comes from</dt><dd>NOAA&rsquo;s rapid-intensification guidance: DTOPS, as issued, read from <a href="https://ftp.nhc.noaa.gov/atcf/stext/26100406EP1526_ships.txt" rel="noopener">NHC&rsquo;s SHIPS text for this cycle</a></dd></div><div><dt>Our experimental model (v10.1)</dt><dd>3.2% &mdash; shown for comparison while it is tested on new forecasts; <a href="#ours">what this is</a></dd></div><div><dt>Official forecast</dt><dd><a href="https://www.nhc.noaa.gov/?cpac" rel="noopener">Central Pacific Hurricane Center</a></dd></div></dl></article><article class="card storm-card" id="storm-EP182026"><div class="storm-card-head"><div><h3>Rachel</h3><p class="muted">East Pacific &middot; EP182026</p></div><div class="storm-card-figure"><span class="chance chance-big p2">1.0%</span><span>chance of rapid intensification, next 24 hours &middot; source: NOAA DTOPS</span></div></div><dl class="facts "><div><dt>Strength</dt><dd>Category 1: 80 kt maximum sustained winds, 970 hPa</dd></div><div><dt>Position</dt><dd>20.1°N 113.0°W, 530 km SSW of La Paz, Mexico</dd></div><div><dt>Forecast cycle</dt><dd><time datetime="2026-10-04T06:00:00Z">4 Oct 2026, 06:00 UTC</time></dd></div><div><dt>Where the number comes from</dt><dd>NOAA&rsquo;s rapid-intensification guidance: DTOPS, as issued, read from <a href="https://ftp.nhc.noaa.gov/atcf/stext/26100406EP1826_ships.txt" rel="noopener">NHC&rsquo;s SHIPS text for this cycle</a></dd></div><div><dt>Our experimental model (v10.1)</dt><dd>0.4% &mdash; shown for comparison while it is tested on new forecasts; <a href="#ours">what this is</a></dd></div><div><dt>Official forecast</dt><dd><a href="https://www.nhc.noaa.gov/" rel="noopener">National Hurricane Center</a></dd></div></dl></article></div></div></section><section class="section " aria-labelledby="sources"><div class="container"><div class="section-head"><div><h2 id="sources">Where each number comes from</h2></div></div><p><strong>Atlantic, East and Central Pacific.</strong> NOAA&rsquo;s own probability, read from the National Hurricane Center&rsquo;s SHIPS text for the same forecast cycle: DTOPS as issued, or SHIPS-RII when DTOPS is missing. We chose it in a comparison written down in advance and run on 2020&ndash;2024, then scored it once on the 2025 season: it ranked a cycle that went on to intensify rapidly above one that did not 92.8% of the time over 601 forecast cycles and 33 storms, and beat NOAA SHIPS-RII, NOAA RIOC consensus and our previous model (v8.2) on the same cycles.</p><p><strong>West Pacific, Indian Ocean and Southern Hemisphere</strong>, where no public rapid-intensification guidance exists, and any NHC cycle without usable SHIPS text: our v8.2 model. Its test, on held-out 2022&ndash;2024 Atlantic and East Pacific cases, ranked them correctly 84.7% of the time; it has not been tested in the basins where it now publishes.</p><p><a href="/methods/#hurricane">Read the full test</a></p></div></section><section class="section " aria-labelledby="ours"><div class="container"><div class="section-head"><div><h2 id="ours">Our experimental model</h2></div></div><p>HazardPulse v10.1 is our own rapid-intensification model, built from NOAA&rsquo;s intensity guidance, its rapid-intensification probabilities and the official forecast. Over the 2022&ndash;2025 seasons, each forecast only from earlier seasons, it scored better than DTOPS: log loss 0.144 against 0.165 (lower is better).</p><p>That is not yet proof. It is shown beside NOAA&rsquo;s number, never instead of it, while a test written down in advance scores it on new forecasts; the verdicts are due on 1 Dec 2026 and 1 Dec 2027. Forecast cycles scored so far: 0.</p><p><a href="/methods/#hurricane-ours">The full comparison, including the variants under test</a></p></div></section><section class="section " aria-labelledby="check"><div class="container"><div class="section-head"><div><h2 id="check">Check this forecast</h2></div></div><div class="cards cards-3"><a class="card card-link" href="/evidence/#current"><h3>See what produced it</h3><p>The forecast&rsquo;s record: its data sources, model version, and hashes of its inputs and output.</p><span class="card-cta">Open the evidence</span></a><a class="card card-link" href="/verification/"><h3>See the track record</h3><p>How the published numbers scored on past seasons, and how live forecasts score against the National Hurricane Center&rsquo;s best track.</p><span class="card-cta">Open the track record</span></a><a class="card card-link" href="/data/replay/hu_fcst_20261004_0959.json"><h3>Re-run it yourself</h3><p>Download this forecast&rsquo;s frozen record: the published numbers, the model version, and the inputs it used (for earthquakes, the catalog window and its hash).</p><span class="card-cta">Download hu_fcst_20261004_0959.json</span></a></div></div></section></main>
+<footer class="site-footer" role="contentinfo">
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a class="brand" href="/"><img class="brand-logo" src="/assets/hp-mark.svg?v=d54bd3e626" alt="" width="28" height="28"><span>HazardPulse</span></a>
+        <p>Hazard forecasts you can verify. Every number links to its data, its model and its track record.</p>
       </div>
-    </section>
-  </main>
-  <footer class="footer" role="contentinfo">
-    <div class="container footer-inner">
-      <div class="footer-col">
-        <h4>Platform</h4>
-        <a href="/live/">Live forecasts</a>
-        <a href="/verification/">Verification</a>
-        <a href="/evidence/">Evidence</a>
-        <a href="/methods/">Methods</a>
-      </div>
-      <div class="footer-col">
-        <h4>Data</h4>
-        <a href="/registry/">Model registry</a>
-        <a href="/api/">API contracts</a>
-        <a href="/ops/status/">System status</a>
-        <a href="/feed.xml">RSS feed</a>
-      </div>
-      <div class="footer-col">
-        <h4>Legal</h4>
-        <a href="/legal/disclaimer/">Disclaimer</a>
-        <a href="/COMMERCIAL_LICENSE.md">Commercial License</a>
-      </div>
-      <p class="footer-disclaimer">
-        Independent hazard intelligence platform. Always follow official guidance from the NHC, JTWC, WMO RSMCs, and local emergency authorities.
-      </p>
-      <p class="footer-build">Static-first HTML &middot; Live data under <code>/data</code> &middot; Edge geolocation by Cloudflare</p>
+      <div class="footer-cols"><div class="footer-col"><h2 class="footer-heading">Forecasts</h2><ul><li><a href="/live/">Live overview</a></li><li><a href="/live/earthquake/">Earthquake</a></li><li><a href="/live/hurricane/">Hurricane</a></li><li><a href="/live/tornado/">Tornado</a></li></ul></div><div class="footer-col"><h2 class="footer-heading">Proof</h2><ul><li><a href="/verification/">Track record</a></li><li><a href="/evidence/">Evidence</a></li><li><a href="/methods/">Methods</a></li><li><a href="/registry/">Model registry</a></li><li><a href="/verification/cross-modality/">Research tests</a></li></ul></div><div class="footer-col"><h2 class="footer-heading">Developers</h2><ul><li><a href="/api/">API</a></li><li><a href="/ops/status/">System status</a></li><li><a href="https://github.com/coherence-energy-labs/hazardpulse/releases">Open data</a></li><li><a href="https://github.com/coherence-energy-labs/hazardpulse">Source code</a></li><li><a href="/feed.xml">RSS feed</a></li></ul></div><div class="footer-col"><h2 class="footer-heading">Legal</h2><ul><li><a href="/legal/disclaimer/">Disclaimer</a></li><li><a href="/legal/privacy/">Privacy</a></li><li><a href="/legal/terms/">Terms of use</a></li><li><a href="/COMMERCIAL_LICENSE.md">Commercial licence</a></li><li><a href="mailto:josh@coherenceenergylabs.com">Contact</a></li></ul></div></div>
     </div>
-  </footer>
+    <div class="footer-bottom">
+      <p class="footer-warning"><strong>Not an official warning service.</strong> In an emergency, follow your national weather and geological services and local authorities &mdash; in the United States, the <a href="https://www.weather.gov/">National Weather Service</a>, the <a href="https://www.nhc.noaa.gov/">National Hurricane Center</a> and the <a href="https://earthquake.usgs.gov/">USGS</a>.</p>
+      <p class="footer-legal">&copy; 2026 HazardPulse &middot; Code under AGPL-3.0, <a href="/COMMERCIAL_LICENSE.md">commercial licence</a> available &middot; Data from NOAA, USGS and the public archives credited on each page</p>
+    </div>
+  </div>
+</footer>
 </body>
 </html>

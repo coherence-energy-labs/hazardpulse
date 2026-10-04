@@ -92,7 +92,7 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          git diff --quiet results/ dist/data/tornado-recovery.json dist/data/verification/ dist/data/verification-summary.json dist/verification/index.html dist/methods/index.html dist/registry/index.html dist/verification/tornado/index.html 2>/dev/null && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+          git diff --quiet results/ dist/data/tornado-recovery.json dist/data/verification/ dist/data/verification-summary.json dist/data/live-pulse.json 'dist/*.html' dist/sitemap.xml dist/feed.xml 2>/dev/null && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Commit and push verification results
         if: steps.changes.outputs.changed == 'true'
@@ -100,7 +100,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add results/earthquake_prospective/ results/tornado_prospective/ results/hurricane_prospective/ results/calibration/ results/verification/
-          git add -f dist/data/tornado-recovery.json dist/data/verification/ dist/data/verification-summary.json dist/verification/index.html dist/methods/index.html dist/registry/index.html dist/verification/tornado/index.html
+          # every page: the site is rendered as one (hazardpulse.site.build), so any page the new summaries
+          # touch -- track record, status, model evidence -- must ship in this commit (git's '*' spans directories)
+          git add -f dist/data/tornado-recovery.json dist/data/verification/ dist/data/verification-summary.json dist/data/live-pulse.json 'dist/*.html' dist/sitemap.xml dist/feed.xml
           git commit -m "data: verification scoring update $(date -u +%Y-%m-%dT%H:%MZ)
 
           Automated prospective scoring of matured forecast replay artifacts.

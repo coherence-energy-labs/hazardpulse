@@ -1,476 +1,263 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Methods - HazardPulse</title>
-  <meta name="description" content="How HazardPulse builds probabilistic hazard forecasts: data sources, model architectures, evaluation protocols, caveats, and governance gates.">
-  <meta name="theme-color" content="#f6f9ff">
+  <title>Methods — HazardPulse</title>
+  <meta name="description" content="What data each HazardPulse forecast uses, how each model was chosen and tested, its known limits, and the checks run before publishing.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://hazardpulse.com/methods/">
-  <script src="/assets/site-shell.js?v=2"></script>
-  <link rel="stylesheet" href="/assets/styles.css?v=9">
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
-  <link rel="alternate" type="application/rss+xml" title="HazardPulse Feed" href="/feed.xml">
-
-  <meta property="og:type" content="article">
-  <meta property="og:title" content="Methods - HazardPulse">
-  <meta property="og:description" content="Data sources, model architectures, evaluation protocols, caveats, and governance.">
-  <meta property="og:url" content="https://hazardpulse.com/methods/">
+  <link rel="preload" href="/assets/fonts/inter-latin.woff2?v=3100e775e8" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/styles.css?v=0bc7973123">
+  <script src="/assets/site-shell.js?v=79cd26787c"></script>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=95b74caff8">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=afff227e57">
+  <link rel="alternate" type="application/rss+xml" title="HazardPulse" href="/feed.xml">
+  <meta property="og:type" content="website">
   <meta property="og:site_name" content="HazardPulse">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Methods - HazardPulse">
-  <meta name="twitter:description" content="Data sources, model architectures, evaluation protocols, caveats, and governance.">
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "TechArticle",
-    "headline": "HazardPulse Methods and Methodology",
-    "description": "Complete methodology for probabilistic hazard forecasting including data sources, model architectures, evaluation protocols, and governance.",
-    "url": "https://hazardpulse.com/methods/",
-    "author": { "@type": "Organization", "name": "HazardPulse", "url": "https://hazardpulse.com/" }
-  }
-  </script>
-
-  <script type="speculationrules">
-  { "prefetch": [{ "source": "list", "urls": ["/verification/", "/evidence/", "/registry/"] }] }
-  </script>
+  <meta property="og:title" content="Methods — HazardPulse">
+  <meta property="og:description" content="What data each HazardPulse forecast uses, how each model was chosen and tested, its known limits, and the checks run before publishing.">
+  <meta property="og:url" content="https://hazardpulse.com/methods/">
+  <meta property="og:image" content="https://hazardpulse.com/assets/og-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="HazardPulse — hazard forecasts you can verify">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Methods — HazardPulse">
+  <meta name="twitter:description" content="What data each HazardPulse forecast uses, how each model was chosen and tested, its known limits, and the checks run before publishing.">
+  <meta name="twitter:image" content="https://hazardpulse.com/assets/og-card.png">
 </head>
 <body>
-  <div class="live-bar"></div>
-  <div class="emergency-banner" role="alert" aria-live="assertive"></div>
-  <a class="skip-link" href="#main">Skip to content</a>
-
-  <header class="topbar" role="banner">
-    <div class="container topbar-inner">
-      <a href="/" class="brand" aria-label="HazardPulse home">
-        <img src="/assets/hp-logo.png" alt="" class="brand-logo" width="30" height="30">
-        HazardPulse 
-      </a>
-      <input type="checkbox" id="nav-toggle" class="nav-hamburger-input" aria-label="Toggle navigation">
-      <label for="nav-toggle" class="nav-hamburger" aria-hidden="true">
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-      </label>
-      <nav class="nav" aria-label="Primary navigation">
-        <div class="nav-dropdown">
-          <a href="/live/">Live</a>
-          <div class="nav-dropdown-menu">
-            <a href="/live/earthquake/"><span class="hazard-dot eq"></span> Earthquake</a>
-            <a href="/live/hurricane/"><span class="hazard-dot hu"></span> Hurricane</a>
-            <a href="/live/tornado/"><span class="hazard-dot to"></span> Tornado</a>
-          </div>
-        </div>
-        <a href="/verification/">Verification</a>
-        <a href="/evidence/">Evidence</a>
-        <a href="/methods/" aria-current="page">Methods</a>
-        <a href="/registry/">Registry</a>
-        <a href="/api/">API</a>
-      </nav>
-      <div class="theme-switch">
-        <input id="theme-toggle" class="theme-toggle" type="checkbox" aria-label="Switch to dark mode">
-        <label for="theme-toggle">Dark</label>
-      </div>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="emergency-banner" role="alert" aria-live="polite"></div>
+<header class="site-header" role="banner">
+  <div class="container header-inner">
+    <a class="brand" href="/" aria-label="HazardPulse home"><img class="brand-logo" src="/assets/hp-mark.svg?v=d54bd3e626" alt="" width="28" height="28"><span>HazardPulse</span></a>
+    <nav class="site-nav" aria-label="Primary"><div class="nav-group"><a class="nav-link" href="/live/">Live</a><div class="nav-sub"><a href="/live/earthquake/"><span class="hazard-dot eq" aria-hidden="true"></span>Earthquake</a><a href="/live/hurricane/"><span class="hazard-dot hu" aria-hidden="true"></span>Hurricane</a><a href="/live/tornado/"><span class="hazard-dot to" aria-hidden="true"></span>Tornado</a></div></div><a class="nav-link" href="/verification/">Track record</a><a class="nav-link" href="/evidence/">Evidence</a><a class="nav-link" href="/methods/" aria-current="page">Methods</a><a class="nav-link" href="/registry/">Models</a><a class="nav-link" href="/api/">API</a></nav>
+    <div class="header-actions">
+      <button class="theme-toggle" type="button" aria-label="Switch colour theme" aria-pressed="false"><svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+      <details class="mobile-nav">
+        <summary aria-label="Menu"><span class="menu-bars" aria-hidden="true"></span></summary>
+        <nav class="mobile-nav-panel" aria-label="Mobile"><div class="nav-group"><a class="nav-link" href="/live/">Live</a><div class="nav-sub"><a href="/live/earthquake/"><span class="hazard-dot eq" aria-hidden="true"></span>Earthquake</a><a href="/live/hurricane/"><span class="hazard-dot hu" aria-hidden="true"></span>Hurricane</a><a href="/live/tornado/"><span class="hazard-dot to" aria-hidden="true"></span>Tornado</a></div></div><a class="nav-link" href="/verification/">Track record</a><a class="nav-link" href="/evidence/">Evidence</a><a class="nav-link" href="/methods/" aria-current="page">Methods</a><a class="nav-link" href="/registry/">Models</a><a class="nav-link" href="/api/">API</a></nav>
+      </details>
     </div>
-  </header>
+  </div>
+</header>
+<main id="main" class="page page-methods">
+<header class="page-hero"><div class="container">
+  <p class="eyebrow">Methods</p>
+  <h1>How the forecasts are made</h1>
+  <p class="lede">Each forecast follows the same path: collect public data, run a fixed and versioned model, run automatic quality checks, and publish the result with a record of exactly what produced it. This page describes each step, the models, the tests that chose them, and their limits.</p>
+  <nav class="toc" aria-label="On this page"><strong>On this page</strong>
+    <ol>
+      <li><a href="#meaning">What each number means</a></li>
+      <li><a href="#data">Data</a></li>
+      <li><a href="#models">The models</a></li>
+      <li><a href="#testing">How models are chosen and tested</a></li>
+      <li><a href="#checks">Checks before publishing</a></li>
+      <li><a href="#limits">Limits</a></li>
+    </ol>
+  </nav>
+</div></header>
 
-  <main id="main" class="container">
-    <section class="hero">
-      <div class="eyebrow">Methods</div>
-      <h1>How we build forecasts</h1>
-      <p class="subtitle">
-        Every number on this platform comes from a defined pipeline:
-        ingest authoritative data, run a pinned model, check governance gates,
-        and publish with full provenance. Here is exactly how each step works.
-      </p>
-    </section>
+<section class="section" aria-labelledby="meaning"><div class="container prose">
+  <h2 id="meaning">What each number means</h2>
+  <p>Every number is a chance: how likely an event is within a stated window, given only the data available when the forecast was issued and the model version named beside it. The three forecasts answer three different questions, over three different windows, so their numbers are not comparable with each other.</p>
+  <div class="table-wrap" tabindex="0" role="region" aria-label="The three forecasts">
+    <table>
+      <thead><tr><th scope="col">Forecast</th><th scope="col">The chance of</th><th scope="col">Window</th><th scope="col">Scored against</th></tr></thead>
+      <tbody>
+        <tr><td>Earthquake</td><td>at least one magnitude 6+ earthquake with its epicentre in a 2&deg; grid cell</td><td>30 days</td><td>the USGS catalog (ComCat)</td></tr>
+        <tr><td>Hurricane</td><td>rapid intensification: maximum sustained winds rising 30 knots or more</td><td>24 hours</td><td>the National Hurricane Center&rsquo;s best track</td></tr>
+        <tr><td>Tornado</td><td>a tornado report starting within 10 km of the storm&rsquo;s tracked radar outline</td><td>60 minutes</td><td>Storm Prediction Center storm reports</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>A chance is not a verdict. A 30% chance means the event is expected in about 3 of every 10 such situations and not in the other 7. The tornado model also publishes chances for 30 and 90 minutes and for a strong (EF2+) tornado.</p>
+</div></section>
 
-    <div class="depth-content">
-      <div class="depth-toggle" role="radiogroup" aria-label="Content depth">
-        <input type="radio" name="depth" id="depth-simple" value="simple" checked>
-        <label for="depth-simple">Simple</label>
-        <input type="radio" name="depth" id="depth-technical" value="technical">
-        <label for="depth-technical">Technical</label>
-      </div>
+<section class="section" aria-labelledby="data"><div class="container">
+  <div class="section-head"><div><h2 id="data">Data</h2><p>Public data from government agencies and published science. We make no observations of our own.</p></div></div>
+  <div class="cards cards-3">
+    <article class="card hz-eq"><h3>Earthquake</h3>
+      <dl class="facts">
+        <div><dt>Live catalog</dt><dd>USGS ANSS Comprehensive Catalog (ComCat): every M2.5+ earthquake of the last 30 days, and every M5+ earthquake since 1973 (a frozen copy, brought up to date from ComCat at each forecast)</dd></div>
+        <div><dt>Long-term rates</dt><dd>GEAR1, a global model of earthquake rates from crustal strain and past seismicity (Bird et al. 2015, CC BY 4.0)</dd></div>
+        <div><dt>Outcomes</dt><dd>M6+ earthquakes in ComCat after each forecast window closes</dd></div>
+      </dl>
+    </article>
+    <article class="card hz-hu"><h3>Hurricane</h3>
+      <dl class="facts">
+        <div><dt>Storms</dt><dd>Positions and intensities from the National Hurricane Center&rsquo;s and Joint Typhoon Warning Center&rsquo;s advisories</dd></div>
+        <div><dt>NOAA guidance</dt><dd>The NHC&rsquo;s SHIPS text for each forecast cycle: DTOPS, SHIPS-RII and the other rapid-intensification probabilities</dd></div>
+        <div><dt>Our models</dt><dd>The early intensity guidance in NHC&rsquo;s forecast files; for the v10.3 variant, NOAA&rsquo;s GMGSI satellite infrared</dd></div>
+        <div><dt>Outcomes</dt><dd>The NHC best track (IBTrACS for the historical tests)</dd></div>
+      </dl>
+    </article>
+    <article class="card hz-to"><h3>Tornado</h3>
+      <dl class="facts">
+        <div><dt>Storms</dt><dd>NOAA ProbSevere v3, which tracks every thunderstorm on radar over and near the contiguous US every two minutes, with its radar, lightning, satellite and environment attributes</dd></div>
+        <div><dt>Warnings</dt><dd>The National Weather Service&rsquo;s active tornado warnings (an input of the published model)</dd></div>
+        <div><dt>Outcomes</dt><dd>Storm Prediction Center storm reports</dd></div>
+      </dl>
+    </article>
+  </div>
+</div></section>
 
-    <!-- The equation -->
-    <section class="section" aria-labelledby="eq-heading">
-      <h2 id="eq-heading">The governing equation</h2>
-      <div data-depth="simple">
-        <div class="card">
-          <p style="font-size:16px;line-height:1.6;margin:0;">We calculate: <strong>How likely is this hazard?</strong> plus a range showing how sure we are. If our quality checks fail, we do not publish.</p>
-        </div>
-      </div>
-      <div data-depth="technical">
-        <div class="equation-block">
-          P(event | data, model, gate=pass) &nbsp; &plusmn; &nbsp; confidence band
-        </div>
-        <p class="muted">
-          Every forecast is a conditional probability: the chance of a hazard event
-          given the latest ingested data, a pinned model version, and confirmation that
-          all governance gates passed. The confidence band quantifies how much the estimate
-          could shift given data and model uncertainty. If any blocking gate fails, the
-          forecast is not published.
-        </p>
-      </div>
-    </section>
-
-    <!-- Data sources -->
-    <section class="section" aria-labelledby="sources-heading">
-      <h2 id="sources-heading">Data sources</h2>
-      <div data-depth="simple">
-        <div class="card">
-          <p class="muted" style="margin:0 0 12px;">We get all our data from official US government agencies:</p>
-          <ul style="margin:0;">
-            <li><strong>Earthquakes</strong> &mdash; US Geological Survey (USGS), updated continuously</li>
-            <li><strong>Hurricanes</strong> &mdash; NOAA weather models and National Hurricane Center, updated every 6 hours</li>
-            <li><strong>Tornadoes</strong> &mdash; Storm Prediction Center and NOAA radar, updated every 15 minutes to 1 hour</li>
-          </ul>
-        </div>
-      </div>
-      <div data-depth="technical">
-        <p class="muted" style="margin-top:-8px;margin-bottom:16px;">
-          All input data comes from authoritative government and scientific agencies.
-          We do not generate our own observations.
-        </p>
-
-        <div class="data-source hazard-eq">
-          <strong>USGS ANSS Comprehensive Earthquake Catalog (ComCat)</strong>
-          <p class="muted">
-            Real-time and reviewed earthquake events. Updated continuously.
-            Feed latency: typically 1&ndash;5 minutes after event detection.
-            Used for: seismicity rates, b-value computation, event clustering, Coulomb stress updates.
-          </p>
-        </div>
-
-        <div class="data-source hazard-hu">
-          <strong>NOAA GFS (Global Forecast System)</strong>
-          <p class="muted">
-            Synoptic-scale atmospheric analysis and forecasts. Updated every 6 hours (00Z, 06Z, 12Z, 18Z).
-            Used for: deep-layer shear, SST, ocean heat content, upper-level divergence, moisture fields.
-          </p>
-        </div>
-
-        <div class="data-source hazard-hu">
-          <strong>NHC Advisories and SHIPS Guidance</strong>
-          <p class="muted">
-            Official tropical cyclone intensity/track advisories and Statistical Hurricane Intensity
-            Prediction Scheme outputs. Updated with each advisory cycle.
-            Used for: current intensity, track forecast, environmental predictors.
-          </p>
-        </div>
-
-        <div class="data-source hazard-to">
-          <strong>SPC Mesoanalysis</strong>
-          <p class="muted">
-            Storm Prediction Center real-time mesoscale analysis fields. Updated hourly.
-            Used for: CAPE, CIN, STP, SRH, composite parameters, LCL height.
-            Freshness threshold: 45 minutes. Beyond this, gate G1 triggers degrade.
-          </p>
-        </div>
-
-        <div class="data-source hazard-to">
-          <strong>ProbSevere v3 via NOAA MRMS</strong>
-          <p class="muted">
-            Real-time storm-object attributes including radar rotation, atmospheric profiles,
-            and lightning data. Updated every 2 minutes.
-            Used for: storm-level tornado scoring via hp-tornado-coherence-v1.
-          </p>
-        </div>
-
-        <div class="data-source hazard-to">
-          <strong>RAP / HRRR and MRMS</strong>
-          <p class="muted">
-            Rapid Refresh / High-Resolution Rapid Refresh model output and Multi-Radar Multi-Sensor
-            precipitation/rotation products. Updated hourly (RAP) and every 15 min (HRRR/MRMS).
-            Used for: convective initiation, mesocyclone detection, environmental verification.
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Model architectures -->
-    <section class="section" aria-labelledby="models-heading">
-      <h2 id="models-heading">Model architectures</h2>
-      <div data-depth="simple">
-        <div class="grid">
+<section class="section" aria-labelledby="models"><div class="container">
+  <div class="section-head"><div><h2 id="models">The models</h2><p>Every figure in this section is read from the results files bound to the exact model file that publishes the live number. If a result cannot be bound to that file, the section says so instead of quoting it.</p></div></div>
+  <div class="cards cards-3">
 <!-- hp-evidence:methods-simple -->
-<div class="card col-4 hazard-eq">
+<article class="card hz-eq">
   <h3>Earthquake</h3>
-  <p class="muted">The chance of a magnitude 6+ earthquake in each 2&deg; cell of the globe over the next 30 days, from where quakes happen in the long run, how they cluster after recent ones, and boosted trees on both, plus a published global model of where the crust is straining (GEAR1). Scored on 2023&ndash;2025 (a second look at those years): +2.60 nats of information per quake over a uniform map (C0 alone: +2.59). Earthquakes cannot be predicted; this ranks where the odds are higher.</p>
-</div>
-<div class="card col-4 hazard-hu">
+  <p>The chance of a magnitude 6+ earthquake in each 2&deg; cell of the globe over the next 30 days, from where earthquakes happen in the long run, how they cluster after recent ones, and boosted trees on both, plus GEAR1, a published global model of where the crust is straining. Scored on 2023&ndash;2025 (a second look at those years): +2.60 nats of information per earthquake over a uniform map (C0 alone: +2.59). Earthquakes cannot be predicted; this ranks where the odds are higher.</p>
+</article>
+<article class="card hz-hu">
   <h3>Hurricane</h3>
-  <p class="muted">Chance of rapid intensification (a 30+ knot wind increase in 24 hours). For storms the National Hurricane Center tracks we serve NOAA DTOPS, which beat every alternative in a pre-registered test on 2025: AUC 0.928 vs our own model&rsquo;s 0.849 on the same cycles. Everywhere else, our v8.2 model (AUC 0.847 on held-out 2022&ndash;2024 cases). Each storm says which. Our new model beat DTOPS in every season tested so far (log loss 0.144 vs 0.165 over 2022&ndash;2025) and is shown beside it while a pre-registered prospective test confirms it.</p>
-</div>
-<div class="card col-4 hazard-to">
+  <p>The chance of rapid intensification: maximum sustained winds rising 30 knots or more in 24 hours. For storms the National Hurricane Center covers we publish NOAA DTOPS, which beat NOAA SHIPS-RII, NOAA RIOC consensus and our previous model (v8.2) in a test written down in advance and run once on 2025: AUC 0.928, against 0.849 for our v8.2 model on the same cycles. Everywhere else we publish v8.2 (AUC 0.847 on held-out 2022&ndash;2024 Atlantic and East Pacific cases; it has not been tested in the basins where it publishes). Each storm says which. Our newer model, v10.1, scored better than DTOPS over 2022&ndash;2025, each season forecast only from earlier ones (log loss 0.144 against 0.165); it is shown beside DTOPS, labelled experimental, while a test written down in advance scores it on new forecasts.</p>
+</article>
+<article class="card hz-to">
   <h3>Tornado</h3>
-  <p class="muted">Scores every thunderstorm NOAA&rsquo;s ProbSevere tracks: the chance that this storm produces a tornado within the next hour, from NOAA&rsquo;s own storm attributes (radar, lightning, satellite, environment) and the live NWS tornado-warning state. On every storm observation of 2025, scored once after training: AUC 0.970 (NOAA ProbTor 0.879).</p>
-</div>
+  <p>For every thunderstorm NOAA&rsquo;s ProbSevere tracks over the contiguous US, the chance that it produces a tornado within the next hour, from NOAA&rsquo;s own storm attributes (radar, lightning, satellite, environment) and the live NWS tornado-warning state. On every storm observation of 2025, scored once after every choice was fixed: AUC 0.970 (NOAA ProbTor: 0.879).</p>
+</article>
 <!-- /hp-evidence:methods-simple -->
-        </div>
-      </div>
-      <div data-depth="technical">
-        <p class="muted" style="margin-top:-8px;margin-bottom:16px;">
-          Each hazard has its own model tailored to the physics and data characteristics of that domain.
-        </p>
-
-        <div class="grid">
+  </div>
+  <h3 class="subhead" id="earthquake">Earthquake</h3>
+  <div class="evidence-grid">
 <!-- hp-evidence:methods-earthquake -->
-<div class="card col-4 hazard-eq">
-  <h3>Earthquake (eq_operational_S1_gear1_v1-d409c534bb4c)</h3>
-  <div class="kv"><span>Target</span><strong>P(an M6.0+ epicentre in the 2&deg; cell within 30 days), every one of 11,700 cells, from events before the issue time only</strong></div>
-  <div class="kv"><span>Architecture</span><strong>C0 plus GEAR1&#x27;s long-term rate (geodetic strain and smoothed seismicity, Bird et al. 2015) as one extra term (156 trees, 22 inputs, scored in NumPy)</strong></div>
-  <div class="kv"><span>How it was chosen</span><strong>Pre-registered comparison of smoothed seismicity, aftershock clustering, two boosted models and the previous model (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/EARTHQUAKE_FORECAST_PROGRAM.md" rel="noopener">docs/EARTHQUAKE_FORECAST_PROGRAM.md</a>); GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights fitted on 2018&ndash;2020, decided on 2021&ndash;2022 against C0 recalibrated on the same years, +0.016 [+0.002, +0.030] nats per quake</strong></div>
-  <div class="kv"><span>Test 2023&ndash;2025 (a second read)</span><strong>+2.60 [2.48, 2.73] nats per quake over a uniform map; AUC 0.969 [0.964, 0.973] over all cells, 0.769 [0.735, 0.799] among recently active cells; Brier skill +0.021</strong></div>
-  <div class="kv"><span>Against the standard reference</span><strong>vs long-term smoothed seismicity (the standard reference forecast): +0.072 [+0.018, +0.125] nats per quake, AUC +0.0019 [+0.0009, +0.0028] (paired, by month)</strong></div>
-  <div class="kv"><span>Replaced</span><strong>C0 alone scored +2.59 nats per quake on the same test; 74% of the test&rsquo;s M6+ cell-windows fell outside recently active cells</strong></div>
-  <div class="kv"><span>Limits</span><strong>Forecasts 13% more quakes than occurred in the test period (ratio 1.13 [1.03, 1.26]); live catalogs are preliminary in the first days after a large quake</strong></div>
-</div>
+<article class="card hz-eq" id="earthquake-model">
+  <h3>Earthquake <code>eq_operational_S1_gear1_v1-d409c534bb4c</code></h3>
+  <dl class="facts">
+    <div><dt>Target</dt><dd>P(an M6.0+ epicentre in the 2&deg; cell within 30 days), every one of 11,700 cells, from events before the issue time only</dd></div>
+    <div><dt>Architecture</dt><dd>C0 plus GEAR1&#x27;s long-term rate (geodetic strain and smoothed seismicity, Bird et al. 2015) as one extra term (156 trees, 22 inputs, scored in NumPy)</dd></div>
+    <div><dt>How it was chosen</dt><dd>Pre-registered comparison of smoothed seismicity, aftershock clustering, two boosted models and the previous model (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/EARTHQUAKE_FORECAST_PROGRAM.md" rel="noopener">docs/EARTHQUAKE_FORECAST_PROGRAM.md</a>); GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights fitted on 2018&ndash;2020, decided on 2021&ndash;2022 against C0 recalibrated on the same years, +0.016 [+0.002, +0.030] nats per quake</dd></div>
+    <div><dt>Test 2023&ndash;2025 (a second read)</dt><dd>+2.60 [2.48, 2.73] nats per quake over a uniform map; AUC 0.969 [0.964, 0.973] over all cells, 0.769 [0.735, 0.799] among recently active cells; Brier skill +0.021</dd></div>
+    <div><dt>Against the standard reference</dt><dd>vs long-term smoothed seismicity (the standard reference forecast): +0.072 [+0.018, +0.125] nats per quake, AUC +0.0019 [+0.0009, +0.0028] (paired, by month)</dd></div>
+    <div><dt>Replaced</dt><dd>C0 alone scored +2.59 nats per quake on the same test; 74% of the test&rsquo;s M6+ cell-windows fell outside recently active cells</dd></div>
+    <div><dt>Limits</dt><dd>Forecasts 13% more quakes than occurred in the test period (ratio 1.13 [1.03, 1.26]); live catalogs are preliminary in the first days after a large quake</dd></div>
+  </dl>
+</article>
 <!-- /hp-evidence:methods-earthquake -->
-
+  </div>
+  <h3 class="subhead" id="hurricane">Hurricane</h3>
+  <div class="evidence-grid">
 <!-- hp-evidence:methods-hurricane -->
-<div class="card col-4 hazard-hu">
-  <h3>Hurricane RI, NHC basins (hurricane_ri_stack_v1-35938d6c09b7)</h3>
-  <div class="kv"><span>What is served</span><strong>NOAA DTOPS (the NHC&#x27;s deterministic-to-probabilistic RI guidance) as issued (SHIPS-RII where it is missing: 21 of 601 cycles in the test), read from NHC&rsquo;s SHIPS text for the same cycle</strong></div>
-  <div class="kv"><span>How it was chosen</span><strong>Pre-registered comparison of NOAA&rsquo;s aids and pools of them on 2020&ndash;2024 by forward chaining (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/HURRICANE_RI_PROGRAM.md" rel="noopener">docs/HURRICANE_RI_PROGRAM.md</a>)</strong></div>
-  <div class="kv"><span>Final test (2025, read once)</span><strong>AUC 0.928 [0.890, 0.966], Brier skill +0.311 [+0.183, +0.398]; 601 cycles, 44 RI events, 33 storms (intervals by storm)</strong></div>
-  <div class="kv"><span>Beats</span><strong>NOAA SHIPS-RII, NOAA RIOC consensus, our previous model (v8.2) (paired 95% intervals on Brier and log loss below zero)</strong></div>
-  <div class="kv"><span>Independent attack</span><strong>CONFIRMED, scoped to the 601-cycle case set</strong></div>
-</div>
+<article class="card hz-hu" id="hurricane-model">
+  <h3>Hurricane, NHC areas: NOAA DTOPS <code>hurricane_ri_stack_v1-35938d6c09b7</code></h3>
+  <dl class="facts">
+    <div><dt>What is served</dt><dd>NOAA DTOPS (the NHC&#x27;s deterministic-to-probabilistic RI guidance) as issued (SHIPS-RII where it is missing: 21 of 601 cycles in the test), read from NHC&rsquo;s SHIPS text for the same cycle</dd></div>
+    <div><dt>How it was chosen</dt><dd>Pre-registered comparison of NOAA&rsquo;s aids and pools of them on 2020&ndash;2024 by forward chaining (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/HURRICANE_RI_PROGRAM.md" rel="noopener">docs/HURRICANE_RI_PROGRAM.md</a>)</dd></div>
+    <div><dt>Final test (2025, read once)</dt><dd>AUC 0.928 [0.890, 0.966], Brier skill +0.311 [+0.183, +0.398]; 601 cycles, 44 RI events, 33 storms (intervals by storm)</dd></div>
+    <div><dt>Beats</dt><dd>NOAA SHIPS-RII, NOAA RIOC consensus, our previous model (v8.2) (paired 95% intervals on Brier and log loss below zero)</dd></div>
+    <div><dt>Independent review</dt><dd>An adversarial re-check, by a reviewer that did not build the test, confirmed the result (scoped to the 601-cycle case set)</dd></div>
+  </dl>
+</article>
 
-<div class="card col-4 hazard-hu">
-  <h3>Hurricane RI, our model (hurricane_ri_v10-8a5ba5896731, experimental)</h3>
-  <div class="kv"><span>What it is</span><strong>Our own model: one exceedance curve P(a rise of k kt in 24 h), k = 15&ndash;45, from the early intensity guidance (NOAA&rsquo;s statistical models, the hurricane and global models, NHC&rsquo;s consensus aids), NOAA&rsquo;s RI probabilities at six thresholds and the official forecast; NOAA&rsquo;s DTOPS wherever that guidance is missing</strong></div>
-  <div class="kv"><span>Each season 2022&ndash;2025</span><strong>predicted from earlier seasons only: log loss 0.144 vs DTOPS 0.165 (paired by storm [&minus;0.031, &minus;0.010]); over DTOPS&rsquo;s four 24-h thresholds, Brier 0.155 vs 0.172 [&minus;0.028, &minus;0.006]</strong></div>
-  <div class="kv"><span>Against every RI probability NOAA publishes</span><strong>2022&ndash;2025, as served, each season predicted from earlier ones; 30-kt log loss SHIPS-RII 0.200 (ours 0.144) &middot; RI logistic 0.197 (ours 0.144) &middot; RI Bayesian 0.232 (ours 0.144) &middot; RI consensus 0.183 (ours 0.144) &middot; DTOPS 0.166 (ours 0.148): ours is lower than every one, each paired by storm with its 95% interval below zero</strong></div>
-  <div class="kv"><span>Against intensity forecasts as yes/no RI calls</span><strong>at each call&rsquo;s own false-alarm rate (a forecast 24-h rise of 30 kt or more), ours catches more RI events than SHIPS (DSHP) (+19 points [+6, +31]); and is within noise of NHC official forecast &middot; HCCA &middot; IVCN &middot; LGEM &middot; NNIC &middot; GEFS mean &middot; hurricane-model mean &middot; most aggressive hurricane model &middot; global-model mean (gaps &minus;3 to +9 points)</strong></div>
-  <div class="kv"><span>2026 so far</span><strong>log loss 0.129 vs DTOPS 0.150, AUC 0.925 (a second look at a season that informed its design, so not a proof)</strong></div>
-  <div class="kv"><span>Challenger in shadow (v10.2)</span><strong>hurricane_ri_v10_2-3e9c1b766454: the same inputs, never lowering the odds when the guidance or NOAA&rsquo;s probability rises. 2022&ndash;2025 against v10.1: log loss 0.1436 vs 0.1443 [&minus;0.0022, +0.0008], four-threshold Brier 0.1544 vs 0.1554; a gain whose interval still includes zero; 2026 (a later look at a season that informed the design, not a proof): 0.1262 vs 0.1291. Scored live with its own prospective test at 99.375%; it replaces the shown model only by the rule written before it scored a cycle</strong></div>
-  <div class="kv"><span>Challenger in shadow (v10.3)</span><strong>hurricane_ri_v10_3-f941a72e2682: v10.2 plus the storm&rsquo;s cloud-top structure from satellite infrared (NOAA GMGSI, two hours after the cycle and six hours earlier). 2022&ndash;2025 against v10.2: log loss 0.1418 vs 0.1436 [&minus;0.0054, +0.0015], four-threshold Brier 0.1527 vs 0.1544; a gain whose interval still includes zero; 2026 (a later look at a season that informed the design, not a proof): 0.1178 vs 0.1262 [&minus;0.0152, &minus;0.0018]. Scored live with its own prospective test at 99.6875%; it replaces the shown model only by the rule written before it scored a cycle</strong></div>
-  <div class="kv"><span>Status</span><strong>in prospective verification: shown beside NOAA&rsquo;s number, not instead of it, until the pre-registered prospective test on cycles from 2026-10-04 meets its rule (verdicts 2026-12-01 and 2027-12-01); cycles scored so far: 0</strong></div>
-</div>
+<article class="card hz-hu" id="hurricane-ours">
+  <h3>Hurricane, our model (experimental): v10.1 <code>hurricane_ri_v10-8a5ba5896731</code></h3>
+  <dl class="facts">
+    <div><dt>What it is</dt><dd>Our own model: one exceedance curve P(a rise of k kt in 24 h), k = 15&ndash;45, from the early intensity guidance (NOAA&rsquo;s statistical models, the hurricane and global models, NHC&rsquo;s consensus aids), NOAA&rsquo;s RI probabilities at six thresholds and the official forecast; NOAA&rsquo;s DTOPS wherever that guidance is missing</dd></div>
+    <div><dt>2022&ndash;2025, each season forecast only from earlier ones</dt><dd>log loss 0.144 vs DTOPS 0.165 (paired by storm [&minus;0.031, &minus;0.010]); over DTOPS&rsquo;s four 24-h thresholds, Brier 0.155 vs 0.172 [&minus;0.028, &minus;0.006]</dd></div>
+    <div><dt>Against every RI probability NOAA publishes</dt><dd>2022&ndash;2025, as served, each season predicted from earlier ones; 30-kt log loss SHIPS-RII 0.200 (ours 0.144) &middot; RI logistic 0.197 (ours 0.144) &middot; RI Bayesian 0.232 (ours 0.144) &middot; RI consensus 0.183 (ours 0.144) &middot; DTOPS 0.166 (ours 0.148): ours is lower than every one, each paired by storm with its 95% interval below zero</dd></div>
+    <div><dt>Against intensity forecasts as yes/no RI calls</dt><dd>at each call&rsquo;s own false-alarm rate (a forecast 24-h rise of 30 kt or more), ours catches more RI events than SHIPS (DSHP) (+19 points [+6, +31]); and is within noise of NHC official forecast &middot; HCCA &middot; IVCN &middot; LGEM &middot; NNIC &middot; GEFS mean &middot; hurricane-model mean &middot; most aggressive hurricane model &middot; global-model mean (gaps &minus;3 to +9 points)</dd></div>
+    <div><dt>2026 so far</dt><dd>log loss 0.129 vs DTOPS 0.150, AUC 0.925 (a second look at a season that informed its design, so not a proof)</dd></div>
+    <div><dt>Variant under test (v10.2)</dt><dd><code>hurricane_ri_v10_2-3e9c1b766454</code>: the same inputs, never lowering the odds when the guidance or NOAA&rsquo;s probability rises. 2022&ndash;2025 against v10.1: log loss 0.1436 vs 0.1443 [&minus;0.0022, +0.0008], four-threshold Brier 0.1544 vs 0.1554; a gain whose interval still includes zero; 2026 (a later look at a season that informed the design, not a proof): 0.1262 vs 0.1291. Tested live under its own rule, written before it scored a forecast (confidence level 99.375%); it replaces the shown model only if it meets that rule</dd></div>
+    <div><dt>Variant under test (v10.3)</dt><dd><code>hurricane_ri_v10_3-f941a72e2682</code>: v10.2 plus the storm&rsquo;s cloud-top structure from satellite infrared (NOAA GMGSI, two hours after the cycle and six hours earlier). 2022&ndash;2025 against v10.2: log loss 0.1418 vs 0.1436 [&minus;0.0054, +0.0015], four-threshold Brier 0.1527 vs 0.1544; a gain whose interval still includes zero; 2026 (a later look at a season that informed the design, not a proof): 0.1178 vs 0.1262 [&minus;0.0152, &minus;0.0018]. Tested live under its own rule, written before it scored a forecast (confidence level 99.6875%); it replaces the shown model only if it meets that rule</dd></div>
+    <div><dt>Status</dt><dd>in prospective verification: shown beside NOAA&rsquo;s number, not instead of it, until the pre-registered prospective test on cycles from 2026-10-04 meets its rule (verdicts 2026-12-01 and 2027-12-01); cycles scored so far: 0</dd></div>
+  </dl>
+</article>
 
-<div class="card col-4 hazard-hu">
-  <h3>Hurricane RI, other basins (hurricane_ri_v8_2)</h3>
-  <div class="kv"><span>Architecture</span><strong>Histogram-GBT (depth 3 + 4) + L2 logistic + bagged logistic ensemble, Newton-calibrated</strong></div>
-  <div class="kv"><span>Key inputs</span><strong>Analysis intensity and pressure (CARQ) and their 6&ndash;24 h tendencies, aid-model intensity forecasts, climatological potential intensity, motion, storm age</strong></div>
-  <div class="kv"><span>AUC</span><strong>0.847 [0.821, 0.874] on 8,317 held-out 2022&ndash;2024 NHC cases; 0.849 on the 2025 NHC cycles above</strong></div>
-  <div class="kv"><span>Used for</span><strong>West Pacific, Indian Ocean and Southern Hemisphere storms (no public RI guidance), and NHC cycles without SHIPS text</strong></div>
-</div>
+<article class="card hz-hu">
+  <h3>Hurricane, other basins: HazardPulse v8.2 <code>hurricane_ri_v8_2</code></h3>
+  <dl class="facts">
+    <div><dt>Architecture</dt><dd>Histogram-GBT (depth 3 + 4) + L2 logistic + bagged logistic ensemble, Newton-calibrated</dd></div>
+    <div><dt>Key inputs</dt><dd>Analysis intensity and pressure (CARQ) and their 6&ndash;24 h tendencies, aid-model intensity forecasts, climatological potential intensity, motion, storm age</dd></div>
+    <div><dt>AUC</dt><dd>0.847 [0.821, 0.874] on 8,317 held-out 2022&ndash;2024 NHC cases (Atlantic and East Pacific); 0.849 on the 2025 NHC cycles above</dd></div>
+    <div><dt>Used for</dt><dd>West Pacific, Indian Ocean and Southern Hemisphere storms (no public RI guidance), and NHC cycles without SHIPS text</dd></div>
+    <div><dt>Not yet tested</dt><dd>In the basins where it publishes: its test cases are NHC&rsquo;s</dd></div>
+  </dl>
+</article>
 <!-- /hp-evidence:methods-hurricane -->
-
-          <div class="card col-4 hazard-to">
-            <h3>Tornado formation (hp-tornado-meso-v1.4.2)</h3>
-            <div class="kv"><span>Architecture</span><strong>Random forest + Platt-scaled calibration</strong></div>
-            <div class="kv"><span>Features</span><strong>34</strong></div>
-            <div class="kv"><span>Key inputs</span><strong>STP, MLCAPE, MLCIN, deep shear, SRH, LCL height, composite parameters</strong></div>
-            <div class="kv"><span>Training cutoff</span><strong>2026-02-25</strong></div>
-            <div class="kv"><span>Calibration method</span><strong>Platt scaling on holdout</strong></div>
-            <div class="kv"><span>AUC</span><strong>0.644 (day-ahead formation)</strong></div>
-          </div>
-
+  </div>
+  <h3 class="subhead" id="tornado">Tornado</h3>
+  <div class="evidence-grid">
 <!-- hp-evidence:methods-tornado -->
-<div class="card col-4 hazard-to">
-  <h3>Tornado storm-object (tornado_v3-05a06c843c87)</h3>
-  <div class="kv"><span>Target</span><strong>A tornado report starts within 10 km of THIS storm&#x27;s tracked polygon within 60 min (also served: tornado within 30 min, tornado within 90 min, ef2+ tornado within 60 min)</strong></div>
-  <div class="kv"><span>Architecture</span><strong>LightGBM (339 trees), exported to a JSON payload scored in pure NumPy; Platt calibration on leave-one-year-out scores; Venn&ndash;Abers band per storm</strong></div>
-  <div class="kv"><span>Inputs (30)</span><strong>28 ProbSevere storm attributes, 2 NWS tornado-warning state</strong></div>
-  <div class="kv"><span>How it was chosen</span><strong>Pre-registered programme: every choice on 2023; development test 2024; refit 2020&ndash;2024; final test 2025 read once (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/TORNADO_MODEL_PROGRAM.md" rel="noopener">docs/TORNADO_MODEL_PROGRAM.md</a>)</strong></div>
-  <div class="kv"><span>Final test 2025</span><strong>AUC 0.970 [0.964, 0.976] on all 1,469,977 storm observations (1,579 tornadic); Brier skill +0.107. 2024: 0.969</strong></div>
-  <div class="kv"><span>Against NOAA</span><strong>NOAA ProbTor scores 0.879 as issued and 0.939 with its integer ties broken; the model is +0.031 [+0.022, +0.042] AUC above the tie-broken version, paired by day; at the NWS warnings&rsquo; own false-alarm rate it catches 30.5% of tornadic storm observations vs the warnings&rsquo; 22.7% (+7.7 [+3.8, +10.1] points, using the warning state as an input); without that input it catches 27.5% (+4.7 [&minus;0.2, +8.5] points)</strong></div>
-  <div class="kv"><span>Coherence field</span><strong>Tested on top of the HRRR fields: &minus;0.0011 [&minus;0.0032, +0.0007] validation AUC (paired); no lift, so not served</strong></div>
-  <div class="kv"><span>Status</span><strong>Live</strong></div>
-</div>
+<article class="card hz-to" id="tornado-model">
+  <h3>Tornado, storm by storm <code>tornado_v3-05a06c843c87</code></h3>
+  <dl class="facts">
+    <div><dt>Target</dt><dd>A tornado report starts within 10 km of this storm&#x27;s tracked polygon within 60 min (also served: tornado within 30 min, tornado within 90 min, ef2+ tornado within 60 min)</dd></div>
+    <div><dt>Architecture</dt><dd>LightGBM (339 trees), exported to a JSON payload scored in pure NumPy; Platt calibration on leave-one-year-out scores; Venn&ndash;Abers band per storm</dd></div>
+    <div><dt>Inputs (30)</dt><dd>28 ProbSevere storm attributes, 2 NWS tornado-warning state</dd></div>
+    <div><dt>How it was chosen</dt><dd>Pre-registered programme: every choice on 2023; development test 2024; refit 2020&ndash;2024; final test 2025 read once (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/TORNADO_MODEL_PROGRAM.md" rel="noopener">docs/TORNADO_MODEL_PROGRAM.md</a>)</dd></div>
+    <div><dt>Final test 2025</dt><dd>AUC 0.970 [0.964, 0.976] on all 1,469,977 storm observations (1,579 tornadic); Brier skill +0.107. 2024: 0.969</dd></div>
+    <div><dt>Against NOAA</dt><dd>NOAA ProbTor scores 0.879 as issued and 0.939 with its integer ties broken; the model is +0.031 [+0.022, +0.042] AUC above the tie-broken version, paired by day; at the NWS warnings&rsquo; own false-alarm rate it catches 30.5% of tornadic storm observations vs the warnings&rsquo; 22.7% (+7.7 [+3.8, +10.1] points, using the warning state as an input); without that input it catches 27.5% (+4.7 [&minus;0.2, +8.5] points)</dd></div>
+    <div><dt>Coherence field</dt><dd>Tested on top of the HRRR fields: &minus;0.0011 [&minus;0.0032, +0.0007] validation AUC (paired); no lift, so not served</dd></div>
+    <div><dt>Status</dt><dd>Published</dd></div>
+  </dl>
+</article>
 <!-- /hp-evidence:methods-tornado -->
-        </div>
-      </div>
-    </section>
+  </div>
+</div></section>
 
-    <!-- Evaluation protocol -->
-    <section class="section" aria-labelledby="eval-heading">
-      <h2 id="eval-heading">Evaluation protocol</h2>
-      <div data-depth="simple">
-        <div class="card">
-          <p class="muted" style="margin:0 0 8px;">After each forecast window closes, we check what actually happened using official records:</p>
-          <ul style="margin:0;">
-            <li>Did the earthquake happen? We check the USGS catalog.</li>
-            <li>Did the hurricane intensify rapidly? We check the NHC best track.</li>
-            <li>Did a tornado form? We check the SPC storm reports.</li>
-          </ul>
-          <p class="muted" style="margin:8px 0 0;">Results are published publicly so you can see our track record. We never edit past results.</p>
-        </div>
-      </div>
-      <div data-depth="technical">
-        <p class="muted" style="margin-top:-8px;margin-bottom:16px;">
-          Every forecast is evaluated against observed outcomes after its valid window closes.
-        </p>
+<section class="section" aria-labelledby="testing"><div class="container prose">
+  <h2 id="testing">How models are chosen and tested</h2>
+  <p>Each model was chosen by a test written down before the data that decides it was scored: the candidates, the measure, the years and the rule for a winner are fixed first, then the test is run once. The protocols, and every dated amendment to them, are in the <a href="https://github.com/coherence-energy-labs/hazardpulse/tree/main/docs" rel="noopener">source repository</a>.</p>
+  <ul>
+    <li><strong>Held-back years.</strong> A model is scored on years it never saw while it was being built. Where a year has informed a design, a later look at it is labelled &ldquo;a second look&rdquo;, not a test.</li>
+    <li><strong>Paired comparisons.</strong> Two models are compared on the same cases, with intervals that resample whole days, months or storms, so that one busy week cannot decide the result.</li>
+    <li><strong>Live records.</strong> Every published forecast is frozen with its inputs, then scored when its window closes. A live score is quoted only once enough events have been observed for it to mean something.</li>
+    <li><strong>Experimental models.</strong> A new model can be shown beside the published number, labelled experimental, while a test written down in advance scores it on new forecasts. It replaces the published model only if it meets that test&rsquo;s rule.</li>
+  </ul>
+  <h3>The measures</h3>
+  <dl class="facts">
+    <div><dt>AUC (ranking accuracy)</dt><dd>How often the forecast ranks a case that had the event above one that did not. 0.5 is a coin flip; 1 is perfect.</dd></div>
+    <div><dt>Brier score</dt><dd>The average squared gap between the forecast and the outcome (0 or 1). Lower is better.</dd></div>
+    <div><dt>Brier skill score</dt><dd>The improvement over always forecasting the average rate. Above 0 beats that baseline.</dd></div>
+    <div><dt>Log loss</dt><dd>Penalises confident wrong forecasts heavily. Lower is better.</dd></div>
+    <div><dt>Information gain</dt><dd>For earthquakes: how much better than a uniform map the forecast predicted the earthquakes that happened, in nats per earthquake. Higher is better.</dd></div>
+    <div><dt>Calibration</dt><dd>Whether events happen as often as forecast: of many 10% forecasts, about 1 in 10 should come true.</dd></div>
+  </dl>
+</div></section>
 
-        <div class="grid">
-          <div class="card col-6">
-            <h3>Resolution process</h3>
-            <ul>
-              <li>Each forecast has a defined valid window: 30 days for earthquake, 24 h for hurricane rapid intensification, 30, 60 or 90 minutes for a tornado storm forecast.</li>
-              <li>After the window closes, we check authoritative sources for the observed outcome.</li>
-              <li>Earthquake: USGS reviewed catalog. Hurricane: NHC best track. Tornado: SPC storm reports.</li>
-              <li>The outcome is recorded immutably in the verification ledger.</li>
-              <li>No manual overrides or retroactive adjustments.</li>
-            </ul>
-          </div>
-          <div class="card col-6">
-            <h3>Scoring metrics</h3>
-            <ul>
-              <li><strong>Brier score</strong> - Mean squared probability error. Lower is better. 0 = perfect.</li>
-              <li><strong>Brier skill score</strong> - Improvement over climatological baseline.</li>
-              <li><strong>AUC</strong> - Discrimination ability (ROC curve area).</li>
-              <li><strong>Log score</strong> - Information-theoretic proper scoring rule.</li>
-              <li><strong>Calibration</strong> - Agreement between predicted and observed rates by bin.</li>
-              <li><strong>Sharpness</strong> - How decisive forecasts are (spread of probabilities).</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
+<section class="section" aria-labelledby="checks"><div class="container prose">
+  <h2 id="checks">Checks before publishing</h2>
+  <p>Every forecast goes through automatic quality checks when it is published: its numbers are well formed, its inputs are fresh, its record is complete, its values are sane, it can be re-run, and its labels never borrow the terms of official warnings. Each check ends in one of three outcomes:</p>
+  <ul>
+    <li><strong>Passed</strong>: the forecast is published.</li>
+    <li><strong>Published with warnings</strong>: a non-blocking check flagged something; the forecast is published and the warning is shown beside it.</li>
+    <li><strong>Blocked</strong>: the forecast is withheld from every page, and the page says why.</li>
+  </ul>
+  <p><a href="/evidence/#checks">What each check tests, and how often each outcome occurred this week</a></p>
+</div></section>
 
-    <!-- Caveats and boundaries -->
-    <section class="section" aria-labelledby="caveats-heading">
-      <h2 id="caveats-heading">Caveats and boundaries</h2>
-      <div data-depth="simple">
-        <div class="card">
-          <ul>
-            <li><strong>Always follow official NWS/USGS guidance.</strong> Visit the National Weather Service at <a href="https://www.weather.gov/" rel="noopener">weather.gov</a>.</li>
-            <li><strong>A 40% probability does not mean it will happen.</strong> It means there is a 60% chance it will not.</li>
-            <li><strong>Our models are not perfect.</strong> We publish our accuracy scores so you can judge for yourself.</li>
-          </ul>
-        </div>
+<section class="section" aria-labelledby="limits"><div class="container prose">
+  <h2 id="limits">Limits</h2>
+  <ul>
+    <li><strong>These are research forecasts, not warnings.</strong> Follow the National Weather Service, the National Hurricane Center, the USGS, your national services and your local authorities for every safety decision.</li>
+    <li><strong>Earthquakes cannot be predicted.</strong> The forecast ranks where the odds are higher; it does not say when or exactly where an earthquake will happen. Where few earthquakes have been recorded, its numbers are less certain.</li>
+    <li><strong>Coverage.</strong> Earthquake: the globe between 60&deg;S and 70&deg;N on a 2&deg; grid. Hurricane: every active tropical cyclone, with NOAA&rsquo;s guidance in the Atlantic, East and Central Pacific and our v8.2 model elsewhere &mdash; v8.2 was tested on Atlantic and East Pacific cases, not in the basins where it now publishes. Tornado: every storm NOAA&rsquo;s radar tracks over and near the contiguous US, including northern Mexico and the Gulf; tornado reports, and so the tests, cover the US only.</li>
+    <li><strong>Preliminary data.</strong> Live catalogs and storm reports are revised after the fact; forecasts use what was available at issue time, and scores use the revised records.</li>
+    <li><strong>Model changes.</strong> A new model version can shift the numbers for reasons that reflect the model, not a change in the hazard. Every version change is listed in the <a href="/registry/">model registry</a>.</li>
+    <li><strong>Calibration is measured on finite samples.</strong> Rare events make rare-event calibration uncertain; intervals are shown wherever they are computed.</li>
+  </ul>
+</div></section>
+</main>
+<footer class="site-footer" role="contentinfo">
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a class="brand" href="/"><img class="brand-logo" src="/assets/hp-mark.svg?v=d54bd3e626" alt="" width="28" height="28"><span>HazardPulse</span></a>
+        <p>Hazard forecasts you can verify. Every number links to its data, its model and its track record.</p>
       </div>
-      <div data-depth="technical">
-        <div class="card">
-          <ul>
-            <li><strong>These are not official forecasts.</strong> HazardPulse is an independent hazard intelligence
-              platform. Always follow guidance from USGS, NHC, NWS, and SPC.</li>
-            <li><strong>Models have known limitations.</strong> Earthquake probability in low-seismicity regions
-              has high uncertainty. Hurricane RI skill degrades for weak/disorganized systems.
-              Tornado forecasting at long lead times (&gt;12h) has low sharpness.</li>
-            <li><strong>Probabilities are not certainties.</strong> A 40% probability means 60% chance the
-              event does not happen. Interpret accordingly.</li>
-            <li><strong>Calibration is approximate.</strong> Reliability diagrams show systematic tendencies
-              but are computed on finite samples. Small bins have high sampling noise.</li>
-            <li><strong>Data freshness matters.</strong> If an input source is stale (exceeds threshold),
-              gate G1 triggers degrade, widening uncertainty bands and displaying a warning.</li>
-            <li><strong>Models are retrained periodically.</strong> Version changes can cause abrupt shifts
-              in probability that reflect improved skill, not real changes in hazard.</li>
-            <li><strong>Geographic scope is limited.</strong> Earthquake coverage focuses on well-instrumented
-              seismic networks. Hurricane RI uses NOAA&rsquo;s DTOPS guidance for the basins the National
-              Hurricane Center covers and our own model elsewhere.
-              Tornado covers CONUS only.</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- Governance -->
-    <section class="section" aria-labelledby="gov-heading">
-      <h2 id="gov-heading">Governance and gates</h2>
-      <div data-depth="simple">
-        <div class="card">
-          <p class="muted" style="margin:0;">Every forecast must pass <strong>13 automatic quality checks</strong> before you see it. These checks verify the data is fresh, the model is correct, the math is right, and the output is safe. If a check fails, the forecast either gets a warning label or is not published at all.</p>
-        </div>
-      </div>
-      <div data-depth="technical">
-        <p class="muted" style="margin-top:-8px;margin-bottom:16px;">
-          13 hard gates must pass before any forecast reaches you. This is not optional.
-        </p>
-        <div class="card">
-          <table>
-            <thead><tr><th>#</th><th>Gate</th><th>What it checks</th></tr></thead>
-            <tbody>
-              <tr><td>G0</td><td>Schema Validity</td><td>All fields present and correctly typed</td></tr>
-              <tr><td>G1</td><td>Source Freshness</td><td>Input data within acceptable latency</td></tr>
-              <tr><td>G2</td><td>Model Lineage Pinned</td><td>Model version matches registry</td></tr>
-              <tr><td>G3</td><td>Provenance Complete</td><td>All hashes present and chain intact</td></tr>
-              <tr><td>G4</td><td>Calibration Floor</td><td>Brier score below threshold</td></tr>
-              <tr><td>G5</td><td>Spatiotemporal Sanity</td><td>Scope within valid bounds</td></tr>
-              <tr><td>G6</td><td>Alert Harm Guard</td><td>No alarmist or misleading language</td></tr>
-              <tr><td>G7</td><td>Explanation Minimum</td><td>Why-changed panel has sufficient factors</td></tr>
-              <tr><td>G8</td><td>Replayability</td><td>Replay artifact emitted and hash-verified</td></tr>
-              <tr><td>G9</td><td>Public Projection Policy</td><td>Disclaimer attached to output</td></tr>
-              <tr><td>G10</td><td>Security Policy</td><td>HTTP headers and CSP valid</td></tr>
-              <tr><td>G11</td><td>Performance Budgets</td><td>Payload within size limits</td></tr>
-              <tr><td>G12</td><td>Trust Surface Sync</td><td>UI chips match actual gate state</td></tr>
-            </tbody>
-          </table>
-          <p class="muted" style="margin-top:12px;font-size:13px;">
-            <strong>pass</strong> = fully publish. <strong>degrade</strong> = publish with warning
-            banner and widened uncertainty. <strong>block</strong> = forecast is not published.
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Legal guidance -->
-    <section class="section" aria-labelledby="legal-heading">
-      <h2 id="legal-heading">Interpretation guidance</h2>
-      <div class="grid">
-        <div class="card col-6">
-          <h3>What this is</h3>
-          <ul>
-            <li>Independent probabilistic hazard intelligence</li>
-            <li>A platform for understanding risk, not a replacement for official warnings</li>
-            <li>Transparent about uncertainty and limitations</li>
-            <li>Fully auditable through public evidence chain</li>
-          </ul>
-        </div>
-        <div class="card col-6">
-          <h3>What this is not</h3>
-          <ul>
-            <li>Not an official forecast or warning</li>
-            <li>Not a substitute for USGS, NHC, NWS, or SPC guidance</li>
-            <li>Not guaranteed to be accurate for any individual event</li>
-            <li>Not advice for evacuation or emergency decisions</li>
-          </ul>
-        </div>
-      </div>
-    </section>
+      <div class="footer-cols"><div class="footer-col"><h2 class="footer-heading">Forecasts</h2><ul><li><a href="/live/">Live overview</a></li><li><a href="/live/earthquake/">Earthquake</a></li><li><a href="/live/hurricane/">Hurricane</a></li><li><a href="/live/tornado/">Tornado</a></li></ul></div><div class="footer-col"><h2 class="footer-heading">Proof</h2><ul><li><a href="/verification/">Track record</a></li><li><a href="/evidence/">Evidence</a></li><li><a href="/methods/">Methods</a></li><li><a href="/registry/">Model registry</a></li><li><a href="/verification/cross-modality/">Research tests</a></li></ul></div><div class="footer-col"><h2 class="footer-heading">Developers</h2><ul><li><a href="/api/">API</a></li><li><a href="/ops/status/">System status</a></li><li><a href="https://github.com/coherence-energy-labs/hazardpulse/releases">Open data</a></li><li><a href="https://github.com/coherence-energy-labs/hazardpulse">Source code</a></li><li><a href="/feed.xml">RSS feed</a></li></ul></div><div class="footer-col"><h2 class="footer-heading">Legal</h2><ul><li><a href="/legal/disclaimer/">Disclaimer</a></li><li><a href="/legal/privacy/">Privacy</a></li><li><a href="/legal/terms/">Terms of use</a></li><li><a href="/COMMERCIAL_LICENSE.md">Commercial licence</a></li><li><a href="mailto:josh@coherenceenergylabs.com">Contact</a></li></ul></div></div>
     </div>
-  </main>
-
-  <footer class="footer" role="contentinfo">
-    <div class="container footer-inner">
-      <div class="footer-col">
-        <h4>Platform</h4>
-        <a href="/live/">Live forecasts</a>
-        <a href="/verification/">Verification</a>
-        <a href="/evidence/">Evidence</a>
-        <a href="/methods/">Methods</a>
-      </div>
-      <div class="footer-col">
-        <h4>Data</h4>
-        <a href="/registry/">Model registry</a>
-        <a href="/api/">API contracts</a>
-        <a href="/ops/status/">System status</a>
-        <a href="/feed.xml">RSS feed</a>
-      </div>
-      <div class="footer-col">
-        <h4>Legal</h4>
-        <a href="/legal/disclaimer/">Disclaimer</a>
-        <a href="/legal/privacy/">Privacy</a>
-        <a href="/legal/terms/">Terms</a>
-        <a href="https://earthquake.usgs.gov/" rel="noopener">USGS</a>
-        <a href="https://www.nhc.noaa.gov/" rel="noopener">NHC</a>
-        <a href="https://www.spc.noaa.gov/" rel="noopener">SPC</a>
-      </div>
-      <p class="footer-disclaimer">
-        Independent hazard intelligence platform. Always follow official guidance from the USGS, NHC, NWS, SPC, JMA, and IMD.
-        Probabilistic outputs represent model estimates with stated uncertainty.
-      </p>
-      <p class="footer-build">Static-first HTML &middot; Evidence-linked data &middot; Edge geolocation by Cloudflare</p>
+    <div class="footer-bottom">
+      <p class="footer-warning"><strong>Not an official warning service.</strong> In an emergency, follow your national weather and geological services and local authorities &mdash; in the United States, the <a href="https://www.weather.gov/">National Weather Service</a>, the <a href="https://www.nhc.noaa.gov/">National Hurricane Center</a> and the <a href="https://earthquake.usgs.gov/">USGS</a>.</p>
+      <p class="footer-legal">&copy; 2026 HazardPulse &middot; Code under AGPL-3.0, <a href="/COMMERCIAL_LICENSE.md">commercial licence</a> available &middot; Data from NOAA, USGS and the public archives credited on each page</p>
     </div>
-  </footer>
+  </div>
+</footer>
 </body>
 </html>
-
-
-

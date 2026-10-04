@@ -1,26 +1,17 @@
 """The live tornado pages: the ledger keeps updating, and a storm's numbers are measured, not invented."""
 from __future__ import annotations
 
-import importlib.util
 import json
-import shutil
-import sys
 from pathlib import Path
 
 import pytest
 
+from hazardpulse.site import build
+from hazardpulse.site.data import SiteData
+from hazardpulse.site.pages import tornado
 from hazardpulse.verification import evidence_pages as ep
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-@pytest.fixture(scope="module")
-def live():
-    sys.path.insert(0, str(ROOT / "scripts"))
-    spec = importlib.util.spec_from_file_location("tornado_page_evidence_live", ROOT / "scripts" / "fetch_and_score_tornado.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
 
 
 def _entry(ts: str, version: str, h: str) -> str:
@@ -28,47 +19,35 @@ def _entry(ts: str, version: str, h: str) -> str:
                        "prev_hash": "0" * 64, "hash": h * 64}) + "\n"
 
 
-def test_the_ledger_keeps_updating_a_page_it_already_baked(live, tmp_path, monkeypatch):
-    page = tmp_path / "verification" / "tornado" / "index.html"
-    page.parent.mkdir(parents=True)
-    shutil.copyfile(ROOT / "dist" / "verification" / "tornado" / "index.html", page)
-    ledger = tmp_path / "tornado-ledger.jsonl"
-    monkeypatch.setattr(live, "DIST", tmp_path)
-    monkeypatch.setattr(live, "LEDGER_PATH", ledger)
-    ledger.write_text(_entry("2026-10-02T00:00:00Z", "tornado_v3-aaaaaaaaaaaa", "a"), encoding="utf-8")
-    live.render_verification_ledger()
-    first = page.read_text(encoding="utf-8")
+def _site(tmp_path: Path, ledger: str = "") -> SiteData:
+    dist = tmp_path / "dist"
+    (dist / "data").mkdir(parents=True)
+    (dist / "data" / "tornado-ledger.jsonl").write_text(ledger, encoding="utf-8")
+    (dist / "data" / "live-tornadoes.json").write_text(json.dumps({"model_version": "tornado_v3-bbbbbbbbbbbb"}),
+                                                       encoding="utf-8")
+    return SiteData(root=tmp_path, dist=dist)
+
+
+def test_the_ledger_keeps_updating_a_page_it_already_rendered(tmp_path):
+    page = (ROOT / "dist" / "verification" / "tornado" / "index.html").read_text(encoding="utf-8")
+    d = _site(tmp_path, _entry("2026-10-02T00:00:00Z", "tornado_v3-aaaaaaaaaaaa", "a"))
+    first = build._apply_ledger(d, page)
     assert "2026-10-02T00:00:00Z" in first and "tornado_v3-aaaaaaaaaaaa" in first
-    # the second run is the one that silently did nothing from 2026-03-31: the page was already baked
-    with ledger.open("a", encoding="utf-8") as f:
+    assert "earlier model" in first                       # an entry of a model that no longer serves says so
+    # the second run is the one that silently did nothing from 2026-03-31: the page was already rendered
+    with (d.dist / "data" / "tornado-ledger.jsonl").open("a", encoding="utf-8") as f:
         f.write(_entry("2026-10-03T00:00:00Z", "tornado_v3-bbbbbbbbbbbb", "b"))
-    live.render_verification_ledger()
-    second = page.read_text(encoding="utf-8")
+    second = build._apply_ledger(SiteData(root=tmp_path, dist=d.dist), first)
     assert "2026-10-03T00:00:00Z" in second and "tornado_v3-bbbbbbbbbbbb" in second
-    assert second.count('class="ledger-row ledger-header"') == 1
-    assert second.count("hash: " + "b" * 64) == 1
-    # nothing outside the ledger blocks moved
-    strip = lambda s: ep._marker_re("rows", "hp-ledger").sub("", ep._marker_re("chain", "hp-ledger").sub("", s))
-    assert strip(first) == strip(second)
+    assert second.index("2026-10-03T00:00:00Z") < second.index("2026-10-02T00:00:00Z")   # newest first
+    assert second.count("<table>") == first.count("<table>")
+    strip = lambda s: ep._marker_re("rows", "hp-ledger").sub("", s)
+    assert strip(first) == strip(second)                  # nothing outside the ledger block moved
 
 
-def test_a_page_without_the_ledger_markers_is_an_error_not_a_silent_no_op(live, tmp_path, monkeypatch):
-    page = tmp_path / "verification" / "tornado" / "index.html"
-    page.parent.mkdir(parents=True)
-    page.write_text("<html><body>no markers</body></html>", encoding="utf-8")
-    monkeypatch.setattr(live, "DIST", tmp_path)
-    monkeypatch.setattr(live, "LEDGER_PATH", tmp_path / "none.jsonl")
+def test_a_page_without_the_ledger_markers_is_an_error_not_a_silent_no_op(tmp_path):
     with pytest.raises(ep.PageBlockError):
-        live.render_verification_ledger()
-
-
-def _storm(v3: dict | None) -> dict:
-    s = {"storm_id": "77", "lat": 35.2, "lon": -97.4, "valid_time": "20250506_180039 UTC", "risk_band": "high",
-         "tornado_probability": 0.12, "motion_east": 12.0, "motion_south": -3.0, "mucape": 2500, "srh01": 250,
-         "maxllaz": 0.012, "flash_rate": 30, "model_version": "tornado_v3-aaaaaaaaaaaa", "track_length": 5}
-    if v3 is not None:
-        s["v3"] = v3
-    return s
+        build._apply_ledger(_site(tmp_path), "<html><body>no markers</body></html>")
 
 
 _TABLE = {"bins": [{"lo": 0.0, "hi": 0.05, "n": 1460000, "pos": 400, "observed": 0.0003, "mean_forecast": 0.0004,
@@ -77,37 +56,50 @@ _TABLE = {"bins": [{"lo": 0.0, "hi": 0.05, "n": 1460000, "pos": 400, "observed":
                     "observed_ci": [0.112, 0.156]}]}
 
 
-def test_a_v3_storm_shows_its_measured_outcome_rate_never_an_invented_one(live, monkeypatch):
-    ev = {"model_version": "tornado_v3-aaaaaaaaaaaa", "reliability": _TABLE, "fallback": None,
-          "test": {"auc": 0.97, "auc_ci": [0.96, 0.98]}}
-    monkeypatch.setattr(live, "tornado_evidence", lambda: ev)
-    v3 = {"model": "v3_w", "probability_60min": 0.12, "probability_30min": 0.07, "probability_90min": 0.15,
-          "probability_ef2plus_60min": 0.02, "nws_warning": {"active": True, "minutes_since_issue": 4.0},
-          "drivers": [{"input": "p_maxllaz", "label": "low-level rotation (max azimuthal shear)", "log_odds": 0.84},
-                      {"input": "p_size", "label": "storm size", "log_odds": -0.21}]}
-    html = live._render_storm_rows([_storm(v3)])
-    assert "Historical analogs" not in html and "percentile (approx.)" not in html
-    assert "Of the 900 storm observations of 2025" in html and "13%" in html
-    assert "between 5.0% and 100%" in html and "[11%, 16%]" in html
+class _Data:
+    def __init__(self, ev):
+        self.evidence = {"tornado": ev}
+
+
+def _storm(p60: float = 0.12) -> dict:
+    return {"storm_id": "77", "lat": 35.2, "lon": -97.4, "valid_time": "20250506_180039 UTC",
+            "tornado_probability": p60, "model_version": "tornado_v3-aaaaaaaaaaaa",
+            "v3": {"model": "v3_w", "probability_60min": p60, "probability_30min": 0.07, "probability_90min": 0.15,
+                   "probability_ef2plus_60min": 0.02, "nws_warning": {"active": True, "minutes_since_issue": 4.0},
+                   "drivers": [{"input": "p_maxllaz", "label": "low-level rotation (max azimuthal shear)",
+                                "value": 0.012, "log_odds": 0.84},
+                               {"input": "p_ps_tor", "label": "NOAA ProbTor", "value": 12.0, "log_odds": -0.21}],
+                   "inputs": {"p_ps_tor": 12.0, "p_mucape": 2500.0, "p_ps": 0.0}}}
+
+
+def test_a_storm_shows_its_measured_outcome_rate_never_an_invented_one():
+    ev = {"model_version": "tornado_v3-aaaaaaaaaaaa", "reliability": _TABLE, "fallback": None}
+    html = tornado._row(1, _storm(), _Data(ev))
+    assert "Historical analogs" not in html and "percentile" not in html
+    assert "Of the 900 storm observations in 2025" in html and "13.33%" in html
+    assert "between 5.0% and 100%" in html and "11.20%" in html and "15.60%" in html
     # the quiet storms: a 0.03% rate is printed as such, never as "0.0%"
-    quiet = live._render_storm_rows([_storm({**v3, "probability_60min": 0.001})])
-    assert "between 0% and 5.0%, 0.030% [0.025%, 0.030%]" in quiet
-    assert "low-level rotation (max azimuthal shear) raises the score (+0.84 log-odds)" in html
-    assert "storm size lowers the score (-0.21 log-odds)" in html
-    assert "AUC 0.970 [0.960, 0.980]" in html
-    assert "not an input to the served model" in html or "coherence" not in html.lower()
+    quiet = tornado._row(1, _storm(0.001), _Data(ev))
+    assert "0.03%" in quiet and "0.0%" not in quiet
+    assert "low-level rotation (max azimuthal shear)" in html and "raises the chance" in html and "+0.84" in html
+    assert "NOAA ProbTor" in html and "12%" in html and "lowers the chance" in html     # ProbTor is a percent
+    assert "NWS tornado warning" in html and "in effect" in html
     # a probability in a range the test never populated: no rate is shown
     empty = {"bins": [{"lo": 0.0, "hi": 0.05, "n": 10, "pos": 0, "observed": 0.0, "mean_forecast": 0.01},
                       {"lo": 0.05, "hi": 1.0, "n": 0, "pos": 0, "observed": None, "mean_forecast": None}]}
-    monkeypatch.setattr(live, "tornado_evidence", lambda: {**ev, "reliability": empty})
-    html = live._render_storm_rows([_storm(v3)])
-    assert "No 2025 storm observation was scored in this range" in html
+    html = tornado._row(1, _storm(), _Data({**ev, "reliability": empty}))
+    assert "No storm in the 2025 test was scored in this range" in html
 
 
-def test_a_legacy_storm_has_no_invented_analog_either(live, monkeypatch):
-    monkeypatch.setattr(live, "tornado_evidence", lambda: None)
-    s = _storm(None)
-    s["model_version"] = "tornado_storm_v1_0"
-    html = live._render_storm_rows([s])
-    assert "Historical analogs" not in html and "Observed rate" not in html
-    assert "legacy tier; no final test is bound to it" in html
+def test_no_research_diagnostic_or_missing_value_masquerades_as_a_storm_property():
+    s = _storm()
+    s["coherence_diagnostics"] = {"singularity_conditions_met": 4, "tau": 1.57}
+    html = tornado._row(1, s, _Data(None))
+    assert "CRITICAL" not in html and "singularity" not in html.lower() and "coherence" not in html.lower()
+    assert "not reported" in html                         # an attribute the storm lacks is not a zero
+    assert "ProbSevere (any severe" in html and "p_ps\"" not in html
+
+
+def test_a_storm_without_a_bound_table_says_so():
+    html = tornado._row(1, _storm(), _Data(None))
+    assert "No 2025 test table is bound to the model that scored this storm" in html

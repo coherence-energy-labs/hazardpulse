@@ -26,10 +26,6 @@ REPLAY_INDEX_PATH = DIST / "data" / "evidence" / "replay-index.json"
 PREDICTION_LEDGER_PATH = DIST / "data" / "evidence" / "prediction-ledger.json"
 PROVENANCE_PATH = DIST / "data" / "evidence" / "provenance-envelopes.json"
 GATE_DECISIONS_PATH = DIST / "data" / "evidence" / "gate-decisions.json"
-EVIDENCE_PAGE_PATH = DIST / "evidence" / "index.html"
-VERIFICATION_PAGE_PATH = DIST / "verification" / "index.html"
-SITEMAP_PATH = DIST / "sitemap.xml"
-FEED_PATH = DIST / "feed.xml"
 RESULTS_VERIFICATION_DIR = ROOT / "results" / "verification"
 EQ_PROSPECTIVE_DIR = ROOT / "results" / "earthquake_prospective"
 TO_PROSPECTIVE_DIR = ROOT / "results" / "tornado_prospective"
@@ -38,6 +34,10 @@ HU_PROSPECTIVE_DIR = ROOT / "results" / "hurricane_prospective"
 # GitHub's scheduler delivered a median gap of 5.7 h and a maximum of 10.9 h. A summary
 # older than a full day means scoring has actually stopped, not that cron jittered.
 PROSPECTIVE_STALE_AFTER = dt.timedelta(hours=24)
+# A live skill score is quoted only once this many events have been observed for the model version: with
+# fewer, a model that always says "no" scores as well as a skilful one (the summary quoted "live BSS 1.00"
+# for 83 storm forecasts with zero tornadoes). The same floor as hazardpulse.site.pages.record.LIVE_MIN_EVENTS.
+LIVE_MIN_EVENTS = 10
 # Statuses that assert "no evaluator exists". Once a prospective scorer has written
 # scored forecasts for a hazard, a rollup carrying one of these is a contradiction.
 NO_EVALUATOR_STATUSES = frozenset({"matured_unscored_no_evaluator", "logging_live_no_evaluator"})
@@ -52,21 +52,6 @@ VERIFICATION_STATUS_BADGES = {
 EQ_HONEST_RESULTS_PATH = ROOT / "results" / "earthquake_honest" / "v4_regional_honest_results.json"
 EQ_SAME_LOCATION_PATH = ROOT / "results" / "earthquake_honest" / "same_location_auc.json"
 TO_RETRO_RESULTS_PATH = ROOT / "results" / "definitive" / "definitive_results.json"
-
-ROUTES = [
-    ("/", "daily", "1.0"),
-    ("/live/", "hourly", "1.0"),
-    ("/live/earthquake/", "hourly", "0.9"),
-    ("/live/hurricane/", "hourly", "0.9"),
-    ("/live/tornado/", "hourly", "0.9"),
-    ("/verification/", "daily", "0.8"),
-    ("/evidence/", "daily", "0.8"),
-    ("/methods/", "weekly", "0.7"),
-    ("/registry/", "daily", "0.8"),
-    ("/api/", "weekly", "0.7"),
-    ("/ops/status/", "hourly", "0.7"),
-    ("/legal/disclaimer/", "monthly", "0.4"),
-]
 
 HAZARD_LABELS = {
     "eq": "Earthquake",
@@ -295,14 +280,6 @@ def _format_utc_z(value: dt.datetime | None) -> str:
     return value.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _format_http_date(value: dt.datetime | None) -> str:
-    if value is None:
-        value = dt.datetime.now(dt.timezone.utc)
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=dt.timezone.utc)
-    return value.astimezone(dt.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
-
-
 def _forecast_id(prefix: str, issued_at: dt.datetime | None) -> str:
     issue = issued_at or dt.datetime.now(dt.timezone.utc)
     if issue.tzinfo is None:
@@ -343,22 +320,27 @@ def _fmt_float(value: object, digits: int = 3) -> str:
         return "--"
 
 
-def _short_hash(value: str | None) -> str:
-    if not value:
-        return "--"
-    clean = value.replace("sha256:", "")
-    if len(clean) <= 16:
-        return clean
-    return f"{clean[:8]}..{clean[-8:]}"
-
-
 def _hazard_label(value: object) -> str:
     return HAZARD_LABELS.get(str(value), str(value).replace("_", " ").title())
 
 
 def _load_replay_index() -> dict:
+    """The replay index, completed from the replay directory itself (the record of truth).
+
+    It used to be only upserted with the current forecasts, so every replay written any other way (a
+    backfill, a run whose index write was lost) was missing from it: 2,422 listed against 2,543 files on
+    2026-10-04. Every file in the directory is listed now. The index is append-only (CI's
+    check_append_only_monotonic), so an entry is never dropped, even if its file is absent from this
+    checkout."""
     payload = _read_json(REPLAY_INDEX_PATH, {"generated_at": None, "items": []})
-    payload.setdefault("items", [])
+    listed = {str(i.get("forecast_id")): i for i in payload.get("items", []) if i.get("forecast_id")}
+    on_disk = {p.stem: p for p in REPLAY_DIR.glob("*_fcst_*.json")} if REPLAY_DIR.exists() else {}
+    items = list(listed.values()) + [{"forecast_id": fid, "replay_artifact": _asset_ref(path)}
+                                     for fid, path in on_disk.items() if fid not in listed]
+    items.sort(key=lambda item: item.get("forecast_id", ""))
+    if [i.get("forecast_id") for i in items] != sorted(listed):
+        payload["generated_at"] = _format_utc_z(dt.datetime.now(dt.timezone.utc))
+    payload["items"] = items
     return payload
 
 
@@ -906,14 +888,6 @@ def _tornado_related_benchmark() -> dict | None:
     }
 
 
-def _status_chip_class(status: str) -> str:
-    if status in {"prospective_scored"}:
-        return "good"
-    if status in {"matured_unscored", "matured_unscored_no_evaluator", "inconsistent_with_prospective_ledger"}:
-        return "bad"
-    return "warn"
-
-
 def _prospective_scored_count(summary: dict) -> int:
     """Forecasts a prospective scorer actually scored (0 when it has not run)."""
     if not summary:
@@ -1293,13 +1267,21 @@ def _build_verification_summary(pulse: dict) -> dict:
         to_brier = to_pooled.get("brier")
         to_bss = to_pooled.get("bss_vs_causal_climatology")
         to_bss_reference = "causal_climatology"
-        to_metric_label = (
-            f"Live record of this version: pooled over {int(to_pooled.get('n_storm_forecasts', 0) or 0)} storm forecasts "
-            f"from {int(to_pooled.get('n_forecasts', 0) or 0)} matured live forecasts against SPC reports; base rate "
-            f"{_fmt_float(to_pooled.get('base_rate'), 5)}, mean forecast "
-            f"{_fmt_float(to_pooled.get('mean_forecast_probability'), 5)}. BSS reference: base rate of outcomes that had "
-            "matured before each forecast was issued."
-        )
+        to_live_events = int(to_pooled.get("n_positive", 0) or 0)
+        if to_live_events >= LIVE_MIN_EVENTS:
+            to_metric_label = (
+                f"Live record of this version: {int(to_pooled.get('n_storm_forecasts', 0) or 0):,} storm forecasts "
+                f"from {int(to_pooled.get('n_forecasts', 0) or 0):,} closed live forecasts, {to_live_events:,} followed "
+                f"by a tornado (SPC reports); Brier skill {_fmt_float(to_bss, 2)} against the base rate of outcomes "
+                "that had closed before each forecast was issued."
+            )
+        else:
+            to_metric_label = (
+                f"Live record of this version: {int(to_pooled.get('n_storm_forecasts', 0) or 0):,} storm forecasts "
+                f"closed, {to_live_events:,} followed by a tornado; too few tornadoes to score yet (a live score is "
+                f"quoted from {LIVE_MIN_EVENTS})."
+            )
+            to_auc = to_brier = to_bss = None
     else:
         to_auc = to_brier = to_bss = to_bss_reference = None
         to_metric_label = ("No storm forecast of this model version has been scored yet."
@@ -1336,7 +1318,8 @@ def _build_verification_summary(pulse: dict) -> dict:
             "brier_skill_score_reference": "test_year_base_rate" if to_exact else to_bss_reference,
             "live_this_version": (
                 {"auc": to_auc, "brier": to_brier, "brier_skill_score": to_bss,
-                 "n_storm_forecasts": int(to_pooled.get("n_storm_forecasts", 0) or 0)} if to_pooled else None
+                 "n_storm_forecasts": int(to_pooled.get("n_storm_forecasts", 0) or 0),
+                 "n_events": int(to_pooled.get("n_positive", 0) or 0)} if to_pooled else None
             ),
             "homepage_line": (
                 f"AUC {_fmt_float(to_exact['auc'])} pre-registered 2025 test"
@@ -1452,932 +1435,54 @@ def _build_verification_summary(pulse: dict) -> dict:
     return summary
 
 
-_SCOREBOARD_PREFIX = {"earthquake": "eq", "tornado": "to", "hurricane": "hu"}
+def _stamp_pulse_from_records(pulse: dict, gate_decisions: list[dict]) -> bool:
+    """Write each current forecast's REAL quality-check outcome into the live pulse.
 
+    The scorers stamped ``gate_status = "pass"`` on every forecast before the checks had run, so the
+    API said "pass" for forecasts the gate log recorded as "degrade" (found 2026-10-04). The checks run
+    here, after the scorers; the pulse now carries their outcome, or "unknown" when no decision exists.
+    Returns True when the pulse changed."""
+    by_id = {d.get("forecast_id"): d for d in gate_decisions}
+    changed = False
+    for hazard in pulse.get("hazards", []):
+        decision = by_id.get(hazard.get("forecast_id"))
+        status = str(decision.get("decision")) if decision else "unknown"
+        if hazard.get("gate_status") != status:
+            hazard["gate_status"] = status
+            changed = True
+    # ...and its "delta" by the pages' one definition: the headline chance minus the same headline in the
+    # previous frozen forecast of that hazard (the scorers' own deltas disagreed with the ledger)
+    src = str(ROOT / "src")
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    from hazardpulse.site.data import SiteData
 
-def _latest_forecast_scores(hazard: str) -> list[float]:
-    """Raw probabilities of the most recent forecast (for distribution-drift PSI)."""
-    prefix = _SCOREBOARD_PREFIX.get(hazard)
-    if not prefix or not REPLAY_DIR.exists():
-        return []
-    paths = sorted(REPLAY_DIR.glob(f"{prefix}_fcst_*.json"))
-    if not paths:
-        return []
-    art = _read_replay_cached(paths[-1])
-    scores: list[float] = []
-    for item in (art.get("active_cells") or art.get("storms") or []):
-        if not isinstance(item, dict):
+    heads = SiteData(root=ROOT, dist=DIST).headlines
+    for hazard in pulse.get("hazards", []):
+        head = heads.get(hazard.get("key"))
+        if head is None or head.forecast_id != hazard.get("forecast_id"):
             continue
-        v = item.get("raw_probability")
-        if v is None:
-            v = item.get("probability",
-                         item.get("tornado_probability", item.get("ri_probability")))
-        if v is not None:
-            try:
-                scores.append(float(v))
-            except (TypeError, ValueError):
-                continue
-    return scores
+        delta = (round(head.probability - head.previous, 4)
+                 if head.probability is not None and head.previous is not None else None)
+        if hazard.get("delta") != delta:
+            hazard["delta"] = delta
+            changed = True
+    return changed
 
 
-def _render_calibration_scoreboard() -> str:
-    """Reliability diagrams + before/after calibration metrics per hazard, drawn
-    from the platform's OWN matured forecasts. Empty until a calibrator exists,
-    so the section simply does not appear until real calibration data flows."""
-    try:
-        from hazardpulse.trust.calibration import reliability_curve_from_counts
-        from hazardpulse.trust.venn_abers import VennAbersCalibrator
-        from hazardpulse.trust.viz import reliability_diagram_svg
-    except Exception:
-        return ""
+def _render_site() -> list[str]:
+    """Every page, from the artifacts just written (hazardpulse.site.build: one renderer for the whole
+    site, so whichever scorer ran, every page agrees with the same files). DIST and ROOT are read at call
+    time, so a test that points this module at a scratch tree renders into that tree."""
+    src = str(ROOT / "src")
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    from hazardpulse.site import build as site_build
 
-    accents = {"earthquake": "#e65100", "tornado": "#6a1b9a", "hurricane": "#1976d2"}
-
-    def _m(d: dict, key: str) -> str:
-        v = (d or {}).get(key)
-        if v is None:
-            return "--"
-        return f"{v:.3f}" if isinstance(v, (int, float)) else _esc(v)
-
-    cards: list[str] = []
-    for name in ("earthquake", "tornado", "hurricane"):
-        rec = _read_json(ROOT / "results" / "calibration" / f"{name}_calibration.json", {})
-        ds = _read_json(ROOT / "results" / f"{name}_prospective" / "calibration_dataset.json", {})
-        after = rec.get("metrics_after") if isinstance(rec, dict) else None
-        if not after or not ds.get("scores"):
-            continue
-        try:
-            cal = VennAbersCalibrator.from_dict(rec["calibrator"])
-            cal_scores, _, _ = cal.predict(ds["scores"])
-            curve = reliability_curve_from_counts(cal_scores, ds["pos"], ds["total"])
-            svg = reliability_diagram_svg(
-                curve, title=f"{name.title()} (deployed)", accent=accents.get(name, "#1976d2"))
-        except Exception:
-            continue
-        before = rec.get("metrics_before", {})
-        drift = {"status": "insufficient_data", "psi": 0.0}
-        try:
-            from hazardpulse.trust.monitor import expand_histogram, forecast_drift_status
-            cur_scores = _latest_forecast_scores(name)
-            if cur_scores:
-                drift = forecast_drift_status(
-                    expand_histogram(ds["scores"], ds["total"]), cur_scores)
-        except Exception:
-            pass
-        cards.append(
-            '<div class="card col-4">'
-            f'<h3 style="margin-top:0;">{_esc(_hazard_label(name))}</h3>'
-            f'{svg}'
-            f'<div class="kv"><span>ECE (raw &rarr; calibrated)</span>'
-            f'<strong>{_m(before, "ece")} &rarr; {_m(after, "ece")}</strong></div>'
-            f'<div class="kv"><span>Brier skill</span>'
-            f'<strong>{_m(before, "brier_skill_score")} &rarr; {_m(after, "brier_skill_score")}</strong></div>'
-            f'<div class="kv"><span>Distribution drift</span>'
-            f'<strong>{_esc(str(drift["status"]).replace("_", " "))} (PSI {drift["psi"]:.3f})</strong></div>'
-            f'<div class="kv"><span>Calibration sample</span>'
-            f'<strong>{int(rec.get("n_calibration", 0) or 0):,}</strong></div>'
-            "</div>"
-        )
-    if not cards:
-        return ""
-    return (
-        '<section class="section" aria-labelledby="calib-heading">'
-        '<h2 id="calib-heading">Calibration scoreboard</h2>'
-        '<p class="muted" style="margin-top:-8px;margin-bottom:16px;">'
-        "Reliability of the deployed (calibrated) forecasts, measured against the "
-        "platform's own realized outcomes. A perfectly calibrated forecaster sits on "
-        "the dashed diagonal; ECE and Brier-skill are shown raw &rarr; calibrated.</p>"
-        f'<div class="grid">{"".join(cards)}</div>'
-        "</section>"
-    )
-
-
-def _render_verification_page(summary: dict) -> None:
-    system = summary.get("system", {})
-    hazards = list(summary.get("hazards", []))
-    calibration_section = _render_calibration_scoreboard()
-
-    system_cards = [
-        (
-            str(system.get("frozen_forecasts", 0)),
-            "Frozen forecasts",
-            "Replay artifacts preserved across all live hazards.",
-        ),
-        (
-            str(system.get("matured_unscored_backlog", 0)),
-            "Scoring backlog",
-            "Matured windows waiting for an evaluator or scoring run.",
-        ),
-        (
-            str(system.get("hash_chain_mismatches", 0)),
-            "Hash mismatches",
-            "Prev-hash continuity failures in raw append-only ledgers.",
-        ),
-        (
-            str(system.get("exact_model_benchmarks", 0)),
-            "Exact benchmarks",
-            "Live model versions with an attached exact benchmark.",
-        ),
-    ]
-
-    system_cards_html = "".join(
-        '<div class="card col-3">'
-        f'<div class="metric mono">{_esc(value)}</div>'
-        f'<div class="metric-label">{_esc(label)}</div>'
-        f'<p class="muted" style="font-size:12px;margin-top:8px;">{_esc(note)}</p>'
-        "</div>"
-        for value, label, note in system_cards
-    )
-
-    alert_items = system.get("alerts", [])
-    alert_html = (
-        "<ul>"
-        + "".join(f"<li>{_esc(item)}</li>" for item in alert_items)
-        + "</ul>"
-        if alert_items
-        else '<p class="muted" style="margin:0;">No current verification-control alerts.</p>'
-    )
-
-    hazard_cards: list[str] = []
-    benchmark_rows: list[str] = []
-    for item in hazards:
-        storage = item.get("forecast_storage", {})
-        ledger = item.get("ledger", {})
-        exact_benchmark = item.get("exact_model_benchmark")
-        related_benchmark = item.get("related_benchmark")
-        metric_html = ""
-        if item.get("auc") is not None or item.get("brier") is not None:
-            bss_html = ""
-            if item.get("brier_skill_score") is not None and item.get("brier_skill_score_reference"):
-                bss_html = (
-                    f' &middot; BSS {_fmt_float(item.get("brier_skill_score"))} vs '
-                    f'{_esc(str(item.get("brier_skill_score_reference")).replace("_", " "))}'
-                )
-            metric_html = (
-                f'<div class="kv"><span>Primary metric</span><strong>AUC {_fmt_float(item.get("auc"))} &middot; '
-                f'Brier {_fmt_float(item.get("brier"), 4)}{bss_html}</strong></div>'
-            )
-        if exact_benchmark:
-            benchmark_html = (
-                f'<div class="kv"><span>Exact benchmark</span><strong>AUC {_fmt_float(exact_benchmark.get("auc"))} &middot; '
-                f'Brier {_fmt_float(exact_benchmark.get("brier"))}</strong></div>'
-            )
-        elif related_benchmark:
-            related_bits = []
-            if related_benchmark.get("same_location_auc") is not None:
-                related_bits.append(f"same-location AUC {_fmt_float(related_benchmark.get('same_location_auc'))}")
-            if related_benchmark.get("global_auc") is not None:
-                related_bits.append(f"global AUC {_fmt_float(related_benchmark.get('global_auc'))}")
-            if related_benchmark.get("auc") is not None:
-                related_bits.append(f"AUC {_fmt_float(related_benchmark.get('auc'))}")
-            benchmark_html = (
-                f'<div class="kv"><span>Related benchmark</span><strong>{_esc(" | ".join(related_bits) or "Available")}</strong></div>'
-            )
-        else:
-            benchmark_html = (
-                '<div class="kv"><span>Benchmark</span><strong>No benchmark artifact attached to this live model yet</strong></div>'
-            )
-        ledger_html = (
-            f'<div class="kv"><span>Raw ledger</span><strong>{int(ledger.get("n_rows", 0) or 0)} rows &middot; '
-            f'{int(ledger.get("prev_hash_mismatches", 0) or 0)} mismatches</strong></div>'
-            if ledger.get("supported")
-            else '<div class="kv"><span>Raw ledger</span><strong>Not implemented for this hazard yet</strong></div>'
-        )
-        hazard_cards.append(
-            f'<div class="card col-4 hazard-{_esc(item["key"])}">'
-            f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><h2 style="margin:0;">{_esc(_hazard_label(item["key"]))}</h2>'
-            f'<span class="chip {_status_chip_class(str(item.get("verification_status", "")))}" style="margin-left:auto;">{_esc(item.get("status_badge", "Status"))}</span></div>'
-            f'<p style="margin:0 0 12px;line-height:1.6;">{_esc(item.get("verification_status_label"))}</p>'
-            f'<div class="kv"><span>Live model</span><strong>{_esc(item.get("model_version") or "--")}</strong></div>'
-            f'<div class="kv"><span>Latest forecast</span><strong>{_esc(storage.get("last_forecast_id") or "--")}</strong></div>'
-            f'<div class="kv"><span>Storage</span><strong>{int(storage.get("n_replay_artifacts", 0) or 0)} replays &middot; horizon {_esc(storage.get("forecast_horizon") or "--")}</strong></div>'
-            f'<div class="kv"><span>Maturity</span><strong>{int(storage.get("n_matured_forecasts", 0) or 0)} matured &middot; {int(storage.get("n_scored_forecasts", 0) or 0)} scored</strong></div>'
-            f'{metric_html}'
-            f'{benchmark_html}'
-            f'{ledger_html}'
-            f'<p class="muted" style="margin:12px 0 0;">{_esc(item.get("recommended_action"))}</p>'
-            "</div>"
-        )
-
-        source = exact_benchmark or related_benchmark or {}
-        metric_bits = []
-        if exact_benchmark and exact_benchmark.get("auc") is not None:
-            metric_bits.append(f"AUC {_fmt_float(exact_benchmark.get('auc'))}")
-        if exact_benchmark and exact_benchmark.get("brier") is not None:
-            metric_bits.append(f"Brier {_fmt_float(exact_benchmark.get('brier'))}")
-        if related_benchmark and related_benchmark.get("same_location_auc") is not None:
-            metric_bits.append(f"same-location AUC {_fmt_float(related_benchmark.get('same_location_auc'))}")
-        if related_benchmark and related_benchmark.get("global_auc") is not None:
-            metric_bits.append(f"global AUC {_fmt_float(related_benchmark.get('global_auc'))}")
-        if related_benchmark and related_benchmark.get("auc") is not None:
-            metric_bits.append(f"AUC {_fmt_float(related_benchmark.get('auc'))}")
-        benchmark_rows.append(
-            "<tr>"
-            f"<td>{_esc(_hazard_label(item['key']))}</td>"
-            f"<td>{_esc(source.get('availability', 'unavailable').replace('_', ' ').title())}</td>"
-            f"<td>{_esc(source.get('model_version') or item.get('model_version') or '--')}</td>"
-            f"<td>{_esc(' | '.join(metric_bits) or 'None attached')}</td>"
-            f"<td>{_esc(source.get('source_updated_at') or '--')}</td>"
-            "</tr>"
-        )
-
-    page = f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Verification - HazardPulse</title>
-  <meta name="description" content="Forecast storage, scoring readiness, and benchmark status for live HazardPulse models. This page distinguishes exact live scoring, pending maturity, and scorer backlogs.">
-  <meta name="theme-color" content="#f6f9ff">
-  <link rel="canonical" href="{PRIMARY_DOMAIN}/verification/">
-  <script src="/assets/site-shell.js?v=2"></script>
-  <link rel="stylesheet" href="/assets/styles.css?v=9">
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
-  <link rel="alternate" type="application/rss+xml" title="HazardPulse Feed" href="/feed.xml">
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="Verification - HazardPulse">
-  <meta property="og:description" content="Forecast storage, scoring readiness, and benchmark status for live HazardPulse models.">
-  <meta property="og:url" content="{PRIMARY_DOMAIN}/verification/">
-  <meta property="og:site_name" content="HazardPulse">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Verification - HazardPulse">
-  <meta name="twitter:description" content="Forecast storage, scoring readiness, and benchmark status for live HazardPulse models.">
-  <script type="application/ld+json">
-  {{
-    "@context": "https://schema.org",
-    "@type": "Dataset",
-    "name": "HazardPulse Verification Status",
-    "description": "Storage, scoring readiness, benchmark provenance, and live verification status for HazardPulse forecast models.",
-    "url": "{PRIMARY_DOMAIN}/verification/",
-    "creator": {{ "@type": "Organization", "name": "HazardPulse", "url": "{PRIMARY_DOMAIN}/" }}
-  }}
-  </script>
-  <script type="speculationrules">
-  {{ "prefetch": [{{ "source": "list", "urls": ["/", "/live/", "/evidence/", "/api/"] }}] }}
-  </script>
-</head>
-<body>
-  <div class="live-bar"></div>
-  <div class="emergency-banner" role="alert" aria-live="assertive"></div>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="topbar" role="banner">
-    <div class="container topbar-inner">
-      <a href="/" class="brand" aria-label="HazardPulse home">
-        <img src="/assets/hp-logo.png" alt="" class="brand-logo" width="30" height="30">
-        HazardPulse
-      </a>
-      <input type="checkbox" id="nav-toggle" class="nav-hamburger-input" aria-label="Toggle navigation">
-      <label for="nav-toggle" class="nav-hamburger" aria-hidden="true">
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-      </label>
-      <nav class="nav" aria-label="Primary navigation">
-        <div class="nav-dropdown">
-          <a href="/live/">Live</a>
-          <div class="nav-dropdown-menu">
-            <a href="/live/earthquake/"><span class="hazard-dot eq"></span> Earthquake</a>
-            <a href="/live/hurricane/"><span class="hazard-dot hu"></span> Hurricane</a>
-            <a href="/live/tornado/"><span class="hazard-dot to"></span> Tornado</a>
-          </div>
-        </div>
-        <a href="/verification/" aria-current="page">Verification</a>
-        <a href="/evidence/">Evidence</a>
-        <a href="/methods/">Methods</a>
-        <a href="/registry/">Registry</a>
-        <a href="/api/">API</a>
-      </nav>
-      <div class="theme-switch">
-        <input id="theme-toggle" class="theme-toggle" type="checkbox" aria-label="Switch to dark mode">
-        <label for="theme-toggle">Dark</label>
-      </div>
-    </div>
-  </header>
-  <main id="main" class="container">
-    <section class="hero">
-      <div class="eyebrow">Verification</div>
-      <h1>Verification now reflects what we can actually prove.</h1>
-      <p class="subtitle">
-        HazardPulse freezes every live forecast into replay artifacts, tracks raw append-only ledgers, and now
-        separates exact model benchmarks, pending maturity windows, and scoring backlogs. If a live model is not
-        scored yet, this page says so directly.
-      </p>
-      <p class="muted">Built {_esc(summary.get("generated_at"))} &middot; Score as of {_esc(summary.get("score_as_of"))}</p>
-    </section>
-    <section class="section">
-      <div class="grid">
-        {system_cards_html}
-      </div>
-    </section>
-    <section class="section">
-      <h2>Control alerts</h2>
-      <div class="card">
-        {alert_html}
-      </div>
-    </section>
-    <section class="section">
-      <h2>Hazard by hazard</h2>
-      <p class="muted" style="margin-top:-8px;margin-bottom:16px;">These cards tell you whether each live model has exact scores, only related research benchmarks, or just frozen forecasts waiting for scoring.</p>
-      <div class="grid">
-        {''.join(hazard_cards)}
-      </div>
-    </section>
-    {calibration_section}
-    <section class="section">
-      <h2>Benchmark provenance</h2>
-      <p class="muted" style="margin-top:-8px;margin-bottom:16px;">Exact benchmarks are safe to cite for the current live model version. Related benchmarks are useful for research context, but not as proof of live performance.</p>
-      <div class="card">
-        <table>
-          <thead><tr><th>Hazard</th><th>Type</th><th>Model</th><th>Metrics</th><th>Source updated</th></tr></thead>
-          <tbody>
-            {''.join(benchmark_rows)}
-          </tbody>
-        </table>
-      </div>
-    </section>
-    <section class="section">
-      <h2>Storage and audit surfaces</h2>
-      <div class="grid">
-        <div class="card col-6">
-          <div class="kv"><span>Verification summary</span><strong><a href="/data/verification-summary.json">/data/verification-summary.json</a></strong></div>
-          <div class="kv"><span>Replay index</span><strong><a href="/data/evidence/replay-index.json">/data/evidence/replay-index.json</a></strong></div>
-          <div class="kv"><span>Prediction ledger</span><strong><a href="/data/evidence/prediction-ledger.json">/data/evidence/prediction-ledger.json</a></strong></div>
-          <div class="kv"><span>Earthquake raw chain</span><strong><a href="/data/earthquake-ledger.jsonl">/data/earthquake-ledger.jsonl</a></strong></div>
-          <div class="kv"><span>Tornado raw chain</span><strong><a href="/data/tornado-ledger.jsonl">/data/tornado-ledger.jsonl</a></strong></div>
-        </div>
-        <div class="card col-6">
-          <p style="margin:0 0 12px;line-height:1.6;">
-            This surface is intentionally stricter than marketing copy. A billion-dollar company needs a page that tells operators
-            what is frozen, what is scored, what is only a research benchmark, and what still needs engineering work before it
-            can influence model adjustment or promotion.
-          </p>
-          <p class="muted" style="margin:0;">Use the evidence ledger for artifact-level traceability and this page for scoring readiness and benchmark discipline.</p>
-        </div>
-      </div>
-    </section>
-  </main>
-  <footer class="footer" role="contentinfo">
-    <div class="container footer-inner">
-      <div class="footer-col">
-        <h4>Platform</h4>
-        <a href="/live/">Live forecasts</a>
-        <a href="/verification/">Verification</a>
-        <a href="/evidence/">Evidence</a>
-        <a href="/methods/">Methods</a>
-      </div>
-      <div class="footer-col">
-        <h4>Data</h4>
-        <a href="/registry/">Model registry</a>
-        <a href="/api/">API contracts</a>
-        <a href="/ops/status/">System status</a>
-        <a href="/feed.xml">RSS feed</a>
-      </div>
-      <div class="footer-col">
-        <h4>About</h4>
-        <a href="mailto:{CONTACT_EMAIL}">Contact</a>
-        <a href="/legal/disclaimer/">Disclaimer</a>
-        <a href="/COMMERCIAL_LICENSE.md">Commercial License</a>
-      </div>
-      <p class="footer-disclaimer">
-        Independent hazard intelligence platform. Always follow official guidance from the USGS, NHC, NWS, SPC, JMA, and IMD.
-      </p>
-      <p class="footer-build">Static-first HTML &middot; Evidence-linked data &middot; Verification state generated from live artifacts</p>
-    </div>
-  </footer>
-</body>
-</html>
-"""
-    VERIFICATION_PAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    VERIFICATION_PAGE_PATH.write_text(page, encoding="utf-8")
-
-
-def _render_evidence_page(
-    pulse: dict,
-    entries: list[dict],
-    envelopes: list[dict],
-    gate_decisions: list[dict],
-    replay_index: dict,
-) -> None:
-    hazard_map = {hazard.get("key"): hazard for hazard in pulse.get("hazards", [])}
-    eq_rows, eq_mismatches = _count_link_mismatches(EQ_LEDGER_PATH)
-    to_rows, to_mismatches = _count_link_mismatches(TO_LEDGER_PATH)
-    replayable_entries = [entry for entry in entries if entry.get("replay_artifact")]
-
-    evidence_cards: list[str] = []
-    for key in ("eq", "hu", "to"):
-        hazard = hazard_map.get(key, {})
-        label = _hazard_label(key)
-        forecast_id = hazard.get("forecast_id") or "No published artifact id"
-        gate_text = str(hazard.get("gate_status", "pass")).replace("_", " ")
-        replay_ready = "Yes" if any(item.get("forecast_id") == hazard.get("forecast_id") for item in replay_index.get("items", [])) else "Pending"
-        evidence_cards.append(
-            f'<div class="card col-4 hazard-{key}">'
-            f"<h3>{_esc(label)}</h3>"
-            f'<div class="metric">{_pct(hazard.get("probability", 0))}</div>'
-            f'<div class="metric-label">Current published state</div>'
-            f'<div class="kv"><span>Forecast ID</span><strong><code>{_esc(forecast_id)}</code></strong></div>'
-            f'<div class="kv"><span>Gate</span><strong>{_esc(gate_text.title())}</strong></div>'
-            f'<div class="kv"><span>Replay ready</span><strong>{replay_ready}</strong></div>'
-            f"</div>"
-        )
-
-    ledger_rows = []
-    for entry in entries[:12]:
-        replay_link = entry.get("replay_artifact")
-        ledger_rows.append(
-            "<tr>"
-            f"<td><code>{_esc(entry.get('forecast_id'))}</code></td>"
-            f"<td>{_esc(_hazard_label(entry.get('hazard')))}</td>"
-            f"<td>{_esc(entry.get('issued_at'))}</td>"
-            f"<td>{_pct(entry.get('probability', 0))}</td>"
-            f"<td><code>{_esc(_short_hash(entry.get('hash')))}</code></td>"
-            f"<td>{'<a href=\"' + _esc(replay_link) + '\">Replay</a>' if replay_link else 'Archive pending'}</td>"
-            "</tr>"
-        )
-
-    provenance_cards = []
-    for envelope in envelopes[:6]:
-        provenance_cards.append(
-            '<div class="card">'
-            f"<h3><code>{_esc(envelope['provenance_id'])}</code></h3>"
-            f'<div class="kv"><span>Forecast</span><strong><code>{_esc(envelope["forecast_id"])}</code></strong></div>'
-            f'<div class="kv"><span>Input hash</span><strong><code>{_esc(_short_hash(envelope["input_hash"]))}</code></strong></div>'
-            f'<div class="kv"><span>Output hash</span><strong><code>{_esc(_short_hash(envelope["output_hash"]))}</code></strong></div>'
-            f'<div class="kv"><span>Signed</span><strong>{_esc(envelope["signed_at"])}</strong></div>'
-            f'<p class="muted" style="margin:12px 0 0;">Sources: {_esc(", ".join(envelope["sources"]))}</p>'
-            "</div>"
-        )
-
-    gate_rows = []
-    for decision in gate_decisions[:10]:
-        warnings = ", ".join(decision.get("warnings", [])) or "None"
-        gate_rows.append(
-            "<tr>"
-            f"<td><code>{_esc(decision['gate_decision_id'])}</code></td>"
-            f"<td>{_esc(_hazard_label(decision['hazard']))}</td>"
-            f"<td>{_esc(decision['decision'])}</td>"
-            f"<td>{_esc(warnings)}</td>"
-            f"<td>{_esc(decision.get('issued_at'))}</td>"
-            "</tr>"
-        )
-
-    replay_rows = []
-    for item in replay_index.get("items", []):
-        replay_rows.append(
-            "<tr>"
-            f"<td><code>{_esc(item.get('forecast_id'))}</code></td>"
-            f"<td><a href=\"{_esc(item.get('replay_artifact'))}\">{_esc(item.get('replay_artifact'))}</a></td>"
-            "</tr>"
-        )
-
-    coverage = f"{len(envelopes)}/{max(1, len(replayable_entries))}"
-    page = f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Evidence Ledger - HazardPulse</title>
-  <meta name="description" content="Live evidence ledger built from real forecast archives, current publish artifacts, provenance hashes, and gate decisions.">
-  <meta name="theme-color" content="#f6f9ff">
-  <link rel="canonical" href="{PRIMARY_DOMAIN}/evidence/">
-  <script src="/assets/site-shell.js?v=2"></script>
-  <link rel="stylesheet" href="/assets/styles.css?v=9">
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
-  <link rel="alternate" type="application/rss+xml" title="HazardPulse Feed" href="/feed.xml">
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="Evidence Ledger - HazardPulse">
-  <meta property="og:description" content="Live evidence ledger built from real forecast archives, current publish artifacts, provenance hashes, and gate decisions.">
-  <meta property="og:url" content="{PRIMARY_DOMAIN}/evidence/">
-  <meta property="og:site_name" content="HazardPulse">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Evidence Ledger - HazardPulse">
-  <meta name="twitter:description" content="Live evidence ledger built from real forecast archives, current publish artifacts, provenance hashes, and gate decisions.">
-  <script type="application/ld+json">
-  {{
-    "@context": "https://schema.org",
-    "@type": "DataCatalog",
-    "name": "HazardPulse Evidence Ledger",
-    "description": "Real forecast archives, provenance hashes, gate decisions, and replay artifacts for published HazardPulse forecasts.",
-    "url": "{PRIMARY_DOMAIN}/evidence/",
-    "creator": {{ "@type": "Organization", "name": "HazardPulse", "url": "{PRIMARY_DOMAIN}/" }}
-  }}
-  </script>
-  <script type="speculationrules">
-  {{ "prefetch": [{{ "source": "list", "urls": ["/", "/live/", "/verification/", "/api/"] }}] }}
-  </script>
-</head>
-<body>
-  <div class="live-bar"></div>
-  <div class="emergency-banner" role="alert" aria-live="assertive"></div>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="topbar" role="banner">
-    <div class="container topbar-inner">
-      <a href="/" class="brand" aria-label="HazardPulse home">
-        <img src="/assets/hp-logo.png" alt="" class="brand-logo" width="30" height="30">
-        HazardPulse
-      </a>
-      <input type="checkbox" id="nav-toggle" class="nav-hamburger-input" aria-label="Toggle navigation">
-      <label for="nav-toggle" class="nav-hamburger" aria-hidden="true">
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-      </label>
-      <nav class="nav" aria-label="Primary navigation">
-        <div class="nav-dropdown">
-          <a href="/live/">Live</a>
-          <div class="nav-dropdown-menu">
-            <a href="/live/earthquake/"><span class="hazard-dot eq"></span> Earthquake</a>
-            <a href="/live/hurricane/"><span class="hazard-dot hu"></span> Hurricane</a>
-            <a href="/live/tornado/"><span class="hazard-dot to"></span> Tornado</a>
-          </div>
-        </div>
-        <a href="/verification/">Verification</a>
-        <a href="/evidence/" aria-current="page">Evidence</a>
-        <a href="/methods/">Methods</a>
-        <a href="/registry/">Registry</a>
-        <a href="/api/">API</a>
-      </nav>
-      <div class="theme-switch">
-        <input id="theme-toggle" class="theme-toggle" type="checkbox" aria-label="Switch to dark mode">
-        <label for="theme-toggle">Dark</label>
-      </div>
-    </div>
-  </header>
-  <main id="main" class="container">
-    <section class="hero">
-      <div class="eyebrow">Evidence</div>
-      <h1>Every published state has a real artifact.</h1>
-      <p class="subtitle">
-        This surface is generated from the live publish artifacts in <code>/data</code>, the replay archive,
-        and the raw earthquake and tornado ledgers. No sample hashes, no synthetic gate records, no fabricated provenance.
-      </p>
-      <p class="muted">Updated {_esc(pulse.get("updated_at"))} &middot; Replayable artifacts: {len(replay_index.get("items", []))}</p>
-    </section>
-    <section class="section">
-      <div class="grid">
-        {"".join(evidence_cards)}
-      </div>
-    </section>
-    <section class="section">
-      <div class="grid">
-        <div class="card col-3"><div class="metric mono">{eq_rows + to_rows}</div><div class="metric-label">Raw chain rows audited</div></div>
-        <div class="card col-3"><div class="metric mono">{eq_mismatches + to_mismatches}</div><div class="metric-label">Prev-hash mismatches</div></div>
-        <div class="card col-3"><div class="metric mono">{coverage}</div><div class="metric-label">Provenance coverage</div></div>
-        <div class="card col-3"><div class="metric mono">{len(replay_index.get("items", []))}</div><div class="metric-label">Replay artifacts</div></div>
-      </div>
-    </section>
-    <section class="section" id="ledger">
-      <h2>Prediction ledger</h2>
-      <p class="muted" style="margin-top:-8px;margin-bottom:16px;">Recent append-only and archive-backed forecast records, newest first.</p>
-      <div class="card">
-        <table>
-          <thead><tr><th>Forecast ID</th><th>Hazard</th><th>Issued</th><th>Probability</th><th>Hash</th><th>Artifact</th></tr></thead>
-          <tbody>
-            {"".join(ledger_rows)}
-          </tbody>
-        </table>
-      </div>
-      <div class="cta-row"><a href="/data/evidence/prediction-ledger.json" class="btn btn-secondary">Download prediction ledger</a></div>
-    </section>
-    <section class="section">
-      <h2>Provenance envelopes</h2>
-      <p class="muted" style="margin-top:-8px;margin-bottom:16px;">Hashes are computed from the actual published replay artifacts and their source manifests.</p>
-      <div class="grid">
-        {"".join(provenance_cards) or '<div class="card"><p class="muted" style="margin:0;">No replay artifacts are available yet.</p></div>'}
-      </div>
-      <div class="cta-row"><a href="/data/evidence/provenance-envelopes.json" class="btn btn-secondary">Download provenance envelopes</a></div>
-    </section>
-    <section class="section" id="gates">
-      <h2>Gate decisions</h2>
-      <p class="muted" style="margin-top:-8px;margin-bottom:16px;">Current warnings are derived from the live publish state, not hardcoded examples.</p>
-      <div class="card">
-        <table>
-          <thead><tr><th>Decision ID</th><th>Hazard</th><th>Decision</th><th>Warnings</th><th>Issued</th></tr></thead>
-          <tbody>
-            {"".join(gate_rows)}
-          </tbody>
-        </table>
-      </div>
-      <div class="cta-row"><a href="/data/evidence/gate-decisions.json" class="btn btn-secondary">Download gate decisions</a></div>
-    </section>
-    <section class="section" id="replay">
-      <h2>Replay index</h2>
-      <p class="muted" style="margin-top:-8px;margin-bottom:16px;">Frozen publish artifacts that can be fetched directly through the public API.</p>
-      <div class="card">
-        <table>
-          <thead><tr><th>Forecast ID</th><th>Artifact</th></tr></thead>
-          <tbody>
-            {"".join(replay_rows)}
-          </tbody>
-        </table>
-      </div>
-      <div class="cta-row"><a href="/data/evidence/replay-index.json" class="btn btn-secondary">Download replay index</a></div>
-    </section>
-  </main>
-  <footer class="footer" role="contentinfo">
-    <div class="container footer-inner">
-      <div class="footer-col">
-        <h4>Platform</h4>
-        <a href="/live/">Live forecasts</a>
-        <a href="/verification/">Verification</a>
-        <a href="/evidence/">Evidence</a>
-        <a href="/methods/">Methods</a>
-      </div>
-      <div class="footer-col">
-        <h4>Data</h4>
-        <a href="/registry/">Model registry</a>
-        <a href="/api/">API contracts</a>
-        <a href="/ops/status/">System status</a>
-        <a href="/feed.xml">RSS feed</a>
-      </div>
-      <div class="footer-col">
-        <h4>About</h4>
-        <a href="mailto:{CONTACT_EMAIL}">Contact</a>
-        <a href="/legal/disclaimer/">Disclaimer</a>
-        <a href="/COMMERCIAL_LICENSE.md">Commercial License</a>
-      </div>
-      <p class="footer-disclaimer">
-        Independent hazard intelligence platform. Always follow official guidance from the USGS, NHC, NWS, SPC, JMA, and IMD.
-      </p>
-      <p class="footer-build">Static-first HTML &middot; Evidence-linked data &middot; Edge geolocation by Cloudflare</p>
-    </div>
-  </footer>
-</body>
-</html>
-"""
-    EVIDENCE_PAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    EVIDENCE_PAGE_PATH.write_text(page, encoding="utf-8")
-
-
-def _ours_cell(storm: dict) -> str:
-    """Our own RI model's 24-h probability for a storm (v10.1 shadow), or why there is none."""
-    sh = storm.get("ri_v10_shadow") or {}
-    if sh.get("status") != "ok":
-        return '<span class="muted">--</span>' if not sh else '<span class="muted">not available</span>'
-    if sh.get("probability") is None:
-        return '<span class="muted">no guidance</span>'
-    note = "" if sh.get("gate_ok") else ' <span class="muted">(NOAA DTOPS: guidance missing)</span>'
-    return f"{_pct(sh['probability'])}{note}"
-
-
-def _ours_note() -> str:
-    """What the experimental column is, from our model's bound evidence (served_evidence)."""
-    from hazardpulse.verification import evidence_pages, served_evidence
-
-    try:
-        ours = (served_evidence.hurricane_evidence() or {}).get("ours")
-    except served_evidence.EvidenceError:
-        ours = None
-    if not ours:
-        return ""
-    items = "".join(f"<li><strong>{label}:</strong> {value}</li>" for label, value in evidence_pages.ours_hurricane_lines(ours))
-    return ('<div class="card" style="margin-top:12px;"><p class="muted" style="margin:0 0 6px;">'
-            f"<strong>HazardPulse model ({html.escape(ours['model_version'])})</strong> &mdash; our own "
-            "rapid-intensification forecast, shown for comparison. The published number is NOAA&rsquo;s until the "
-            f"pre-registered test below is passed.</p><ul class=\"muted\" style=\"margin:0;\">{items}</ul></div>")
-
-
-def _render_live_hurricane_page() -> None:
-    storms = _read_json(LIVE_STORMS_PATH, {})
-    updated_at = _parse_utc(storms.get("updated_at"))
-    storms_list = list(storms.get("storms", []))
-
-    if storms_list:
-        rows = []
-        sorted_storms = sorted(
-            storms_list,
-            key=lambda item: float(item.get("ri_probability", 0) or 0),
-            reverse=True,
-        )
-        for storm in sorted_storms[:8]:
-            rows.append(
-                f"<tr>"
-                f"<td>{_esc(storm.get('storm_name', storm.get('storm_id', 'Storm')))}</td>"
-                f"<td>{_esc(storm.get('category', '--'))}</td>"
-                f"<td>{_esc(storm.get('lat', '--'))}, {_esc(storm.get('lon', '--'))}</td>"
-                f"<td>{_pct(storm.get('ri_probability', 0))}</td>"
-                f"<td>{_esc(storm.get('ri_source_label') or 'HazardPulse v8.2')}</td>"
-                f"<td>{_ours_cell(storm)}</td>"
-                f"<td>{_esc(storm.get('vmax_kt', '--'))} kt</td>"
-                f"</tr>"
-            )
-        storms_html = (
-            "<table><thead><tr><th>Storm</th><th>Status</th><th>Location</th><th>RI 24h (published)</th>"
-            "<th>Source</th><th>HazardPulse model (experimental)</th><th>Wind</th></tr></thead>"
-            f"<tbody>{''.join(rows)}</tbody></table>" + _ours_note()
-        )
-        top = sorted_storms[0]
-        summary_html = (
-            '<div class="card hazard-hu">'
-            '<h2 style="margin-top:0;">Top storm</h2>'
-            f'<div class="metric">{_pct(top.get("ri_probability", 0))}</div>'
-            '<div class="metric-label">Rapid intensification in 24h'
-            f' ({_esc(top.get("ri_source_label") or "HazardPulse v8.2")})</div>'
-            f'<div class="kv"><span>Name</span><strong>{_esc(top.get("storm_name", top.get("storm_id", "Storm")))}</strong></div>'
-            f'<div class="kv"><span>Status</span><strong>{_esc(top.get("category", "--"))} &middot; {_esc(top.get("vmax_kt", "--"))} kt</strong></div>'
-            + (f'<div class="kv"><span>HazardPulse model (experimental)</span><strong>{_ours_cell(top)}</strong></div>'
-               if (top.get("ri_v10_shadow") or {}).get("status") == "ok" else "")
-            + "</div>"
-        )
-    else:
-        storms_html = (
-            '<div class="card"><p class="muted" style="margin:0;">'
-            "No active tropical cyclones are present in the current feed."
-            "</p></div>"
-        )
-        summary_html = (
-            '<div class="card hazard-hu"><h2 style="margin-top:0;">Current state</h2>'
-            '<div class="metric">0.0%</div>'
-            '<div class="metric-label">Rapid intensification in 24h</div>'
-            '<p class="muted">No active tropical cyclones are present in the current feed.</p>'
-            "</div>"
-        )
-
-    page = f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Live Hurricane Forecasts - HazardPulse</title>
-  <meta name="description" content="Static live hurricane page built from the current tropical cyclone feed and HazardPulse rapid-intensification model output.">
-  <meta name="theme-color" content="#f6f9ff">
-  <link rel="canonical" href="{PRIMARY_DOMAIN}/live/hurricane/">
-  <script src="/assets/site-shell.js?v=2"></script>
-  <link rel="stylesheet" href="/assets/styles.css?v=9">
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="Live Hurricane Forecasts - HazardPulse">
-  <meta property="og:description" content="Static live hurricane page built from the current tropical cyclone feed and HazardPulse rapid-intensification model output.">
-  <meta property="og:url" content="{PRIMARY_DOMAIN}/live/hurricane/">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Live Hurricane Forecasts - HazardPulse">
-  <meta name="twitter:description" content="Static live hurricane page built from the current tropical cyclone feed and HazardPulse rapid-intensification model output.">
-  <script type="application/ld+json">
-  {{
-    "@context": "https://schema.org",
-    "@type": "Dataset",
-    "name": "HazardPulse Live Hurricane Forecasts",
-    "url": "{PRIMARY_DOMAIN}/live/hurricane/",
-    "description": "Static live hurricane page built from the current tropical cyclone feed and HazardPulse rapid-intensification model output."
-  }}
-  </script>
-  <script type="speculationrules">
-  {{
-    "prefetch": [
-      {{ "source": "list", "urls": ["/", "/live/", "/live/earthquake/", "/live/tornado/", "/evidence/", "/verification/"] }}
-    ]
-  }}
-  </script>
-</head>
-<body>
-  <div class="live-bar"></div>
-  <div class="emergency-banner" role="alert" aria-live="assertive"></div>
-  <a class="skip-link" href="#main">Skip to content</a>
-  <header class="topbar" role="banner">
-    <div class="container topbar-inner">
-      <a href="/" class="brand" aria-label="HazardPulse home">
-        <img src="/assets/hp-logo.png" alt="" class="brand-logo" width="30" height="30">
-        HazardPulse
-      </a>
-      <input type="checkbox" id="nav-toggle" class="nav-hamburger-input" aria-label="Toggle navigation">
-      <label for="nav-toggle" class="nav-hamburger" aria-hidden="true">
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-      </label>
-      <nav class="nav" aria-label="Primary navigation">
-        <div class="nav-dropdown">
-          <a href="/live/" aria-current="page">Live</a>
-          <div class="nav-dropdown-menu">
-            <a href="/live/earthquake/"><span class="hazard-dot eq"></span> Earthquake</a>
-            <a href="/live/hurricane/"><span class="hazard-dot hu"></span> Hurricane</a>
-            <a href="/live/tornado/"><span class="hazard-dot to"></span> Tornado</a>
-          </div>
-        </div>
-        <a href="/verification/">Verification</a>
-        <a href="/evidence/">Evidence</a>
-        <a href="/methods/">Methods</a>
-        <a href="/registry/">Registry</a>
-        <a href="/api/">API</a>
-      </nav>
-      <div class="theme-switch">
-        <input id="theme-toggle" class="theme-toggle" type="checkbox" aria-label="Switch to dark mode">
-        <label for="theme-toggle">Dark</label>
-      </div>
-    </div>
-  </header>
-  <main id="main" class="container">
-    <section class="hero">
-      <div class="eyebrow">Hurricane live page</div>
-      <h1>Current tropical cyclone view</h1>
-      <p class="subtitle">
-        This page is rendered from the current tropical cyclone feed. When there are no active storms,
-        it says so plainly instead of showing synthetic examples.
-      </p>
-      <p class="muted">Updated {_esc(_format_utc_z(updated_at))} &middot; Model: {_esc(storms.get('model_version') or 'unknown')} &middot; Independent hazard intelligence platform</p>
-    </section>
-    <section class="section">
-      <div class="grid">
-        <div class="col-4">
-          {summary_html}
-        </div>
-        <div class="card col-8">
-          <h2 style="margin-top:0;">Active tropical systems</h2>
-          {storms_html}
-          <p class="muted" style="margin-top:12px;">Where the RI number comes from: {_esc(storms.get('ri_sources_note') or 'HazardPulse v8.2 in every basin.')}</p>
-          <p class="muted" style="margin-top:12px;">Source feed: <a href="/data/live-storms.json">/data/live-storms.json</a>. Always follow official advisories from the National Hurricane Center and local authorities.</p>
-        </div>
-      </div>
-    </section>
-  </main>
-  <footer class="footer" role="contentinfo">
-    <div class="container footer-inner">
-      <div class="footer-col">
-        <h4>Platform</h4>
-        <a href="/live/">Live forecasts</a>
-        <a href="/verification/">Verification</a>
-        <a href="/evidence/">Evidence</a>
-        <a href="/methods/">Methods</a>
-      </div>
-      <div class="footer-col">
-        <h4>Data</h4>
-        <a href="/registry/">Model registry</a>
-        <a href="/api/">API contracts</a>
-        <a href="/ops/status/">System status</a>
-        <a href="/feed.xml">RSS feed</a>
-      </div>
-      <div class="footer-col">
-        <h4>Legal</h4>
-        <a href="/legal/disclaimer/">Disclaimer</a>
-        <a href="/COMMERCIAL_LICENSE.md">Commercial License</a>
-      </div>
-      <p class="footer-disclaimer">
-        Independent hazard intelligence platform. Always follow official guidance from the NHC, JTWC, WMO RSMCs, and local emergency authorities.
-      </p>
-      <p class="footer-build">Static-first HTML &middot; Live data under <code>/data</code> &middot; Edge geolocation by Cloudflare</p>
-    </div>
-  </footer>
-</body>
-</html>
-"""
-    live_hurricane_path = DIST / "live" / "hurricane" / "index.html"
-    live_hurricane_path.parent.mkdir(parents=True, exist_ok=True)
-    live_hurricane_path.write_text(page, encoding="utf-8")
-
-
-def _write_sitemap_and_feed(pulse: dict) -> None:
-    updated_at = _parse_utc(pulse.get("updated_at")) or dt.datetime.now(dt.timezone.utc)
-    lastmod = updated_at.strftime("%Y-%m-%d")
-
-    sitemap_lines = [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    ]
-    for route, changefreq, priority in ROUTES:
-        sitemap_lines.append(
-            f"  <url><loc>{PRIMARY_DOMAIN}{route}</loc><lastmod>{lastmod}</lastmod><changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>"
-        )
-    sitemap_lines.append("</urlset>")
-    SITEMAP_PATH.write_text("\n".join(sitemap_lines) + "\n", encoding="utf-8")
-
-    hazard_map = {hazard.get("key"): hazard for hazard in pulse.get("hazards", [])}
-    summary = (
-        f"Earthquake {_pct(hazard_map.get('eq', {}).get('probability', 0))}, "
-        f"Hurricane {_pct(hazard_map.get('hu', {}).get('probability', 0))}, "
-        f"Tornado {_pct(hazard_map.get('to', {}).get('probability', 0))}."
-    )
-    feed_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>HazardPulse Updates</title>
-    <link>{PRIMARY_DOMAIN}/</link>
-    <description>Current publish-cycle updates from the live HazardPulse surface</description>
-    <language>en-us</language>
-    <item>
-      <title>HazardPulse publish cycle {updated_at.strftime('%Y-%m-%d %H:%M UTC')}</title>
-      <link>{PRIMARY_DOMAIN}/</link>
-      <guid>hazardpulse-publish-{updated_at.strftime('%Y%m%d%H%M')}</guid>
-      <pubDate>{_format_http_date(updated_at)}</pubDate>
-      <description>{_esc(summary)}</description>
-    </item>
-  </channel>
-</rss>
-"""
-    FEED_PATH.write_text(feed_xml, encoding="utf-8")
-
-
-def _normalize_html_accessibility_labels() -> None:
-    for html_path in DIST.rglob("*.html"):
-        text = html_path.read_text(encoding="utf-8")
-        normalized = text.replace(
-            'aria-label="Switch to light mode"',
-            'aria-label="Switch to dark mode"',
-        )
-        if normalized != text:
-            html_path.write_text(normalized, encoding="utf-8")
+    changed = site_build.build_site(DIST, ROOT)
+    if changed:
+        print(f"  Site: {len(changed)} files re-rendered")
+    return changed
 
 
 def _publish_signing_key() -> None:
@@ -2424,13 +1529,9 @@ def build_site_artifacts() -> dict:
             "decisions": gate_decisions,
         },
     )
-    _render_live_hurricane_page()
-    _render_evidence_page(pulse, entries, envelopes, gate_decisions, replay_index)
-    _render_verification_page(verification_summary)
-    _write_sitemap_and_feed(pulse)
-    _render_cross_hazard_pages()
-    _render_model_evidence_blocks()
-    _normalize_html_accessibility_labels()
+    if _stamp_pulse_from_records(pulse, gate_decisions):
+        _write_json(LIVE_PULSE_PATH, pulse)
+    _render_site()
 
     return {
         "pulse": pulse,
@@ -2440,55 +1541,6 @@ def build_site_artifacts() -> dict:
         "gate_decisions": gate_decisions,
         "replay_index": replay_index,
     }
-
-
-def _render_model_evidence_blocks() -> None:
-    """The methods / registry / tornado-verification pages' model numbers, re-rendered from the
-    results files bound to each SERVED artifact (hazardpulse.verification.evidence_pages) -- they
-    were typed by hand until 2026-10 and had drifted to five different superseded models."""
-    from hazardpulse.verification import evidence_pages, served_evidence
-
-    present = [rel for rel in evidence_pages.BLOCKS if (DIST / rel).exists()]
-    if not present:                      # a site tree without the evidence pages (e.g. a test build)
-        print("  Model evidence: no evidence pages under this site tree; nothing to re-render")
-        return
-    if len(present) != len(evidence_pages.BLOCKS):
-        missing = sorted(set(evidence_pages.BLOCKS) - set(present))
-        raise FileNotFoundError(f"evidence pages missing under {DIST}: {missing}")
-    errors: list[str] = []
-    changed = evidence_pages.render_pages(DIST, ev=served_evidence.all_evidence(errors=errors))
-    for e in errors:
-        print(f"  Warning: model evidence not bound ({e}); the page says so instead of quoting it")
-    if changed:
-        print(f"  Re-rendered model evidence on: {', '.join(changed)}")
-
-
-def _render_cross_hazard_pages() -> None:
-    """Re-render the pages that summarise ALL hazards (homepage, /live/) from the artifacts.
-
-    Their renderer lives in the tornado scorer, so until 2026-10 only a tornado cycle
-    refreshed them: an earthquake or hurricane cycle advanced live-pulse.json while
-    dist/index.html kept the previous forecast -- aedf08cd1 published
-    eq_fcst_20261001_2200 (4.5%) while the homepage still showed eq_fcst_20261001_1300
-    (4.6%), and test_live_earthquake_forecast_references_existing_replay had failed on
-    every push since 2026-07-31. (The regex id-rewrite added then,
-    sync_homepage_forecast_refs, ran only from this file's __main__, which no workflow
-    calls -- and it would have stamped the new id onto the old numbers.)
-
-    Every scorer calls build_site_artifacts() before committing dist/, after the pulse is
-    final, so rendering here makes every commit's cross-hazard pages agree with its
-    live-pulse.json whichever hazard produced it. The render reads only published
-    artifacts, so it is the same page whichever scorer runs it.
-    """
-    import sys
-
-    scripts_dir = str(Path(__file__).resolve().parent)
-    if scripts_dir not in sys.path:
-        sys.path.insert(0, scripts_dir)
-    # Lazy import: the renderer's module is the tornado scorer, which imports this module.
-    import fetch_and_score_tornado as site_pages
-
-    site_pages.render_cross_hazard_pages_from_artifacts()
 
 
 def build_verification_rollups() -> dict:
@@ -2506,11 +1558,10 @@ def build_verification_rollups() -> dict:
     _REPLAY_READ_CACHE.clear()
     pulse = _read_json(LIVE_PULSE_PATH, {"updated_at": None, "hazards": []})
     summary = _build_verification_summary(pulse)
-    _render_verification_page(summary)
-    # the prospective summaries this workflow just rewrote also feed the model-evidence blocks
-    # (e.g. a challenger's error budget and matured count); re-render them in the same commit, or
-    # main stays inconsistent with its own results until some other scorer runs a full build
-    _render_model_evidence_blocks()
+    # the prospective summaries this workflow just rewrote feed the track record and the model-evidence
+    # blocks (e.g. a challenger's error budget and matured count); re-render the site in the same commit,
+    # or main stays inconsistent with its own results until some other scorer runs a full build
+    _render_site()
     return summary
 
 
@@ -2530,7 +1581,7 @@ def main(argv: list[str] | None = None) -> int:
         summary = build_verification_rollups()
     else:
         summary = build_site_artifacts()["verification_summary"]
-        print("Built HazardPulse evidence, replay, sitemap, feed, homepage and live overview.")
+        print("Built HazardPulse evidence, replay index, verification summary and every page.")
     for item in summary.get("hazards", []):
         storage = item.get("forecast_storage", {})
         print(
