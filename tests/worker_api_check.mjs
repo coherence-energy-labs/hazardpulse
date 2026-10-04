@@ -353,6 +353,11 @@ assertHtmlSecurityHeaders(missingResponse, 404, "no-store");
 assert.equal(missingResponse.headers.get("X-Robots-Tag"), "noindex, nofollow");
 assert.match(await missingResponse.text(), /Page not found/);
 
+// the API documentation page is a page, not an API route (it 404ed once pages ran through the Worker)
+const apiDocs = await worker.fetch(new Request("https://hazardpulse.com/api/"), env);
+assertHtmlSecurityHeaders(apiDocs);
+assert.match(await apiDocs.text(), /Every forecast, as data/);
+
 const unknownApiResponse = await worker.fetch(
   new Request("https://hazardpulse.com/api/v1/unknown"),
   env

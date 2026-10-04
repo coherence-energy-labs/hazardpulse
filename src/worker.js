@@ -875,7 +875,8 @@ export default {
       );
     }
 
-    if (pathname.startsWith("/api/")) {
+    // /api/ itself is the API's documentation page; everything below it is the API
+    if (pathname.startsWith("/api/") && pathname !== "/api/" && pathname !== "/api/index.html") {
       const apiResponse = await handleApiRequest(request, env);
       return apiResponse || errorEnvelope("not_found", "Unknown API endpoint.");
     }
