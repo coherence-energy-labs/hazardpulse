@@ -118,6 +118,7 @@ function assertHtmlSecurityHeaders(
 
 const homeResponse = await worker.fetch(new Request("https://hazardpulse.com/"), env);
 assertHtmlSecurityHeaders(homeResponse);
+const homeCsp = homeResponse.headers.get("Content-Security-Policy") || "";
 assert.match(await homeResponse.text(), /HazardPulse/);
 
 const siteShellResponse = await worker.fetch(
@@ -175,20 +176,7 @@ assert.equal(
 );
 
 const invalidGeo = workerTest.normalizeGeo({ latitude: "0", longitude: "0" });
-const invalidBodyAttrs = new Map();
-new workerTest.BodyHandler(invalidGeo, {
-  alertLevel: "none",
-  nearest: null,
-  nearestDist: null,
-}).element({
-  setAttribute(name, value) {
-    invalidBodyAttrs.set(name, value);
-  },
-});
-assert.equal(invalidBodyAttrs.get("data-geo-valid"), "false");
-assert.equal(invalidBodyAttrs.get("data-lat"), "");
-assert.equal(invalidBodyAttrs.get("data-lon"), "");
-assert.match(invalidBodyAttrs.get("style") || "", /--user-x:-9999px/);
+assert.equal(invalidGeo.isReliable, false);
 
 const validGeo = workerTest.normalizeGeo({
   latitude: "40.7128",
@@ -200,34 +188,81 @@ const validGeo = workerTest.normalizeGeo({
   continent: "NA",
 });
 
-const markerAttrs = new Map();
-new workerTest.UserMarkerHandler(validGeo).element({
-  setAttribute(name, value) {
-    markerAttrs.set(name, value);
-  },
-});
-assert.match(markerAttrs.get("transform") || "", /^translate\(\d+\.\d \d+\.\d\)$/);
-assert.match(markerAttrs.get("aria-label") || "", /Your approximate location/);
+function attrs(handler, initial = {}) {
+  const set = new Map();
+  handler.element({
+    getAttribute: (name) => (name in initial ? initial[name] : null),
+    setAttribute: (name, value) => set.set(name, value),
+  });
+  return set;
+}
 
-const toggleAttrs = new Map();
-new workerTest.ThemeToggleHandler("dark").element({
-  setAttribute(name, value) {
-    toggleAttrs.set(name, value);
-  },
-});
-assert.equal(toggleAttrs.get("checked"), "checked");
-assert.equal(toggleAttrs.get("aria-label"), "Switch to light mode");
+// the theme reaches <html> before first paint; the toggle reports its state
+assert.equal(attrs(new workerTest.ThemeRootHandler("dark")).get("data-theme"), "dark");
+assert.equal(attrs(new workerTest.ThemeRootHandler(null)).has("data-theme"), false);
+const toggle = attrs(new workerTest.ThemeToggleHandler("dark"));
+assert.equal(toggle.get("aria-pressed"), "true");
+assert.equal(toggle.get("aria-label"), "Switch to light theme");
+assert.equal(attrs(new workerTest.ThemeToggleHandler("light")).get("aria-pressed"), "false");
 
-let unavailableAreaHtml = "";
-new workerTest.YourAreaHandler(
-  { alertLevel: "none", nearest: null, nearestDist: null },
-  invalidGeo
-).element({
-  setInnerContent(html) {
-    unavailableAreaHtml = html;
-  },
+// the visitor marker uses the projection carried by the map's own marker element
+const worldProj = { "data-lon0": "-180", "data-lat0": "80", "data-sx": "2.66667", "data-sy": "2.66667" };
+const marker = attrs(new workerTest.UserMarkerHandler(validGeo), worldProj);
+const m = (marker.get("transform") || "").match(/^translate\(([\d.]+) ([\d.]+)\)$/);
+assert.ok(m, marker.get("transform"));
+assert.ok(Math.abs(Number(m[1]) - (-74.006 + 180) * 2.66667) < 0.2);
+assert.ok(Math.abs(Number(m[2]) - (80 - 40.7128) * 2.66667) < 0.2);
+assert.match(marker.get("aria-label") || "", /Your approximate location/);
+assert.equal(attrs(new workerTest.UserMarkerHandler(invalidGeo), worldProj).has("transform"), false);
+assert.equal(attrs(new workerTest.UserMarkerHandler(validGeo), {}).has("transform"), false);   // no projection, no guess
+
+// the visitor's own earthquake cell is the published grid value for that cell
+const replay = {
+  forecast_domain: { lat_min: -60, lon_min: -180, dlat: 2, dlon: 2, n_lat: 65, n_lon: 180 },
+  probability_grid: Array.from({ length: 65 * 180 }, (_, i) => (i === 50 * 180 + 52 ? "0.0123" : "0.0001")).join(","),
+};
+const cell = workerTest.earthquakeCell(40.7128, -74.006, replay);
+assert.equal(cell.p, 0.0123);
+assert.equal(cell.lat, 41);
+assert.equal(cell.lon, -75);   // the cell spanning 76W-74W
+assert.equal(workerTest.earthquakeCell(75, 10, replay).outside, true);
+
+// the banner is factual, hazard-appropriate, and never raised by an earthquake number
+const quiet = workerTest.summarizeArea(validGeo, { eq: replay, eqGate: "pass", storms: [], tornadoes: [] });
+assert.equal(quiet.banner, null);
+const highEq = { ...replay, probability_grid: replay.probability_grid.replace("0.0123", "0.9") };
+assert.equal(workerTest.summarizeArea(validGeo, { eq: highEq, eqGate: "pass", storms: [], tornadoes: [] }).banner, null);
+const stormArea = workerTest.summarizeArea(validGeo, {
+  eq: replay, eqGate: "pass", tornadoes: [],
+  storms: [{ storm_id: "AL092026", storm_name: "IRENE", basin: "AL", category: "Category 1", lat: 39.0, lon: -72.0, ri_probability: 0.2 }],
 });
-assert.match(unavailableAreaHtml, /Approximate location is currently unavailable/);
+assert.equal(stormArea.banner.kind, "hurricane");
+let bannerHtml = "";
+new workerTest.EmergencyBannerHandler(stormArea).element({ setInnerContent: (h) => { bannerHtml = h; } });
+assert.match(bannerHtml, /Irene \(Category 1\) is about \d+ km \(\d+ mi\) [NESW]+ of your approximate location/);
+assert.match(bannerHtml, /National Hurricane Center/);
+assert.doesNotMatch(bannerHtml, /style=|imminent|take action/i);
+const farStorm = workerTest.summarizeArea(validGeo, {
+  eq: replay, eqGate: "pass", tornadoes: [],
+  storms: [{ storm_id: "EP152026", storm_name: "NOLO", basin: "EP", lat: 23.5, lon: -175.9, ri_probability: 0.9 }],
+});
+assert.equal(farStorm.banner, null);
+assert.deepEqual(workerTest.officialCenter({ basin: "EP", lon: -175.9 })[0], "Central Pacific Hurricane Center");
+const okc = workerTest.normalizeGeo({ latitude: "35.4676", longitude: "-97.5164", city: "Oklahoma City", country: "US" });
+const twister = (p, active) => ({ storm_id: "1", lat: 35.5, lon: -97.6, tornado_probability: p, v3: { nws_warning: { active } } });
+assert.equal(workerTest.summarizeArea(okc, { eq: null, storms: [], tornadoes: [twister(0.02, false)] }).banner, null);
+assert.equal(workerTest.summarizeArea(okc, { eq: null, storms: [], tornadoes: [twister(0.02, true)] }).banner.kind, "tornado");
+assert.equal(workerTest.summarizeArea(okc, { eq: null, storms: [], tornadoes: [twister(0.25, false)] }).banner.kind, "tornado");
+
+// "Near you": empty (so hidden) without a reliable location; facts, not advice, with one
+let areaHtml = "unset";
+new workerTest.YourAreaHandler({ reliable: false }, invalidGeo).element({ setInnerContent: (h) => { areaHtml = h; } });
+assert.equal(areaHtml, "unset");
+new workerTest.YourAreaHandler(stormArea, validGeo).element({ setInnerContent: (h) => { areaHtml = h; } });
+assert.match(areaHtml, /New York, US/);
+assert.match(areaHtml, /chance of a magnitude 6\+ earthquake in your 2&deg; grid cell/);
+assert.match(areaHtml, /<span class="chance p2">1\.2%<\/span>/);
+assert.doesNotMatch(areaHtml, /style=/);
 
 await expectJsonRoute("/api/v1/live/pulse", (data) => {
   assert.ok(Array.isArray(data.hazards));
@@ -300,7 +335,7 @@ const missingResponse = await worker.fetch(
 );
 assertHtmlSecurityHeaders(missingResponse, 404, "no-store");
 assert.equal(missingResponse.headers.get("X-Robots-Tag"), "noindex, nofollow");
-assert.match(await missingResponse.text(), /404 - Page not found|Not found/);
+assert.match(await missingResponse.text(), /Page not found/);
 
 const unknownApiResponse = await worker.fetch(
   new Request("https://hazardpulse.com/api/v1/unknown"),
@@ -310,5 +345,21 @@ assert.equal(unknownApiResponse.status, 404);
 const unknownApiJson = await unknownApiResponse.json();
 assert.equal(unknownApiJson.error.code, "not_found");
 assert.ok(unknownApiJson.error.trace_id);
+
+// the API's rate limit answers in the same envelope as every other error
+let limited = null;
+for (let i = 0; i < 130 && !limited; i += 1) {
+  const r = await worker.fetch(new Request("https://hazardpulse.com/api/v1/ops/status",
+    { headers: { "CF-Connecting-IP": "203.0.113.9" } }), env);
+  if (r.status === 429) limited = r;
+}
+assert.ok(limited, "no 429 after 130 requests from one address");
+const limitedJson = await limited.json();
+assert.equal(limitedJson.error.code, "rate_limited");
+assert.ok(limitedJson.error.trace_id);
+
+// the HTML CSP allows nothing from another origin
+assert.doesNotMatch(homeCsp, /https?:\/\//);
+assert.doesNotMatch(homeCsp, /unsafe-inline/);
 
 console.log("worker api smoke checks passed");

@@ -80,7 +80,24 @@ def _n(x: Any) -> str:
 
 
 def _kv(label: str, value: str) -> str:
-    return f'<div class="kv"><span>{label}</span><strong>{value}</strong></div>'
+    """One label/value row; a card's rows go inside ``_facts``."""
+    return f"<div><dt>{label}</dt><dd>{value}</dd></div>"
+
+
+def _facts(rows: list[str]) -> str:
+    return '<dl class="facts">\n    ' + "\n    ".join(rows) + "\n  </dl>"
+
+
+def _card(cls: str, title: str, body: str, ident: str = "") -> str:
+    idattr = f' id="{ident}"' if ident else ""
+    return f'<article class="card {cls}"{idattr}>\n  <h3>{title}</h3>\n  {body}\n</article>'
+
+
+def _table(head: list[str], rows: list[str], caption: str = "") -> str:
+    ths = "".join(f'<th scope="col">{h}</th>' for h in head)
+    cap = f"<caption>{caption}</caption>" if caption else ""
+    return (f'<div class="table-wrap" tabindex="0" role="region" aria-label="{_e(re.sub("<[^>]+>", "", caption or head[0]))}">'
+            f"<table>{cap}<thead><tr>{ths}</tr></thead><tbody>\n" + "\n".join(rows) + "\n</tbody></table></div>")
 
 
 def _doc(path: str) -> str:
@@ -115,42 +132,45 @@ def methods_simple(ev: dict) -> str:
         t = eq["test"]
         replaced = eq.get("replaced_ig_per_target") or {}
         g1 = eq.get("gear1")
-        out.append(
-            '<div class="card col-4 hazard-eq">\n  <h3>Earthquake</h3>\n  <p class="muted">'
-            f"The chance of a magnitude {eq['target_magnitude_min']:.0f}+ earthquake in each 2&deg; cell of the globe "
-            f"over the next {eq['horizon_days']:.0f} days, from where quakes happen in the long run, how they cluster "
-            "after recent ones, and boosted trees on both"
-            + (", plus a published global model of where the crust is straining (GEAR1)" if g1 else "")
+        out.append(_card(
+            "hz-eq", "Earthquake",
+            f"<p>The chance of a magnitude {eq['target_magnitude_min']:.0f}+ earthquake in each 2&deg; cell of the "
+            f"globe over the next {eq['horizon_days']:.0f} days, from where earthquakes happen in the long run, how "
+            "they cluster after recent ones, and boosted trees on both"
+            + (", plus GEAR1, a published global model of where the crust is straining" if g1 else "")
             + (f". Scored on {_when(t)} (a second look at those years): " if t.get("second_read")
                else f". Tested once on {_when(t)}: ")
-            + f"{_signed(t['ig_per_target']['value'], 2)} nats of information per quake over a uniform map"
+            + f"{_signed(t['ig_per_target']['value'], 2)} nats of information per earthquake over a uniform map"
             + (f" ({_e(eq.get('replaced_name', 'the model it replaced'))}: {_signed(replaced.get('value'), 2)})"
                if replaced.get("value") is not None else "")
-            + ". Earthquakes cannot be predicted; this ranks where the odds are higher.</p>\n</div>")
+            + ". Earthquakes cannot be predicted; this ranks where the odds are higher.</p>"))
     else:
-        out.append('<div class="card col-4 hazard-eq">\n  <h3>Earthquake</h3>\n  <p class="muted">'
-                   "No final test is bound to the served earthquake model in this repository.</p>\n</div>")
+        out.append(_card("hz-eq", "Earthquake",
+                         "<p>No final test is bound to the served earthquake model in this repository.</p>"))
     if hu:
         t = hu["test"]
         ob = (hu.get("other_basins") or {}).get("test") or {}
         same = hu.get("v8_2_same_cases") or {}
-        out.append(
-            '<div class="card col-4 hazard-hu">\n  <h3>Hurricane</h3>\n  <p class="muted">'
-            "Chance of rapid intensification (a 30+ knot wind increase in 24 hours). For storms the National "
-            f"Hurricane Center tracks we serve {_e(hu['candidate_name'].split(' (')[0])}, which beat every alternative "
-            f"in a pre-registered test on {_when(t)}: AUC {_f(t['auc'])}"
-            + (f" vs our own model&rsquo;s {_f(same.get('auc'))} on the same cycles" if same.get("auc") is not None else "")
+        beaten = [_e(c["against"]) for c in hu.get("claims", []) if c["better"]]
+        out.append(_card(
+            "hz-hu", "Hurricane",
+            "<p>The chance of rapid intensification: maximum sustained winds rising 30 knots or more in 24 hours. For "
+            f"storms the National Hurricane Center covers we publish {_e(hu['candidate_name'].split(' (')[0])}, which "
+            + (f"beat {_join(beaten)} " if beaten else "was chosen ")
+            + f"in a test written down in advance and run once on {_when(t)}: AUC {_f(t['auc'])}"
+            + (f", against {_f(same.get('auc'))} for our v8.2 model on the same cycles" if same.get("auc") is not None else "")
             + "."
-            + (f" Everywhere else, our v8.2 model (AUC {_f(ob.get('auc'))} on held-out {_when(ob)} cases)."
+            + (f" Everywhere else we publish v8.2 (AUC {_f(ob.get('auc'))} on held-out {_when(ob)} cases)."
                if ob.get("auc") is not None else "")
             + " Each storm says which."
-            + (f" Our new model beat DTOPS in every season tested so far (log loss {_f(hu['ours']['dev']['log_loss'])} "
-               f"vs {_f(hu['ours']['dev']['dtops_log_loss'])} over 2022&ndash;2025) and is shown beside it while a "
-               "pre-registered prospective test confirms it." if hu.get("ours") else "")
-            + "</p>\n</div>")
+            + (f" Our newer model, v10.1, scored better than DTOPS over 2022&ndash;2025, each season forecast only "
+               f"from earlier ones (log loss {_f(hu['ours']['dev']['log_loss'])} against "
+               f"{_f(hu['ours']['dev']['dtops_log_loss'])}); it is shown beside DTOPS, labelled experimental, while a "
+               "test written down in advance scores it on new forecasts." if hu.get("ours") else "")
+            + "</p>"))
     else:
-        out.append('<div class="card col-4 hazard-hu">\n  <h3>Hurricane</h3>\n  <p class="muted">'
-                   "No final test is bound to the served hurricane model in this repository.</p>\n</div>")
+        out.append(_card("hz-hu", "Hurricane",
+                         "<p>No final test is bound to the served hurricane model in this repository.</p>"))
     if to:
         t = to["test"]
         pt = ((to.get("probtor_final") or {}).get("probtor_raw") or {}).get("auc")
@@ -159,15 +179,23 @@ def methods_simple(ev: dict) -> str:
             inputs += " and the live NWS tornado-warning state"
         if to.get("inputs_use_hrrr"):
             inputs += " and the HRRR environment"
-        out.append(
-            '<div class="card col-4 hazard-to">\n  <h3>Tornado</h3>\n  <p class="muted">'
-            "Scores every thunderstorm NOAA&rsquo;s ProbSevere tracks: the chance that this storm produces a tornado "
-            f"within the next hour, from {inputs}. On every storm observation of 2025, scored once after training: "
-            f"AUC {_f(t['auc'])}" + (f" (NOAA ProbTor {_f(pt)})" if pt is not None else "") + ".</p>\n</div>")
+        out.append(_card(
+            "hz-to", "Tornado",
+            "<p>For every thunderstorm NOAA&rsquo;s ProbSevere tracks over the contiguous US, the chance that it "
+            f"produces a tornado within the next hour, from {inputs}. On every storm observation of 2025, scored once "
+            f"after every choice was fixed: AUC {_f(t['auc'])}" + (f" (NOAA ProbTor: {_f(pt)})" if pt is not None else "")
+            + ".</p>"))
     else:
-        out.append('<div class="card col-4 hazard-to">\n  <h3>Tornado</h3>\n  <p class="muted">'
-                   "No final test is bound to the served tornado model in this repository.</p>\n</div>")
+        out.append(_card("hz-to", "Tornado",
+                         "<p>No final test is bound to the served tornado model in this repository.</p>"))
     return "\n".join(out)
+
+
+def _join(items: list[str]) -> str:
+    items = [i for i in items if i]
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " and " + items[-1]
 
 
 def _gear1_sentence(g1: dict | None) -> str:
@@ -183,8 +211,7 @@ def _gear1_sentence(g1: dict | None) -> str:
 def methods_earthquake(ev: dict) -> str:
     eq = ev.get("earthquake")
     if not eq:
-        return ('<div class="card col-4 hazard-eq">\n  <h3>Earthquake</h3>\n'
-                '  <p class="muted">No final test is bound to the served earthquake model.</p>\n</div>')
+        return _card("hz-eq", "Earthquake", "<p>No final test is bound to the served earthquake model.</p>")
     t = eq["test"]
     rows = [
         _kv("Target", f"P(an M{eq['target_magnitude_min']:.1f}+ epicentre in the 2&deg; cell within "
@@ -222,15 +249,14 @@ def methods_earthquake(ev: dict) -> str:
         rows.append(_kv("Limits", f"Forecasts {_pct(abs(over), 0)} {'more' if over > 0 else 'fewer'} quakes than "
                                   f"occurred in the test period (ratio {_f(cr['value'], 2)}{_ci(cr.get('ci'), 2)}); "
                                   "live catalogs are preliminary in the first days after a large quake"))
-    body = "\n  ".join(rows)
-    return (f'<div class="card col-4 hazard-eq">\n  <h3>Earthquake ({_e(eq["model_version"])})</h3>\n  {body}\n</div>')
+    return _card("hz-eq", f'Earthquake <code>{_e(eq["model_version"])}</code>', _facts(rows), ident="earthquake-model")
 
 
 def methods_hurricane(ev: dict) -> str:
     hu = ev.get("hurricane")
     if not hu:
-        return ('<div class="card col-4 hazard-hu">\n  <h3>Hurricane RI</h3>\n'
-                '  <p class="muted">No final test is bound to the served hurricane model.</p>\n</div>')
+        return _card("hz-hu", "Hurricane rapid intensification",
+                     "<p>No final test is bound to the served hurricane model.</p>")
     t = hu["test"]
     seasons = hu.get("chosen_on_seasons") or ["?", "?"]
     better = [c["against"] for c in hu.get("claims", []) if c["better"]]
@@ -249,18 +275,21 @@ def methods_hurricane(ev: dict) -> str:
                         + " (paired 95% intervals on Brier and log loss below zero)"))
     adv = hu.get("adversary") or {}
     if adv.get("verdict"):
-        rows.append(_kv("Independent attack", _e(adv["verdict"])))
-    out = [f'<div class="card col-4 hazard-hu">\n  <h3>Hurricane RI, NHC basins ({_e(hu["model_version"])})</h3>\n  '
-           + "\n  ".join(rows) + "\n</div>"]
+        verdict = str(adv["verdict"])
+        rows.append(_kv("Independent review",
+                        ("An adversarial re-check, by a reviewer that did not build the test, confirmed the result"
+                         if verdict.upper().startswith("CONFIRMED") else _e(verdict[:1].upper() + verdict[1:].lower()))
+                        + (f" ({_e(verdict.split(',', 1)[1].strip())})" if "," in verdict else "")))
+    out = [_card("hz-hu", f'Hurricane, NHC areas: NOAA DTOPS <code>{_e(hu["model_version"])}</code>', _facts(rows),
+                 ident="hurricane-model")]
     ours = hu.get("ours")
     if ours:
         out.append(_ours_hurricane_card(ours))
     ob = hu.get("other_basins")
     if ob:
         o = ob["test"]
-        out.append(
-            '<div class="card col-4 hazard-hu">\n  <h3>Hurricane RI, other basins (hurricane_ri_v8_2)</h3>\n  '
-            + "\n  ".join([
+        out.append(_card(
+            "hz-hu", "Hurricane, other basins: HazardPulse v8.2 <code>hurricane_ri_v8_2</code>", _facts([
                 _kv("Architecture", "Histogram-GBT (depth 3 + 4) + L2 logistic + bagged logistic ensemble, "
                                     "Newton-calibrated"),
                 _kv("Key inputs", "Analysis intensity and pressure (CARQ) and their 6&ndash;24 h tendencies, "
@@ -271,7 +300,7 @@ def methods_hurricane(ev: dict) -> str:
                        if (hu.get("v8_2_same_cases") or {}).get("auc") is not None else "")),
                 _kv("Used for", "West Pacific, Indian Ocean and Southern Hemisphere storms (no public RI guidance), "
                                 "and NHC cycles without SHIPS text"),
-            ]) + "\n</div>")
+            ])))
     return "\n\n".join(out)
 
 
@@ -335,13 +364,14 @@ def _ours_challenger_lines(ch: dict | None) -> list[tuple[str, str]]:
            if s26.get("log_loss") is not None and s26.get("champion_log_loss") is not None else "")
     what = ch.get("what") or ("the same inputs, never lowering the odds when the guidance or "
                               "NOAA&rsquo;s probability rises")
-    return [(f"Challenger in shadow ({_e(ch.get('label') or '')})".replace(" ()", ""),
-             f"{_e(ch['model_version'])}: {what}. 2022&ndash;2025 against {against}: log loss "
+    level_txt = (f" (confidence level {level.replace(' at ', '')})" if level else "")
+    return [(f"Variant under test ({_e(ch.get('label') or '')})".replace(" ()", ""),
+             f"<code>{_e(ch['model_version'])}</code>: {what}. 2022&ndash;2025 against {against}: log loss "
              f"{_f(d['log_loss'], 4)} vs {_f(d['champion_log_loss'], 4)}{_ci(ci, 4, signed=True)}, four-threshold "
              f"Brier {_f(d['brier4'], 4)} vs {_f(d['champion_brier4'], 4)}; "
              + ("better at 95%" if settled else "a gain whose interval still includes zero")
-             + f"{y26}. Scored live with its own prospective test{level}{live}; it replaces the "
-             "shown model only by the rule written before it scored a cycle")]
+             + f"{y26}. Tested live under its own rule, written before it scored a forecast{level_txt}{live}; it "
+             "replaces the shown model only if it meets that rule")]
 
 
 def ours_hurricane_lines(ours: dict) -> list[tuple[str, str]]:
@@ -353,7 +383,7 @@ def ours_hurricane_lines(ours: dict) -> list[tuple[str, str]]:
                        "early intensity guidance (NOAA&rsquo;s statistical models, the hurricane and global models, "
                        "NHC&rsquo;s consensus aids), NOAA&rsquo;s RI probabilities at six thresholds and the official "
                        "forecast; NOAA&rsquo;s DTOPS wherever that guidance is missing"),
-        ("Each season 2022&ndash;2025", f"predicted from earlier seasons only: log loss {_f(d['log_loss'])} vs DTOPS "
+        ("2022&ndash;2025, each season forecast only from earlier ones", f"log loss {_f(d['log_loss'])} vs DTOPS "
                                        f"{_f(d['dtops_log_loss'])} (paired by storm{_ci(d.get('d_log_loss_ci'), signed=True)})"
                                        + (f"; over DTOPS&rsquo;s four 24-h thresholds, Brier {_f(mt.get('ours'))} vs "
                                           f"{_f(mt.get('dtops'))}{_ci(mt.get('d_ci'), signed=True)}" if mt else "")),
@@ -371,9 +401,9 @@ def ours_hurricane_lines(ours: dict) -> list[tuple[str, str]]:
 
 
 def _ours_hurricane_card(ours: dict) -> str:
-    rows = "\n  ".join(_kv(k, v) for k, v in ours_hurricane_lines(ours))
-    return (f'<div class="card col-4 hazard-hu">\n  <h3>Hurricane RI, our model ({_e(ours["model_version"])}, '
-            f'experimental)</h3>\n  {rows}\n</div>')
+    rows = [_kv(k, v) for k, v in ours_hurricane_lines(ours)]
+    return _card("hz-hu", f'Hurricane, our model (experimental): v10.1 <code>{_e(ours["model_version"])}</code>',
+                 _facts(rows), ident="hurricane-ours")
 
 
 def _tornado_inputs_text(to: dict) -> str:
@@ -422,12 +452,12 @@ def _nws_sentence(to: dict) -> str | None:
 def methods_tornado(ev: dict) -> str:
     to = ev.get("tornado")
     if not to:
-        return ('<div class="card col-4 hazard-to">\n  <h3>Tornado storm-object</h3>\n'
-                '  <p class="muted">No final test is bound to the served tornado model.</p>\n</div>')
+        return _card("hz-to", "Tornado", "<p>No final test is bound to the served tornado model.</p>")
     t = to["test"]
     products = [_PRODUCT_NAMES[k] for k in ("p30", "p90", "p_ef2") if k in (to.get("products") or {})]
+    event = _e(to["event"]).replace("THIS", "this")
     rows = [
-        _kv("Target", _e(to["event"][0].upper() + to["event"][1:])
+        _kv("Target", event[0].upper() + event[1:]
             + (f" (also served: {', '.join(_e(p.lower()) for p in products)})" if products else "")),
         _kv("Architecture", f"LightGBM ({_n(to['n_trees'])} trees), exported to a JSON payload scored in pure NumPy; "
                             "Platt calibration on leave-one-year-out scores"
@@ -450,9 +480,9 @@ def methods_tornado(ev: dict) -> str:
             rows.append(_kv("Coherence field", f"Tested on top of the HRRR fields: {_signed(nu['delta_auc'], 4)}"
                                                f"{_ci(nu['delta_auc_ci'], 4, signed=True)} validation AUC (paired); "
                                                "no lift, so not served"))
-    rows.append(_kv("Status", "Live"))
-    return (f'<div class="card col-4 hazard-to">\n  <h3>Tornado storm-object ({_e(to["model_version"])})</h3>\n  '
-            + "\n  ".join(rows) + "\n</div>")
+    rows.append(_kv("Status", "Published"))
+    return _card("hz-to", f'Tornado, storm by storm <code>{_e(to["model_version"])}</code>', _facts(rows),
+                 ident="tornado-model")
 
 
 # ---------------------------------------------------------------------------
@@ -464,35 +494,39 @@ def registry_simple(ev: dict) -> str:
     cards = []
     if eq:
         t = eq["test"]
-        cards.append(('hazard-eq', "Earthquake model",
-                      f"Combines where large quakes happen in the long run with how they cluster after recent ones. "
-                      f"On {_when(t)}, scored once, it ranked a cell that went on to have an M6+ quake above one "
+        how = "a second look at those years" if t.get("second_read") else "scored once"
+        cards.append(('hz-eq', "Earthquake: S1 (C0 + GEAR1)" if eq.get("gear1") else "Earthquake",
+                      "Combines where large earthquakes happen in the long run with how they cluster after recent "
+                      + ("ones, plus GEAR1&rsquo;s long-term rate from crustal strain. " if eq.get("gear1") else "ones. ")
+                      + f"On {_when(t)} ({how}), it ranked a cell that went on to have an M6+ earthquake above one "
                       f"that did not {_pct(t['auc']['value'], 0)} of the time across the globe, and "
-                      f"{_pct(t['auc_active_cells']['value'], 0)} among cells with recent quakes, the harder question."))
+                      f"{_pct(t['auc_active_cells']['value'], 0)} among cells with recent earthquakes, the harder question."))
     if hu:
         t = hu["test"]
-        cards.append(('hazard-hu', "Hurricane model",
-                      f"For storms the National Hurricane Center tracks, we serve NOAA&rsquo;s own DTOPS guidance: in a "
-                      f"pre-registered test on the {_when(t)} season it beat every alternative, including our own "
-                      f"model, ranking a forecast cycle that went on to intensify rapidly above one that did not "
-                      f"{_pct(t['auc'], 0)} of the time."))
+        beaten = [_e(c["against"]) for c in hu.get("claims", []) if c["better"]]
+        cards.append(('hz-hu', "Hurricane: NOAA DTOPS, and v8.2 elsewhere",
+                      "For storms the National Hurricane Center covers, we publish NOAA&rsquo;s own DTOPS guidance: in a "
+                      f"test written down in advance and run once on the {_when(t)} season it "
+                      + (f"beat {_join(beaten)}, " if beaten else "")
+                      + "ranking a forecast cycle that went on to intensify rapidly above one that did not "
+                      f"{_pct(t['auc'], 0)} of the time. Elsewhere we publish our v8.2 model. Our v10.1 model is shown "
+                      "beside DTOPS, labelled experimental, while it is tested on new forecasts."))
     if to:
         t = to["test"]
-        cards.append(('hazard-to', "Tornado model (storm-level)",
-                      f"Scores every thunderstorm NOAA tracks for the chance it produces a tornado in the next hour. "
-                      f"On every storm of 2025, scored once, it ranked a storm that went on to produce a tornado above "
-                      f"one that did not {_pct(t['auc'], 0)} of the time."))
-    out = []
-    for cls, title, text in cards:
-        out.append(f'<div class="card col-6 {cls}">\n  <h3>{title}</h3>\n  <p class="muted">{text}</p>\n</div>')
-    return "\n".join(out)
+        cards.append(('hz-to', "Tornado: v3",
+                      "Scores every thunderstorm NOAA tracks over the contiguous US for the chance it produces a tornado "
+                      "in the next hour. On every storm of 2025, scored once, it ranked a storm that went on to produce "
+                      f"a tornado above one that did not {_pct(t['auc'], 0)} of the time."))
+    return "\n".join(_card(cls, title, f"<p>{text}</p>") for cls, title, text in cards)
+
+
+_STATUS_CHIP = {"published": "good", "experimental": "warn", "fallback": "neutral"}
 
 
 def _registry_row(model: str, hazard: str, status: str, test: str, auc: str, skill: str, arch: str) -> str:
-    chip = {"active": "good", "fallback": "neutral"}.get(status, "neutral")
-    return (f"<tr><td><strong>{_e(model)}</strong></td><td>{hazard}</td>"
-            f'<td><span class="chip {chip}">{status}</span></td><td>{test}</td>'
-            f'<td class="mono">{auc}</td><td class="mono">{skill}</td><td>{arch}</td></tr>')
+    return (f"<tr><td><code>{_e(model)}</code></td><td>{hazard}</td>"
+            f'<td><span class="chip {_STATUS_CHIP.get(status, "neutral")}">{status}</span></td><td>{test}</td>'
+            f'<td class="num">{auc}</td><td class="num">{skill}</td><td>{arch}</td></tr>')
 
 
 def registry_active(ev: dict) -> str:
@@ -500,85 +534,101 @@ def registry_active(ev: dict) -> str:
     eq, hu, to = ev.get("earthquake"), ev.get("hurricane"), ev.get("tornado")
     if eq:
         t = eq["test"]
-        rows.append(_registry_row(eq["model_version"], "Earthquake (30 d, M6+)", "active",
+        rows.append(_registry_row(eq["model_version"], "Earthquake (30 days, M6+)", "published",
                                   _when(t), f"{_f(t['auc']['value'])}{_ci(t['auc']['ci'])}",
                                   f"IG {_signed(t['ig_per_target']['value'], 2)} nats/quake",
-                                  "Smoothed seismicity + ETAS-style clustering + boosted trees"))
+                                  "Boosted trees on long-term seismicity and aftershock-style clustering"
+                                  + (", plus GEAR1&rsquo;s strain-rate model" if eq.get("gear1") else "")))
     if hu:
         t = hu["test"]
-        rows.append(_registry_row(hu["model_version"], "Hurricane RI (NHC basins)", "active",
+        rows.append(_registry_row(hu["model_version"], "Hurricane RI (NHC areas)", "published",
                                   _when(t), f"{_f(t['auc'])}{_ci(t['auc_ci'])}",
                                   f"BSS {_signed(t['bss'])}", "NOAA DTOPS as issued (SHIPS-RII fallback)"))
         ours = hu.get("ours")
         if ours:
             d = ours["dev"]
-            rows.append(_registry_row(ours["model_version"], "Hurricane RI (NHC basins, our model)", "experimental",
+            rows.append(_registry_row(ours["model_version"], "Hurricane RI (NHC areas, our model v10.1)", "experimental",
                                       "2022&ndash;2025 (each season out of sample)", f"{_f(d['auc'])}",
                                       f"LL {_f(d['log_loss'])} vs DTOPS {_f(d['dtops_log_loss'])}",
                                       "LightGBM exceedance curve; in prospective verification, shown beside DTOPS"))
         ob = hu.get("other_basins")
         if ob:
             o = ob["test"]
-            rows.append(_registry_row(ob["model"], "Hurricane RI (other basins)", "active",
+            rows.append(_registry_row(ob["model"], "Hurricane RI (other basins)", "published",
                                       _when(o), f"{_f(o['auc'])}{_ci(o['auc_ci'])}",
                                       f"BSS {_signed(o['bss'])}", "GBT + logistic ensemble, Newton-calibrated"))
     if to:
         t = to["test"]
-        rows.append(_registry_row(to["model_version"], "Tornado (storm, 60 min)", "active", "2025",
+        rows.append(_registry_row(to["model_version"], "Tornado within 60 min", "published", "2025",
                                   f"{_f(t['auc'])}{_ci(t['auc_ci'])}", f"BSS {_signed(t['bss'])}",
                                   f"LightGBM, {_n(to['n_trees'])} trees, {to['n_inputs']} inputs"))
         fb = to.get("fallback")
         if fb:
             ft = fb["test"]
-            rows.append(_registry_row(fb["model_version"], "Tornado (no NWS feed)", "fallback", "2025",
+            rows.append(_registry_row(fb["model_version"], "Tornado within 60 min, when the NWS feed is down", "fallback", "2025",
                                       f"{_f(ft['auc'])}{_ci(ft['auc_ci'])}", f"BSS {_signed(ft['bss'])}",
                                       f"LightGBM, {_n(fb['n_trees'])} trees, {fb['n_inputs']} inputs"))
         for key, p in (to.get("products") or {}).items():
             pt = p["test"]
-            rows.append(_registry_row(p["model_version"], _e(_PRODUCT_NAMES[key]), "active", "2025",
+            rows.append(_registry_row(p["model_version"], _e(_PRODUCT_NAMES[key]), "published", "2025",
                                       f"{_f(pt['auc'])}{_ci(pt['auc_ci'])}", f"BSS {_signed(pt['bss'])}",
                                       f"LightGBM, {_n(p['n_trees'])} trees"))
-    return "\n".join(rows)
+    return _table(["Model version", "Forecasts", "Status", "Test", "AUC [95% CI]", "Skill", "What it is"], rows,
+                  caption="Every model version that publishes a number now")
 
 
 def registry_history(ev: dict) -> str:
+    """Promotions and retirements, newest first, each reason read from the evidence of the model that
+    replaced it. Only changes with a record in this repository are listed."""
     rows = []
     eq, hu, to = ev.get("earthquake"), ev.get("hurricane"), ev.get("tornado")
 
     def row(action: str, model: str, reason: str) -> str:
-        chip = {"promote": "good", "retire": "neutral"}[action]
-        return (f'<tr><td>2026-10</td><td><span class="chip {chip}">{action}</span></td>'
-                f"<td>{_e(model)}</td><td>{reason}</td></tr>")
+        chip = {"promote": "good", "retire": "neutral", "supersede": "neutral"}[action]
+        word = {"promote": "promoted", "retire": "retired", "supersede": "superseded"}[action]
+        return (f'<tr><td>Oct 2026</td><td><span class="chip {chip}">{word}</span></td>'
+                f"<td><code>{_e(model)}</code></td><td>{reason}</td></tr>")
     if to:
         t = to["test"]
         vs = to.get("vs_probtor")
         rows.append(row("promote", to["model_version"],
-                        f"Pre-registered programme, 2025 read once: AUC {_f(t['auc'])}{_ci(t['auc_ci'])}"
-                        + (f"; vs NOAA ProbTor {_signed(vs['delta_auc'])}{_ci(vs['delta_auc_ci'], signed=True)} "
+                        f"Pre-registered programme, 2025 scored once: AUC {_f(t['auc'])}{_ci(t['auc_ci'])}"
+                        + (f"; against NOAA ProbTor {_signed(vs['delta_auc'])}{_ci(vs['delta_auc_ci'], signed=True)} "
                            "(paired by day)" if vs else "")))
         v2 = to.get("vs_v2")
         rows.append(row("retire", "tornado_gbt_v2",
-                        "Superseded by v3" + (f": on 2025, v3 &minus; v2 {_signed(v2['delta_auc'])}"
-                                               f"{_ci(v2['delta_auc_ci'], signed=True)} AUC on the same storms and event"
-                                               if v2 else "")))
+                        "Replaced by v3" + (f": on 2025, v3 &minus; v2 {_signed(v2['delta_auc'])}"
+                                             f"{_ci(v2['delta_auc_ci'], signed=True)} AUC on the same storms and event"
+                                             if v2 else "")))
         rows.append(row("retire", "hp-tornado-coherence-v1",
-                        "Its published 0.894 was measured on a 5:1-downsampled split with labels on the wrong clock "
-                        "(docs/AUDIT_2026-10-01.md)"))
+                        "Its published AUC of 0.894 was measured on a 5:1-downsampled split with labels on the wrong "
+                        "clock (docs/AUDIT_2026-10-01.md)"))
     if eq:
         t = eq["test"]
+        g1 = (eq.get("gear1") or {}).get("dev_vs_recalibrated") or {}
+        how = "a second look at" if t.get("second_read") else "scored once on"
         rows.append(row("promote", eq["model_version"],
-                        f"Pre-registered, {_when(t)} read once: "
-                        f"{_signed(t['ig_per_target']['value'], 2)} nats per quake, AUC {_f(t['auc']['value'])}"))
+                        "Adds GEAR1&rsquo;s long-term rate to C0"
+                        + (f", decided by a test written down in advance on {_e(eq['gear1'].get('decided_on', '')).replace('-', '&ndash;')}: "
+                           f"{_signed(g1['ig_per_target']['diff'])}{_ci(g1['ig_per_target']['ci'], signed=True)} nats per "
+                           "earthquake" if g1.get("ig_per_target") else "")
+                        + f"; on {_when(t)} ({how} those years) {_signed(t['ig_per_target']['value'], 2)} nats per "
+                          f"earthquake, AUC {_f(t['auc']['value'])}"))
         replaced = eq.get("replaced_ig_per_target")
-        if replaced and replaced.get("value") is not None:
-            rows.append(row("retire", "eq_coherence_v1_0",
-                            f"{_signed(replaced['value'], 2)} nats per quake on the same test (worse than a uniform map)"))
+        if replaced and replaced.get("value") is not None and eq.get("base_model_version"):
+            rows.append(row("supersede", eq["base_model_version"],
+                            f"Now the base of the published model rather than published itself; it scored "
+                            f"{_signed(replaced['value'], 2)} nats per earthquake on the same test"))
+        rows.append(row("retire", "eq_coherence_v1_0",
+                        "Replaced by the pre-registered operational forecast (docs/EARTHQUAKE_FORECAST_PROGRAM.md); "
+                        "its live record is on the track record page"))
     if hu:
         t = hu["test"]
+        beaten = [_e(c["against"]) for c in hu.get("claims", []) if c["better"]]
         rows.append(row("promote", hu["model_version"],
-                        f"NOAA DTOPS served for NHC basins: {_when(t)} AUC {_f(t['auc'])}; beats "
-                        + ", ".join(_e(c["against"]) for c in hu.get("claims", []) if c["better"])))
-    return "\n".join(rows)
+                        f"NOAA DTOPS published for the NHC areas: {_when(t)} season scored once, AUC {_f(t['auc'])}"
+                        + (f"; beat {_join(beaten)}" if beaten else "")))
+    return _table(["Date", "Change", "Model version", "Reason"], rows, caption="Promotions and retirements")
 
 
 # ---------------------------------------------------------------------------
@@ -588,120 +638,129 @@ def registry_history(ev: dict) -> str:
 def tornado_hero(ev: dict) -> str:
     to = ev.get("tornado")
     if not to:
-        return ('<p class="subtitle">No final test is bound to the served tornado model in this repository.</p>')
-    return ('<p class="subtitle">\n  Out-of-sample results for the served HazardPulse tornado model, '
-            f"<span class=\"mono\">{_e(to['model_version'])}</span>. Every number on this page is read from the "
-            "results files of a pre-registered programme whose final test (every storm of 2025) was run once, "
-            "after every choice was frozen.\n</p>")
+        return '<p class="lede">No final test is bound to the published tornado model in this repository.</p>'
+    t = to["test"]
+    return ('<p class="lede">How the published tornado model scored on every thunderstorm NOAA tracked over the US in '
+            f"2025: {_n(t['n'])} storm observations, {_n(t['pos'])} of them followed by a tornado. Every modelling "
+            "choice was fixed before 2025 was scored, and it was scored once. Every number below is read from the "
+            "programme&rsquo;s results files.</p>")
+
+
+# the protocol's strata (scripts/audit_20261001/tornado_lab.stress_groups), in words
+_STRATA = {
+    "region_plains": "Plains (105&deg;W to 94&deg;W, north of 30&deg;N)",
+    "region_midwest": "Midwest (94&deg;W to 80&deg;W, north of 37&deg;N)",
+    "region_southeast": "Southeast (94&deg;W to 75&deg;W, south of 37&deg;N)",
+    "region_elsewhere": "Everywhere else",
+    "season_DJF": "Winter (Dec&ndash;Feb)", "season_MAM": "Spring (Mar&ndash;May)",
+    "season_JJA": "Summer (Jun&ndash;Aug)", "season_SON": "Autumn (Sep&ndash;Nov)",
+    "local_night": "Night (20:00&ndash;06:00 local solar time)", "local_day": "Day (06:00&ndash;20:00 local solar time)",
+    "size_small": "Smallest third of storms", "size_mid": "Middle third of storms", "size_large": "Largest third of storms",
+    "analysis_9km": "Fine-grid (9 km) environment analysis available",
+    "lead_0_15": "Tornado 0&ndash;15 minutes ahead", "lead_15_30": "Tornado 15&ndash;30 minutes ahead",
+    "lead_30_60": "Tornado 30&ndash;60 minutes ahead",
+    "ef2plus": "Strong tornadoes (EF2 and above)", "ef0_1": "Weak tornadoes (EF0&ndash;EF1)",
+}
 
 
 def _metric_row(name: str, m: dict, best: bool = False) -> str:
-    cls = ' class="best-row"' if best else ""
-    return (f"<tr{cls}><td>{name}</td><td class=\"mono\">{_f(m.get('auc'))}</td>"
-            f"<td class=\"mono\">{_ci(m.get('auc_ci')).strip() or '--'}</td>"
-            f"<td class=\"mono\">{_f(m.get('pr_auc'))}</td><td class=\"mono\">{_signed(m.get('bss')) if m.get('bss') is not None else '--'}</td>"
-            f"<td class=\"mono\">{_n(m.get('n'))} / {_n(m.get('pos'))}</td></tr>")
+    cls = ' class="row-highlight"' if best else ""
+    bss = _signed(m.get("bss")) if m.get("bss") is not None else "&mdash;"
+    return (f"<tr{cls}><td>{name}</td><td class=\"num\">{_f(m.get('auc'))}</td>"
+            f"<td class=\"num\">{_ci(m.get('auc_ci')).strip() or '&mdash;'}</td>"
+            f"<td class=\"num\">{_f(m.get('pr_auc'))}</td><td class=\"num\">{bss}</td>"
+            f"<td class=\"num\">{_n(m.get('n'))} / {_n(m.get('pos'))}</td></tr>")
+
+
+def _section(ident: str, title: str, body: str, intro: str = "") -> str:
+    head = f'<div class="section-head"><div><h2 id="{ident}">{title}</h2>' + (f"<p>{intro}</p>" if intro else "") + "</div></div>"
+    return (f'<section class="section" aria-labelledby="{ident}"><div class="container">{head}{body}</div></section>')
 
 
 def tornado_body(ev: dict) -> str:
     to = ev.get("tornado")
     if not to:
-        return ('<section class="section"><div class="card"><p class="muted">No final test is bound to the served '
-                "tornado model in this repository, so no result is shown.</p></div></section>")
+        return _section("results", "Results", "<p>No final test is bound to the published tornado model in this "
+                                               "repository, so no result is shown.</p>")
     t = to["test"]
-    fam = _tornado_inputs_text(to)
+    event = _e(to["event"]).replace("THIS", "this")
     parts = []
-    parts.append(
-        '<section class="section" aria-labelledby="overview-heading">\n'
-        '  <h2 id="overview-heading">The served model</h2>\n  <div class="card">\n    <div class="overview-grid">\n'
-        "      <div>\n        "
-        + "\n        ".join([
-            _kv("Model", f"<span class=\"mono\">{_e(to['model_version'])}</span>"),
-            _kv("Forecasts", _e(to["forecasts"])),
-            _kv("Event", _e(to["event"])),
-            _kv(f"Inputs ({to['n_inputs']})", fam),
-        ])
-        + "\n      </div>\n      <div>\n        "
-        + "\n        ".join([
-            _kv("Model form", f"LightGBM, {_n(to['n_trees'])} trees, scored in NumPy from a JSON payload"),
-            _kv("Calibration", "Platt on leave-one-year-out scores"
-                + ("; Venn&ndash;Abers band per storm" if to.get("has_band") else "")),
-            _kv("Training", _e(to["trained"])),
-            _kv("Final test", f"2025, read once: {_n(t['n'])} storm observations, {_n(t['pos'])} tornadic"),
-        ])
-        + "\n      </div>\n    </div>\n"
-        f'    <p class="muted" style="margin-top:12px;font-size:12px;">Protocol: {_doc(to["program"])}. Every choice '
-        "(inputs, model family, hyperparameters, calibration, label) was made on 2023; 2024 was a development test; "
-        "the model was then refitted on 2020&ndash;2024 and scored once on 2025. A forecast is scored against SPC "
-        "storm reports matched to the storm&rsquo;s own tracked radar polygon.</p>\n  </div>\n</section>")
+    parts.append(_section("model", "The model", _facts([
+        _kv("Model version", f"<code>{_e(to['model_version'])}</code>"),
+        _kv("What it forecasts", "The chance that this storm produces a tornado within 60 minutes"
+            + (" (its inputs include the live NWS tornado-warning state)" if to.get("inputs_use_nws") else "")),
+        _kv("What counts as a tornado", event[0].upper() + event[1:]),
+        _kv(f"Inputs ({to['n_inputs']})", _tornado_inputs_text(to)),
+        _kv("Model form", f"Gradient-boosted trees (LightGBM, {_n(to['n_trees'])} trees), scored in NumPy from a JSON "
+                          "file in the repository"),
+        _kv("Calibration", "Platt scaling fitted on leave-one-year-out scores"
+            + ("; a Venn&ndash;Abers band per storm" if to.get("has_band") else "")),
+        _kv("Training", _e(to["trained"]).replace("..", "&ndash;")),
+    ]) + (f'<p class="section-foot">How the test was run: every choice &mdash; inputs, model type, settings, '
+          "calibration and the event definition &mdash; was made on 2023; 2024 was a development check; the model "
+          "was then refitted on 2020&ndash;2024 and scored once on 2025, against SPC storm reports matched to each "
+          f"storm&rsquo;s own tracked radar outline. Protocol: {_doc(to['program'])}.</p>")))
 
-    rows = [_metric_row("Served: with the NWS warning state", t, best=True)]
+    rows = [_metric_row("Published model (with the NWS warning state)", t, best=True)]
     fb = to.get("fallback")
     if fb:
-        rows.append(_metric_row("Fallback: no NWS input (feed down)", fb["test"]))
-    for key, p in (to.get("products") or {}).items():
-        rows.append(_metric_row(_e(_PRODUCT_NAMES[key]), p["test"]))
+        rows.append(_metric_row("Fallback, when the NWS warnings feed is down", fb["test"]))
+    for key, pr in (to.get("products") or {}).items():
+        rows.append(_metric_row(_e(_PRODUCT_NAMES[key]), pr["test"]))
     for key, name in (("probtor_raw", "NOAA ProbTor, as issued"), ("probtor_tiebroken", "NOAA ProbTor, ties broken")):
         m = (to.get("probtor_final") or {}).get(key)
         if m:
-            rows.append(f"<tr><td>{name}</td><td class=\"mono\">{_f(m.get('auc'))}</td>"
-                        f"<td class=\"mono\">{_ci(m.get('auc_ci')).strip() or '--'}</td>"
-                        "<td class=\"mono\">--</td><td class=\"mono\">--</td><td class=\"mono\">same storms</td></tr>")
+            rows.append(f"<tr><td>{name}</td><td class=\"num\">{_f(m.get('auc'))}</td>"
+                        f"<td class=\"num\">{_ci(m.get('auc_ci')).strip() or '&mdash;'}</td>"
+                        "<td class=\"num\">&mdash;</td><td class=\"num\">&mdash;</td>"
+                        "<td class=\"num\">same storms</td></tr>")
     dev = to.get("dev")
-    parts.append(
-        '<section class="section" aria-labelledby="results-heading">\n'
-        '  <h2 id="results-heading">Final test: every storm of 2025</h2>\n  <div class="card">\n'
-        '    <table class="results-table">\n      <thead><tr><th>Forecast</th><th>AUC</th><th>95% CI</th>'
-        "<th>PR-AUC</th><th>Brier skill</th><th>Storm obs / tornadic</th></tr></thead>\n      <tbody>\n        "
-        + "\n        ".join(rows) + "\n      </tbody>\n    </table>\n"
-        '    <p class="muted" style="margin-top:12px;font-size:12px;">Intervals: bootstrap over days. Brier skill '
-        "is against the test year&rsquo;s base rate."
-        + (f" Development year {_when(dev)}: AUC {_f(dev['auc'])}{_ci(dev['auc_ci'])}, Brier "
-           f"skill {_signed(dev['bss'])}." if dev else "")
-        + "</p>\n  </div>\n</section>")
+    parts.append(_section(
+        "results", "Final test: every storm of 2025",
+        _table(["Forecast", "AUC", "95% interval", "PR-AUC", "Brier skill", "Storm observations / tornadic"], rows,
+               caption="Scored once, after every choice was fixed")
+        + '<p class="section-foot"><strong>AUC</strong>: how often a storm that produced a tornado is ranked above '
+          "one that did not (0.5 is chance, 1 is perfect). <strong>PR-AUC</strong>: the same idea, focused on the "
+          "rare tornadic storms. <strong>Brier skill</strong>: improvement over always forecasting 2025&rsquo;s "
+          "average rate. Intervals: 95%, bootstrapped over days. NOAA ProbTor is issued in whole percents and is 0 for "
+          "most storms, so its ties are broken with ProbSevere&rsquo;s own severe probability for a fair ranking."
+        + (f" Development year {_when(dev)}: AUC {_f(dev['auc'])}{_ci(dev['auc_ci'])}, Brier skill "
+           f"{_signed(dev['bss'])}." if dev else "") + "</p>"))
 
     comp = []
     vs = to.get("vs_probtor")
-    s = _probtor_sentence(to)
-    if s:
-        comp.append(f"<li><strong>NOAA ProbTor</strong> {s.replace('NOAA ProbTor ', '', 1)} over "
-                    f"{_n(vs.get('n_days'))} days; Brier "
-                    f"{_signed(vs['delta_brier'], 6)}{_ci(vs['delta_brier_ci'], 6, signed=True)}. The issued product "
-                    "is an integer percent and 0 for most storms, so its ties are broken by ProbSevere&rsquo;s own "
-                    "severe probability for a fair ranking comparison.</li>")
-    s = _nws_sentence(to)
+    s1 = _probtor_sentence(to)
+    if s1:
+        comp.append(f"<li><strong>NOAA ProbTor.</strong> {s1[0].upper() + s1[1:]}, over {_n(vs.get('n_days'))} days; "
+                    f"Brier {_signed(vs['delta_brier'], 6)}{_ci(vs['delta_brier_ci'], 6, signed=True)}.</li>")
+    s2 = _nws_sentence(to)
     nws = to.get("vs_nws_warnings")
-    if s:
-        comp.append(f"<li><strong>NWS tornado warnings:</strong> {s[0].upper() + s[1:]}. The false-alarm rate is "
-                    f"the warnings&rsquo; own ({_pct(nws['nws_pofd'], 3)} of non-tornadic storm observations). A model "
-                    "that reads the warning state measures what it adds on top of the warnings; the figure without "
-                    "that input is the contest on its own.</li>")
+    if s2:
+        comp.append(f"<li><strong>NWS tornado warnings.</strong> {s2[0].upper() + s2[1:]}. The false-alarm rate is "
+                    f"the warnings&rsquo; own ({_pct(nws['nws_pofd'], 3)} of storm observations without a tornado). A "
+                    "model that reads the warning state measures what it adds on top of the warnings; the figure "
+                    "without that input is the contest on its own. HazardPulse does not issue warnings; NWS warnings "
+                    "remain the authority for protective action.</li>")
     v2 = to.get("vs_v2")
     if v2:
-        comp.append(f"<li><strong>Our previous model (v2):</strong> {_signed(v2['delta_auc'])}"
+        comp.append(f"<li><strong>Our previous model (v2).</strong> {_signed(v2['delta_auc'])}"
                     f"{_ci(v2['delta_auc_ci'], signed=True)} AUC on the same storms and the same event.</li>")
     if comp:
-        parts.append('<section class="section" aria-labelledby="comparison-heading">\n'
-                     '  <h2 id="comparison-heading">Against NOAA and the NWS, on the same storms</h2>\n'
-                     '  <div class="card">\n    <ul class="theory-list">\n      ' + "\n      ".join(comp)
-                     + "\n    </ul>\n  </div>\n</section>")
+        parts.append(_section("against", "Against NOAA and the NWS, on the same storms",
+                              '<ul class="compare-list">' + "".join(comp) + "</ul>"))
 
     st = to.get("stress")
     if st:
-        srows = []
-        for r in st["strata"]:
-            srows.append(f"<tr><td>{_e(r['stratum'].replace('_', ' '))}</td><td class=\"mono\">{_n(r['n'])} / "
-                         f"{_n(r['pos'])}</td><td class=\"mono\">{_f(r['auc'])}{_ci(r['auc_ci'])}</td>"
-                         f"<td class=\"mono\">{_f(r['probtor_auc'])}{_ci(r['probtor_ci'])}</td></tr>")
-        parts.append(
-            '<section class="section" aria-labelledby="stress-heading">\n'
-            '  <h2 id="stress-heading">Every stratum</h2>\n  <div class="card">\n'
-            f'    <p class="muted" style="margin-bottom:12px;">The protocol&rsquo;s strata, defined before any result. '
-            f"Lowest AUC in any stratum: {_f(st['min_auc'])}; in {st['n_clear_of_probtor']} of {st['n_strata']} the "
-            "model&rsquo;s interval lies wholly above calibrated ProbTor&rsquo;s.</p>\n"
-            '    <table class="results-table">\n      <thead><tr><th>Stratum</th><th>Storm obs / tornadic</th>'
-            "<th>Model AUC</th><th>ProbTor (calibrated) AUC</th></tr></thead>\n      <tbody>\n        "
-            + "\n        ".join(srows) + "\n      </tbody>\n    </table>\n  </div>\n</section>")
+        srows = [f"<tr><td>{_STRATA.get(r['stratum'], _e(r['stratum'].replace('_', ' ')))}</td>"
+                 f"<td class=\"num\">{_n(r['n'])} / {_n(r['pos'])}</td>"
+                 f"<td class=\"num\">{_f(r['auc'])}{_ci(r['auc_ci'])}</td>"
+                 f"<td class=\"num\">{_f(r['probtor_auc'])}{_ci(r['probtor_ci'])}</td></tr>" for r in st["strata"]]
+        parts.append(_section(
+            "strata", "By region, season, time of day, storm size and lead time",
+            _table(["Group", "Storm observations / tornadic", "Model AUC", "ProbTor (calibrated) AUC"], srows,
+                   caption="The groups were defined before any result"),
+            intro=f"The lowest AUC in any group is {_f(st['min_auc'])}; in {st['n_clear_of_probtor']} of "
+                  f"{st['n_strata']} groups the model&rsquo;s whole interval lies above calibrated ProbTor&rsquo;s."))
 
     rel = to.get("reliability")
     if rel:
@@ -710,18 +769,16 @@ def tornado_body(ev: dict) -> str:
             if not b.get("n"):
                 continue
             ci = b.get("observed_ci")
-            rrows.append(f"<tr><td class=\"mono\">{_pct_fine(b['lo'])} &ndash; {_pct_fine(b['hi'])}</td>"
-                         f"<td class=\"mono\">{_n(b['n'])}</td><td class=\"mono\">{_pct_fine(b['mean_forecast'])}</td>"
-                         f"<td class=\"mono\">{_pct_fine(b['observed'])}"
+            rrows.append(f"<tr><td>{_pct_fine(b['lo'])} &ndash; {_pct_fine(b['hi'])}</td>"
+                         f"<td class=\"num\">{_n(b['n'])}</td><td class=\"num\">{_pct_fine(b['mean_forecast'])}</td>"
+                         f"<td class=\"num\">{_pct_fine(b['observed'])}"
                          f"{(' [' + _pct_fine(ci[0]) + ', ' + _pct_fine(ci[1]) + ']') if ci else ''}</td></tr>")
-        parts.append(
-            '<section class="section" aria-labelledby="calibration-heading">\n'
-            '  <h2 id="calibration-heading">Does 10% mean 10%?</h2>\n  <div class="card">\n'
-            '    <p class="muted" style="margin-bottom:12px;">2025 storm observations grouped by the probability the '
-            "served model gave them, and how often a tornado followed (95% Jeffreys interval).</p>\n"
-            '    <table class="results-table">\n      <thead><tr><th>Forecast range</th><th>Storm obs</th>'
-            "<th>Mean forecast</th><th>Observed</th></tr></thead>\n      <tbody>\n        "
-            + "\n        ".join(rrows) + "\n      </tbody>\n    </table>\n  </div>\n</section>")
+        parts.append(_section(
+            "calibration", "Does 10% mean 10%?",
+            _table(["Forecast range", "Storm observations", "Average forecast", "Tornado followed [95% interval]"], rrows,
+                   caption="2025 storm observations grouped by the chance the model gave them"),
+            intro="In a well-calibrated row the average forecast and the rate at which a tornado followed agree. "
+                  "Intervals are 95% Jeffreys intervals."))
 
     nu = to.get("tested_not_served") or []
     if nu:
@@ -731,44 +788,41 @@ def tornado_body(ev: dict) -> str:
             items.append(f"<li><strong>{_e(x['what'][0].upper() + x['what'][1:])}:</strong> "
                          f"{_signed(x['delta_auc'], 4)}{_ci(x.get('delta_auc_ci'), 4, signed=True)} validation AUC "
                          f"({how}{'; ' + _e(x['note']) if x.get('note') else ''}).</li>")
-        parts.append('<section class="section" aria-labelledby="theory-heading">\n'
-                     '  <h2 id="theory-heading">Tested and not served</h2>\n  <div class="card">\n'
-                     '    <p class="muted" style="margin-bottom:12px;">Each was measured on 2023 under the same '
-                     "protocol. None improved the forecast, so none is in the served model.</p>\n"
-                     '    <ul class="theory-list">\n      ' + "\n      ".join(items) + "\n    </ul>\n  </div>\n</section>")
+        parts.append(_section(
+            "not-served", "Tested and not used",
+            '<ul class="compare-list">' + "".join(items) + "</ul>",
+            intro="Each was measured on 2023 under the same protocol. None improved the forecast, so none is in the "
+                  "published model."))
     return "\n\n".join(parts)
 
 
 def tornado_different(ev: dict) -> str:
     to = ev.get("tornado")
     items = [
-        ("Pre-registered and read once",
+        ("Fixed in advance, scored once",
          "Every modelling choice was fixed on 2023 and checked on 2024 before 2025 was scored, once. The protocol and "
          "its dated amendments are public, including the ones that corrected our own earlier numbers."),
         ("Scored against NOAA on the same storms",
          "The comparison with NOAA ProbTor and the NWS warnings uses the same storm observations, the same event and "
          "intervals paired by day."),
         ("Open and reproducible",
-         "The served model is a JSON file in the repository, scored in pure NumPy; its identity is the hash of its "
-         "bytes, and every live forecast is appended to a hash-chained ledger."),
+         "The model is a JSON file in the repository, scored in pure NumPy; its identity is the hash of its bytes, "
+         "and every live forecast is appended to a hash-chained ledger."),
     ]
     if to and to.get("tested_not_served"):
-        items.append(("We publish what did not work",
+        items.append(("What did not work is published too",
                       "The HRRR environment and the coherence field were tested and did not improve the forecast; "
                       "the measurements are above."))
-    lis = "\n    ".join(f"<li>\n      <strong>{t}</strong>\n      <p>{d}</p>\n    </li>" for t, d in items)
+    cards = "".join(f'<div class="card"><h3>{t}</h3><p>{d}</p></div>' for t, d in items)
     links = [
-        (f"{REPO}", "GitHub repository"),
-        (f"{REPO}/blob/main/{se.TORNADO_PROGRAM}", "Model programme"),
-        ("/data/tornado-ledger.jsonl", "Prediction ledger (JSONL)"),
-        ("/verification/", "All verification scores"),
+        (f"{REPO}/blob/main/{se.TORNADO_PROGRAM}", "The model programme"),
+        ("/data/tornado-ledger.jsonl", "Every live forecast (ledger, JSONL)"),
+        ("/verification/", "The track record for every hazard"),
+        (REPO, "Source code"),
     ]
-    noopener = ' rel="noopener"'
-    link_html = "\n  ".join(
-        f'<a href="{_e(h)}" class="btn btn-secondary" style="padding:8px 16px;font-size:13px;"'
-        f'{noopener if h.startswith("http") else ""}>{t}</a>' for h, t in links)
-    return (f'<div class="card">\n  <ul class="diff-list">\n    {lis}\n  </ul>\n</div>\n\n'
-            f'<div class="link-row">\n  {link_html}\n</div>')
+    link_html = "".join(f'<li><a href="{_e(h)}"{" rel=" + chr(34) + "noopener" + chr(34) if h.startswith("http") else ""}>'
+                        f"{t}</a></li>" for h, t in links)
+    return f'<div class="cards">{cards}</div><ul class="link-list section-foot">{link_html}</ul>'
 
 
 # ---------------------------------------------------------------------------

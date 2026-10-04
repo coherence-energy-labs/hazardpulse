@@ -20,12 +20,11 @@ ROOT = Path(__file__).resolve().parents[1]
 PULSE_PATH = ROOT / "dist" / "data" / "live-pulse.json"
 REPLAY_DIR = ROOT / "dist" / "data" / "replay"
 
-# Max acceptable age per hazard (hours) -- the scheduled cadence plus slack.
-MAX_AGE_HOURS = {
-    "eq": 12,   # earthquake scorer runs every 6h
-    "hu": 14,   # hurricane scorer runs every NHC cycle (6h): one skipped run + 2h of cron delay
-    "to": 6,    # tornado scorer runs every 2h
-}
+# Max acceptable age per hazard (hours) -- the scheduled cadence plus slack: earthquake every 6 h -> 12,
+# hurricane every NHC cycle (6 h) -> 14 (one skipped run + 2 h of cron delay), tornado every 2 h -> 6. One
+# definition, shared with the status page (hazardpulse.site.hazards), so the two can never disagree.
+sys.path.insert(0, str(ROOT / "src"))
+from hazardpulse.site.hazards import MAX_AGE_HOURS  # noqa: E402
 
 
 def _parse_utc(value: object) -> dt.datetime | None:
@@ -79,8 +78,22 @@ def evaluate_freshness(
     return lines, failures
 
 
-def evaluate_tornado_tier(replay_dir: Path = REPLAY_DIR, n: int = 5) -> tuple[list[str], list[str]]:
-    """Ensure tier1_ml is winning, not silently falling back, over the last ``n`` replays."""
+def expected_tornado_tier(models_dir: Path = ROOT / "results" / "models") -> str | None:
+    """The tier the best trained tornado model present should serve: the v3 suite when its payloads
+    exist (docs/TORNADO_MODEL_PROGRAM.md), else the GBT. (Until 2026-10-04 this check demanded tier1_ml
+    whatever was present, so it failed every run from the moment v3 went live -- an alarm that fires on
+    success teaches everyone to ignore it.)"""
+    if (models_dir / "tornado_v3_w.json").exists() or (models_dir / "tornado_v3.json").exists():
+        return "tier1_v3"
+    if (models_dir / "tornado_gbt_v1.json").exists():
+        return "tier1_ml"
+    return None
+
+
+def evaluate_tornado_tier(replay_dir: Path = REPLAY_DIR, n: int = 5,
+                          want: str | None = None) -> tuple[list[str], list[str]]:
+    """Ensure the best trained tier is winning, not silently falling back, over the last ``n`` replays."""
+    want = want or expected_tornado_tier()
     lines: list[str] = []
     failures: list[str] = []
     replays = sorted(replay_dir.glob("to_fcst_*.json"), reverse=True)[:n]
@@ -92,13 +105,12 @@ def evaluate_tornado_tier(replay_dir: Path = REPLAY_DIR, n: int = 5) -> tuple[li
             continue
         t = d.get("scoring_tier", "unknown")
         tier_counts[t] = tier_counts.get(t, 0) + 1
-    if tier_counts:
-        lines.append(f"  Tornado tier distribution (last {len(replays)} replays): {tier_counts}")
-        if tier_counts.get("tier1_ml", 0) == 0 and len(replays) >= 3:
+    if tier_counts and want:
+        lines.append(f"  Tornado tier distribution (last {len(replays)} replays): {tier_counts}; expected {want}")
+        if tier_counts.get(want, 0) == 0 and len(replays) >= 3:
             failures.append(
-                "Tornado tier1_ml has NOT triggered in the last "
-                f"{len(replays)} runs (got {tier_counts}). HRRR or "
-                "trained-model loading is likely broken."
+                f"Tornado {want} has NOT triggered in the last {len(replays)} runs (got {tier_counts}). "
+                "Trained-model loading or an input feed is likely broken."
             )
     return lines, failures
 
@@ -122,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  - {f}")
         return 1
     print()
-    print("All three scorers are fresh; tier1_ml is firing.")
+    print(f"All three scorers are fresh; the tornado scorer serves {expected_tornado_tier()}.")
     return 0
 
 

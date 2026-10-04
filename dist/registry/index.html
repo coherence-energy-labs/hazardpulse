@@ -1,270 +1,135 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Model Registry - HazardPulse</title>
-  <meta name="description" content="Active and retired model versions, promotion history, and performance metrics for all HazardPulse hazard models.">
-  <meta name="theme-color" content="#f6f9ff">
+  <title>Model registry — HazardPulse</title>
+  <meta name="description" content="Every HazardPulse model version: what it forecasts, whether it is published, experimental or retired, its test result, and why it changed.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://hazardpulse.com/registry/">
-  <script src="/assets/site-shell.js?v=2"></script>
-  <link rel="stylesheet" href="/assets/styles.css?v=9">
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
-  <link rel="alternate" type="application/rss+xml" title="HazardPulse Feed" href="/feed.xml">
-
+  <link rel="preload" href="/assets/fonts/inter-latin.woff2?v=3100e775e8" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/styles.css?v=b01d9bc18b">
+  <script src="/assets/site-shell.js?v=79cd26787c"></script>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=95b74caff8">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=afff227e57">
+  <link rel="alternate" type="application/rss+xml" title="HazardPulse" href="/feed.xml">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Model Registry - HazardPulse">
-  <meta property="og:description" content="Active and retired model versions with promotion history and performance metrics.">
-  <meta property="og:url" content="https://hazardpulse.com/registry/">
   <meta property="og:site_name" content="HazardPulse">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Model Registry - HazardPulse">
-  <meta name="twitter:description" content="Active and retired model versions with promotion history and performance metrics.">
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "DataCatalog",
-    "name": "HazardPulse Model Registry",
-    "description": "Versioned model registry with promotion/rejection history.",
-    "url": "https://hazardpulse.com/registry/",
-    "creator": { "@type": "Organization", "name": "HazardPulse", "url": "https://hazardpulse.com/" }
-  }
-  </script>
-
-  <script type="speculationrules">
-  { "prefetch": [{ "source": "list", "urls": ["/methods/", "/verification/"] }] }
-  </script>
+  <meta property="og:title" content="Model registry — HazardPulse">
+  <meta property="og:description" content="Every HazardPulse model version: what it forecasts, whether it is published, experimental or retired, its test result, and why it changed.">
+  <meta property="og:url" content="https://hazardpulse.com/registry/">
+  <meta property="og:image" content="https://hazardpulse.com/assets/og-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="HazardPulse — hazard forecasts you can verify">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Model registry — HazardPulse">
+  <meta name="twitter:description" content="Every HazardPulse model version: what it forecasts, whether it is published, experimental or retired, its test result, and why it changed.">
+  <meta name="twitter:image" content="https://hazardpulse.com/assets/og-card.png">
 </head>
 <body>
-  <div class="live-bar"></div>
-  <div class="emergency-banner" role="alert" aria-live="assertive"></div>
-  <a class="skip-link" href="#main">Skip to content</a>
-
-  <header class="topbar" role="banner">
-    <div class="container topbar-inner">
-      <a href="/" class="brand" aria-label="HazardPulse home">
-        <img src="/assets/hp-logo.png" alt="" class="brand-logo" width="30" height="30">
-        HazardPulse 
-      </a>
-      <input type="checkbox" id="nav-toggle" class="nav-hamburger-input" aria-label="Toggle navigation">
-      <label for="nav-toggle" class="nav-hamburger" aria-hidden="true">
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-        <span class="nav-hamburger-bar"></span>
-      </label>
-      <nav class="nav" aria-label="Primary navigation">
-        <div class="nav-dropdown">
-          <a href="/live/">Live</a>
-          <div class="nav-dropdown-menu">
-            <a href="/live/earthquake/"><span class="hazard-dot eq"></span> Earthquake</a>
-            <a href="/live/hurricane/"><span class="hazard-dot hu"></span> Hurricane</a>
-            <a href="/live/tornado/"><span class="hazard-dot to"></span> Tornado</a>
-          </div>
-        </div>
-        <a href="/verification/">Verification</a>
-        <a href="/evidence/">Evidence</a>
-        <a href="/methods/">Methods</a>
-        <a href="/registry/" aria-current="page">Registry</a>
-        <a href="/api/">API</a>
-      </nav>
-      <div class="theme-switch">
-        <input id="theme-toggle" class="theme-toggle" type="checkbox" aria-label="Switch to dark mode">
-        <label for="theme-toggle">Dark</label>
-      </div>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="emergency-banner" role="alert" aria-live="polite"></div>
+<header class="site-header" role="banner">
+  <div class="container header-inner">
+    <a class="brand" href="/" aria-label="HazardPulse home"><img class="brand-logo" src="/assets/hp-mark.svg?v=d54bd3e626" alt="" width="28" height="28"><span>HazardPulse</span></a>
+    <nav class="site-nav" aria-label="Primary"><div class="nav-group"><a class="nav-link" href="/live/">Live</a><div class="nav-sub"><a href="/live/earthquake/"><span class="hazard-dot eq" aria-hidden="true"></span>Earthquake</a><a href="/live/hurricane/"><span class="hazard-dot hu" aria-hidden="true"></span>Hurricane</a><a href="/live/tornado/"><span class="hazard-dot to" aria-hidden="true"></span>Tornado</a></div></div><a class="nav-link" href="/verification/">Track record</a><a class="nav-link" href="/evidence/">Evidence</a><a class="nav-link" href="/methods/">Methods</a><a class="nav-link" href="/registry/" aria-current="page">Models</a><a class="nav-link" href="/api/">API</a></nav>
+    <div class="header-actions">
+      <button class="theme-toggle" type="button" aria-label="Switch colour theme" aria-pressed="false"><svg class="icon icon-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="icon icon-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+      <details class="mobile-nav">
+        <summary aria-label="Menu"><span class="menu-bars" aria-hidden="true"></span></summary>
+        <nav class="mobile-nav-panel" aria-label="Mobile"><div class="nav-group"><a class="nav-link" href="/live/">Live</a><div class="nav-sub"><a href="/live/earthquake/"><span class="hazard-dot eq" aria-hidden="true"></span>Earthquake</a><a href="/live/hurricane/"><span class="hazard-dot hu" aria-hidden="true"></span>Hurricane</a><a href="/live/tornado/"><span class="hazard-dot to" aria-hidden="true"></span>Tornado</a></div></div><a class="nav-link" href="/verification/">Track record</a><a class="nav-link" href="/evidence/">Evidence</a><a class="nav-link" href="/methods/">Methods</a><a class="nav-link" href="/registry/" aria-current="page">Models</a><a class="nav-link" href="/api/">API</a></nav>
+      </details>
     </div>
-  </header>
+  </div>
+</header>
+<main id="main" class="page page-registry">
+<header class="page-hero"><div class="container">
+  <p class="eyebrow">Model registry</p>
+  <h1>Every model version, and why it changed</h1>
+  <p class="lede">Only registered model versions publish numbers. Each version is named by the hash of its file, so the name changes whenever the model does, and every promotion and retirement is listed with its reason.</p>
+</div></header>
 
-  <main id="main" class="container">
-    <section class="hero">
-      <div class="eyebrow">Model registry</div>
-      <h1>Every model is versioned and tracked.</h1>
-      <p class="subtitle">
-        We never run an unregistered model. Every version is pinned, every promotion
-        is justified, and every retirement is recorded.
-      </p>
-    </section>
-
-    <div class="depth-content">
-      <div class="depth-toggle" role="radiogroup" aria-label="Content depth">
-        <input type="radio" name="depth" id="depth-simple" value="simple" checked>
-        <label for="depth-simple">Simple</label>
-        <input type="radio" name="depth" id="depth-technical" value="technical">
-        <label for="depth-technical">Technical</label>
-      </div>
-
-    <div data-depth="simple">
-      <section class="section">
-        <h2>Our models</h2>
-        <div class="card">
-          <p style="font-size:15px;line-height:1.6;margin:0 0 12px;">HazardPulse uses four prediction models, each specialized for a different type of hazard:</p>
-          <div class="grid">
+<section class="section" aria-labelledby="publishing"><div class="container">
+  <div class="section-head"><div><h2 id="publishing">Models publishing now</h2><p>Read from the test results bound to each published file.</p></div></div>
+  <div class="cards cards-3">
 <!-- hp-evidence:registry-simple -->
-<div class="card col-6 hazard-eq">
-  <h3>Earthquake model</h3>
-  <p class="muted">Combines where large quakes happen in the long run with how they cluster after recent ones. On 2023&ndash;2025, scored once, it ranked a cell that went on to have an M6+ quake above one that did not 97% of the time across the globe, and 77% among cells with recent quakes, the harder question.</p>
-</div>
-<div class="card col-6 hazard-hu">
-  <h3>Hurricane model</h3>
-  <p class="muted">For storms the National Hurricane Center tracks, we serve NOAA&rsquo;s own DTOPS guidance: in a pre-registered test on the 2025 season it beat every alternative, including our own model, ranking a forecast cycle that went on to intensify rapidly above one that did not 93% of the time.</p>
-</div>
-<div class="card col-6 hazard-to">
-  <h3>Tornado model (storm-level)</h3>
-  <p class="muted">Scores every thunderstorm NOAA tracks for the chance it produces a tornado in the next hour. On every storm of 2025, scored once, it ranked a storm that went on to produce a tornado above one that did not 97% of the time.</p>
-</div>
+<article class="card hz-eq">
+  <h3>Earthquake: S1 (C0 + GEAR1)</h3>
+  <p>Combines where large earthquakes happen in the long run with how they cluster after recent ones, plus GEAR1&rsquo;s long-term rate from crustal strain. On 2023&ndash;2025 (a second look at those years), it ranked a cell that went on to have an M6+ earthquake above one that did not 97% of the time across the globe, and 77% among cells with recent earthquakes, the harder question.</p>
+</article>
+<article class="card hz-hu">
+  <h3>Hurricane: NOAA DTOPS, and v8.2 elsewhere</h3>
+  <p>For storms the National Hurricane Center covers, we publish NOAA&rsquo;s own DTOPS guidance: in a test written down in advance and run once on the 2025 season it beat NOAA SHIPS-RII, NOAA RIOC consensus and our previous model (v8.2), ranking a forecast cycle that went on to intensify rapidly above one that did not 93% of the time. Elsewhere we publish our v8.2 model. Our v10.1 model is shown beside DTOPS, labelled experimental, while it is tested on new forecasts.</p>
+</article>
+<article class="card hz-to">
+  <h3>Tornado: v3</h3>
+  <p>Scores every thunderstorm NOAA tracks over the contiguous US for the chance it produces a tornado in the next hour. On every storm of 2025, scored once, it ranked a storm that went on to produce a tornado above one that did not 97% of the time.</p>
+</article>
 <!-- /hp-evidence:registry-simple -->
-            <div class="card col-6 hazard-to">
-              <h3>Tornado model (day-ahead)</h3>
-              <p class="muted">Uses weather parameters to predict tornado environments 12-24 hours ahead. It ranks a tornado environment above a non-tornado one 64% of the time (AUC 0.644; this is a hard problem).</p>
-            </div>
-          </div>
-          <p class="muted" style="margin:12px 0 0;font-size:13px;">Models are only promoted after they beat the previous version on holdout data. Models that fail quality checks are rejected.</p>
-        </div>
-      </section>
-    </div>
+  </div>
+</div></section>
 
-    <section class="section" aria-labelledby="active-heading" data-depth="technical">
-      <h2 id="active-heading">Active models</h2>
-      <div class="card">
-        <table>
-          <thead><tr><th>Model</th><th>Hazard</th><th>Status</th><th>Final test</th><th>AUC [95% CI]</th><th>Skill</th><th>Architecture</th></tr></thead>
-          <tbody>
+<section class="section" aria-labelledby="versions"><div class="container">
+  <div class="section-head"><div><h2 id="versions">Every version in use</h2><p><strong>Published</strong>: produces the number on the site. <strong>Fallback</strong>: takes over when an input feed is down. <strong>Experimental</strong>: shown beside the published number while it is tested on new forecasts.</p></div></div>
 <!-- hp-evidence:registry-active -->
-<tr><td><strong>eq_operational_S1_gear1_v1-d409c534bb4c</strong></td><td>Earthquake (30 d, M6+)</td><td><span class="chip good">active</span></td><td>2023&ndash;2025</td><td class="mono">0.969 [0.964, 0.973]</td><td class="mono">IG +2.60 nats/quake</td><td>Smoothed seismicity + ETAS-style clustering + boosted trees</td></tr>
-<tr><td><strong>hurricane_ri_stack_v1-35938d6c09b7</strong></td><td>Hurricane RI (NHC basins)</td><td><span class="chip good">active</span></td><td>2025</td><td class="mono">0.928 [0.890, 0.966]</td><td class="mono">BSS +0.311</td><td>NOAA DTOPS as issued (SHIPS-RII fallback)</td></tr>
-<tr><td><strong>hurricane_ri_v10-8a5ba5896731</strong></td><td>Hurricane RI (NHC basins, our model)</td><td><span class="chip neutral">experimental</span></td><td>2022&ndash;2025 (each season out of sample)</td><td class="mono">0.930</td><td class="mono">LL 0.144 vs DTOPS 0.165</td><td>LightGBM exceedance curve; in prospective verification, shown beside DTOPS</td></tr>
-<tr><td><strong>hurricane_ri_v8_2</strong></td><td>Hurricane RI (other basins)</td><td><span class="chip good">active</span></td><td>2022&ndash;2024</td><td class="mono">0.847 [0.821, 0.874]</td><td class="mono">BSS +0.145</td><td>GBT + logistic ensemble, Newton-calibrated</td></tr>
-<tr><td><strong>tornado_v3-05a06c843c87</strong></td><td>Tornado (storm, 60 min)</td><td><span class="chip good">active</span></td><td>2025</td><td class="mono">0.970 [0.964, 0.976]</td><td class="mono">BSS +0.107</td><td>LightGBM, 339 trees, 30 inputs</td></tr>
-<tr><td><strong>tornado_v3-9005905f08b7</strong></td><td>Tornado (no NWS feed)</td><td><span class="chip neutral">fallback</span></td><td>2025</td><td class="mono">0.969 [0.963, 0.975]</td><td class="mono">BSS +0.097</td><td>LightGBM, 339 trees, 28 inputs</td></tr>
-<tr><td><strong>tornado_v3-c45167a49056</strong></td><td>Tornado within 30 min</td><td><span class="chip good">active</span></td><td>2025</td><td class="mono">0.974 [0.968, 0.979]</td><td class="mono">BSS +0.084</td><td>LightGBM, 301 trees</td></tr>
-<tr><td><strong>tornado_v3-58208efc4bb4</strong></td><td>Tornado within 90 min</td><td><span class="chip good">active</span></td><td>2025</td><td class="mono">0.968 [0.961, 0.974]</td><td class="mono">BSS +0.111</td><td>LightGBM, 312 trees</td></tr>
-<tr><td><strong>tornado_v3-a4413fadb32c</strong></td><td>EF2+ tornado within 60 min</td><td><span class="chip good">active</span></td><td>2025</td><td class="mono">0.994 [0.989, 0.997]</td><td class="mono">BSS +0.061</td><td>LightGBM, 371 trees</td></tr>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Every model version that publishes a number now"><table><caption>Every model version that publishes a number now</caption><thead><tr><th scope="col">Model version</th><th scope="col">Forecasts</th><th scope="col">Status</th><th scope="col">Test</th><th scope="col">AUC [95% CI]</th><th scope="col">Skill</th><th scope="col">What it is</th></tr></thead><tbody>
+<tr><td><code>eq_operational_S1_gear1_v1-d409c534bb4c</code></td><td>Earthquake (30 days, M6+)</td><td><span class="chip good">published</span></td><td>2023&ndash;2025</td><td class="num">0.969 [0.964, 0.973]</td><td class="num">IG +2.60 nats/quake</td><td>Boosted trees on long-term seismicity and aftershock-style clustering, plus GEAR1&rsquo;s strain-rate model</td></tr>
+<tr><td><code>hurricane_ri_stack_v1-35938d6c09b7</code></td><td>Hurricane RI (NHC areas)</td><td><span class="chip good">published</span></td><td>2025</td><td class="num">0.928 [0.890, 0.966]</td><td class="num">BSS +0.311</td><td>NOAA DTOPS as issued (SHIPS-RII fallback)</td></tr>
+<tr><td><code>hurricane_ri_v10-8a5ba5896731</code></td><td>Hurricane RI (NHC areas, our model v10.1)</td><td><span class="chip warn">experimental</span></td><td>2022&ndash;2025 (each season out of sample)</td><td class="num">0.930</td><td class="num">LL 0.144 vs DTOPS 0.165</td><td>LightGBM exceedance curve; in prospective verification, shown beside DTOPS</td></tr>
+<tr><td><code>hurricane_ri_v8_2</code></td><td>Hurricane RI (other basins)</td><td><span class="chip good">published</span></td><td>2022&ndash;2024</td><td class="num">0.847 [0.821, 0.874]</td><td class="num">BSS +0.145</td><td>GBT + logistic ensemble, Newton-calibrated</td></tr>
+<tr><td><code>tornado_v3-05a06c843c87</code></td><td>Tornado within 60 min</td><td><span class="chip good">published</span></td><td>2025</td><td class="num">0.970 [0.964, 0.976]</td><td class="num">BSS +0.107</td><td>LightGBM, 339 trees, 30 inputs</td></tr>
+<tr><td><code>tornado_v3-9005905f08b7</code></td><td>Tornado within 60 min, when the NWS feed is down</td><td><span class="chip neutral">fallback</span></td><td>2025</td><td class="num">0.969 [0.963, 0.975]</td><td class="num">BSS +0.097</td><td>LightGBM, 339 trees, 28 inputs</td></tr>
+<tr><td><code>tornado_v3-c45167a49056</code></td><td>Tornado within 30 min</td><td><span class="chip good">published</span></td><td>2025</td><td class="num">0.974 [0.968, 0.979]</td><td class="num">BSS +0.084</td><td>LightGBM, 301 trees</td></tr>
+<tr><td><code>tornado_v3-58208efc4bb4</code></td><td>Tornado within 90 min</td><td><span class="chip good">published</span></td><td>2025</td><td class="num">0.968 [0.961, 0.974]</td><td class="num">BSS +0.111</td><td>LightGBM, 312 trees</td></tr>
+<tr><td><code>tornado_v3-a4413fadb32c</code></td><td>EF2+ tornado within 60 min</td><td><span class="chip good">published</span></td><td>2025</td><td class="num">0.994 [0.989, 0.997]</td><td class="num">BSS +0.061</td><td>LightGBM, 371 trees</td></tr>
+</tbody></table></div>
 <!-- /hp-evidence:registry-active -->
-            <tr>
-              <td><strong>hp-tornado-meso-v1.4.2</strong></td>
-              <td>Tornado (day-ahead)</td>
-              <td><span class="chip good">active</span></td>
-              <td>2025 spring holdout (its own record)</td>
-              <td class="mono">0.644</td>
-              <td class="mono">Brier 0.231</td>
-              <td>Random forest + Platt cal.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+  <p class="section-foot"><strong>IG</strong>: information gain over a uniform map, in nats per earthquake (higher is better). <strong>BSS</strong>: Brier skill score (above 0 beats the average rate). <strong>LL</strong>: log loss (lower is better).</p>
+</div></section>
 
-    <section class="section" aria-labelledby="history-heading" data-depth="technical">
-      <h2 id="history-heading">Promotion / retirement history</h2>
-      <div class="card">
-        <table>
-          <thead><tr><th>Date</th><th>Action</th><th>Model</th><th>Reason</th></tr></thead>
-          <tbody>
+<section class="section" aria-labelledby="history"><div class="container">
+  <div class="section-head"><div><h2 id="history">Promotions and retirements</h2><p>Changes since the current testing programme began, each with the result that decided it.</p></div></div>
 <!-- hp-evidence:registry-history -->
-<tr><td>2026-10</td><td><span class="chip good">promote</span></td><td>tornado_v3-05a06c843c87</td><td>Pre-registered programme, 2025 read once: AUC 0.970 [0.964, 0.976]; vs NOAA ProbTor +0.031 [+0.022, +0.042] (paired by day)</td></tr>
-<tr><td>2026-10</td><td><span class="chip neutral">retire</span></td><td>tornado_gbt_v2</td><td>Superseded by v3: on 2025, v3 &minus; v2 +0.007 [+0.003, +0.010] AUC on the same storms and event</td></tr>
-<tr><td>2026-10</td><td><span class="chip neutral">retire</span></td><td>hp-tornado-coherence-v1</td><td>Its published 0.894 was measured on a 5:1-downsampled split with labels on the wrong clock (docs/AUDIT_2026-10-01.md)</td></tr>
-<tr><td>2026-10</td><td><span class="chip good">promote</span></td><td>eq_operational_S1_gear1_v1-d409c534bb4c</td><td>Pre-registered, 2023&ndash;2025 read once: +2.60 nats per quake, AUC 0.969</td></tr>
-<tr><td>2026-10</td><td><span class="chip neutral">retire</span></td><td>eq_coherence_v1_0</td><td>+2.59 nats per quake on the same test (worse than a uniform map)</td></tr>
-<tr><td>2026-10</td><td><span class="chip good">promote</span></td><td>hurricane_ri_stack_v1-35938d6c09b7</td><td>NOAA DTOPS served for NHC basins: 2025 AUC 0.928; beats NOAA SHIPS-RII, NOAA RIOC consensus, our previous model (v8.2)</td></tr>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Promotions and retirements"><table><caption>Promotions and retirements</caption><thead><tr><th scope="col">Date</th><th scope="col">Change</th><th scope="col">Model version</th><th scope="col">Reason</th></tr></thead><tbody>
+<tr><td>Oct 2026</td><td><span class="chip good">promoted</span></td><td><code>tornado_v3-05a06c843c87</code></td><td>Pre-registered programme, 2025 scored once: AUC 0.970 [0.964, 0.976]; against NOAA ProbTor +0.031 [+0.022, +0.042] (paired by day)</td></tr>
+<tr><td>Oct 2026</td><td><span class="chip neutral">retired</span></td><td><code>tornado_gbt_v2</code></td><td>Replaced by v3: on 2025, v3 &minus; v2 +0.007 [+0.003, +0.010] AUC on the same storms and event</td></tr>
+<tr><td>Oct 2026</td><td><span class="chip neutral">retired</span></td><td><code>hp-tornado-coherence-v1</code></td><td>Its published AUC of 0.894 was measured on a 5:1-downsampled split with labels on the wrong clock (docs/AUDIT_2026-10-01.md)</td></tr>
+<tr><td>Oct 2026</td><td><span class="chip good">promoted</span></td><td><code>eq_operational_S1_gear1_v1-d409c534bb4c</code></td><td>Adds GEAR1&rsquo;s long-term rate to C0, decided by a test written down in advance on 2021&ndash;2022: +0.016 [+0.002, +0.030] nats per earthquake; on 2023&ndash;2025 (a second look at those years) +2.60 nats per earthquake, AUC 0.969</td></tr>
+<tr><td>Oct 2026</td><td><span class="chip neutral">superseded</span></td><td><code>eq_operational_C0_v1-d28c62a2e35b</code></td><td>Now the base of the published model rather than published itself; it scored +2.59 nats per earthquake on the same test</td></tr>
+<tr><td>Oct 2026</td><td><span class="chip neutral">retired</span></td><td><code>eq_coherence_v1_0</code></td><td>Replaced by the pre-registered operational forecast (docs/EARTHQUAKE_FORECAST_PROGRAM.md); its live record is on the track record page</td></tr>
+<tr><td>Oct 2026</td><td><span class="chip good">promoted</span></td><td><code>hurricane_ri_stack_v1-35938d6c09b7</code></td><td>NOAA DTOPS published for the NHC areas: 2025 season scored once, AUC 0.928; beat NOAA SHIPS-RII, NOAA RIOC consensus and our previous model (v8.2)</td></tr>
+</tbody></table></div>
 <!-- /hp-evidence:registry-history -->
-            <tr><td>2026-03-05</td><td><span class="chip good">promote</span></td><td>hp-tornado-meso-v1.4.2</td><td>+0.02 AUC, improved sharpness on 2025 spring holdout</td></tr>
-            <tr><td>2026-03-05</td><td><span class="chip neutral">retire</span></td><td>hp-tornado-meso-v1.4.1</td><td>Superseded by hp-tornado-meso-v1.4.2</td></tr>
-            <tr><td>2026-03-13</td><td><span class="chip good">promote</span></td><td>hp-hurricane-ri-v8.1</td><td>Advisory-time eval: AUC 0.938 avg (0.910-0.957), BSS +0.29, +0.009 delta vs OFCL across 5 holdouts. 65 features, real NOAA SST, Platt calibration.</td></tr>
-            <tr><td>2026-03-13</td><td><span class="chip neutral">retire</span></td><td>hp-hurricane-ri-v3.2</td><td>Superseded by hp-hurricane-ri-v8.1  -  v3.2 used IBTrACS best-track eval (AUC 0.84); v8.1 uses honest advisory-time protocol</td></tr>
-            <tr><td>2026-03-01</td><td><span class="chip good">promote</span></td><td>hp-hurricane-ri-v3.2</td><td>+0.04 AUC, -0.015 Brier vs hp-hurricane-ri-v3.1 on holdout</td></tr>
-            <tr><td>2026-03-01</td><td><span class="chip neutral">retire</span></td><td>hp-hurricane-ri-v3.1</td><td>Superseded by hp-hurricane-ri-v3.2</td></tr>
-            <tr><td>2026-02-28</td><td><span class="chip good">promote</span></td><td>hp-etas-v3.2.1</td><td>+0.03 AUC, -0.011 Brier vs hp-etas-v3.1.0 on holdout</td></tr>
-            <tr><td>2026-02-28</td><td><span class="chip neutral">retire</span></td><td>hp-etas-v3.1.0</td><td>Superseded by hp-etas-v3.2.1</td></tr>
-            <tr><td>2026-02-15</td><td><span class="chip bad">reject</span></td><td>eq-v3.2.0</td><td>Failed calibration floor G4 on validation set (Brier 0.261)</td></tr>
-            <tr><td>2026-02-10</td><td><span class="chip bad">reject</span></td><td>to-v1.4.0</td><td>Regression in false alarm rate (+8%) on CONUS spring holdout</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+</div></section>
 
-    <section class="section" aria-labelledby="retired-heading" data-depth="technical">
-      <h2 id="retired-heading">Retired models</h2>
-      <div class="card">
-        <table>
-          <thead><tr><th>Model</th><th>Hazard</th><th>Retired</th><th>Final AUC</th><th>Final Brier</th><th>Forecasts issued</th></tr></thead>
-          <tbody>
-            <tr><td>hp-etas-v3.1.0</td><td>Earthquake</td><td>2026-02-28</td><td>0.78</td><td>0.153</td><td>2,841</td></tr>
-            <tr><td>hp-hurricane-ri-v3.2</td><td>Hurricane RI</td><td>2026-03-13</td><td>0.84</td><td>0.168</td><td>1,891</td></tr>
-            <tr><td>hp-hurricane-ri-v3.1</td><td>Hurricane RI</td><td>2026-03-01</td><td>0.80</td><td>0.183</td><td>1,247</td></tr>
-            <tr><td>hp-tornado-meso-v1.4.1</td><td>Tornado</td><td>2026-03-05</td><td>0.75</td><td>0.124</td><td>3,102</td></tr>
-          </tbody>
-        </table>
+<section class="section" aria-labelledby="rules"><div class="container prose">
+  <h2 id="rules">How a model is promoted</h2>
+  <ul>
+    <li>A candidate is compared with the published model in a test written down before the deciding data is scored, on the same cases, with paired intervals.</li>
+    <li>It is promoted only if the test&rsquo;s own rule says it is better; a gain whose interval includes zero is not enough.</li>
+    <li>The promoted file is frozen and named by its hash. Its live forecasts are recorded and scored from the moment it publishes.</li>
+    <li>A retired model&rsquo;s past forecasts stay in the ledger and in its live record on the <a href="/verification/">track record</a>.</li>
+  </ul>
+  <p><a href="/data/model-registry.json">The full registry, with file hashes (JSON)</a> &middot; <a href="/api/v1/registry/models">The same, through the API</a></p>
+</div></section>
+</main>
+<footer class="site-footer" role="contentinfo">
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a class="brand" href="/"><img class="brand-logo" src="/assets/hp-mark.svg?v=d54bd3e626" alt="" width="28" height="28"><span>HazardPulse</span></a>
+        <p>Hazard forecasts you can verify. Every number links to its data, its model and its track record.</p>
       </div>
-    </section>
-
-    <section class="section" aria-labelledby="policy-heading" data-depth="technical">
-      <h2 id="policy-heading">Promotion policy</h2>
-      <div class="grid">
-        <div class="card col-6">
-          <h3>Requirements for promotion</h3>
-          <ul>
-            <li>Statistically significant improvement on holdout set (AUC or Brier)</li>
-            <li>No regression in calibration or false alarm rate</li>
-            <li>Passes all gate checks (G0-G12) on validation corpus</li>
-            <li>Training data cutoff documented and frozen</li>
-            <li>Feature set and architecture documented in registry</li>
-          </ul>
-        </div>
-        <div class="card col-6">
-          <h3>Rejection criteria</h3>
-          <ul>
-            <li>Brier score above calibration floor threshold (0.25)</li>
-            <li>False alarm rate regression exceeding 5%</li>
-            <li>Calibration error exceeding 8% in any bin</li>
-            <li>Inability to produce replay-verified deterministic outputs</li>
-            <li>Missing or incomplete feature documentation</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-
-    <div class="cta-row" style="margin-bottom:32px;" data-depth="technical">
-      <a href="/data/model-registry.json" class="btn btn-secondary">Download registry (JSON)</a>
+      <div class="footer-cols"><div class="footer-col"><h2 class="footer-heading">Forecasts</h2><ul><li><a href="/live/">Live overview</a></li><li><a href="/live/earthquake/">Earthquake</a></li><li><a href="/live/hurricane/">Hurricane</a></li><li><a href="/live/tornado/">Tornado</a></li></ul></div><div class="footer-col"><h2 class="footer-heading">Proof</h2><ul><li><a href="/verification/">Track record</a></li><li><a href="/evidence/">Evidence</a></li><li><a href="/methods/">Methods</a></li><li><a href="/registry/">Model registry</a></li><li><a href="/verification/cross-modality/">Research tests</a></li></ul></div><div class="footer-col"><h2 class="footer-heading">Developers</h2><ul><li><a href="/api/">API</a></li><li><a href="/ops/status/">System status</a></li><li><a href="https://github.com/coherence-energy-labs/hazardpulse/releases">Open data</a></li><li><a href="https://github.com/coherence-energy-labs/hazardpulse">Source code</a></li><li><a href="/feed.xml">RSS feed</a></li></ul></div><div class="footer-col"><h2 class="footer-heading">Legal</h2><ul><li><a href="/legal/disclaimer/">Disclaimer</a></li><li><a href="/legal/privacy/">Privacy</a></li><li><a href="/legal/terms/">Terms of use</a></li><li><a href="/COMMERCIAL_LICENSE.md">Commercial licence</a></li><li><a href="mailto:josh@coherenceenergylabs.com">Contact</a></li></ul></div></div>
     </div>
+    <div class="footer-bottom">
+      <p class="footer-warning"><strong>Not an official warning service.</strong> In an emergency, follow your national weather and geological services and local authorities &mdash; in the United States, the <a href="https://www.weather.gov/">National Weather Service</a>, the <a href="https://www.nhc.noaa.gov/">National Hurricane Center</a> and the <a href="https://earthquake.usgs.gov/">USGS</a>.</p>
+      <p class="footer-legal">&copy; 2026 HazardPulse &middot; Code under AGPL-3.0, <a href="/COMMERCIAL_LICENSE.md">commercial licence</a> available &middot; Data from NOAA, USGS and the public archives credited on each page</p>
     </div>
-  </main>
-
-  <footer class="footer" role="contentinfo">
-    <div class="container footer-inner">
-      <div class="footer-col">
-        <h4>Platform</h4>
-        <a href="/live/">Live forecasts</a>
-        <a href="/verification/">Verification</a>
-        <a href="/evidence/">Evidence</a>
-        <a href="/methods/">Methods</a>
-      </div>
-      <div class="footer-col">
-        <h4>Data</h4>
-        <a href="/registry/">Model registry</a>
-        <a href="/api/">API contracts</a>
-        <a href="/ops/status/">System status</a>
-        <a href="/feed.xml">RSS feed</a>
-      </div>
-      <div class="footer-col">
-        <h4>Legal</h4>
-        <a href="/legal/disclaimer/">Disclaimer</a>
-        <a href="/legal/privacy/">Privacy</a>
-        <a href="/legal/terms/">Terms</a>
-        <a href="https://earthquake.usgs.gov/" rel="noopener">USGS</a>
-        <a href="https://www.nhc.noaa.gov/" rel="noopener">NHC</a>
-        <a href="https://www.spc.noaa.gov/" rel="noopener">SPC</a>
-      </div>
-      <p class="footer-disclaimer">
-        Independent hazard intelligence platform. Always follow official guidance from the USGS, NHC, NWS, SPC, JMA, and IMD.
-        Probabilistic outputs represent model estimates with stated uncertainty.
-      </p>
-      <p class="footer-build">Static-first HTML &middot; Evidence-linked data &middot; Edge geolocation by Cloudflare</p>
-    </div>
-  </footer>
+  </div>
+</footer>
 </body>
 </html>
-
-
-

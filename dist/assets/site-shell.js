@@ -1,98 +1,54 @@
+/* HazardPulse site shell: the colour theme. Loaded in <head> so the saved theme applies before the
+   first paint. The edge also sets data-theme from the cookie, so a page renders in the right theme
+   even before this runs. Nothing else lives here: every page works without JavaScript. */
 (function () {
-  const STORAGE_KEY = "hp_theme";
-  const COOKIE_NAME = "hp_theme";
-  const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
-  const THEME_ATTRIBUTE = "data-theme";
-  const DARK_META_COLOR = "#0A0F1A";
-  const LIGHT_META_COLOR = "#f6f9ff";
+  "use strict";
+  var KEY = "hp_theme";
+  var root = document.documentElement;
 
-  function readCookieTheme() {
-    const match = document.cookie.match(/(?:^|;\s*)hp_theme=(dark|light)(?:;|$)/i);
-    return match ? match[1].toLowerCase() : null;
-  }
-
-  function readTheme() {
-    const cookieTheme = readCookieTheme();
-    if (cookieTheme === "dark" || cookieTheme === "light") {
-      return cookieTheme;
-    }
+  function saved() {
+    var m = document.cookie.match(/(?:^|;\s*)hp_theme=(dark|light)(?:;|$)/);
+    if (m) return m[1];
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored === "dark" || stored === "light") {
-        return stored;
-      }
-    } catch {}
+      var s = window.localStorage.getItem(KEY);
+      if (s === "dark" || s === "light") return s;
+    } catch (e) {}
     return null;
   }
 
-  function persistTheme(theme) {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, theme);
-    } catch {}
-    const secure = window.location.protocol === "https:" ? "; Secure" : "";
-    document.cookie =
-      COOKIE_NAME +
-      "=" +
-      theme +
-      "; path=/; max-age=" +
-      COOKIE_MAX_AGE +
-      "; SameSite=Lax" +
-      secure;
+  function systemDark() {
+    return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
   }
 
-  function applyDocumentTheme(theme) {
-    const isDark = theme === "dark";
-    document.documentElement.setAttribute(THEME_ATTRIBUTE, isDark ? "dark" : "light");
-    if (document.body) {
-      document.body.setAttribute(THEME_ATTRIBUTE, isDark ? "dark" : "light");
-    }
-    const themeColor = document.querySelector('meta[name="theme-color"]');
-    if (themeColor) {
-      themeColor.setAttribute("content", isDark ? DARK_META_COLOR : LIGHT_META_COLOR);
-    }
-    document.documentElement.style.colorScheme = isDark ? "dark" : "light";
+  function current() {
+    var t = root.getAttribute("data-theme");
+    if (t === "dark" || t === "light") return t;
+    return systemDark() ? "dark" : "light";
   }
 
-  function syncThemeToggles(theme) {
-    const isDark = theme === "dark";
-    document.querySelectorAll(".theme-toggle").forEach((input) => {
-      if (!(input instanceof HTMLInputElement)) return;
-      input.checked = isDark;
-      input.setAttribute(
-        "aria-label",
-        isDark ? "Switch to light mode" : "Switch to dark mode"
-      );
+  function apply(theme, persist) {
+    root.setAttribute("data-theme", theme);
+    if (persist) {
+      try { window.localStorage.setItem(KEY, theme); } catch (e) {}
+      document.cookie = "hp_theme=" + theme + "; path=/; max-age=31536000; SameSite=Lax" +
+        (location.protocol === "https:" ? "; Secure" : "");
+    }
+    var buttons = document.querySelectorAll(".theme-toggle");
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+      buttons[i].setAttribute("aria-label", theme === "dark" ? "Switch to light theme" : "Switch to dark theme");
+    }
+  }
+
+  var s = saved();
+  if (s) root.setAttribute("data-theme", s);
+
+  document.addEventListener("DOMContentLoaded", function () {
+    apply(current(), false);
+    document.addEventListener("click", function (ev) {
+      var btn = ev.target.closest && ev.target.closest(".theme-toggle");
+      if (!btn) return;
+      apply(current() === "dark" ? "light" : "dark", true);
     });
-  }
-
-  function applyTheme(theme) {
-    applyDocumentTheme(theme);
-    syncThemeToggles(theme);
-  }
-
-  function syncFromStoredTheme() {
-    const theme = readTheme();
-    if (theme === "dark" || theme === "light") {
-      persistTheme(theme);
-      applyTheme(theme);
-    }
-  }
-
-  const initialTheme = readTheme();
-  if (initialTheme === "dark" || initialTheme === "light") {
-    applyDocumentTheme(initialTheme);
-  }
-
-  document.addEventListener("change", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement)) return;
-    if (!target.classList.contains("theme-toggle")) return;
-    const theme = target.checked ? "dark" : "light";
-    persistTheme(theme);
-    applyTheme(theme);
   });
-
-  document.addEventListener("DOMContentLoaded", syncFromStoredTheme, { once: true });
-  window.addEventListener("pageshow", syncFromStoredTheme);
-  syncFromStoredTheme();
 })();

@@ -41,7 +41,6 @@ def _load(tmp_path: Path):
     m.REPLAY_DIR = dist / "data" / "replay"
     m.VERIFICATION_SUMMARY_PATH = dist / "data" / "verification-summary.json"
     m.VERIFICATION_DATA_DIR = dist / "data" / "verification"
-    m.VERIFICATION_PAGE_PATH = dist / "verification" / "index.html"
     m.RESULTS_VERIFICATION_DIR = root / "results" / "verification"
     m.EQ_PROSPECTIVE_DIR = root / "results" / "earthquake_prospective"
     m.TO_PROSPECTIVE_DIR = root / "results" / "tornado_prospective"
@@ -81,7 +80,7 @@ def _write_summary(m, directory: Path, payload: dict) -> None:
 
 POOLED = {
     "n_storm_forecasts": 900,
-    "n_positive": 3,
+    "n_positive": 12,
     "base_rate": 0.0033,
     "mean_forecast_probability": 0.05,
     "brier": 0.0123,
@@ -144,6 +143,21 @@ def test_tornado_rollup_reports_the_scorers_count_and_pooled_skill(tmp_path):
     assert on_disk["forecast_storage"]["n_scored_forecasts"] == 5
     served = json.loads((m.VERIFICATION_DATA_DIR / "to.json").read_text())
     assert served["forecast_storage"]["n_scored_forecasts"] == 5
+
+
+def test_a_live_score_needs_events_before_it_is_quoted(tmp_path):
+    """With fewer than LIVE_MIN_EVENTS tornadoes, a model that always says "no" scores as well as a skilful
+    one: the summary quoted "live BSS 1.00" on 83 storm forecasts and zero tornadoes (2026-10-04)."""
+    m = _load(tmp_path)
+    _write_replays(m, "to", "tornado", 5)
+    summary = _tornado_summary(5)
+    for pooled in (summary.get("pooled_by_model_version") or {}).values():
+        pooled["n_positive"] = m.LIVE_MIN_EVENTS - 1
+    _write_summary(m, m.TO_PROSPECTIVE_DIR, summary)
+    item = _hazard(m._build_verification_summary(json.loads(m.LIVE_PULSE_PATH.read_text())), "to")
+    assert item["auc"] is None and item["brier"] is None and item["brier_skill_score"] is None
+    assert "too few tornadoes to score yet" in item["metric_source_label"]
+    assert item["forecast_storage"]["n_scored_forecasts"] == 5          # the count is still reported
 
 
 def test_a_live_record_of_another_model_version_is_never_shown_as_the_live_models(tmp_path):

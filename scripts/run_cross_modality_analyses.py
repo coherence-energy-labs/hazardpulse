@@ -25,6 +25,7 @@ import argparse
 import dataclasses
 import datetime as dt
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -74,6 +75,23 @@ def _load_eq_targets(*, max_events: int) -> list[dt.datetime]:
     return times
 
 
+def _finite(obj):
+    """The same structure with every non-finite float (NaN, inf) replaced by None."""
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _finite(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_finite(v) for v in obj]
+    return obj
+
+
+def _strict_json(obj) -> str:
+    """JSON every parser accepts: an analysis with no data has null statistics, never a bare NaN token
+    (which Python writes by default and the Worker's JSON.parse rejects -- /api/v1/laic/* was a 404)."""
+    return json.dumps(_finite(obj), indent=2, allow_nan=False)
+
+
 def _result_to_dict(result, hazard: str, analysis_id: str) -> dict:
     """Convert any analysis dataclass to the publish schema."""
     base = dataclasses.asdict(result)
@@ -118,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
         r = run_earthquake_geomagnetic_precursor(eq_times)
         d = _result_to_dict(r, "earthquake", "geomagnetic_precursor_kp")
         (args.out_dir / "earthquake_geomagnetic_precursor.json").write_text(
-            json.dumps(d, indent=2) + "\n", encoding="utf-8",
+            _strict_json(d) + "\n", encoding="utf-8",
         )
         analyses.append(d)
         print(f"  delta={r.delta_mean:+.3f} CI [{r.bootstrap_ci_delta_lo:+.3f}, "
@@ -129,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
         r = run_earthquake_solar_flare_precursor(eq_times)
         d = _result_to_dict(r, "earthquake", "solar_flare_precursor_xray")
         (args.out_dir / "earthquake_solar_flare_precursor.json").write_text(
-            json.dumps(d, indent=2) + "\n", encoding="utf-8",
+            _strict_json(d) + "\n", encoding="utf-8",
         )
         analyses.append(d)
         print(f"  delta={r.delta_mean:+.3f} CI [{r.bootstrap_ci_delta_lo:+.3f}, "
@@ -140,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         r = run_earthquake_imf_bz_precursor(eq_times)
         d = _result_to_dict(r, "earthquake", "imf_bz_precursor")
         (args.out_dir / "earthquake_imf_bz_precursor.json").write_text(
-            json.dumps(d, indent=2) + "\n", encoding="utf-8",
+            _strict_json(d) + "\n", encoding="utf-8",
         )
         analyses.append(d)
         print(f"  delta={r.delta_mean:+.3f} CI [{r.bootstrap_ci_delta_lo:+.3f}, "
@@ -180,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         r = run_cme_hurricane_intensification(ri_times, no_ri_times)
         d = _result_to_dict(r, "hurricane", "cme_intensification")
         (args.out_dir / "cme_hurricane_intensification.json").write_text(
-            json.dumps(d, indent=2) + "\n", encoding="utf-8",
+            _strict_json(d) + "\n", encoding="utf-8",
         )
         analyses.append(d)
         print(f"  RI={r.n_ri_events}  no-RI={r.n_no_ri_events}  "
@@ -218,7 +236,11 @@ def main(argv: list[str] | None = None) -> int:
         "n_eq_events_used": len(eq_times),
         "analyses": analyses,
     }
-    args.out_summary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    args.out_summary.write_text(_strict_json(payload) + "\n", encoding="utf-8")
+    # the research page renders from this summary: rebuild the site so the page and the file agree
+    from hazardpulse.site import build as site_build
+    changed = site_build.build_site()
+    print(f"Site: {len(changed)} files re-rendered")
     print()
     print(f"Wrote {args.out_summary} ({len(analyses)} analyses)")
     return 0

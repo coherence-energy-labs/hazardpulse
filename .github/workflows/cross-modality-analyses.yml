@@ -76,7 +76,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f dist/data/cross-modality-summary.json results/cross_modality/
+          git add -f dist/data/cross-modality-summary.json dist/verification/cross-modality/index.html results/cross_modality/
           if git diff --cached --quiet; then echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0; fi
           git commit -m "data: cross-modality analyses $(date -u +%Y-%m-%dT%H:%MZ)"
           echo "changed=true" >> "$GITHUB_OUTPUT"

@@ -1,0 +1,16 @@
+{
+  "prefetch": [
+    {
+      "source": "document",
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/data/*" } },
+          { "not": { "href_matches": "/api/*" } },
+          { "not": { "href_matches": "/stream/*" } }
+        ]
+      },
+      "eagerness": "moderate"
+    }
+  ]
+}
