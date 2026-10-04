@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import sys
 from pathlib import Path
 from typing import Callable
@@ -158,6 +159,30 @@ def _apply_ledger(d: SiteData, page: str) -> str:
     return evidence_pages.apply_block(page, "rows", tornado_ledger(d), prefix="hp-ledger")
 
 
+AREA_INDEX = "data/area-index.json"
+
+
+def area_index(d: SiteData) -> str:
+    """What the edge worker needs to personalise a page, and nothing more: the current earthquake grid,
+    and the positions of active tropical cyclones and tracked thunderstorms. One small file, so a page
+    view parses ~0.1 MB instead of the 1.5 MB of full forecast files."""
+    eq = d.earthquake
+    gate, _ = d.gate_of(eq.get("forecast_id"))
+    storms = [{k: s.get(k) for k in ("storm_id", "storm_name", "basin", "category", "lat", "lon", "ri_probability")}
+              for s in d.hurricanes.get("storms") or []]
+    tornadoes = [{"lat": s.get("lat"), "lon": s.get("lon"), "tornado_probability": s.get("tornado_probability"),
+                  "warned": bool(((s.get("v3") or {}).get("nws_warning") or {}).get("active"))}
+                 for s in d.tornadoes.get("storms") or []]
+    payload = {
+        "forecasts": {k: d.headlines[k].forecast_id for k in ("eq", "hu", "to")},
+        "eq": ({"forecast_id": eq.get("forecast_id"), "gate": gate, "forecast_domain": eq.get("forecast_domain"),
+                "probability_grid": eq.get("probability_grid")} if eq.get("probability_grid") else None),
+        "storms": storms,
+        "tornadoes": tornadoes,
+    }
+    return json.dumps(payload, separators=(",", ":"), allow_nan=False) + "\n"
+
+
 def evidence_blocks(d: SiteData, dist: Path) -> list[str]:
     from hazardpulse.verification import evidence_pages
     present = [rel for rel in EVIDENCE_PAGES if (dist / rel).exists()]
@@ -185,6 +210,8 @@ def build_site(dist: Path | None = None, root: Path | None = None) -> list[str]:
         if _write(page_file(dist, path), html):
             changed.append(path)
     changed += evidence_blocks(d, dist)
+    if _write(dist / AREA_INDEX, area_index(d)):
+        changed.append(AREA_INDEX)
     changed += shell.rewrap_static_pages(dist)
     changed += sitemap_and_feed(d, dist)
     return changed
@@ -207,6 +234,9 @@ def check_site(dist: Path | None = None, root: Path | None = None) -> list[str]:
     from hazardpulse.verification import evidence_pages
     ev = {k: v for k, v in d.evidence.items() if not k.startswith("_")}
     stale += [f"/{rel}" for rel in evidence_pages.check_pages(dist, root, ev=ev)]
+    idx = dist / AREA_INDEX
+    if not idx.exists() or idx.read_text(encoding="utf-8") != area_index(d):
+        stale.append(f"/{AREA_INDEX}")
     f = dist / LEDGER_PAGE
     if f.exists() and _apply_ledger(d, f.read_text(encoding="utf-8")) != f.read_text(encoding="utf-8"):
         stale.append(f"/{LEDGER_PAGE} (ledger)")

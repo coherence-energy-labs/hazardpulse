@@ -40,7 +40,13 @@ lists any page that differs from what the artifacts say, and `tests/test_site_pa
 
 ## Edge personalisation (`src/worker.js`)
 
-For each HTML response the Worker uses the visitor's approximate location (Cloudflare `request.cf`), for
+Pages run through the Worker (`run_worker_first` in `wrangler.toml`); assets, data files and the root text
+files are served directly. Workers serve any file that matches an asset without running the Worker, so
+until 2026-10-04 none of the code below had ever run on a page. `_headers` does not apply to a response the
+Worker returns, so the Worker sets every header a page needs itself.
+
+For each HTML response the Worker reads one small file the build writes for it (`/data/area-index.json`:
+the earthquake grid and storm positions) and uses the visitor's approximate location (Cloudflare `request.cf`), for
 that response only, to place the location marker on the maps (the projection travels on each map's
 `.user-marker`), to fill "Near you" on the home page (the visitor's own grid-cell earthquake chance, the
 nearest tropical cyclone and tracked thunderstorm), and to show a factual notice when an active tropical

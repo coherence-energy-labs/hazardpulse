@@ -119,6 +119,9 @@ function assertHtmlSecurityHeaders(
 const homeResponse = await worker.fetch(new Request("https://hazardpulse.com/"), env);
 assertHtmlSecurityHeaders(homeResponse);
 const homeCsp = homeResponse.headers.get("Content-Security-Policy") || "";
+// _headers is not applied to a Worker response: the page's own headers come from the Worker
+assert.equal(homeResponse.headers.get("Speculation-Rules"), '"/speculation-rules.json"');
+assert.equal(homeResponse.headers.get("X-Build-Mode"), null);
 assert.match(await homeResponse.text(), /HazardPulse/);
 
 const siteShellResponse = await worker.fetch(
@@ -253,6 +256,19 @@ const twister = (p, active) => ({ storm_id: "1", lat: 35.5, lon: -97.6, tornado_
 assert.equal(workerTest.summarizeArea(okc, { eq: null, storms: [], tornadoes: [twister(0.02, false)] }).banner, null);
 assert.equal(workerTest.summarizeArea(okc, { eq: null, storms: [], tornadoes: [twister(0.02, true)] }).banner.kind, "tornado");
 assert.equal(workerTest.summarizeArea(okc, { eq: null, storms: [], tornadoes: [twister(0.25, false)] }).banner.kind, "tornado");
+// the build's area index carries the warning state as a flag
+assert.equal(workerTest.summarizeArea(okc, { eq: null, storms: [],
+  tornadoes: [{ lat: 35.5, lon: -97.6, tornado_probability: 0.01, warned: true }] }).banner.kind, "tornado");
+assert.equal(workerTest.summarizeArea(okc, { eq: null, storms: [],
+  tornadoes: [{ lat: 35.5, lon: -97.6, tornado_probability: 0.01, warned: false }] }).banner, null);
+
+// the index the build writes is what the worker reads
+const areaIndex = JSON.parse(readFileSync(path.join(root, "dist", "data", "area-index.json"), "utf8"));
+assert.ok(areaIndex.eq && areaIndex.eq.forecast_domain && typeof areaIndex.eq.probability_grid === "string");
+assert.ok(Array.isArray(areaIndex.storms) && Array.isArray(areaIndex.tornadoes));
+const fromIndex = workerTest.summarizeArea(validGeo, {
+  eq: areaIndex.eq, eqGate: areaIndex.eq.gate, storms: areaIndex.storms, tornadoes: areaIndex.tornadoes });
+assert.ok(fromIndex.eqCell && Number.isFinite(fromIndex.eqCell.p));
 
 // "Near you": empty (so hidden) without a reliable location; facts, not advice, with one
 let areaHtml = "unset";

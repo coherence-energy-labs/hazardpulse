@@ -96,7 +96,11 @@ function withSecurityHeaders(
   secured.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   secured.headers.set("X-Content-Type-Options", "nosniff");
   secured.headers.set("X-Frame-Options", "DENY");
-  secured.headers.set("X-Build-Mode", "observatory-v7");
+  // _headers is not applied to a response the Worker returns, so every header a page needs is set here
+  const type = secured.headers.get("Content-Type") || "";
+  if (type.includes("text/html")) {
+    secured.headers.set("Speculation-Rules", '"/speculation-rules.json"');
+  }
   if (cacheControl) secured.headers.set("Cache-Control", cacheControl);
   if (cacheControl && cacheControl.includes("no-store")) {
     secured.headers.set("CDN-Cache-Control", "no-store");
@@ -385,22 +389,17 @@ function officialCenter(storm) {
   return ["Joint Typhoon Warning Center", "https://www.metoc.navy.mil/jtwc/jtwc.html"];
 }
 
+// one small file the site build writes for this purpose (hazardpulse.site.build.area_index): the earthquake
+// grid and the storm positions, ~0.15 MB, instead of parsing 1.5 MB of forecast files on every page view
 async function loadAreaData(env, request) {
-  const [pulse, storms, tornadoes] = await Promise.all([
-    fetchAssetJson(env, "/data/live-pulse.json", request),
-    fetchAssetJson(env, "/data/live-storms.json", request),
-    fetchAssetJson(env, "/data/live-tornadoes.json", request),
-  ]);
-  const eqHazard = pulse && Array.isArray(pulse.hazards) ? pulse.hazards.find((h) => h.key === "eq") : null;
-  const replay =
-    eqHazard && eqHazard.forecast_id
-      ? await fetchAssetJson(env, `/data/replay/${eqHazard.forecast_id}.json`, request)
-      : null;
+  const idx = await fetchAssetJson(env, "/data/area-index.json", request);
+  if (!idx) return { eq: null, eqGate: null, storms: [], tornadoes: [] };
+  const eq = idx.eq && idx.eq.forecast_domain && idx.eq.probability_grid ? idx.eq : null;
   return {
-    eq: replay && replay.forecast_domain && replay.probability_grid ? replay : null,
-    eqGate: eqHazard ? eqHazard.gate_status : null,
-    storms: storms && Array.isArray(storms.storms) ? storms.storms : [],
-    tornadoes: tornadoes && Array.isArray(tornadoes.storms) ? tornadoes.storms : [],
+    eq,
+    eqGate: eq ? eq.gate : null,
+    storms: Array.isArray(idx.storms) ? idx.storms : [],
+    tornadoes: Array.isArray(idx.tornadoes) ? idx.tornadoes : [],
   };
 }
 
@@ -434,7 +433,9 @@ function nearest(lat, lon, items, maxKm) {
 }
 
 function tornadoWarned(storm) {
-  return Boolean(storm && storm.v3 && storm.v3.nws_warning && storm.v3.nws_warning.active);
+  if (!storm) return false;
+  if (typeof storm.warned === "boolean") return storm.warned;
+  return Boolean(storm.v3 && storm.v3.nws_warning && storm.v3.nws_warning.active);
 }
 
 function summarizeArea(geo, data) {

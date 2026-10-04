@@ -172,6 +172,18 @@ def test_worker_is_in_deploy_path() -> None:
     assert 'main = "./src/worker.js"' in wrangler_toml
 
 
+def test_pages_run_through_the_worker_and_static_files_do_not() -> None:
+    """Workers serve a file that matches an asset without running the Worker, so the edge personalisation
+    and the pages' own headers never ran in production until this routing existed (2026-10-04)."""
+    import tomllib
+    cfg = tomllib.loads(_read_text("wrangler.toml"))
+    patterns = cfg["assets"]["run_worker_first"]
+    assert "/*" in patterns
+    for static in ("!/assets/*", "!/data/*", "!/speculation-rules.json", "!/sitemap.xml", "!/feed.xml",
+                   "!/robots.txt"):
+        assert static in patterns, static
+
+
 def test_personalized_live_pages_are_not_publicly_cached() -> None:
     headers = _read_text("dist/_headers")
     assert "/live/*" in headers

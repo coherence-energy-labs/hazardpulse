@@ -5,7 +5,21 @@ main = "./src/worker.js"
 [assets]
 directory = "./dist"
 binding = "ASSETS"
+# Pages run through the Worker, which sets their security headers and personalises them at the edge
+# (theme, the visitor's map marker, "Near you", the nearby-storm notice). Without this, Workers serve every
+# file that matches an asset directly and the Worker never saw a page -- the personalisation written for
+# it had never run in production (found 2026-10-04). Assets, data files and the root text files stay on
+# the static path, where _headers applies.
+run_worker_first = [
+  "/*",
+  "!/assets/*",
+  "!/data/*",
+  "!/speculation-rules.json",
+  "!/sitemap.xml",
+  "!/feed.xml",
+  "!/robots.txt",
+  "!/COMMERCIAL_LICENSE.md",
+]
 
 [env.preview]
 name = "hazardpulse-preview"
-
