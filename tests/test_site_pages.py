@@ -322,7 +322,11 @@ def test_quality_check_outcomes_are_the_recorded_ones_and_a_blocked_forecast_is_
 def test_the_earthquake_page_explains_the_forecast_and_keeps_research_statistics_apart(site):
     html = earthquake.page(site)
     assert "Earthquakes cannot be predicted" in html
-    assert "account for 86% of this cell&rsquo;s modelled rate" in html and "since 1973" in html
+    # the rate model's split, stated as exactly that (finding 9, 2026-10-05): its short-term term is not
+    # "recent earthquakes", and it is an input of the forecast, not a breakdown of the chance
+    assert "86% of this cell&rsquo;s 30-day rate comes from its short-term term" in html and "since 1973" in html
+    assert "not a breakdown of the chance" in html
+    assert "Recent earthquakes nearby" not in html and "Why this cell" not in html
     assert "Research statistics (not used by the forecast)" in html
     for banned in ("criticality", "Days to criticality", "singularity", "Threat brief", "Operational posture"):
         assert banned not in html, banned

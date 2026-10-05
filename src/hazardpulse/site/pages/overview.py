@@ -110,6 +110,12 @@ def world_map(d: SiteData, ident: str = "world-map") -> str:
 # home
 # ------------------------------------------------------------------------------------------------
 
+def _points(x: float) -> str:
+    """A difference of two proportions in percentage points, signed, two decimals."""
+    v = 100.0 * float(x)
+    return ("+" if v >= 0 else "&minus;") + f"{abs(v):.2f}"
+
+
 def _proofs(d: SiteData) -> str:
     """How each served model tested, from the evidence bound to the served artifacts."""
     ev = d.evidence
@@ -122,9 +128,16 @@ def _proofs(d: SiteData) -> str:
         how = "a second look at those years" if t.get("second_read") else "scored once"
         ref = ((eq.get("vs") or {}).get("A") or {}).get("auc") or {}
         ref_auc = auc - ref["diff"] if auc is not None and ref.get("diff") is not None else None
-        cards.append(("eq", fmt.pct(auc, 0) if auc is not None else "&mdash;",
+        # One decimal, both figures: rounded to whole percents the 96.9% beside the reference's 96.7%
+        # read as "97%" against it, a gap that is really 0.19 points [0.09, 0.28] (paired, by month).
+        ci = ref.get("ci") or [None, None]
+        gap = (f"; difference {_points(ref['diff'])} points"
+               + (f", 95% interval {_points(ci[0])} to {_points(ci[1])}" if ci[0] is not None else "")
+               if ref.get("diff") is not None else "")
+        cards.append(("eq", fmt.pct(auc, 1) if auc is not None else "&mdash;",
                       "of the time, a cell that went on to have an M6+ earthquake was ranked above one that did not"
-                      + (f" (a long-term seismicity map alone: {fmt.pct(ref_auc, 1)})" if ref_auc is not None else ""),
+                      + (f" (a long-term seismicity map alone: {fmt.pct(ref_auc, 1)}{gap})" if ref_auc is not None
+                         else ""),
                       f"Every 2&deg; cell, {when} ({how})"))
     hu = ev.get("hurricane")
     if hu:

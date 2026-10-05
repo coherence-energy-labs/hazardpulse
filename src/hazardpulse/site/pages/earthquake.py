@@ -16,25 +16,30 @@ def _catalog_start_year() -> str:
     return CATALOG_START[:4]
 
 
+DRIVER_LEAD = "Rate-model input"
+
+
 def driver_sentence(cell: dict) -> str:
-    """What moves the cell's number: the split of the clustering-model rate the boosted trees read
-    as their two strongest inputs (``lambda_short`` from recent nearby quakes, ``lambda_long`` from the
-    long-term rate)."""
+    """The split of the clustering (rate) model's 30-day rate for the cell, stated as exactly that.
+
+    ``lambda_short`` is the rate model's short-term term: a sum over EVERY earlier M5+ event since the
+    catalog start, each weighted by Omori decay since it happened -- not "recent earthquakes" (in
+    2026-10 it drew about half its weight from events more than five years old, and 97 of 100 listed
+    cells, some with 3 or fewer recent events, were told "recent earthquakes account for >= 50%").
+    It is also one input of the boosted trees (and GEAR1's stack) that compute the published chance,
+    so it is not a breakdown of that chance, and the sentence says so instead of explaining it."""
     lam_long = float(cell.get("lambda_long") or 0.0)
     lam_short = float(cell.get("lambda_short") or 0.0)
     total = lam_long + lam_short
     year = _catalog_start_year()
     if total <= 0:
-        return "This cell&rsquo;s modelled rate is at the model&rsquo;s floor: no recorded M5+ earthquake nearby."
+        return ("The clustering-rate model, one input of the forecast, has no rate for this cell: no M5+ "
+                f"earthquake since {year} reaches it.")
     share = lam_short / total
-    if share >= 0.5:
-        return (f"Recent earthquakes nearby &mdash; aftershock-style clustering &mdash; account for {share:.0%} of this "
-                f"cell&rsquo;s modelled rate; the rest is its long-term rate of M5+ earthquakes since {year}.")
-    if share >= 0.1:
-        return (f"Mostly this cell&rsquo;s long-term rate of M5+ earthquakes since {year}, raised by recent "
-                f"earthquakes nearby ({share:.0%} of the modelled rate).")
-    return (f"Almost entirely this cell&rsquo;s long-term rate of M5+ earthquakes since {year}; recent activity "
-            "adds little.")
+    return (f"In the clustering-rate model the forecast reads as one input, {share:.0%} of this cell&rsquo;s 30-day "
+            f"rate comes from its short-term term &mdash; every earlier M5+ earthquake nearby since {year}, weighted "
+            "by how long ago it happened, so large old earthquakes count as well as recent ones &mdash; and the "
+            "rest from its long-term rate. This describes an input, not a breakdown of the chance above.")
 
 
 def _research(cell: dict) -> str:
@@ -78,7 +83,7 @@ def _row(i: int, cell: dict) -> str:
             f'<span class="row-main"><span class="row-title">{esc(fe_region(lat, lon))}</span>'
             f'<span class="row-sub">{coords(lat, lon, 0)} &middot; {sub}</span></span>'
             f'<span class="row-figure">{fmt.chance(cell.get("probability"))}</span></summary>'
-            f'<div class="row-body"><p class="row-lead"><strong>Why this cell:</strong> {driver_sentence(cell)}</p>'
+            f'<div class="row-body"><p class="row-lead"><strong>{DRIVER_LEAD}:</strong> {driver_sentence(cell)}</p>'
             f"{details}{_research(cell)}</div></details></li>")
 
 
@@ -164,12 +169,12 @@ def page(d: SiteData) -> str:
                "(the <code>probability_grid</code> field, row by row from the south-west corner).</p>")
     body = (common.section("map", "Map", notices + themap)
             + common.section("cells", "Cells with the highest chance", listing,
-                             intro=f"The {min(N_LISTED, len(cells))} cells with the highest 30-day chance. Open a row to "
-                                   "see what drives its number.")
+                             intro=f"The {min(N_LISTED, len(cells))} cells with the highest 30-day chance. Open a row "
+                                   "for the cell, its recent earthquakes and one input of the forecast.")
             + common.section("model", "About this forecast", _model_box(d),
                              intro="A chance is not an alarm: a 20% chance still means that, of five such 30-day "
                                    "periods, four would pass without an M6+ earthquake in that cell. Compare a cell "
-                                   "with others, and with what drives its number.")
+                                   "with others.")
             + common.section("check", "Check this forecast", common.check_this(
                 replay.get("forecast_id"),
                 scored_note="How this model scored on past years, and how its live forecasts score as their 30-day "
