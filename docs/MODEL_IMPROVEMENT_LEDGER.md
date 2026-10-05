@@ -166,6 +166,54 @@ tornado deploy or merge. Cheap fix: give `earthquake-score.yml` the same deploy 
         `EchoTop_50`, `LCL`), chosen on 2023-2024 plus 2025-08..12, and scored once on 2026.
      - Promotion follows the program's carried-challenger rule: shadow first, then the rule written
        before the challenger's first cycle.
+   - **Measured 2026-10-05, ruling out the cheap repair:** old `PS` is not the `probsevere` model
+     probability the parser still reads (`p_ps_severe`). On the training store they are equal on 25.9% of
+     rows (corr 0.83), and `p_ps` was already 0 on 32% of rows while `p_ps_severe` never is. So mapping
+     the surviving field into `PS` would feed the model a quantity it never saw. In tonight's live file the
+     new `ProbSevere` property equalled `models.probsevere.PROB` on all 78 storms, all at 0 (inconclusive).
+3. **T3. A live nowcast at the edge** (opened 2026-10-05).
+   - **The fact.** The served `tornado_v3_w` reads 30 inputs (`results/models/tornado_v3_w.json`
+     `feature_names`): the current scan's 28 ProbSevere attributes, whether an NWS tornado warning
+     covers the storm, and minutes since it was issued. That is 339 trees and a Platt map (a 1.006,
+     b -6.391). Every input is in NOAA's 2-minute ProbSevere file and the NWS alerts the Worker already
+     reads. No HRRR, track history or coherence field enters it.
+   - **What it would give.** The Worker could score every tracked storm on the newest file, so the 60-min
+     forecast is minutes old, not 30-120.
+   - **Deciding work.**
+     1. A JavaScript tree evaluator and feature extractor, owned by a parity oracle: every recorded v3
+        storm (inputs and full-precision `probability_60min` are in each record, ~300,000 since
+        2026-10-03) must reproduce exactly.
+     2. Feature extraction checked against archived raw files for recorded runs.
+   - **Decisions first.** Worker CPU: the free plan's 10 ms per request cannot score an outbreak's
+     hundreds of storms. And every number the site shows must stay recorded, so edge numbers need a
+     record (or the edge shows the batch record plus a fresher view, labelled as such).
+   - **Correction recorded.** The same day this was first "killed" because the record's input vector has
+     161 features, 107 from HRRR and the coherence engine. That counted what the record computes, not what
+     the model reads. The kill was itself killed by the payload's feature list.
+
+### Hurricane RI, serving
+
+1. **H7. Give WP/IO/SH v8.2 its storm history** (opened 2026-10-05, hurricane audit).
+   - **The problem.** Live WP runs from one JTWC warning, so 9 of v8.2's 17 inputs are median-imputed.
+     Re-scoring the 2022-2024 WP holdout with that input pattern: log loss 0.2589 vs climatology 0.2649
+     (0.2057 with full inputs). Live witness: Choi-Wan intensified 45, 45 and 40 kt in 24 h while v8.2
+     published 5.7%, 5.4% and 3.2%.
+   - **The source.** UCAR RAL's real-time b-decks (`hurricanes.ral.ucar.edu/repository/data/bdecks_open/2026/`)
+     hold positions, intensity and pressure history for every active storm. On 2026-10-05 all files were
+     refreshed together at 01:47Z with the 00Z fixes, inside the scorer's t + 3 h 30 min.
+   - **Deciding experiment.** Measure RAL's lag over 48 h. Re-score the WP holdout with exactly the
+     history that lag allows at t + 3 h 30 min, then serve it. This is a train/serve repair: the model
+     unchanged, its inputs restored.
+
+## Platform (2026-10-05 audit)
+
+- **A clock for the scorers.** GitHub fired no scheduled run of any workflow here from 00:23Z to past
+  03:30Z on 2026-10-05, with nothing on its status page. The scorers' own gated crons and
+  `scheduler.yml` are in place, but both depend on GitHub's cron. The production Worker's 10-minute
+  Cloudflare cron (PR #26) dispatches the scheduler once a token exists: `GH_DISPATCH_TOKEN`
+  (fine-grained, this repository, Actions read/write).
+- **Where the records live.** `docs/DATA_AND_RECORDS.md` covers growth, about 1 GB a year in git at the
+  new cadence, and the options (R2 with hashes in git is recommended).
 
 ## Killed (witness -> what survives)
 
@@ -177,6 +225,8 @@ tornado deploy or merge. Cheap fix: give `earthquake-score.yml` the same deploy 
 | Cycle-to-cycle revisions predict RI (R) | dev: -0.0002 [-0.0013, +0.0009] | nothing |
 | TC-PRIMED as a live input | 2025 "preliminary" uploaded 2026-07-24; 2026 EP empty | training data only |
 | GEAR1 as a better long-term earthquake map than ours | AG - A_ch: DEV -0.21 [-0.33, -0.08], FINAL -0.31 [-0.41, -0.21] nats per target | GEAR1 as an added term (S1, served) |
+| Repair the 2025 format change by mapping the new `ProbSevere` into old `PS` | training store: `p_ps == p_ps_severe` on 25.9% of rows, corr 0.83; `p_ps` = 0 on 32% where `p_ps_severe` never is | T2's evaluation and refit |
+| A live calibrator from the matured live record, as soon as one exists | tornado 2026-10-04: fitted on 794 storm-forecasts with 0 tornadoes, it published 567-1,822x the model's chance; held-out Brier 467x worse | a calibrator with >= 30 distinct events and a held-out win over the model (`calibrator_admissible`, PR #22) |
 
 **Blocked, not killed:** CIRA's SHIPS developmental data. `rammb-data.cira.colostate.edu` returns
 403 (nginx) to this machine, even with browser headers. Untested from a US CI runner.
