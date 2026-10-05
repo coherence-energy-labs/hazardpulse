@@ -1,6 +1,90 @@
 {
-  "generated_at": "2026-10-05T03:40:21Z",
+  "generated_at": "2026-10-05T11:42:39Z",
   "envelopes": [
+    {
+      "provenance_id": "prov_hu_fcst_20261005_1038",
+      "forecast_id": "hu_fcst_20261005_1038",
+      "hazard": "hurricane",
+      "model_version": "hurricane_ri_v8_2",
+      "input_hash": "sha256:4841b380e0420c5675ea7c4959801b85cc111397ce659ba92604df208fad70d0",
+      "output_hash": "sha256:dce17797a986413ca8be1ae93cdae252b67b3677b994120265b2ef236c04d27d",
+      "signed_at": "2026-10-05T10:38:51Z",
+      "sources": [
+        "ATCF advisories",
+        "NOAA tropical cyclone feed",
+        "published live storm snapshot"
+      ],
+      "transforms": [
+        "advisory_ingest",
+        "feature_build",
+        "ri_scoring",
+        "calibration",
+        "publish_artifact"
+      ],
+      "replay_artifact": "/data/replay/hu_fcst_20261005_1038.json"
+    },
+    {
+      "provenance_id": "prov_to_fcst_20261005_1021",
+      "forecast_id": "to_fcst_20261005_1021",
+      "hazard": "tornado",
+      "model_version": "tornado_v3-05a06c843c87",
+      "input_hash": "sha256:7f08a78b0460e5433b1336de05caf62e2ec9cbed733eb2482832d290429513dc",
+      "output_hash": "sha256:513241f5ef1a9aba154e80f0617b302a70a06dfc00a8b7accd14a470cbb19cdb",
+      "signed_at": "2026-10-05T10:21:56Z",
+      "sources": [
+        "ProbSevere storm objects",
+        "published live tornado snapshot",
+        "HRRR analysis"
+      ],
+      "transforms": [
+        "probsevere_ingest",
+        "coherence_scoring",
+        "storm_ranking",
+        "publish_artifact"
+      ],
+      "replay_artifact": "/data/replay/to_fcst_20261005_1021.json"
+    },
+    {
+      "provenance_id": "prov_eq_fcst_20261005_1000",
+      "forecast_id": "eq_fcst_20261005_1000",
+      "hazard": "earthquake",
+      "model_version": "eq_operational_S1_gear1_v1-d409c534bb4c",
+      "input_hash": "sha256:e1fa0f1b2379f0bb2ff30a1027ffe00bf675c3400e12026dc17e4597a1716ca0",
+      "output_hash": "sha256:341768b714ab3bdf7f8b3bb619851c1c1bd6d0032ace5300a978427e0d80edfe",
+      "signed_at": "2026-10-05T10:00:00Z",
+      "sources": [
+        "USGS FDSNWS"
+      ],
+      "transforms": [
+        "catalog_ingest",
+        "grid_binning",
+        "coherence_feature_extraction",
+        "singularity_scoring",
+        "publish_artifact"
+      ],
+      "replay_artifact": "/data/replay/eq_fcst_20261005_1000.json"
+    },
+    {
+      "provenance_id": "prov_to_fcst_20261005_0856",
+      "forecast_id": "to_fcst_20261005_0856",
+      "hazard": "tornado",
+      "model_version": "tornado_v3-05a06c843c87",
+      "input_hash": "sha256:1806f43738f6efccdbe92a67a1476515a629a424ea194186cc855cf670ac2f63",
+      "output_hash": "sha256:0a5b8dbafd73078d81c761ac4b404749bb8306cdeccbc6c12bbd31b3835d0e81",
+      "signed_at": "2026-10-05T08:56:45Z",
+      "sources": [
+        "ProbSevere storm objects",
+        "published live tornado snapshot",
+        "HRRR analysis"
+      ],
+      "transforms": [
+        "probsevere_ingest",
+        "coherence_scoring",
+        "storm_ranking",
+        "publish_artifact"
+      ],
+      "replay_artifact": "/data/replay/to_fcst_20261005_0856.json"
+    },
     {
       "provenance_id": "prov_hu_fcst_20261005_0333",
       "forecast_id": "hu_fcst_20261005_0333",
@@ -22,6 +106,26 @@
         "publish_artifact"
       ],
       "replay_artifact": "/data/replay/hu_fcst_20261005_0333.json"
+    },
+    {
+      "provenance_id": "prov_eq_fcst_20261005_0300",
+      "forecast_id": "eq_fcst_20261005_0300",
+      "hazard": "earthquake",
+      "model_version": "eq_operational_S1_gear1_v1-d409c534bb4c",
+      "input_hash": "sha256:f7f7c8b680d3c6ad42ffef0302b1c496e55adeb956902d850cdd3986f9e64063",
+      "output_hash": "sha256:4e9700f487d03fe1652002148fd451afd75cf8aee0dd7bdfc40a7e7af9a8f4e6",
+      "signed_at": "2026-10-05T03:00:00Z",
+      "sources": [
+        "USGS FDSNWS"
+      ],
+      "transforms": [
+        "catalog_ingest",
+        "grid_binning",
+        "coherence_feature_extraction",
+        "singularity_scoring",
+        "publish_artifact"
+      ],
+      "replay_artifact": "/data/replay/eq_fcst_20261005_0300.json"
     },
     {
       "provenance_id": "prov_to_fcst_20261005_0205",
