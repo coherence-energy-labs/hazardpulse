@@ -497,6 +497,24 @@ None of these choices depends on outcomes, but all of them change which records 
    result is also reported without catch-up and rebuilt records, so the effect of this amendment is
    visible. The claim rule, the looks and the error budgets of amendments 1, 4 and 6 are unchanged.
 
+### Amendment 7, implementation record (2026-10-05)
+
+- Rules 1, 2 and 4 live in one module, `hazardpulse.hurricane.cycle_records`, used by the live scorer
+  (catch-up), the prospective test and the verifier of the published numbers.
+- Rule 3: `scripts/rebuild_hurricane_cycles.py` was run blind on the 6 qualifying live records
+  (EP15 and EP18 at 10-04 06, 12 and 18Z). It reproduced 24 of 24 shadows: probability, curve, model
+  probabilities and every full-precision input identical (max |d| 0.0). EP15 and EP18 at 10-04 00Z
+  were then rebuilt (`results/hurricane_prospective/rebuilt/hu_rebuilt_20261005_0251.json`,
+  `rebuilt: true`). The file records the control and every input read.
+- On the records of 2026-10-05 ~03Z, the test set is 8 storm-cycles: EP15 and EP18 at 10-04 00Z
+  (rebuilt), 06, 12 and 18Z.
+- Disclosure: before the rebuild, while checking the published-number verifier (~02:20Z), this
+  implementation fetched the operational best tracks of EP15 and EP18. They then held fixes through
+  10-05 00Z, which is the 24-h fix of the two rebuilt cycles. Their 24-h change was not computed.
+  One endpoint was printed: EP18 at 85 kt at 10-05 00Z, shown as the old verifier's misaligned end
+  fix for the 06Z record. The rebuild has no choice an outcome could steer: the procedure is fixed
+  and its control is exact. The disclosure is here so a reader can judge.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
