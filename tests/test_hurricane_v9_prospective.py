@@ -104,6 +104,7 @@ def test_the_output_reports_the_test_set_with_and_without_catch_up(tmp_path, mon
     cus = [_rec(f"AL{i:02d}2026", cyc, 0.7 if i % 3 == 0 else 0.03, catch_up=True) for i in range(1, 7)]
     _art(replay, "hu_fcst_20261004_1022", "2026-10-04T10:22:08Z", storms, catch_up=cus)
     monkeypatch.setattr(m, "REPLAY", replay)
+    monkeypatch.setattr(m, "REBUILT", tmp_path / "rebuilt")
     monkeypatch.setattr(m, "OUT", tmp_path / "v9.json")
     t0 = dt.datetime(2026, 10, 4, 6)
 

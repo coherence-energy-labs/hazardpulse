@@ -39,6 +39,7 @@ TOL = 5e-5          # stored probabilities are rounded to 4 decimals
 
 
 CATCH_UP_KEY = "shadow_catch_up"      # a forecast file's catch-up records (amendment 7 rule 2)
+REBUILT_KEY = "rebuilt_records"       # a rebuild file's records (amendment 7 rule 3)
 
 
 def sha(obj) -> str:
@@ -107,12 +108,19 @@ def audit(root: Path = ROOT) -> dict:
             content_ok += 1
         else:
             content_bad.append(row["forecast_id"])
+    # amendment 7 rule 3 records: not forecasts (no ledger entry) -- each file carries its own content hash
+    rebuilt = sorted((root / "results" / "hurricane_prospective" / "rebuilt").glob("hu_rebuilt_*.json"))
+    rebuilt_bad = []
+    for p in rebuilt:
+        art = json.loads(p.read_text(encoding="utf-8"))
+        if sha({k: v for k, v in art.items() if k != "content_sha256"}) != art.get("content_sha256"):
+            rebuilt_bad.append(p.stem)
     models = known_models(root)
     rec = {"checked": 0, "matched": 0, "mismatched": [], "no_inputs": 0, "artifact_not_in_repo": 0}
     files = sorted((root / "dist" / "data" / "replay").glob("hu_fcst_*.json"))
-    for p in files:
+    for p in files + rebuilt:
         art = json.loads(p.read_text(encoding="utf-8"))
-        for s in (art.get("storms") or []) + (art.get(CATCH_UP_KEY) or []):
+        for s in (art.get("storms") or []) + (art.get(CATCH_UP_KEY) or []) + (art.get(REBUILT_KEY) or []):
             for key, sh in s.items():
                 if not (key.endswith("_shadow") and isinstance(sh, dict) and sh.get("status") == "ok"):
                     continue
@@ -129,11 +137,12 @@ def audit(root: Path = ROOT) -> dict:
                     rec["matched"] += 1
                 else:
                     rec["mismatched"].append(f"{art['forecast_id']} {s.get('storm_id')} {key}: |d| {worst:.2e}")
-    ok = not chain_bad and not content_bad and not rec["mismatched"]
+    ok = not chain_bad and not content_bad and not rec["mismatched"] and not rebuilt_bad
     return {"generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"), "ok": ok,
             "ledger": {"entries": len(rows), "chain_mismatches": chain_bad,
                        "content_matches": content_ok, "content_mismatches": content_bad,
                        "entries_without_replay": no_replay},
+            "rebuilt_files": {"files": len(rebuilt), "content_mismatches": rebuilt_bad},
             "replay_files": len(files), "recompute": rec,
             "note": "records written before the ledger (2026-10-03) or before inputs were stored are "
                     "counted as not covered, never as passing"}

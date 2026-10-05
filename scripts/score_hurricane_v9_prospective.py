@@ -45,6 +45,9 @@ from hazardpulse.hurricane import atcf, ri_v9  # noqa: E402
 from hazardpulse.hurricane import cycle_records as cr  # noqa: E402
 
 REPLAY = ROOT / "dist" / "data" / "replay"
+# amendment 7 rule 3: missed cycles rebuilt by a procedure that reproduced the live records exactly
+# (scripts/rebuild_hurricane_cycles.py)
+REBUILT = ROOT / "results" / "hurricane_prospective" / "rebuilt"
 OUT = ROOT / "results" / "hurricane_prospective" / "v9_shadow.json"
 BTK = "https://ftp.nhc.noaa.gov/atcf/btk/b{low}.dat"
 LOOKS = ("2026-12-01", "2027-12-01")
@@ -61,22 +64,32 @@ def _iso(s: str) -> dt.datetime:
     return dt.datetime.fromisoformat(s.replace("Z", ""))
 
 
-def candidates(replay_dir: Path | None = None) -> list[cr.Candidate]:
+_DEFAULT = object()
+
+
+def candidates(replay_dir: Path | None = None, rebuilt_dir=_DEFAULT) -> list[cr.Candidate]:
     """Every forecast record of a test-population storm-cycle (an NHC-basin numbered storm, t >= the
     start) that carries the shadows: the published storms of each forecast file and its catch-up
     records (amendment 7 rule 2), each with the time its file was made (cycle_records.file_candidates,
-    the reader the live scorer's catch-up uses too)."""
+    the reader the live scorer's catch-up uses too); and the rule 3 records of ``rebuilt_dir`` (by
+    default REBUILT when the default replay directory is read, none for another one)."""
+    if rebuilt_dir is _DEFAULT:
+        rebuilt_dir = REBUILT if replay_dir is None else None
+    paths = sorted((replay_dir or REPLAY).glob("hu_fcst_*.json"))
+    if rebuilt_dir is not None:
+        paths += sorted(Path(rebuilt_dir).glob("hu_rebuilt_*.json"))
     out = []
-    for path in sorted((replay_dir or REPLAY).glob("hu_fcst_*.json")):
+    for path in paths:
         art = json.loads(path.read_text(encoding="utf-8"))
         out.extend(c for c in cr.file_candidates(art) if cr.is_nhc_numbered(c.storm_id) and c.cycle >= START)
     return out
 
 
-def select_test_records(replay_dir: Path | None = None) -> cr.Selection:
-    """Amendment 7 rules 1-2: at most one test record per storm-cycle -- the first made at or after
-    t + 3 h 30 min (a catch-up record only before t + 12 h). The same record serves every entrant."""
-    return cr.select(candidates(replay_dir))
+def select_test_records(replay_dir: Path | None = None, rebuilt_dir=_DEFAULT) -> cr.Selection:
+    """Amendment 7 rules 1-3: at most one test record per storm-cycle -- the first made at or after
+    t + 3 h 30 min (a catch-up record only before t + 12 h; a rule 3 rebuild where no run recorded the
+    cycle). The same record serves every entrant."""
+    return cr.select(candidates(replay_dir, rebuilt_dir))
 
 
 def collect(replay_dir: Path | None = None, key: str = "ri_v9_shadow", selection: cr.Selection | None = None) -> list[dict]:

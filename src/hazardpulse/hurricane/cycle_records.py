@@ -30,6 +30,7 @@ OUTCOME_WINDOW = dt.timedelta(hours=24)                  # rule 4
 RI_THRESHOLD_KT = 30.0
 NHC_BASINS = frozenset({"AL", "EP", "CP"})
 CATCH_UP_KEY = "shadow_catch_up"                         # where a forecast file keeps its catch-up records
+REBUILT_KEY = "rebuilt_records"                          # where a rebuild file keeps its rule 3 records
 
 EARLY = "made before t + 3 h 30 min (preliminary inputs)"
 LATE_CATCH_UP = "catch-up made at or after t + 12 h"
@@ -157,11 +158,12 @@ def has_shadow(entry: Mapping[str, Any]) -> bool:
 
 def file_candidates(artifact: Mapping[str, Any]) -> list[Candidate]:
     """Every shadow-carrying record in one forecast file -- its published storms and its catch-up
-    records -- keyed by the record's own cycle (``issue_time``; the shadows' ``cycle`` for a record
-    that has none), made at the file's own time. ``ref`` is ``(forecast id, list name, record)``."""
+    records (or a rebuild file's rule 3 records) -- keyed by the record's own cycle (``issue_time``; the
+    shadows' ``cycle`` for a record that has none), made at the file's own time. ``ref`` is
+    ``(forecast id, list name, record)``."""
     made = record_time(artifact)
     out = []
-    for kind in ("storms", CATCH_UP_KEY):
+    for kind in ("storms", CATCH_UP_KEY, REBUILT_KEY):
         for s in artifact.get(kind) or []:
             if not isinstance(s, Mapping) or not has_shadow(s):
                 continue
