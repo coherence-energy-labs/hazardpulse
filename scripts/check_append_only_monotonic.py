@@ -63,6 +63,29 @@ def git(*args: str) -> str:
                           text=True, check=False).stdout
 
 
+def is_ancestor(a: str, b: str) -> bool:
+    """``a`` is ``b`` or in its history."""
+    return subprocess.run(["git", "merge-base", "--is-ancestor", a, b], cwd=ROOT,
+                          capture_output=True, check=False).returncode == 0
+
+
+def effective_base(base: str, head: str) -> tuple[str | None, str]:
+    """``(ref, why)``: the state ``head`` must not have shrunk from.
+
+    ``head`` not yet in ``base``'s history (a pull request, a branch): ``base``, the live branch it merges
+    into. ``head`` already in it (a push to main; or main moved on while this ran): ``base`` is then either
+    ``head`` itself -- a comparison that cannot fail -- or a LATER commit, a shrink by construction (the merge
+    of PR #28 read one record "destroyed" in four ledgers on 2026-10-05, because a scorer pushed during its
+    test run). The question is then what ``head`` did to the state it was built on: its first parent. None
+    when it has none (a root commit cannot have lost a record)."""
+    if not is_ancestor(head, base):
+        return base, f"{head} merges into {base}"
+    parent = git("rev-parse", "--verify", "--quiet", f"{head}^1").strip()
+    why = (f"{head} is already in {base}'s history, so it is checked against the commit it was built on "
+           f"({head}^1)")
+    return (parent or None), why
+
+
 def blob_at(ref: str, path: str) -> str | None:
     proc = subprocess.run(["git", "show", f"{ref}:{path}"], cwd=ROOT,
                           capture_output=True, text=True, check=False)
@@ -163,7 +186,13 @@ def main() -> int:
         print("APPEND-ONLY GATE VACUOUS: no evidence artifacts discovered", file=sys.stderr)
         return 1
 
-    violations, notes = check(args.base, args.head)
+    base, why = effective_base(args.base, args.head)
+    print(f"  base: {why}")
+    if base is None:
+        print(f"APPEND-ONLY GATE GREEN - {args.head} is a root commit: there is no earlier state to have lost "
+              "records from.")
+        return 0
+    violations, notes = check(base, args.head)
     for note in notes:
         print(f"  note: {note}")
     if violations:
@@ -171,7 +200,7 @@ def main() -> int:
         print("\nResolve these files toward the LIVE branch. A regenerated evidence artifact from an "
               "older fork point is stale data, not a change.")
         return 1
-    print(f"APPEND-ONLY GATE GREEN - {len(checked)} evidence artifact(s) checked against {args.base}; "
+    print(f"APPEND-ONLY GATE GREEN - {len(checked)} evidence artifact(s) checked against {base}; "
           f"none lost records.")
     return 0
 
