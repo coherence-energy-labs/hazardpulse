@@ -689,10 +689,12 @@ function chanceLevel(p) {
   return "p1";
 }
 
+// a hazard chance: never "0%" -- no model here outputs an exact zero, so a 0 is rounding (the tornado scorer
+// stores 4 decimals) or a default, and "0%" would promise what nobody can ("Near you" said a storm 170 km
+// away had a 0% chance of a tornado, 2026-10-05)
 function formatChance(p) {
   const v = Number(p);
   if (!Number.isFinite(v)) return "&mdash;";
-  if (v <= 0) return "0%";
   if (v < 0.001) return "&lt;0.1%";
   if (v >= 1) return "100%";
   return `${(v * 100).toFixed(1)}%`;
@@ -1505,11 +1507,13 @@ export default {
     // point -- fetched together, and waited for only PAGE_LIVE_BUDGET_MS. A warm server answers from memory;
     // a cold one sends the page without them (dashes, the feed's placeholder) and app.js fills them in, while
     // the fetches finish behind the response and warm the server for the next visitor.
+    const liveStart = Date.now();
     const live = await withinBudget(
       Promise.all([getLive(env, request, ctx), geo.isReliable ? nwsPointAlerts(geo, ctx) : null]),
       PAGE_LIVE_BUDGET_MS,
       ctx
     );
+    const liveMs = Date.now() - liveStart;
     const [liveNow, alerts] = live || [null, null];
     let area = { reliable: false };
     if (geo.isReliable) {
@@ -1532,12 +1536,19 @@ export default {
       .on(".forecast-age", new ForecastAgeHandler())
       .transform(response);
 
-    return withSecurityHeaders(new Response(transformed.body, transformed), {
+    const page = withSecurityHeaders(new Response(transformed.body, transformed), {
       cacheControl: HTML_CACHE_CONTROL,
       xRobotsTag: "index, follow",
       contentSecurityPolicy: HTML_CONTENT_SECURITY_POLICY,
       vary: "CF-IPCountry, Accept-Encoding",
     });
+    // how long the page waited for the live data, readable in any browser's network panel: a slow page
+    // (one took 3.2 s on 2026-10-05 and could not be attributed afterwards) now says where its time went
+    page.headers.set(
+      "Server-Timing",
+      `live;dur=${liveMs};desc="${liveNow ? "live data in the page" : "past the budget, filled by app.js"}"`
+    );
+    return page;
   },
 };
 

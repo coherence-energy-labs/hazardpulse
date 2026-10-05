@@ -72,8 +72,8 @@ tracked them is under 3 hours old.
 The server renders everything first (`HTMLRewriter`: the counters `[data-live]`, `#live-feed`, `#near-you`,
 the notice, the globe's centre), so the page is complete without JavaScript. `/assets/app.js` then draws
 the globe (WebGL: a land mask, `/assets/maps/land-2048.webp`, and the 30-day earthquake forecast as a heat
-layer, under the live markers), polls `/api/v1/now` every minute and `/api/v1/near` every five while the
-page is visible, and keeps the relative times current. Without WebGL the static forecast map stays.
+layer from `/data/globe.json`, ~17 KB, under the live markers), polls `/api/v1/now` every minute and
+`/api/v1/near` every five while the page is visible, and keeps the relative times current. Without WebGL the static forecast map stays.
 
 Rules, each with a test in `tests/worker_api_check.mjs`:
 

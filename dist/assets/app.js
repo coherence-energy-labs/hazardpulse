@@ -511,29 +511,25 @@
     };
     img.src = el.getAttribute("data-land");
 
-    getJSON(el.getAttribute("data-area") || "/data/area-index.json").then(function (idx) {
-      var trackedAt = forecastTime(idx && idx.forecasts && idx.forecasts.to);
-      if (idx && Array.isArray(idx.tornadoes) && Date.now() - trackedAt <= TRACKED_MAX_AGE_MS) {
-        tracked = idx.tornadoes.filter(function (s) { return fin(s.lat) && fin(s.lon); });
+    // the globe's own small file (built by hazardpulse.site.build.globe_index): the earthquake forecast as
+    // one log-scaled byte per cell, and the tracked thunderstorms' positions
+    getJSON(el.getAttribute("data-globe") || "/data/globe.json").then(function (g) {
+      var tr = g && g.tracked;
+      if (tr && Array.isArray(tr.points) && Date.now() - forecastTime(tr.forecast_id) <= TRACKED_MAX_AGE_MS) {
+        tracked = tr.points.filter(function (p) { return fin(p[0]) && fin(p[1]); })
+          .map(function (p) { return { lat: p[0], lon: p[1] }; });
       }
-      var eq = idx && idx.eq;
-      if (!eq || eq.gate === "block" || !eq.forecast_domain || typeof eq.probability_grid !== "string") return;
-      var dom = eq.forecast_domain, vals = eq.probability_grid.split(",");
-      var nx = dom.n_lon | 0, ny = dom.n_lat | 0;
-      // the shader maps the grid's columns onto the whole globe from 180 W: any other grid is not drawn
-      if (vals.length !== nx * ny || dom.lon_min !== -180 || Math.abs(nx * dom.dlon - 360) > 1e-6) return;
-      var data = new Uint8Array(nx * ny);
-      for (var i = 0; i < vals.length; i++) {
-        var p = parseFloat(vals[i]);
-        // logarithmic: 0.05% -> 0, 25% -> 255
-        var v = p > 0 ? (Math.log(p) / Math.LN10 + 3.3) / 2.7 : 0;
-        data[i] = Math.max(0, Math.min(255, Math.round(v * 255)));
-      }
+      var h = g && g.heat;
+      if (!h || typeof h.bytes !== "string") return;   // withheld, or a grid the globe cannot draw
+      var bin = atob(h.bytes), nx = h.n_lon | 0, ny = h.n_lat | 0;
+      if (bin.length !== nx * ny || !fin(h.lat_min) || !fin(h.dlat)) return;
+      var data = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) data[i] = bin.charCodeAt(i);
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, heatTex);
       gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, nx, ny, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, data);
-      gl.uniform2f(U.u_heatLat, rad(dom.lat_min), rad(dom.lat_min + ny * dom.dlat));
+      gl.uniform2f(U.u_heatLat, rad(h.lat_min), rad(h.lat_min + ny * h.dlat));
       gl.uniform1f(U.u_heatOn, 1);
       draw(performance.now());
     }).catch(function () {});
