@@ -82,6 +82,10 @@ def test_v3_tier_uses_the_warnings_model_when_the_feed_answers(live, suite, monk
     assert by["11"]["model_version"] == lp.model_version(suite.main)
     assert by["11"]["v3"]["probability_30min"] is not None                  # products served with the feed
     assert by["11"]["v3"]["probability_30min"] <= by["11"]["v3"]["probability_60min"] + 1e-12
+    # score_storms keeps the model's full precision (the trust layer and the live record read it);
+    # main() rounds for display afterwards (round_published)
+    assert by["11"]["tornado_probability"] == min(by["11"]["v3"]["probability_60min"], 0.99)
+    live.round_published(out)
     assert by["11"]["tornado_probability"] == round(by["11"]["v3"]["probability_60min"], 4)
     assert by["11"]["v3"]["drivers"] and by["11"]["v3"]["hrrr_analysis"] is None   # no HRRR in this test
 

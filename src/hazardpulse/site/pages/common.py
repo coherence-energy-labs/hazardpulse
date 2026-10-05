@@ -48,14 +48,23 @@ GATE_WORDS = {
 }
 
 
-def forecast_age(issued_at, window_minutes: int, schedule: str) -> str:
+def forecast_age(issued_at, window_minutes: int, schedule: str, *, valid_at=None, short: bool = False) -> str:
     """An empty notice the edge worker fills when the forecast is older than its own window at the moment the
-    page is viewed (a static page cannot know that); empty, it is not shown."""
+    page is viewed (a static page cannot know that); empty, it is not shown.
+
+    ``valid_at``: when the forecast's DATA was valid, if it precedes the issue time -- the window runs from it
+    (a 60-minute tornado forecast made from radar data 19 minutes old has 41 minutes left when issued).
+    ``short``: the inline form a hazard card carries at the end of its meta line (an empty ``<span>`` takes no
+    space, so it needs no style of its own)."""
     stamp = fmt.iso(issued_at)
     if not stamp:
         return ""
-    return (f'<p class="notice notice-warn forecast-age" data-issued="{stamp}" data-window-minutes="{window_minutes}" '
-            f'data-schedule="{esc(schedule)}"></p>')
+    valid = fmt.iso(valid_at) if valid_at else ""
+    attrs = (f'data-issued="{stamp}"' + (f' data-valid="{valid}"' if valid else "")
+             + f' data-window-minutes="{window_minutes}" data-schedule="{esc(schedule)}"')
+    if short:
+        return f'<span class="forecast-age" data-format="short" {attrs}></span>'
+    return f'<p class="notice notice-warn forecast-age" {attrs}></p>'
 
 
 def gate_chip(gate: str) -> str:

@@ -133,6 +133,12 @@ def _hazard_record_card(d: SiteData, key: str) -> str:
     if ledger.get("supported"):
         rows.append(("Ledger", f'<a href="{esc(ledger.get("path"))}">{int(ledger.get("n_rows") or 0):,} chained rows</a>, '
                                f"{int(ledger.get('prev_hash_mismatches') or 0):,} breaks"))
+        if ledger.get("content_hash_verified") is not None:      # the tornado ledger: every row's own hash
+            legacy = int(ledger.get("content_hash_verified_without_forecast_id") or 0)
+            rows.append(("Row hashes", f"{int(ledger['content_hash_verified']):,} rows match their own hash"
+                         + (f"; {legacy:,} earlier rows match it with <code>forecast_id</code> removed (they were "
+                            "hashed before that field was added)" if legacy else "")
+                         + f"; {int(ledger.get('content_hash_mismatches') or 0):,} mismatches"))
     return (f'<article class="card record-card hz-{key}"><div class="record-card-head">{common.hazard_label(key)}</div>'
             f"{common.facts(rows)}</article>")
 

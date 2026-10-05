@@ -78,9 +78,10 @@ from hazardpulse.data.hrrr import (  # noqa: E402
     load_cached_hrrr,
 )
 from hazardpulse.data.probsevere import (  # noqa: E402
-    fetch_probsevere_day,
+    fetch_probsevere_live,
     load_cached_probsevere,
 )
+from hazardpulse.tornado import input_guard  # noqa: E402
 from hazardpulse.tornado.coherence_engine import (  # noqa: E402
     compute_coherence_fields,
     compute_derived_hrrr,
@@ -255,6 +256,115 @@ def withhold_bands_excluding_probability(scored: list[dict]) -> int:
             s["band_withheld"] = BAND_WITHHELD_REASON
             withheld += 1
     return withheld
+
+
+def display_probability(p: float) -> float:
+    """The published (display) value of a probability: 4 decimals (a hundredth of a percentage point), except
+    that a positive chance below 0.005% keeps one significant digit instead of reading as exactly 0 -- the
+    model never says "no chance". Display only: the record keeps the model's full-precision number
+    (``v3.probability_60min``), and that is what the live record is scored on."""
+    p = float(p)
+    if not p > 0.0:
+        return 0.0
+    r = round(p, 4)
+    return r if r > 0.0 else float(f"{p:.1g}")
+
+
+def round_published(scored: list[dict]) -> list[dict]:
+    """Round every storm's published probability for display, AFTER the trust layer has read full precision."""
+    for s in scored:
+        if s.get("tornado_probability") is not None:
+            s["tornado_probability"] = display_probability(s["tornado_probability"])
+    return scored
+
+
+def apply_trust_layer(scored: list[dict], forecaster, issued_at: str) -> int:
+    """Calibrate the storms scored by the calibrator's own model (full-precision input). Returns how many."""
+    if forecaster is None or not scored:
+        return 0
+    from hazardpulse.trust.scoring import enrich_cells
+
+    # only the storms the calibrator's own model scored: with v3, storms can come from the +W model or the
+    # fallback, and a curve fitted for one is wrong for the other
+    mine = [s for s in scored if s.get("model_version") == forecaster.model_version]
+    enrich_cells(mine, forecaster, prob_key="tornado_probability", issued_at=issued_at)
+    for s in mine:
+        if s.get("receipt"):
+            # keep what the calibrator fingerprinted, under its own name (stamp_receipts binds it)
+            s["calibrator_sha256"] = s["receipt"].get("model_sha256")
+    return len(mine)
+
+
+def stamp_receipts(scored: list[dict], issued_at: str, signer=None) -> int:
+    """Give every v3 storm a receipt whose hashes are what they say: ``input_sha256`` of the input vector the
+    model read (``v3_serving.input_digest``) and ``model_sha256`` of the served payload -- combined with the
+    calibrator's fingerprint when one was applied. Run last, on the published numbers. Returns how many.
+
+    The trust layer's receipt hashed ``np.float64(rounded probability).tobytes()`` as the "input" (so 0.0004
+    had one input hash whatever the storm) and fingerprinted the calibrator, not the model; and with no
+    admissible calibrator (PR #22) the tornado forecasts carried no receipt at all, while every live page says
+    each forecast is saved with "hashes of its inputs"."""
+    from hazardpulse.trust.forecast import RECEIPT_SPEC, sign_forecast_receipt
+
+    n = 0
+    for s in scored:
+        v3 = s.get("v3") or {}
+        if not v3.get("input_sha256") or not v3.get("model_sha256"):
+            continue
+        prior = s.get("receipt") or {}
+        model_sha = v3["model_sha256"]
+        if s.get("calibrator_sha256"):
+            model_sha = hashlib.sha256(json.dumps(
+                {"model_sha256": v3["model_sha256"], "calibrator_sha256": s["calibrator_sha256"]},
+                sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        core = {
+            "spec": RECEIPT_SPEC,
+            "model_version": s.get("model_version"),
+            "model_sha256": model_sha,
+            "input_sha256": v3["input_sha256"],
+            "issued_at": issued_at,
+            "raw_probability": float(v3["probability_60min"]),
+            "probability": s.get("tornado_probability"),
+            "confidence_lo": s.get("confidence_lo"),
+            "confidence_hi": s.get("confidence_hi"),
+            "uncertainty_class": s.get("uncertainty_class"),
+            "ood_score": prior.get("ood_score"),
+            "ood_flag": bool(prior.get("ood_flag", False)),
+            "abstained": bool(s.get("abstained", False)),
+            "abstain_reason": s.get("abstain_reason"),
+            "gateway_mode": s.get("gateway_mode"),
+            "coverage_target": prior.get("coverage_target"),
+        }
+        receipt = sign_forecast_receipt(core, signer)
+        receipt["binds"] = {"model_sha256": ("sha256 of the canonical JSON {model_sha256, calibrator_sha256}"
+                                             if s.get("calibrator_sha256") else
+                                             "sha256 of the served payload file (v3.model_sha256)"),
+                            "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's "
+                                            "feature_names (v3_serving.input_digest of v3.inputs)"}
+        s["receipt"] = receipt
+        s["receipt_sha256"] = receipt["receipt_sha256"]
+        n += 1
+    return n
+
+
+def product_coherence(scored: list[dict]) -> dict:
+    """How often this run's nested products were clipped into coherence (v3_serving.coherent), per product."""
+    with_products = [s for s in scored if (s.get("v3") or {}).get("probability_90min") is not None
+                     or (s.get("v3") or {}).get("probability_30min") is not None]
+    clipped = {k: sum(1 for s in with_products if k in ((s.get("v3") or {}).get("coherence_clipped") or []))
+               for k in ("p30", "p90", "p_ef2")}
+    n = len(with_products)
+    return {"rule": "p30 <= p60 <= p90 and p_ef2 <= p60; a product outside its nesting is clipped to p60",
+            "n_storms_with_products": n, "clipped": clipped,
+            "clipped_rate": {k: (round(v / n, 4) if n else None) for k, v in clipped.items()}}
+
+
+def data_valid_iso(time_steps: list[dict]) -> str | None:
+    """The valid time of the ProbSevere data the forecast was made from (its newest step), ISO 8601."""
+    if not time_steps:
+        return None
+    t = definitive_parse_valid_time(str(time_steps[-1].get("valid_time", "")))
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ") if t is not None else None
 
 
 # ---------------------------------------------------------------------------
@@ -676,9 +786,13 @@ def score_storms(
                 v3_derived,
                 None if v3_warnings is None else v3_warnings.get(sid),
             )
-            prob = round(min(max(v3_out["p60"], 0.0), 0.99), 4)
+            # full precision here: the trust layer (when a calibrator is admissible) and the scorer read the
+            # model's own number; round_published() rounds for display after them. Rounding here to 4
+            # decimals turned 1,404 of 1,602 v3 storm forecasts into exactly 0.0, and the live record
+            # was scored on those zeros.
+            prob = min(max(float(v3_out["p60"]), 0.0), 0.99)
             risk = _risk_band(prob)
-            model_scores = {"v3_p60": prob, "calibrated": True, "model": v3_out["model"]}
+            model_scores = {"v3_p60": float(v3_out["p60"]), "calibrated": True, "model": v3_out["model"]}
             top_features = [{"name": d["label"], "value": None if d["value"] is None else round(d["value"], 4),
                              "log_odds": d["log_odds"]} for d in v3_out.get("drivers", [])]
         elif (
@@ -847,6 +961,10 @@ def score_storms(
                 "coherence_clipped": v3_out.get("coherence_clipped", []),
                 "drivers": v3_out.get("drivers", []),
                 "model_version": v3_out["model_version"],
+                # SHA-256 of the served payload and of the input vector it read (v3_serving.input_digest:
+                # recomputable from "inputs" below); the receipt binds both
+                "model_sha256": v3_out.get("model_sha256"),
+                "input_sha256": v3_out.get("input_sha256"),
                 "inputs": v3_out.get("inputs"),
             }
 
@@ -872,8 +990,16 @@ def write_outputs(
     now: dt.datetime,
     scoring_tier: str = "tier3_ps_only",
     coherence_source: str = "none",
+    *,
+    data_valid_time: str | None = None,
+    input_gaps: dict | None = None,
+    product_coherence: dict | None = None,
 ) -> None:
-    """Write scored results to dist/data/."""
+    """Write scored results to dist/data/.
+
+    ``data_valid_time``: when the ProbSevere data the forecast was made from was valid -- the 60-minute window
+    runs from it, not from the issue time. ``input_gaps``: the input-format guard's record (input_guard).
+    ``product_coherence``: how often this run's nested products were clipped."""
     forecast_id = f"to_fcst_{now.strftime('%Y%m%d_%H%M')}"
 
     # Determine scoring tier label for display
@@ -912,6 +1038,14 @@ def write_outputs(
         "recent_predictions": recent_predictions,
         "storms": scored_storms,
     }
+    if data_valid_time is not None:
+        output["data_valid_time"] = data_valid_time
+        valid = dt.datetime.strptime(data_valid_time, "%Y-%m-%dT%H:%M:%SZ")
+        output["input_age_at_issue_min"] = round((now - valid).total_seconds() / 60.0, 1)
+    if input_gaps is not None:
+        output["input_gaps"] = input_gaps
+    if product_coherence is not None:
+        output["product_coherence"] = product_coherence
     storms_path = DIST / "data" / "live-tornadoes.json"
     storms_path.parent.mkdir(parents=True, exist_ok=True)
     storms_path.write_text(
@@ -1309,10 +1443,13 @@ def main() -> None:
     print(f"HazardPulse Tornado Scoring Pipeline -- {now.isoformat()}Z")
     print()
 
-    # Step 1: Fetch ProbSevere data
+    # Step 1: Fetch ProbSevere data -- the NEWEST file for the current state, and the earlier 30-min slots at
+    # the same phase for the track history (probsevere.live_keys). The first file of the latest slot made the
+    # input a median 17.5 min old at issue (1,757 records of 2026; 20.8 over the 13 v3 runs).
     print("Step 1: Fetching ProbSevere storm objects...")
+    feed_census: dict | None = None
     try:
-        time_steps = fetch_probsevere_day(date_str, refresh=True)
+        time_steps, feed_census = fetch_probsevere_live(date_str)
     except Exception as e:
         print(f"  Warning: ProbSevere fetch failed: {e}")
         time_steps = []
@@ -1335,10 +1472,24 @@ def main() -> None:
 
     n_storms_latest = len(time_steps[-1].get("storms", [])) if time_steps else 0
     print(f"  {len(time_steps)} time steps, {n_storms_latest} storms in latest")
+    data_valid_time = data_valid_iso(time_steps)
+
+    # The input-format guard: which of the served model's inputs the feed no longer carries (NOAA's
+    # 2025-08-06 format change). Recorded, never "fixed" here -- the model receives what it always did.
+    served_payloads = [p for p in (V3_SUITE.main, V3_SUITE.fallback) if p is not None]
+    gaps = None
+    if served_payloads:
+        gaps = input_guard.input_gaps(
+            feed_census, [n for p in served_payloads for n in p["feature_names"]],
+            splits=input_guard.split_counts(served_payloads))
+        for item in gaps.get("absent", []):
+            print(f"  Input gap: {item['input']} ({'/'.join(item['source'])}) absent from the feed; "
+                  f"the model receives {'0' if item['fed'] == input_guard.ZERO else 'a missing value'}")
 
     if n_storms_latest == 0:
         print("  No active storms in latest time step.")
-        write_outputs([], now, scoring_tier="tier3_ps_only", coherence_source="none")
+        write_outputs([], now, scoring_tier="tier3_ps_only", coherence_source="none",
+                      data_valid_time=data_valid_time, input_gaps=gaps)
         append_ledger([], now)
         build_site_artifacts()
         print()
@@ -1507,11 +1658,12 @@ def main() -> None:
         except Exception:
             pass
 
-    # Trust layer: calibrate tornado probabilities, attach honest [conf_lo,
-    # conf_hi] bands + Ed25519-signed re-runnable receipts. Fail-safe: raw until
-    # a calibrator (results/models/tornado_calibration.json) exists.
+    # Trust layer: calibrate tornado probabilities (only with an ADMISSIBLE calibrator, from
+    # results/calibration/tornado_calibration.json), on the model's full-precision number.
+    issued_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    _signer = None
     try:
-        from hazardpulse.trust.scoring import enrich_cells, load_forecaster, load_signer
+        from hazardpulse.trust.scoring import load_forecaster, load_signer
 
         _signer = load_signer()
         _forecaster = load_forecaster("tornado", signer=_signer)
@@ -1525,13 +1677,9 @@ def main() -> None:
             )
             _forecaster = None
         if _forecaster is not None and scored:
-            # only the storms the calibrator's own model scored: with v3, storms can come from the
-            # +W model or the fallback, and a curve fitted for one is wrong for the other
-            mine = [s for s in scored if s.get("model_version") == _forecaster.model_version]
-            enrich_cells(mine, _forecaster, prob_key="tornado_probability",
-                         issued_at=now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+            n_cal = apply_trust_layer(scored, _forecaster, issued_at)
             print(
-                f"  Trust layer: calibrated {len(mine)} of {len(scored)} storms "
+                f"  Trust layer: calibrated {n_cal} of {len(scored)} storms "
                 f"(model {_forecaster.model_version}, signed={_signer is not None})"
             )
         elif scored:
@@ -1540,11 +1688,18 @@ def main() -> None:
     except Exception as exc:  # never let the trust layer break a live forecast
         print(f"  Trust layer: skipped ({exc})")
 
+    round_published(scored)
+    # highest published chance first (stable: the model's own full-precision order breaks display ties); the
+    # pulse and the ledger take scored[0] as the headline
+    scored.sort(key=lambda s: -float(s.get("tornado_probability") or 0.0))
     refresh_risk_bands(scored)
     n_withheld = withhold_bands_excluding_probability(scored)
     if n_withheld:
         print(f"  Bands withheld: {n_withheld} of {len(scored)} storms' bands did not contain their "
               "published probability")
+    # the receipts last, on the numbers as published: hashes of the model payload and of its input vector
+    n_receipts = stamp_receipts(scored, issued_at, _signer)
+    print(f"  Receipts: {n_receipts} of {len(scored)} storms (signed={_signer is not None})")
 
     for s in scored[:10]:
         print(
@@ -1572,7 +1727,9 @@ def main() -> None:
     # Step 6: Write outputs
     print()
     print("Step 6: Writing outputs...")
-    write_outputs(scored, now, scoring_tier=scoring_tier, coherence_source=coherence_source)
+    write_outputs(scored, now, scoring_tier=scoring_tier, coherence_source=coherence_source,
+                  data_valid_time=data_valid_time, input_gaps=gaps,
+                  product_coherence=product_coherence(scored) if scoring_tier == "tier1_v3" else None)
     append_ledger(scored, now)
 
     # Step 7: render every page from the published artifacts (hazardpulse.site.build)

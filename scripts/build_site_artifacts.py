@@ -442,8 +442,10 @@ def _ensure_live_publish_artifacts() -> tuple[dict, dict]:
             # ONE object for the record and the live file, so git stores the forecast once. Written as
             # two different documents, every tornado run committed the same ~1.2 MB of storms twice:
             # 74 KB compressed of a ~170 KB commit (measured 2026-10-05). The record takes the live
-            # file's three extra fields; the live file (and /api/v1/live/tornado) gains the record's.
-            for key in ("disclaimer", "updated_at", "recent_predictions"):
+            # file's extra fields; the live file (and /api/v1/live/tornado) gains the record's. (The data's
+            # valid time, the input-format guard and the products' clip counts are part of the record.)
+            for key in ("disclaimer", "updated_at", "recent_predictions", "data_valid_time",
+                        "input_age_at_issue_min", "input_gaps", "product_coherence"):
                 if key in tornadoes:
                     artifact[key] = tornadoes[key]
             _write_json(replay_path, artifact)
@@ -598,6 +600,10 @@ def _build_provenance_envelopes(entries: list[dict]) -> list[dict]:
                 "n_active_storms": artifact.get("n_active_storms"),
                 "storm_ids": [storm.get("storm_id") for storm in artifact.get("storms", [])],
             }
+            # recorded only where the forecast carries them, so no earlier envelope's input hash changes
+            for key in ("data_valid_time", "input_gaps", "product_coherence"):
+                if artifact.get(key) is not None:
+                    input_manifest[key] = artifact[key]
             sources = ["ProbSevere storm objects", "published live tornado snapshot"]
             if artifact.get("coherence_source") == "hrrr":
                 sources.append("HRRR analysis")
@@ -671,6 +677,24 @@ def _live_data_age_seconds(entries: list[dict], now: dt.datetime) -> dict[str, f
     return ages
 
 
+def _tornado_data_valid_time(artifact: dict) -> dt.datetime | None:
+    """When the ProbSevere data a tornado forecast was made from was valid: the record's ``data_valid_time``,
+    else (records before 2026-10-05) the newest storm ``valid_time`` (``20261005_000038 UTC``)."""
+    stamp = _parse_utc(artifact.get("data_valid_time"))
+    if stamp is not None:
+        return stamp
+    newest = None
+    for storm in artifact.get("storms") or []:
+        text = str(storm.get("valid_time") or "")
+        try:
+            t = dt.datetime.strptime(text[:15], "%Y%m%d_%H%M%S").replace(tzinfo=dt.timezone.utc)
+        except ValueError:
+            t = _parse_utc(text)
+        if t is not None and (newest is None or t > newest):
+            newest = t
+    return newest
+
+
 def _gate_top_object(artifact: dict) -> dict:
     cells = artifact.get("active_cells")
     if isinstance(cells, list) and cells:
@@ -712,6 +736,13 @@ def _build_gate_decisions(entries: list[dict], pulse: dict,
         if prob is None:
             prob = artifact.get("top_probability", 0.0)
         m = calib.get(hazard_name)
+        data_age = data_ages.get(entry["forecast_id"])
+        if hazard_name == "tornado" and data_age is not None:
+            # a 60-minute forecast ages from its DATA's valid time, which precedes its issue time (by a median
+            # 17.5 min over the 1,757 tornado records of 2026 to 2026-10-05)
+            valid, issued = _tornado_data_valid_time(artifact), _parse_utc(entry.get("issued_at"))
+            if valid is not None and issued is not None and valid <= issued:
+                data_age += (issued - valid).total_seconds()
         ctx = GateContext(
             hazard=hazard_name,
             forecast_id=entry["forecast_id"],
@@ -728,7 +759,7 @@ def _build_gate_decisions(entries: list[dict], pulse: dict,
             lat=top.get("lat"),
             lon=top.get("lon"),
             cell_size_deg=_GATE_CELL_DEG.get(hazard_name),
-            data_age_seconds=data_ages.get(entry["forecast_id"]),
+            data_age_seconds=data_age,
             ece=(m or {}).get("ece"),
             brier_skill_score=(m or {}).get("brier_skill_score"),
             calibration_known=m is not None,
@@ -757,6 +788,66 @@ def _count_link_mismatches(path: Path) -> tuple[int, int]:
             mismatches += 1
         previous_hash = str(row.get("hash", previous_hash))
     return len(rows), mismatches
+
+
+def _tornado_ledger_row_hash(body: dict) -> str:
+    """The tornado ledger's row hash, exactly as scripts/fetch_and_score_tornado.append_ledger computes it."""
+    return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _verify_tornado_ledger(path: Path) -> dict:
+    """Every row of the tornado ledger checked against its OWN content hash, not only its prev_hash link.
+
+    The site used to count prev_hash links alone, so a row edited after it was written (keeping its stored
+    hash) passed. Measured 2026-10-05: 1,654 of 1,824 rows verify as written; the first 170
+    (2026-03-22..2026-04-13) do not, and every one of them verifies once ``forecast_id`` is removed -- the
+    field was added to those rows after they were hashed. They are reported as such (never hidden, never
+    failed, never rewritten: the ledger is append-only); any other mismatch, and any unreadable line, is a
+    failure (``content_hash_mismatches``)."""
+    rows: list[dict | None] = []
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                row = None
+            rows.append(row if isinstance(row, dict) else None)
+    verified = legacy = 0
+    legacy_span: list[str | None] = [None, None]
+    mismatched: list[dict] = []
+    link_mismatches = 0
+    previous = "0" * 64
+    for index, row in enumerate(rows):
+        if row is None:
+            mismatched.append({"row": index, "timestamp": None, "why": "unreadable line"})
+            continue
+        if str(row.get("prev_hash", "")) != (previous if index else "0" * 64):
+            link_mismatches += 1
+        previous = str(row.get("hash", previous))
+        body = {k: v for k, v in row.items() if k != "hash"}
+        if _tornado_ledger_row_hash(body) == row.get("hash"):
+            verified += 1
+            continue
+        if "forecast_id" in body and _tornado_ledger_row_hash(
+                {k: v for k, v in body.items() if k != "forecast_id"}) == row.get("hash"):
+            legacy += 1
+            legacy_span[0] = legacy_span[0] or row.get("timestamp")
+            legacy_span[1] = row.get("timestamp")
+            continue
+        mismatched.append({"row": index, "timestamp": row.get("timestamp"), "why": "content does not match its hash"})
+    return {
+        "n_rows": len(rows),
+        "prev_hash_mismatches": link_mismatches,
+        "content_hash_verified": verified,
+        "content_hash_verified_without_forecast_id": legacy,
+        "content_hash_legacy_note": (
+            f"{legacy} rows ({legacy_span[0]} to {legacy_span[1]}) were hashed before forecast_id was added to "
+            "them; each verifies with forecast_id removed" if legacy else None),
+        "content_hash_mismatches": len(mismatched),
+        "content_hash_mismatched_rows": mismatched[:20],
+    }
 
 
 def _artifact_hazard_key(artifact: dict) -> str | None:
@@ -1016,7 +1107,8 @@ def _build_verification_summary(pulse: dict) -> dict:
     legacy_summary = _read_json(VERIFICATION_SUMMARY_PATH, {"hazards": []})
     replay_groups = _load_replay_artifacts_by_hazard()
     eq_rows, eq_mismatches = _count_link_mismatches(EQ_LEDGER_PATH)
-    to_rows, to_mismatches = _count_link_mismatches(TO_LEDGER_PATH)
+    to_ledger = _verify_tornado_ledger(TO_LEDGER_PATH)
+    to_rows, to_mismatches = to_ledger["n_rows"], to_ledger["prev_hash_mismatches"]
     hu_rows, hu_mismatches = _count_link_mismatches(HU_LEDGER_PATH)
     live_map = {hazard.get("key"): hazard for hazard in pulse.get("hazards", [])}
     eq_related = _earthquake_related_benchmark()
@@ -1275,6 +1367,11 @@ def _build_verification_summary(pulse: dict) -> dict:
                  if to_scored > 0 else {})
     if not to_pooled.get("n_storm_forecasts"):
         to_pooled = {}
+    if to_pooled and not int(to_pooled.get("n_positive") or 0):
+        # with no event, Brier skill is undefined: /data/verification/to.json published 0.9986 for 794 storm
+        # forecasts and ZERO tornadoes (against another model's base rate). Summaries written before the scorer
+        # learnt this still carry the number; it is never republished.
+        to_pooled = {**to_pooled, "bss_vs_causal_climatology": None, "bss_vs_sample_climatology": None}
     # (the raw-vs-calibrated split is not separated by version either, so it is not quoted)
     to_served: dict = {}
     if to_pooled:
@@ -1362,8 +1459,7 @@ def _build_verification_summary(pulse: dict) -> dict:
             "ledger": {
                 "supported": True,
                 "path": "/data/tornado-ledger.jsonl",
-                "n_rows": to_rows,
-                "prev_hash_mismatches": to_mismatches,
+                **to_ledger,
             },
             "prospective": {
                 **to_binding["prospective"],
@@ -1412,8 +1508,15 @@ def _build_verification_summary(pulse: dict) -> dict:
     total_matured = sum(item["forecast_storage"]["n_matured_forecasts"] for item in hazards)
     total_scored = sum(item["forecast_storage"]["n_scored_forecasts"] for item in hazards)
     total_backlog = sum(item["forecast_storage"]["n_backlog"] for item in hazards)
-    total_chain_mismatches = eq_mismatches + to_mismatches
+    # a tornado row whose content no longer matches its own hash is a break too (only the 170 rows hashed before
+    # forecast_id was added verify another way, and they are reported, not counted)
+    ledger_violations = (
+        [f"Tornado ledger: {to_ledger['content_hash_mismatches']} rows do not match their own content hash "
+         f"(first: row {to_ledger['content_hash_mismatched_rows'][0]['row']})"]
+        if to_ledger["content_hash_mismatches"] else [])
+    total_chain_mismatches = eq_mismatches + to_mismatches + to_ledger["content_hash_mismatches"]
     alerts: list[str] = [f"Verification rollup inconsistent: {message}" for message in violations]
+    alerts += ledger_violations
     if total_backlog:
         alerts.append(f"{total_backlog} matured forecast windows are waiting for scoring.")
     if total_chain_mismatches:
@@ -1437,6 +1540,7 @@ def _build_verification_summary(pulse: dict) -> dict:
             "exact_model_benchmarks": sum(1 for item in hazards if item.get("exact_model_benchmark")),
             "alerts": alerts,
             "rollup_violations": violations,
+            "ledger_violations": ledger_violations,
         },
         "hazards": hazards,
     }
@@ -1625,11 +1729,12 @@ def main(argv: list[str] | None = None) -> int:
             f"{storage.get('n_scored_forecasts', 0)} scored / {storage.get('n_matured_forecasts', 0)} matured"
         )
     violations = (summary.get("system") or {}).get("rollup_violations") or []
-    if violations:
-        for message in violations:
-            print(f"VERIFICATION ROLLUP INCONSISTENT: {message}", file=sys.stderr)
-        return 1
-    return 0
+    ledger_violations = (summary.get("system") or {}).get("ledger_violations") or []
+    for message in violations:
+        print(f"VERIFICATION ROLLUP INCONSISTENT: {message}", file=sys.stderr)
+    for message in ledger_violations:
+        print(f"LEDGER INTEGRITY: {message}", file=sys.stderr)
+    return 1 if (violations or ledger_violations) else 0
 
 
 if __name__ == "__main__":

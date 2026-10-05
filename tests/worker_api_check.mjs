@@ -812,6 +812,30 @@ assert.equal(ageNote("2026-10-04T08:30:00Z"), "");
 assert.match(ageNote("2026-10-04T11:00:00Z"), /issued 3 hours ago, so its 60-minute window has passed/);
 assert.match(ageNote("2026-10-04T08:50:00Z"), /issued 66 minutes ago/);
 
+// the window runs from the DATA's valid time (tornado audit item 8, 2026-10-05): the 00:25Z forecast was made
+// from 00:00:38 data, so at 01:10 it has expired although only 45 minutes have passed since it was issued
+function validNote(now, extra = {}) {
+  let html = "";
+  const attrs = { "data-issued": "2026-10-05T00:25:23Z", "data-valid": "2026-10-05T00:00:38Z",
+                  "data-window-minutes": "60", "data-schedule": "every 2 hours", ...extra };
+  new workerTest.ForecastAgeHandler(new Date(now)).element({
+    getAttribute: (n) => attrs[n] ?? null,
+    setInnerContent: (h) => { html = h; },
+  });
+  return html;
+}
+assert.equal(validNote("2026-10-05T00:55:00Z"), "");                       // inside the data's window
+assert.match(validNote("2026-10-05T01:10:00Z"),
+             /made from data observed at 00:00 UTC, so its 60-minute window ended 9 minutes ago/);
+assert.match(validNote("2026-10-05T03:30:00Z"), /window ended 2 hours ago/);
+// the one-line form the home and /live/ tornado card carry: text only, no inline style
+const shortNote = validNote("2026-10-05T01:10:00Z", { "data-format": "short" });
+assert.match(shortNote, /out of date: its 60-minute window ended 9 minutes ago/);
+assert.doesNotMatch(shortNote, /style=|<script/);
+assert.equal(validNote("2026-10-05T00:59:00Z", { "data-format": "short" }), "");
+// a valid time AFTER the issue time is not a window start (malformed): the issue time is used
+assert.equal(validNote("2026-10-05T01:10:00Z", { "data-valid": "2026-10-05T01:00:00Z" }), "");
+
 // the API documentation page is a page, not an API route (it 404ed once pages ran through the Worker)
 const apiDocs = await worker.fetch(new Request("https://hazardpulse.com/api/"), env);
 assertHtmlSecurityHeaders(apiDocs);
