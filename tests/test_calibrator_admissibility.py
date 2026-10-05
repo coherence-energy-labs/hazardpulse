@@ -44,6 +44,16 @@ def test_a_calibrator_with_enough_events_that_beats_the_model_is_admitted():
     assert not calibrator_admissible({**rec, "inflated": True})[0]
 
 
+def test_the_floor_counts_distinct_events_when_the_record_carries_them():
+    """5,931 positive cell-windows were 64 earthquakes: overlapping windows must not pass the floor."""
+    rec = {"inflated": False, "n_calibration": 7_172_100, "n_positive": 5931, "n_distinct_events": 12,
+           "metrics_before": {"brier": 0.0029}, "metrics_after_heldout": {"brier": 0.0008}}
+    ok, why = calibrator_admissible(rec)
+    assert not ok and "12 events" in why
+    assert calibrator_admissible({**rec, "n_distinct_events": 64})[0]
+    assert calibration_events({**rec, "n_distinct_events": None}) == 5931     # absent: the positives
+
+
 def test_events_are_counted_from_the_base_rate_when_a_record_predates_n_positive():
     assert calibration_events({"n_calibration": 7_172_100, "metrics_before": {"base_rate": 0.00082695}}) == 5931
     assert calibration_events({"n_calibration": 794, "metrics_before": {"base_rate": 0.0}}) == 0

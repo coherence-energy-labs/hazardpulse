@@ -61,7 +61,13 @@ MIN_CALIBRATION_EVENTS = 30
 
 
 def calibration_events(record: dict) -> int:
-    """Positive outcomes in the data a calibration record was fitted on."""
+    """Independent positive outcomes in the data a calibration record was fitted on.
+
+    DISTINCT events when the record carries them: positives counted per cell-window or per forecast
+    repeat one event across overlapping windows (the retired earthquake model's pool held 5,931
+    positive cell-windows from 64 earthquakes), so a floor on them can pass on a handful of events."""
+    if record.get("n_distinct_events") is not None:
+        return int(record["n_distinct_events"])
     if record.get("n_positive") is not None:
         return int(record["n_positive"])
     before = record.get("metrics_before") or {}

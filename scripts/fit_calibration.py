@@ -118,6 +118,9 @@ def fit_one(dataset_path: Path, out_path: Path, *, model_version: str,
         "fitted_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "n_calibration": int(np.sum(total)),
         "n_positive": int(np.sum(pos)),
+        # independent events, when the scorer that pooled the data counted them (the earthquake pool does:
+        # one quake falls in ~100 overlapping windows); the admissibility floor counts these
+        "n_distinct_events": data.get("n_distinct_events"),
         "n_groups": int(scores.size),
         "inflated": bool(cal.inflated),
         "metrics_before": before,
