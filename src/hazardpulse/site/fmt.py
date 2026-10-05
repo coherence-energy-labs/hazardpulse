@@ -148,10 +148,20 @@ def legend(label: str = "Chance") -> str:
     return f'<div class="legend" role="group" aria-label="{esc(label)} colour scale"><span class="legend-title">{esc(label)}</span><ul>{items}</ul></div>'
 
 
+_PROBABILITY_KEYS = ("probability", "tornado_probability", "ri_probability")
+
+
 def interval(item: dict) -> str:
-    """``90% range 8.0%&ndash;18.0%`` for a forecast whose calibrator produced an informative interval;
-    nothing when there is none or it is too wide to inform (the trust layer's ``uncertainty_class`` "wide":
-    [0%, 25%] around a 0.2% chance tells a reader nothing and reads like an error)."""
+    """``Calibration range 8.0%&ndash;18.0%`` for a forecast whose calibrator produced an informative band
+    that contains the probability shown beside it; nothing otherwise.
+
+    The band is a Venn-Abers PAIR -- the two calibrated probabilities the calibration data supports -- not an
+    interval with a stated coverage, so it is never labelled "90%" (the receipt's ``coverage_target`` is the
+    trust layer's nominal target, not a property of the pair). Not shown when it is too wide to inform (the
+    trust layer's ``uncertainty_class`` "wide": [0%, 25%] around a 0.2% chance tells a reader nothing), or when
+    it does not contain the published probability (measured on the v3 tornado records to 2026-10-05 02:05Z:
+    the model's 60-minute probability lay outside its own pair for 971 of 1,602 storm forecasts; a range that
+    excludes the number it qualifies reads like an error, because it is one)."""
     lo, hi = item.get("confidence_lo"), item.get("confidence_hi")
     cls = item.get("uncertainty_class")
     if lo is None or hi is None or cls not in ("tight", "moderate"):
@@ -162,9 +172,13 @@ def interval(item: dict) -> str:
         return ""
     if not (math.isfinite(lo) and math.isfinite(hi)) or lo > hi:
         return ""
-    cov = (item.get("receipt") or {}).get("coverage_target")
-    label = f"{float(cov) * 100:.0f}% range" if cov else "Range"
-    return f"{label} {pct(lo)}&ndash;{pct(hi)}"
+    p = next((item[k] for k in _PROBABILITY_KEYS if item.get(k) is not None), None)
+    try:
+        if p is not None and not lo <= float(p) <= hi:
+            return ""
+    except (TypeError, ValueError):
+        return ""
+    return f"Calibration range {pct(lo)}&ndash;{pct(hi)}"
 
 
 def chance(p, *, big: bool = False) -> str:

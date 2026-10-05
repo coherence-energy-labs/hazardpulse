@@ -225,6 +225,38 @@ def refresh_risk_bands(scored: list[dict]) -> list[dict]:
     return scored
 
 
+BAND_WITHHELD_REASON = "the band does not contain the probability published beside it"
+
+
+def withhold_bands_excluding_probability(scored: list[dict]) -> int:
+    """Publish a storm's ``[confidence_lo, confidence_hi]`` only when it CONTAINS the probability published
+    beside it; otherwise both are null and ``band_withheld`` says why. Returns how many were withheld.
+
+    The v3 band is the Venn-Abers pair of the 60-min model (two calibrated estimates from leave-one-year-out
+    scores), while the published 60-min probability is the payload's own Platt calibration: two different
+    calibrations, so nothing keeps one inside the other (the raw p60 lay outside its own pair for 971 of the
+    1,602 storm forecasts in the v3 records to 2026-10-05 02:05Z). Once PR #22 stopped the inflating calibrator, the
+    02:05Z run of 2026-10-05 published a headline of 0.06% beside a "range" of 0.07%-0.07% (and the pulse
+    failed tests/test_site_integrity.py, which deploys gate on). The pair itself stays in the record, at full
+    precision, as ``v3.probability_band_60min``; only the published band is withheld.
+    """
+    withheld = 0
+    for s in scored:
+        lo, hi = s.get("confidence_lo"), s.get("confidence_hi")
+        if lo is None or hi is None:
+            continue
+        p = s.get("tornado_probability")
+        try:
+            ok = p is not None and float(lo) <= float(p) <= float(hi)
+        except (TypeError, ValueError):
+            ok = False
+        if not ok:
+            s["confidence_lo"] = s["confidence_hi"] = None
+            s["band_withheld"] = BAND_WITHHELD_REASON
+            withheld += 1
+    return withheld
+
+
 # ---------------------------------------------------------------------------
 # Storm tracking from ProbSevere time steps
 # ---------------------------------------------------------------------------
@@ -806,6 +838,8 @@ def score_storms(
                 "probability_90min": v3_out.get("p90"),
                 "probability_ef2plus_60min": v3_out.get("p_ef2"),
                 "probability_band_60min": v3_out.get("band"),
+                # what the band IS: two calibrated estimates, not an interval with a stated coverage
+                "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
                 "model": v3_out["model"],
                 "nws_warning": v3_out.get("warning"),
                 "nws_feed_error": v3_warning_error,
@@ -1509,6 +1543,10 @@ def main() -> None:
         print(f"  Trust layer: skipped ({exc})")
 
     refresh_risk_bands(scored)
+    n_withheld = withhold_bands_excluding_probability(scored)
+    if n_withheld:
+        print(f"  Bands withheld: {n_withheld} of {len(scored)} storms' bands did not contain their "
+              "published probability")
 
     for s in scored[:10]:
         print(
