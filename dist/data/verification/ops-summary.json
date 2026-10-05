@@ -1,16 +1,16 @@
 {
-  "generated_at": "2026-10-05T11:56:25Z",
+  "generated_at": "2026-10-05T12:34:09Z",
   "score_as_of": "2026-10-05T11:55:14Z",
   "system": {
     "frozen_forecasts": 2558,
     "matured_forecasts": 2432,
-    "scored_forecasts": 2423,
-    "matured_unscored_backlog": 9,
+    "scored_forecasts": 2424,
+    "matured_unscored_backlog": 8,
     "raw_chain_rows": 2568,
     "hash_chain_mismatches": 0,
     "exact_model_benchmarks": 3,
     "alerts": [
-      "9 matured forecast windows are waiting for scoring."
+      "8 matured forecast windows are waiting for scoring."
     ],
     "rollup_violations": [],
     "ledger_violations": []
@@ -50,7 +50,7 @@
       "prospective": {
         "summary_path": "results/earthquake_prospective/prospective_summary.json",
         "status": "ok",
-        "scored_as_of": "2026-10-05T10:50:04Z",
+        "scored_as_of": "2026-10-05T12:31:23Z",
         "message": null,
         "top_5_hit_rate": null,
         "this_model_version": null
@@ -90,7 +90,7 @@
       "model_version": "hurricane_ri_v8_2",
       "verification_status": "prospective_scored",
       "status_badge": "Scored",
-      "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 16 storm forecasts scored against NHC best track; 2 rapid-intensification events observed.",
+      "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 11 storm forecasts scored against NHC best track; 2 rapid-intensification events observed.",
       "metric_source": "retrospective_holdout_exact_model",
       "metric_source_label": "Exact-model retrospective benchmark is available.",
       "auc": 0.8474,
@@ -100,8 +100,8 @@
       "forecast_storage": {
         "n_replay_artifacts": 67,
         "n_matured_forecasts": 63,
-        "n_scored_forecasts": 54,
-        "n_backlog": 9,
+        "n_scored_forecasts": 55,
+        "n_backlog": 8,
         "first_issued_at": "2026-03-13T03:00:00Z",
         "last_issued_at": "2026-10-05T10:38:51Z",
         "last_forecast_id": "hu_fcst_20261005_1038",
@@ -119,14 +119,54 @@
       "prospective": {
         "summary_path": "results/hurricane_prospective/prospective_summary.json",
         "status": "ok",
-        "scored_as_of": "2026-10-05T10:51:32Z",
-        "n_scored_forecasts": 54,
+        "scored_as_of": "2026-10-05T12:32:41Z",
+        "n_scored_forecasts": 55,
         "stale": false,
         "message": null,
-        "unit": null,
-        "pooled": null,
-        "by_model_version": null,
-        "total_storms_scored": 16,
+        "unit": "storm-cycle: one scored record per storm and synoptic time t, the first made at or after t + 3 h 30 min (docs/HURRICANE_RI_V9_PROGRAM.md amendment 7, rule 1)",
+        "pooled": {
+          "n_storm_cycles": 11,
+          "n_events": 2,
+          "n_storms": 4,
+          "brier": 0.127084,
+          "mean_forecast": 0.092664,
+          "observed_rate": 0.181818,
+          "auc": null,
+          "auc_withheld": "the cycles span 4 storms (< 5)"
+        },
+        "by_model_version": {
+          "hurricane_ri_stack_v1-35938d6c09b7": {
+            "n_storm_cycles": 4,
+            "n_events": 1,
+            "n_storms": 2,
+            "brier": 0.12625,
+            "mean_forecast": 0.225,
+            "observed_rate": 0.25,
+            "auc": null,
+            "auc_withheld": "the cycles span 2 storms (< 5)"
+          },
+          "hurricane_ri_v8_2": {
+            "n_storm_cycles": 2,
+            "n_events": 1,
+            "n_storms": 1,
+            "brier": 0.446465,
+            "mean_forecast": 0.05965,
+            "observed_rate": 0.5,
+            "auc": null,
+            "auc_withheld": "the cycles span 1 storms (< 5)"
+          },
+          "jtwc_warning_ingest": {
+            "n_storm_cycles": 5,
+            "n_events": 0,
+            "n_storms": 1,
+            "brier": 0.0,
+            "mean_forecast": 0.0,
+            "observed_rate": 0.0,
+            "auc": null,
+            "auc_withheld": "only one outcome occurred: a ranking score is undefined"
+          }
+        },
+        "total_storms_scored": 11,
         "total_ri_events": 2
       },
       "exact_model_benchmark": {
@@ -194,7 +234,7 @@
       "prospective": {
         "summary_path": "results/tornado_prospective/prospective_summary.json",
         "status": "ok",
-        "scored_as_of": "2026-10-05T10:50:43Z",
+        "scored_as_of": "2026-10-05T12:31:57Z",
         "n_scored_forecasts": 1754,
         "stale": false,
         "message": null,
@@ -203,21 +243,30 @@
           "n_storm_forecasts": 1039,
           "n_positive": 0,
           "base_rate": 0.0,
-          "mean_forecast_probability": 2.483e-05,
+          "mean_forecast_probability": 3.498e-05,
           "brier": 2e-08,
           "auc": null,
-          "ece": 2.5e-05,
+          "ece": 3.5e-05,
           "brier_sample_climatology": 0.0,
           "bss_vs_sample_climatology": null,
-          "n_with_causal_reference": 1039,
-          "brier_causal_climatology": 7.24e-06,
+          "n_with_causal_reference": 100,
+          "brier_causal_climatology": 0.0,
           "bss_vs_causal_climatology": null,
+          "skill_undefined": "no event observed",
+          "label_after_issue_only": {
+            "n_storm_forecasts": 1039,
+            "n_positive": 0,
+            "base_rate": 0.0,
+            "brier": 2e-08,
+            "auc": null
+          },
+          "n_repeat_storm_forecasts_dropped": 0,
           "n_forecasts": 8,
           "first_issued_at": "2026-10-03T03:39:53Z",
           "last_issued_at": "2026-10-04T07:43:44Z"
         },
         "pooled_by_served_mode": null,
-        "skill_reference": "bss_vs_causal_climatology: reference = base rate of all storm-forecasts whose 24 h window matured before the forecast was issued (no outcome leak). bss_vs_sample_climatology: reference = pooled base rate of the scored set itself (in-sample, shown for comparison).",
+        "skill_reference": "bss_vs_causal_climatology: reference = base rate of the SAME model version's storm-forecasts whose 24 h window matured before the forecast was issued (no outcome leak; versions differ in event definition). bss_vs_sample_climatology: reference = pooled base rate of the scored set itself (in-sample, shown for comparison). Both are null when no event was observed. Scored on the model's full-precision probability.",
         "pooled_model_version": "tornado_v3-05a06c843c87"
       },
       "exact_model_benchmark": {
