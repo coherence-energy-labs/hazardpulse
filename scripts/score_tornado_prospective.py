@@ -82,9 +82,14 @@ MATCH_WINDOW_HOURS = 4.0  # temporal proximity threshold
 RELIABILITY_EDGES = (0.0, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 1.0)
 
 SKILL_REFERENCE_NOTE = (
-    "bss_vs_causal_climatology: reference = base rate of all storm-forecasts whose 24 h window "
-    "matured before the forecast was issued (no outcome leak). bss_vs_sample_climatology: "
-    "reference = pooled base rate of the scored set itself (in-sample, shown for comparison)."
+    "bss_vs_causal_climatology: reference = base rate of the SAME model version's storm-forecasts whose 24 h "
+    "window matured before the forecast was issued (no outcome leak; versions differ in event definition). "
+    "bss_vs_sample_climatology: reference = pooled base rate of the scored set itself (in-sample, shown for "
+    "comparison). Both are null when no event was observed. Scored on the model's full-precision probability."
+)
+LABEL_TIME_NOTE = (
+    "v3 storms are labelled from the storm's ProbSevere valid time, as in training (storm_features.labels); "
+    "label_after_issue_only drops reports before the run's issue time, for comparison"
 )
 
 
@@ -376,9 +381,10 @@ def pooled_metrics(y_true: np.ndarray, y_score: np.ndarray, reference: np.ndarra
     def _r(x: float, nd: int = 6):
         return round(float(x), nd) if x is not None and math.isfinite(x) else None
 
-    return {
+    n_positive = int(y_true.sum())
+    out = {
         "n_storm_forecasts": n,
-        "n_positive": int(y_true.sum()),
+        "n_positive": n_positive,
         "base_rate": _r(base, 8),
         "mean_forecast_probability": _r(float(y_score.mean()), 8),
         "brier": _r(bs, 8),
@@ -393,6 +399,12 @@ def pooled_metrics(y_true: np.ndarray, y_score: np.ndarray, reference: np.ndarra
         ),
         "reliability": rel,
     }
+    if n_positive == 0:
+        # With no event a skill score measures only how close to zero the forecasts were: the summary published
+        # "BSS 0.9986" for 794 storm forecasts and zero tornadoes. Undefined, never a number.
+        out["bss_vs_causal_climatology"] = out["bss_vs_sample_climatology"] = None
+        out["skill_undefined"] = "no event observed"
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -524,12 +536,38 @@ def _label_v3_storm(storm: dict, storm_time: dt.datetime, reports_in_window: lis
     return float(lab[sf.LABEL_NAMES.index("storm_60")])
 
 
+def model_probability(storm: dict) -> float:
+    """The number a storm's live record is scored on: the MODEL's own full-precision probability.
+
+    For a v3 storm that is ``v3.probability_60min``. The published ``tornado_probability`` is a display value
+    (rounded to 4 decimals until 2026-10-05, which made 1,404 of 1,602 v3 storm forecasts exactly 0.0) and,
+    while a calibrator was applied, not the model's number at all. Older records keep their published one."""
+    v3 = storm.get("v3") or {}
+    if v3.get("probability_60min") is not None:
+        return float(v3["probability_60min"])
+    return float(storm.get("tornado_probability", 0.0) or 0.0)
+
+
+def dedup_key(storm: dict, version: str, storm_time: dt.datetime) -> tuple | None:
+    """One forecast per storm per valid hour (per model version): consecutive runs re-forecast the same storm
+    from the same or nearly the same radar data, and pooling every copy counts one outcome several times.
+    None (never dropped) for a storm without an id: it cannot be recognised in another run."""
+    sid = storm.get("storm_id", storm.get("id"))
+    if sid in (None, "", 0, "0"):
+        return None
+    return (version, str(sid), storm_time.replace(minute=0, second=0, microsecond=0))
+
+
 def label_storms(artifact: dict, tornado_reports: list[dict], tracks: TrackSource | None = None) -> dict:
     """Label every storm of one forecast against UTC-timed reports.
 
     A v3 storm (model_version tornado_v3-...) is labelled with the event its model forecasts --
     the training definition, via the storm's archived track (raises TrackUnavailable if the
-    archive cannot be read). Earlier models keep their own definition: a report within
+    archive cannot be read), counted from the storm's VALID time as every training row was
+    (storm_features.labels). Until 2026-10-05 reports before the run's issue time were dropped:
+    the issue time is a median 17.5 min after the valid time (1,757 records of 2026), and 33.8% of
+    2025's 1,579 positives had their first report within 15 min of it (the v3 feature store). ``y_true_after_issue`` is that run-time-truncated
+    label, reported separately. Earlier models keep their own definition: a report within
     MATCH_RADIUS_KM of the storm and MATCH_WINDOW_HOURS of its valid time, inside the
     forecast window [issued_at, issued_at + horizon].
     """
@@ -537,29 +575,45 @@ def label_storms(artifact: dict, tornado_reports: list[dict], tracks: TrackSourc
     horizon_hours = int(artifact.get("forecast_horizon_hours", 24))
     window_end = issued_at + dt.timedelta(hours=horizon_hours)
     storms = artifact.get("storms") or []
+    storm_times = [parse_utc(s.get("valid_time", artifact["issued_at"])) for s in storms]
+    earliest = min(storm_times + [issued_at])
 
-    reports_in_window = []
-    for report in tornado_reports:
-        rtime = parse_utc(report["time"])
-        if issued_at <= rtime <= window_end:
-            reports_in_window.append((rtime, report))
+    timed = [(parse_utc(report["time"]), report) for report in tornado_reports]
+    reports_in_window = [(rt, r) for rt, r in timed if issued_at <= rt <= window_end]
+    # a v3 label counts from the storm's valid time, which precedes the issue time
+    reports_from_valid = [(rt, r) for rt, r in timed if earliest <= rt <= window_end]
 
     y_true = np.zeros(len(storms), dtype=np.float64)
+    y_after = np.zeros(len(storms), dtype=np.float64)
     y_score = np.zeros(len(storms), dtype=np.float64)
+    y_published = np.zeros(len(storms), dtype=np.float64)
     y_raw = np.zeros(len(storms), dtype=np.float64)
     calibrated = np.zeros(len(storms), dtype=bool)
+    # which model scored each storm (a v3 forecast mixes the +NWS model and its fallback), so the
+    # live record is reported per model version and never pools a replaced model under a new one
+    versions = np.array([str(s.get("model_version") or artifact.get("model_version") or "unknown")
+                         for s in storms], dtype=object)
+    keys = []
     for i, storm in enumerate(storms):
-        prob = float(storm.get("tornado_probability", 0.0))
-        y_score[i] = prob
-        y_raw[i] = float(storm.get("raw_probability", prob))
+        published = float(storm.get("tornado_probability", 0.0) or 0.0)
+        y_published[i] = published
+        y_score[i] = model_probability(storm)
+        # the calibrator is fitted on (and applied to) the model's own number
+        y_raw[i] = y_score[i] if (storm.get("v3") or {}).get("probability_60min") is not None \
+            else float(storm.get("raw_probability", published))
         calibrated[i] = bool(storm.get("calibrated", False))
         storm_lat = float(storm.get("lat", 0))
         storm_lon = float(storm.get("lon", 0))
-        storm_time = parse_utc(storm.get("valid_time", artifact["issued_at"]))
+        storm_time = storm_times[i]
+        keys.append(dedup_key(storm, str(versions[i]), storm_time))
         if str(storm.get("model_version", "")).startswith(V3_PREFIX):
             if tracks is None:
                 tracks = TrackSource()
-            y_true[i] = _label_v3_storm(storm, storm_time, reports_in_window, tracks)
+            mine = [(rt, r) for rt, r in reports_from_valid if rt >= storm_time]
+            y_true[i] = _label_v3_storm(storm, storm_time, mine, tracks)
+            if y_true[i]:
+                after = [(rt, r) for rt, r in mine if rt >= issued_at]
+                y_after[i] = _label_v3_storm(storm, storm_time, after, tracks) if after else 0.0
             continue
         for rtime, report in reports_in_window:
             dist = haversine_km(storm_lat, storm_lon, report["lat"], report["lon"])
@@ -567,20 +621,35 @@ def label_storms(artifact: dict, tornado_reports: list[dict], tracks: TrackSourc
             if dist <= MATCH_RADIUS_KM and dt_hours <= MATCH_WINDOW_HOURS:
                 y_true[i] = 1.0
                 break
-    # which model scored each storm (a v3 forecast mixes the +NWS model and its fallback), so the
-    # live record is reported per model version and never pools a replaced model under a new one
-    versions = np.array([str(s.get("model_version") or artifact.get("model_version") or "unknown")
-                         for s in storms], dtype=object)
+        y_after[i] = y_true[i]           # (the window of these models already starts at issue)
     return {
         "issued_at": issued_at,
+        "label_start": earliest,
         "window_end": window_end,
         "y_true": y_true,
+        "y_true_after_issue": y_after,
         "y_score": y_score,
+        "y_published": y_published,
         "y_raw": y_raw,
         "calibrated": calibrated,
         "model_versions": versions,
+        "dedup_keys": keys,
         "n_reports_in_window": len(reports_in_window),
     }
+
+
+def mark_first_occurrences(labels: dict, seen: set) -> np.ndarray:
+    """``labels["keep"]``: True for each storm forecast whose dedup key (``dedup_key``) was not seen in an
+    earlier forecast; adds the new keys to ``seen``. Call in issue order."""
+    keep = np.zeros(len(labels["dedup_keys"]), dtype=bool)
+    for i, key in enumerate(labels["dedup_keys"]):
+        if key is None:
+            keep[i] = True
+        elif key not in seen:
+            seen.add(key)
+            keep[i] = True
+    labels["keep"] = keep
+    return keep
 
 
 def score_single_forecast(
@@ -622,10 +691,13 @@ def score_single_forecast(
             keep = np.array([
                 str(s.get("model_version", LEGACY_MODEL_VERSION)) == version for s in storms
             ], dtype=bool)
+        if labels.get("keep") is not None:       # one forecast per storm per valid hour
+            keep &= labels["keep"]
         if keep.any():
             _accumulate_calibration(calib_acc, labels["y_raw"][keep], y_true[keep])
 
     n_matched = int(np.sum(y_true))
+    after = labels.get("y_true_after_issue")
     return {
         "forecast_id": artifact["forecast_id"],
         "issued_at": artifact["issued_at"],
@@ -633,6 +705,8 @@ def score_single_forecast(
         "n_storms": len(storms),
         "n_reports_in_window": labels["n_reports_in_window"],
         "n_matched_storms": n_matched,
+        "n_matched_storms_after_issue": int(np.sum(after)) if after is not None else n_matched,
+        "n_repeat_storm_forecasts": (int(np.sum(~labels["keep"])) if labels.get("keep") is not None else 0),
         "match_rate": round(n_matched / len(storms), 4),
         "base_rate": round(n_matched / len(storms), 4),
         "auc": compute_auc(y_true, y_score),
@@ -665,23 +739,48 @@ def summarize(
     rows = [r for _, _, r in scored]
     issued = [lab["issued_at"] for _, lab, _ in scored]
     ends = [lab["window_end"] for _, lab, _ in scored]
-    n_storms = np.array([lab["y_true"].size for _, lab, _ in scored], dtype=np.float64)
-    n_pos = np.array([lab["y_true"].sum() for _, lab, _ in scored], dtype=np.float64)
-    ref_fc = causal_climatology(issued, ends, n_storms, n_pos)
 
-    def _pool(select) -> dict:
+    def _versions(lab: dict) -> np.ndarray:
+        v = lab.get("model_versions")
+        return v if v is not None else np.full(lab["y_true"].size, "unknown", dtype=object)
+
+    # one forecast per storm per valid hour (label_storms.dedup_key), in issue order; labels written by the main
+    # loop already carry the mask, others (tests, older callers) get it here
+    if any(lab.get("keep") is None for _, lab, _ in scored):
+        seen: set = set()
+        for _, lab, _ in sorted(scored, key=lambda t: t[1]["issued_at"]):
+            if lab.get("dedup_keys") is not None:
+                mark_first_occurrences(lab, seen)
+            else:
+                lab["keep"] = np.ones(lab["y_true"].size, dtype=bool)
+
+    all_versions = sorted({str(v) for _, lab, _ in scored for v in _versions(lab)})
+    # The causal climatology of each storm forecast is its OWN model version's base rate over the forecasts that
+    # had matured before it was issued. Pooled over every version, the reference of the v3 record was the old
+    # model's base rate (its own event definition: 40 km and +-4 h, 0.27%) and the summary published "BSS 0.9986".
+    ref_rows = [np.full(lab["y_true"].size, np.nan) for _, lab, _ in scored]
+    for ver in all_versions:
+        masks = [(_versions(lab) == ver) & lab["keep"] for _, lab, _ in scored]
+        n_v = np.array([m.sum() for m in masks], dtype=np.float64)
+        p_v = np.array([lab["y_true"][m].sum() for (_, lab, _), m in zip(scored, masks)], dtype=np.float64)
+        ref_v = causal_climatology(issued, ends, n_v, p_v)
+        for f, ((_, lab, _), m) in enumerate(zip(scored, masks)):
+            ref_rows[f][_versions(lab) == ver] = ref_v[f]
+
+    def _pool(select, y_key: str = "y_true", s_key: str = "y_score") -> dict:
         ys, ps, refs = [], [], []
-        for (art, lab, row), ref in zip(scored, ref_fc):
+        for (art, lab, row), ref in zip(scored, ref_rows):
             mask = select(art, lab, row)
             if mask is None:
                 continue
             if mask is True:
                 mask = np.ones(lab["y_true"].size, dtype=bool)
+            mask = mask & lab["keep"]
             if not np.any(mask):
                 continue
-            ys.append(lab["y_true"][mask])
-            ps.append(lab["y_score"][mask])
-            refs.append(np.full(int(mask.sum()), ref))
+            ys.append(lab.get(y_key, lab["y_true"])[mask])
+            ps.append(lab.get(s_key, lab["y_score"])[mask])
+            refs.append(ref[mask])
         if not ys:
             return {"n_storm_forecasts": 0}
         return pooled_metrics(np.concatenate(ys), np.concatenate(ps), np.concatenate(refs))
@@ -692,18 +791,22 @@ def summarize(
         t: _pool(lambda a, lab, r, t=t: True if r.get("scoring_tier", "unknown") == t else None)
         for t in tiers
     }
+    # the served split scores what was PUBLISHED (calibrated or the model's own number, as displayed)
     pooled_by_served_mode = {
-        "raw_model_probability": _pool(lambda a, lab, r: ~lab["calibrated"]),
-        "calibrated_probability": _pool(lambda a, lab, r: lab["calibrated"]),
+        "raw_model_probability": _pool(lambda a, lab, r: ~lab["calibrated"], s_key="y_published"),
+        "calibrated_probability": _pool(lambda a, lab, r: lab["calibrated"], s_key="y_published"),
     }
 
-    def _versions(lab: dict) -> np.ndarray:
-        v = lab.get("model_versions")
-        return v if v is not None else np.full(lab["y_true"].size, "unknown", dtype=object)
+    def _after_issue(ver: str) -> dict:
+        m = _pool(lambda a, lab, r, ver=ver: _versions(lab) == ver, y_key="y_true_after_issue")
+        return {k: m.get(k) for k in ("n_storm_forecasts", "n_positive", "base_rate", "brier", "auc")}
 
-    all_versions = sorted({str(v) for _, lab, _ in scored for v in _versions(lab)})
     pooled_by_model_version = {
         ver: {**_pool(lambda a, lab, r, ver=ver: _versions(lab) == ver),
+              # the label truncated at the run's issue time (reports before it dropped), for comparison only
+              "label_after_issue_only": _after_issue(ver),
+              "n_repeat_storm_forecasts_dropped": int(sum(((_versions(lab) == ver) & ~lab["keep"]).sum()
+                                                          for _, lab, _ in scored)),
               "n_forecasts": sum(1 for _, lab, _ in scored if np.any(_versions(lab) == ver)),
               "first_issued_at": min((lab["issued_at"] for _, lab, _ in scored if np.any(_versions(lab) == ver)),
                                      default=None),
@@ -776,6 +879,12 @@ def summarize(
         "total_tornado_reports_in_windows": total_reports,
         "overall_match_rate": round(total_matched / max(total_storms, 1), 4),
         "skill_reference": SKILL_REFERENCE_NOTE,
+        "label_time_convention": LABEL_TIME_NOTE,
+        "repeat_storm_forecasts": {
+            "rule": "pooled metrics keep one forecast per (model version, storm, valid hour): the first issued",
+            "n_storm_forecasts_before": int(sum(lab["y_true"].size for _, lab, _ in scored)),
+            "n_dropped": int(sum((~lab["keep"]).sum() for _, lab, _ in scored)),
+        },
         "pooled": pooled,
         "pooled_by_tier": pooled_by_tier,
         "pooled_by_served_mode": pooled_by_served_mode,
@@ -894,6 +1003,7 @@ def main(argv: list[str] | None = None) -> int:
         unavailable: list[str] = []
         with open(per_forecast_path, "w", encoding="utf-8") as handle:
             tracks = TrackSource()
+            seen_storm_hours: set = set()          # one forecast per storm per valid hour (issue order)
             for artifact in matured:
                 try:
                     labels = label_storms(artifact, all_reports, tracks=tracks)
@@ -902,10 +1012,11 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  {artifact['forecast_id']}: {exc} -- left for the next run")
                     unavailable.append(artifact["forecast_id"])
                     continue
-                if window_overlaps_failed_days(labels["issued_at"], labels["window_end"], failed_days):
+                if window_overlaps_failed_days(labels.get("label_start", labels["issued_at"]), labels["window_end"], failed_days):
                     # No outcome file for part of the window: unscorable, never "no tornado".
                     unavailable.append(artifact["forecast_id"])
                     continue
+                mark_first_occurrences(labels, seen_storm_hours)
                 result = score_single_forecast(artifact, all_reports, calib_acc=calib_acc, labels=labels)
                 scored.append((artifact, labels, result))
                 handle.write(json.dumps(result) + "\n")

@@ -1161,7 +1161,15 @@ function areaDataOf(idx, now = Date.now()) {
 }
 
 // a live page is rendered when its forecast is published; when it is viewed after the forecast's own window
-// has passed (a 60-minute tornado forecast seen three hours later), the page says so
+// has passed (a 60-minute tornado forecast seen three hours later), the page says so. The window runs from the
+// DATA's valid time when the page gives one (data-valid): a tornado forecast made from radar data observed 19
+// minutes before it was issued has 41 minutes left at issue, and counting from the issue time left it expired
+// with no notice 6.3% of the time (the 2026-10-05 audit). data-format="short" is the one-line form a hazard card
+// carries (home and /live/).
+function minutesText(min) {
+  return min >= 120 ? `${Math.floor(min / 60)} hours` : `${Math.max(1, Math.round(min))} minutes`;
+}
+
 class ForecastAgeHandler {
   constructor(now = new Date()) {
     this.now = now;
@@ -1169,15 +1177,29 @@ class ForecastAgeHandler {
 
   element(el) {
     const issued = Date.parse(el.getAttribute("data-issued") || "");
+    const validRaw = el.getAttribute("data-valid");
+    const valid = validRaw ? Date.parse(validRaw) : NaN;
     const windowMin = Number(el.getAttribute("data-window-minutes"));
     if (!Number.isFinite(issued) || !Number.isFinite(windowMin) || windowMin <= 0) return;
-    const ageMin = (this.now.getTime() - issued) / 60000;
+    const fromValid = Number.isFinite(valid) && valid <= issued;
+    const start = fromValid ? valid : issued;
+    const ageMin = (this.now.getTime() - start) / 60000;
     if (ageMin <= windowMin) return;
-    const schedule = escapeHtml(el.getAttribute("data-schedule") || "");
-    const ago = ageMin >= 120 ? `${Math.floor(ageMin / 60)} hours` : `${Math.round(ageMin)} minutes`;
     const span = windowMin >= 120 ? `${Math.round(windowMin / 60)}-hour` : `${windowMin}-minute`;
+    const endedAgo = minutesText(ageMin - windowMin);
+    if (el.getAttribute("data-format") === "short") {
+      el.setInnerContent(` &middot; <strong>out of date: its ${span} window ended ${endedAgo} ago</strong>`, {
+        html: true,
+      });
+      return;
+    }
+    const schedule = escapeHtml(el.getAttribute("data-schedule") || "");
+    const lead = fromValid
+      ? `This forecast was made from data observed at ${new Date(valid).toISOString().slice(11, 16)} UTC, so its ` +
+        `${span} window ended ${endedAgo} ago.`
+      : `This forecast was issued ${minutesText(ageMin)} ago, so its ${span} window has passed.`;
     el.setInnerContent(
-      `<strong>This forecast was issued ${ago} ago, so its ${span} window has passed.</strong> ` +
+      `<strong>${lead}</strong> ` +
         `A new one is published ${schedule || "on schedule"}; until then, treat these numbers as out of date.`,
       { html: true }
     );

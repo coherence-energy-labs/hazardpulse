@@ -14,7 +14,7 @@ esc = fmt.esc
 # the three hazard cards (home and /live/)
 # ------------------------------------------------------------------------------------------------
 
-def _card(key: str, d: SiteData, *, label: str, where: str, count: str, empty: str) -> str:
+def _card(key: str, d: SiteData, *, label: str, where: str, count: str, empty: str, expiry: str = "") -> str:
     h = {"eq": EARTHQUAKE, "hu": HURRICANE, "to": TORNADO}[key]
     head = d.headlines[key]
     gate = "" if head.gate in ("pass", "unknown") else common.gate_chip(head.gate)
@@ -31,7 +31,7 @@ def _card(key: str, d: SiteData, *, label: str, where: str, count: str, empty: s
     return (f'<a class="card card-link hazard-card hz-{key}" href="{h.path}"{fid}>'
             f'<div class="hazard-card-top">{common.hazard_label(key)}<span class="hazard-card-window">next '
             f"{h.window}</span></div>{body}"
-            f'<p class="hazard-card-meta">{count} &middot; issued {issued} {gate}</p>'
+            f'<p class="hazard-card-meta">{count} &middot; issued {issued} {gate}{expiry}</p>'
             f'<span class="card-cta">{h.name} forecast</span></a>')
 
 
@@ -60,12 +60,17 @@ def hazard_cards(d: SiteData) -> str:
         empty="No tropical cyclones are active anywhere right now.")
 
     tstorms = d.tornadoes.get("storms") or []
+    from hazardpulse.site.pages.tornado import data_valid_time
+    to_head = d.headlines["to"]
     to_card = _card(
         "to", d,
         label="Highest chance a tracked thunderstorm produces a tornado",
-        where=esc(d.headlines["to"].where),
+        where=esc(to_head.where),
         count=fmt.plural(len(tstorms), "storm") + " tracked",
-        empty="No thunderstorms are being tracked over the US right now.")
+        empty="No thunderstorms are being tracked over the US right now.",
+        # the edge fills it once the 60-minute window (from the data's valid time) has passed
+        expiry=common.forecast_age(to_head.issued_at, 60, TORNADO.schedule,
+                                   valid_at=data_valid_time(d.tornadoes), short=True))
     return f'<div class="cards cards-3 hazard-cards">{eq_card}{hu_card}{to_card}</div>'
 
 

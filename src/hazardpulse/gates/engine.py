@@ -55,7 +55,11 @@ class GateConfig:
 _HAZARD_CONFIG = {
     "earthquake": GateConfig(freshness_soft_seconds=12 * 3600, freshness_hard_seconds=36 * 3600,
                              min_cell_deg=2.0),
-    "tornado": GateConfig(freshness_soft_seconds=6 * 3600, freshness_hard_seconds=12 * 3600,
+    # A 60-minute forecast, issued every 2 h (every 30 min while risk is elevated; scripts/ci/schedule.py),
+    # its age counted from its DATA's valid time: past 2.5 h a scheduled run has been missed (degrade);
+    # past 6 h -- six of its own windows, and site.hazards.TORNADO's overdue age -- it is not published.
+    # (These were 6 h / 12 h: a 60-minute forecast eleven hours old passed with a warning.)
+    "tornado": GateConfig(freshness_soft_seconds=2.5 * 3600, freshness_hard_seconds=6 * 3600,
                           min_cell_deg=2.0),
     "hurricane": GateConfig(freshness_soft_seconds=24 * 3600, freshness_hard_seconds=48 * 3600,
                             min_cell_deg=0.0),  # storm-relative, not gridded
@@ -165,10 +169,10 @@ def g1_source_freshness(ctx: GateContext, cfg: GateConfig) -> GateResult:
         return GateResult(gid, DEGRADE, "source data age unknown")
     if age > cfg.freshness_hard_seconds:
         return GateResult(gid, BLOCK,
-                          f"source data is stale ({age/3600:.1f}h > {cfg.freshness_hard_seconds/3600:.0f}h)")
+                          f"source data is stale ({age/3600:.1f}h > {cfg.freshness_hard_seconds/3600:g}h)")
     if age > cfg.freshness_soft_seconds:
         return GateResult(gid, DEGRADE,
-                          f"source data is aging ({age/3600:.1f}h > {cfg.freshness_soft_seconds/3600:.0f}h)")
+                          f"source data is aging ({age/3600:.1f}h > {cfg.freshness_soft_seconds/3600:g}h)")
     return GateResult(gid, PASS)
 
 

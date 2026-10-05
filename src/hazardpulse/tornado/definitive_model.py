@@ -1335,6 +1335,13 @@ def model_version_of_payload(path: str | Path) -> str:
     retrained model would have been "calibrated" by its predecessor's curve.
     Uncalibrated v1 payloads keep the legacy name (their calibrator stays
     valid); a calibrated payload is ``"tornado_gbt_v2-<sha256[:12]>"``.
+
+    The digest is of the CONTENT with CRLF normalised to LF (the rule of
+    ``hurricane.ri_model.sha256_file``): git checks the payload out with CRLF on
+    Windows and LF on Linux, and a raw-byte digest named one model twice --
+    the committed registry carried ``77c3b0078761`` (Windows) while Linux CI
+    forecasts carry ``48637c637e01`` (measured 2026-10-02). Normalised, the
+    identity is the Linux/index one on every platform.
     """
     import hashlib
 
@@ -1342,7 +1349,8 @@ def model_version_of_payload(path: str | Path) -> str:
     payload = json.loads(raw.decode("utf-8"))
     if payload.get("calibration") is None:
         return LEGACY_MODEL_VERSION
-    return "tornado_gbt_v2-" + hashlib.sha256(raw).hexdigest()[:12]
+    canonical = raw.replace(bytes([13, 10]), bytes([10]))
+    return "tornado_gbt_v2-" + hashlib.sha256(canonical).hexdigest()[:12]
 
 
 def predict_proba_from_payload(payload: dict, raw_features: dict[str, float]) -> tuple[float, bool]:
