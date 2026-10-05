@@ -660,12 +660,15 @@ assert.equal(Object.keys(handlerFor("[data-live]").stats).length, 0, "the counte
 assert.match(handlerFor(".emergency-banner").html, /Choi-Wan \(Super typhoon, Category 4\) is about \d+ km/,
   "the notice still stands, from the build's index");
 assert.ok(background2.length >= 1, "the fetches carry on behind the response");
+// a slow page says where its time went
+assert.match(coldPage.headers.get("Server-Timing") || "", /^live;dur=\d+;desc="past the budget, filled by app\.js"$/);
 await Promise.all(background2);
 // ...and a warm server renders all of it into the page
 resetLive("ok");
 await workerTest.getLive(envFixture, pageRequest);
-await worker.fetch(withCf("https://hazardpulse.com/",
+const warmPage = await worker.fetch(withCf("https://hazardpulse.com/",
   { latitude: "35.4676", longitude: "-97.5164", city: "Oklahoma City", country: "US" }), envFixture, coldCtx);
+assert.match(warmPage.headers.get("Server-Timing") || "", /^live;dur=\d+;desc="live data in the page"$/);
 assert.match(handlerFor("#near-you").html, /Near you &middot; Oklahoma City, US/);
 assert.equal(handlerFor("[data-live]").stats.quakes_day, "3");
 assert.match(handlerFor("#live-feed").html, /^<li class="feed-item/);
@@ -678,6 +681,12 @@ assertHtmlSecurityHeaders(downHome);
 resetLive("ok");
 
 // 8. the small rules
+// a storm whose stored chance rounded to 0 is "<0.1%", never "0%"
+const roundedZero = workerTest.summarizeArea(okcGeo, { eq: null, storms: [], known: true,
+  tornadoes: [{ lat: 35.5, lon: -97.6, tornado_probability: 0, warned: false }] }, live, []);
+const roundedZeroNear = workerTest.nearHtml(roundedZero, okcGeo, live);
+assert.match(roundedZeroNear, /its chance of a tornado within the hour: <span class="chance p1">&lt;0\.1%<\/span>/);
+assert.doesNotMatch(roundedZeroNear, />0%</);
 assert.equal(workerTest.freshForecastStorm({ position_time: iso(NOW - 2 * HOUR) }), true);
 assert.equal(workerTest.freshForecastStorm({ position_time: iso(NOW - 25 * HOUR) }), false);
 assert.equal(workerTest.freshForecastStorm({ position_time: iso(NOW + 3 * HOUR) }), false, "a position from the future is wrong");

@@ -10,8 +10,10 @@ point -- building twice changes nothing -- which is what ``check_site`` (and tes
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Callable
@@ -190,6 +192,47 @@ def area_index(d: SiteData) -> str:
     return json.dumps(payload, separators=(",", ":"), allow_nan=False) + "\n"
 
 
+GLOBE_INDEX = "data/globe.json"
+# the globe's heat scale: one byte per cell, logarithmic from 0.05% (0) to 25% (255) -- what the shader reads
+GLOBE_HEAT_FLOOR, GLOBE_HEAT_CEIL = 5e-4, 0.25
+
+
+def globe_heat_byte(p: float) -> int:
+    if not p > 0:
+        return 0
+    lo, hi = math.log10(GLOBE_HEAT_FLOOR), math.log10(GLOBE_HEAT_CEIL)
+    return max(0, min(255, int(math.floor((math.log10(p) - lo) / (hi - lo) * 255 + 0.5))))
+
+
+def globe_index(d: SiteData) -> str:
+    """What the home page's globe draws, and nothing more: the 30-day earthquake forecast as one byte per
+    cell (base64) and the tracked thunderstorms' positions. The globe used to fetch the Worker's area index
+    for this -- 146 KB to parse, 40 KB over the wire -- of which it read two fields. A withheld (block)
+    forecast is not drawn; a grid that does not span the globe from 180 W is not drawn either (the shader
+    maps columns onto longitude from -180)."""
+    eq = d.earthquake
+    gate, _ = d.gate_of(eq.get("forecast_id"))
+    dom = eq.get("forecast_domain") or {}
+    grid = eq.get("probability_grid")
+    heat = None
+    if gate != "block" and isinstance(grid, str) and dom:
+        values = grid.split(",")
+        nx, ny = int(dom.get("n_lon") or 0), int(dom.get("n_lat") or 0)
+        spans = float(dom.get("lon_min", 0)) == -180.0 and abs(nx * float(dom.get("dlon") or 0) - 360.0) < 1e-6
+        if nx and ny and len(values) == nx * ny and spans:
+            raw = bytes(globe_heat_byte(float(v) if v else 0.0) for v in values)
+            heat = {"forecast_id": eq.get("forecast_id"), "lat_min": dom.get("lat_min"), "dlat": dom.get("dlat"),
+                    "n_lat": ny, "n_lon": nx, "floor": GLOBE_HEAT_FLOOR, "ceil": GLOBE_HEAT_CEIL,
+                    "bytes": base64.b64encode(raw).decode("ascii")}
+    points = []
+    for s in d.tornadoes.get("storms") or []:
+        lat, lon = s.get("lat"), s.get("lon")
+        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+            points.append([round(float(lat), 2), round(float(lon), 2)])
+    payload = {"heat": heat, "tracked": {"forecast_id": d.headlines["to"].forecast_id, "points": points}}
+    return json.dumps(payload, separators=(",", ":"), allow_nan=False) + "\n"
+
+
 STATUS_INDEX = "data/status.json"
 
 
@@ -236,7 +279,7 @@ def build_site(dist: Path | None = None, root: Path | None = None) -> list[str]:
         if _write(page_file(dist, path), html):
             changed.append(path)
     changed += evidence_blocks(d, dist)
-    for rel, text in ((AREA_INDEX, area_index(d)), (STATUS_INDEX, status_index(d))):
+    for rel, text in ((AREA_INDEX, area_index(d)), (STATUS_INDEX, status_index(d)), (GLOBE_INDEX, globe_index(d))):
         if _write(dist / rel, text):
             changed.append(rel)
     changed += shell.rewrap_static_pages(dist)
@@ -264,7 +307,7 @@ def check_site(dist: Path | None = None, root: Path | None = None) -> list[str]:
     from hazardpulse.verification import evidence_pages
     ev = {k: v for k, v in d.evidence.items() if not k.startswith("_")}
     stale += [f"/{rel}" for rel in evidence_pages.check_pages(dist, root, ev=ev)]
-    for rel, text in ((AREA_INDEX, area_index(d)), (STATUS_INDEX, status_index(d))):
+    for rel, text in ((AREA_INDEX, area_index(d)), (STATUS_INDEX, status_index(d)), (GLOBE_INDEX, globe_index(d))):
         if not (dist / rel).exists() or (dist / rel).read_text(encoding="utf-8") != text:
             stale.append(f"/{rel}")
     f = dist / LEDGER_PAGE

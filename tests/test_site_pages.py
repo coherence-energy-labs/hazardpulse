@@ -143,6 +143,25 @@ def test_the_live_hero_and_its_script_are_on_the_live_pages_and_nowhere_else():
             assert sorted(re.findall(r'data-live="([^"]*)"', text)) == sorted(k for k, _, _ in overview.LIVE_STATS), page.path
 
 
+def test_the_globe_reads_its_own_small_file_built_from_the_served_grid():
+    """The globe fetched the Worker's 146 KB area index to read two fields; globe.json carries exactly what it
+    draws. Its bytes are the documented quantization of the published grid, cell for cell."""
+    import base64
+    globe = json.loads((DIST / "data" / "globe.json").read_text(encoding="utf-8"))
+    area = json.loads((DIST / "data" / "area-index.json").read_text(encoding="utf-8"))
+    assert (DIST / "data" / "globe.json").stat().st_size < 30_000
+    heat, eq = globe["heat"], area["eq"]
+    raw = base64.b64decode(heat["bytes"])
+    values = [float(v) if v else 0.0 for v in eq["probability_grid"].split(",")]
+    assert len(raw) == len(values) == heat["n_lat"] * heat["n_lon"]
+    assert list(raw) == [build.globe_heat_byte(p) for p in values]
+    assert build.globe_heat_byte(5e-4) == 0 and build.globe_heat_byte(0.25) == 255 and build.globe_heat_byte(0) == 0
+    assert build.globe_heat_byte(0.9) == 255 and 0 < build.globe_heat_byte(0.01) < 255
+    assert len(globe["tracked"]["points"]) == len(area["tornadoes"])
+    app = (DIST / "assets" / "app.js").read_text(encoding="utf-8")
+    assert "area-index" not in app and "data-globe" in app
+
+
 def test_the_globe_texture_is_a_land_mask_the_right_way_up():
     """The globe's shader reads land-2048.webp as equirectangular, north at the top: Earth is 29% land."""
     np = pytest.importorskip("numpy")
