@@ -38,8 +38,20 @@ OUT = ROOT / "results" / "hurricane_prospective" / "record_audit.json"
 TOL = 5e-5          # stored probabilities are rounded to 4 decimals
 
 
+CATCH_UP_KEY = "shadow_catch_up"      # a forecast file's catch-up records (amendment 7 rule 2)
+
+
 def sha(obj) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def content(art: dict) -> dict:
+    """What a forecast file said, as its ledger entry hashed it (fetch_and_score.forecast_content):
+    its id, its storms, and its catch-up records when it has any."""
+    body = {"forecast_id": art["forecast_id"], "storms": art["storms"]}
+    if art.get(CATCH_UP_KEY):
+        body[CATCH_UP_KEY] = art[CATCH_UP_KEY]
+    return body
 
 
 def known_models(root: Path = ROOT) -> dict[str, tuple[str, dict]]:
@@ -91,7 +103,7 @@ def audit(root: Path = ROOT) -> dict:
             no_replay.append(row["forecast_id"])
             continue
         art = json.loads(p.read_text(encoding="utf-8"))
-        if sha({"forecast_id": art["forecast_id"], "storms": art["storms"]}) == row.get("content_sha256"):
+        if sha(content(art)) == row.get("content_sha256"):
             content_ok += 1
         else:
             content_bad.append(row["forecast_id"])
@@ -100,7 +112,7 @@ def audit(root: Path = ROOT) -> dict:
     files = sorted((root / "dist" / "data" / "replay").glob("hu_fcst_*.json"))
     for p in files:
         art = json.loads(p.read_text(encoding="utf-8"))
-        for s in art.get("storms") or []:
+        for s in (art.get("storms") or []) + (art.get(CATCH_UP_KEY) or []):
             for key, sh in s.items():
                 if not (key.endswith("_shadow") and isinstance(sh, dict) and sh.get("status") == "ok"):
                     continue

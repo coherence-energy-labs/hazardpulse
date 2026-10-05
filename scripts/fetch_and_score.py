@@ -25,6 +25,7 @@ import datetime as dt
 import gzip
 import hashlib
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -52,6 +53,7 @@ from hazardpulse.hurricane.operational_ri import (  # noqa: E402
     climatological_mpi_features,
     translation_speed_kmh,
 )
+from hazardpulse.hurricane import cycle_records as cr  # noqa: E402
 from hazardpulse.hurricane import ri_model  # noqa: E402
 from hazardpulse.hurricane import ri_stack, ships_text  # noqa: E402
 from hazardpulse.hurricane import ri_v9  # noqa: E402
@@ -468,6 +470,7 @@ def build_live_case(
     aid_models: tuple[str, ...] = DEFAULT_AID_MODELS,
     lead_times: tuple[int, ...] = DEFAULT_LEAD_TIMES,
     full_history: bool = True,
+    cycle: dt.datetime | None = None,
 ) -> dict[str, object] | None:
     """Build a single feature case from the LATEST advisory cycle of an active storm.
 
@@ -476,6 +479,9 @@ def build_live_case(
 
     ``full_history``: the records hold the storm's whole track (an a-deck). A JTWC warning
     holds one cycle, so its storm age is unknown (None, not 0).
+
+    ``cycle``: build that cycle instead of the latest (a catch-up forecast, amendment 7 rule 2);
+    None when the deck has no analysis for it.
     """
 
     if not adeck_records:
@@ -486,6 +492,8 @@ def build_live_case(
         {r.cycle for r in adeck_records if r.tau_hours == 0},
         reverse=True,
     )
+    if cycle is not None:
+        cycles = [c for c in cycles if c == cycle]
 
     for cycle in cycles:
         by_model_tau = {
@@ -740,21 +748,56 @@ def ir_reader_available() -> bool:
 _IR_IMAGES: dict = {}            # one download per image hour per run, shared by every storm
 
 
-def live_ir_features(sid: str, cycle: dt.datetime, records) -> dict[str, float]:
-    """The amendment-5 IR features for a cycle, made by the training code path
-    (``ir_source`` crops, ``ir_features``): GMGSI at t + 2 h and t - 4 h around the extrapolated
-    CARQ centre. A missing image gives NaNs, as it did in training."""
+IR_IMAGE_LABELS = {"p2": "t + 2 h", "m4": "t - 4 h"}
+
+
+def live_ir_read(sid: str, cycle: dt.datetime, records) -> tuple[dict[str, float], dict[str, object]]:
+    """``(IR features, what was read)`` for a cycle, made by the training code path (``ir_source``
+    crops, ``ir_features``): GMGSI at t + 2 h and t - 4 h around the extrapolated CARQ centre. A
+    missing image gives NaNs, as it did in training; ``what was read`` names each image's key, or
+    None with its hour when there was no image (a run before t + 2 h 40 min finds none at t + 2 h)."""
     from hazardpulse.hurricane import ir_features, ir_source
     cen = ir_source.centres(records, cycle)
     if cen is None:
-        return ir_features.features(None, None)
-    crops = {}
+        return ir_features.features(None, None), {"centre": "no CARQ position at t"}
+    crops, read = {}, {}
     for tag, (hour, centre) in cen.items():
         if hour not in _IR_IMAGES:
             _IR_IMAGES[hour] = ir_source.fetch_image(hour)
         key, counts, lat, lon = _IR_IMAGES[hour]
         crops[tag] = None if key is None else ir_source.crop(counts, lat, lon, centre)
-    return ir_features.features(crops["p2"], crops["m4"])
+        read[tag] = {"hour": hour.strftime("%Y-%m-%dT%H:00Z"), "key": key}
+    return ir_features.features(crops["p2"], crops["m4"]), read
+
+
+def live_ir_features(sid: str, cycle: dt.datetime, records) -> dict[str, float]:
+    """The amendment-5 IR features for a cycle (``live_ir_read`` without its account of the reads)."""
+    return live_ir_read(sid, cycle, records)[0]
+
+
+def ir_status(features: dict[str, float], read: dict[str, object] | None = None) -> str:
+    """What the IR inputs of a forecast actually were: ``ok`` only when every IR feature was computed;
+    ``missing`` when none was (Rachel 2026-10-03 18Z, run at t + 46 min: no image at t + 2 h yet, all 14
+    features NaN, and the record said "ok"); ``partial`` in between. Names the images that were not read."""
+    from hazardpulse.hurricane import ir_features
+    n = sum(1 for k in ir_features.IR_NAMES if math.isfinite(float(features.get(k, math.nan))))
+    total = len(ir_features.IR_NAMES)
+    why = []
+    if read:
+        if "centre" in read:
+            why.append(str(read["centre"]))
+        not_read = [f"{IR_IMAGE_LABELS[t]} ({v['hour']})" for t, v in read.items()
+                    if t in IR_IMAGE_LABELS and isinstance(v, dict) and v.get("key") is None]
+        if not_read and len(not_read) == sum(t in IR_IMAGE_LABELS for t in read):
+            why.append("no image read: " + ", ".join(not_read))
+        elif not_read:
+            why.append("no image at " + ", ".join(not_read))
+    detail = ("; " + "; ".join(why)) if why else ""
+    if n == total:
+        return "ok"
+    if n == 0:
+        return f"missing: 0 of {total} IR features" + detail
+    return f"partial: {n} of {total} IR features" + detail
 
 
 def _shadow_inputs(case: dict[str, object], ships_raw_fetcher=None, adeck_fetcher=None):
@@ -801,7 +844,11 @@ def shadow_forecasts(case: dict[str, object], v9: dict[str, object] | None, v10:
                      challengers: dict[str, dict[str, object]] | None = None,
                      ir_fetcher=None) -> dict[str, dict[str, object]]:
     """Every shadow (v9.1, v10.1 and each challenger) from ONE read of the cycle's SHIPS text and
-    the storm's a-deck; an IR model also gets the cycle's IR features, read once."""
+    the storm's a-deck; an IR model also gets the cycle's IR features, read once.
+
+    ``ir_fetcher(sid, cycle, records)`` returns the IR features, or ``(features, what was read)`` as
+    ``live_ir_read`` does; the shadow's ``ir`` says what the inputs were (``ir_status``), never "ok"
+    for a forecast made without an image."""
     got = _shadow_inputs(case, ships_raw_fetcher, adeck_fetcher)
     if got is None:
         return {k: {"status": "not an NHC a-deck case"} for k in _shadow_keys(v9, v10, challengers)}
@@ -810,7 +857,7 @@ def shadow_forecasts(case: dict[str, object], v9: dict[str, object] | None, v10:
     if v9 is not None:
         out["ri_v9_shadow"] = {"status": "ok", "ships_text": note,
                                **ri_v9.predict(v9["payload"], str(v9["model_version"]), records, cycle, sid[:2], pcts)}
-    ir, ir_note = None, None
+    ir, ir_note, ir_read = None, None, None
     for key, m in (("ri_v10_shadow", v10), *(challengers or {}).items()):
         if m is None:
             continue
@@ -818,14 +865,89 @@ def shadow_forecasts(case: dict[str, object], v9: dict[str, object] | None, v10:
         if ri_v10.needs_ir(m["artifact"]):
             if ir is None:
                 try:
-                    ir = (ir_fetcher or live_ir_features)(sid, cycle, records)
-                    ir_note = "ok"
+                    got_ir = (ir_fetcher or live_ir_read)(sid, cycle, records)
+                    ir, ir_read = got_ir if isinstance(got_ir, tuple) else (got_ir, None)
+                    ir_note = ir_status(ir, ir_read)
                 except Exception as exc:  # noqa: BLE001 -- no IR: NaN inputs, as a missing image was in training
                     ir, ir_note = {}, f"error: {type(exc).__name__}: {exc}"
             extra = ir
         out[key] = {"status": "ok", "ships_text": note,
                     **({"ir": ir_note} if extra is not None else {}),
+                    **({"ir_images": ir_read} if extra is not None and ir_read else {}),
                     **ri_v10.predict(m["artifact"], str(m["model_version"]), records, cycle, sid[:2], pcts, extra)}
+    return out
+
+
+def analysis_cycles(records: list[ATCFRecord]) -> list[dt.datetime]:
+    """Every cycle of a deck that build_live_case can build (an analysis with a wind)."""
+    groups: dict[dt.datetime, dict[tuple[str, int], ATCFRecord]] = {}
+    for r in records:
+        groups.setdefault(r.cycle, {})[(r.model, r.tau_hours)] = r       # as build_live_case: last line wins
+    return sorted(c for c, m in groups.items() if _select_analysis_record(m) is not None)
+
+
+def recorded_test_cycles(now: dt.datetime, replay_dir: Path | None = None) -> set[tuple[str, dt.datetime]]:
+    """Storm-cycles that already have a test record (amendment 7 rules 1-2), read from the forecast
+    files that can hold one for a cycle still inside the catch-up window (made in the last 13 h)."""
+    replay_dir = DIST / "data" / "replay" if replay_dir is None else replay_dir
+    oldest = now - cr.CATCH_UP_LIMIT - dt.timedelta(hours=1)
+    cands: list[cr.Candidate] = []
+    for path in sorted(replay_dir.glob("hu_fcst_*.json")):
+        stamp = cr.record_time({"forecast_id": path.stem})
+        if stamp is not None and stamp < oldest:
+            continue
+        try:
+            art = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        cands.extend(cr.file_candidates(art))
+    return set(cr.select(cands).chosen)
+
+
+def catch_up_cases(live_cases: list[dict[str, object]], adeck_by_storm: dict[str, list[ATCFRecord]],
+                   now: dt.datetime, have: set[tuple[str, dt.datetime]]) -> list[dict[str, object]]:
+    """Amendment 7 rule 2: for every active NHC-basin numbered storm, a case for each cycle of its deck
+    with ``t >= 2026-10-04 00Z``, ``t + 3 h 30 min`` passed, ``t + 12 h`` not passed and no test record
+    -- built from the deck already read this run (no second read). The cycle this run forecasts live
+    is not one: its live record is made now."""
+    out = []
+    for case in live_cases:
+        sid = str(case["storm_id"]).upper()
+        if case.get("analysis_model") == "JTWC" or not cr.is_nhc_numbered(sid):
+            continue
+        records = adeck_by_storm.get(sid) or []
+        done = {t for s, t in have if s == sid} | {dt.datetime.fromisoformat(str(case["issue_time"]))}
+        for t in cr.due_catch_up_cycles(analysis_cycles(records), now, done):
+            c = build_live_case(sid, records, cycle=t)
+            if c is not None:
+                out.append(c)
+    return out
+
+
+def catch_up_forecasts(cases: list[dict[str, object]], now: dt.datetime, v9, v10,
+                       challengers: dict[str, dict[str, object]] | None = None, ships_raw_fetcher=None,
+                       adeck_fetcher=None, ir_fetcher=None) -> list[dict[str, object]]:
+    """The shadow forecasts of the catch-up cycles: the SAME computation a live run makes for a cycle
+    (``shadow_forecasts`` on build_live_case's case: one read of the cycle's SHIPS text, the storm's
+    deck and the IR images), recorded with ``catch_up: true`` and its lag (record time minus t).
+    Never a published number; a failure is written down and touches nothing else."""
+    keys = _shadow_keys(v9, v10, challengers)
+    out = []
+    for case in cases:
+        t = dt.datetime.fromisoformat(str(case["issue_time"]))
+        rec: dict[str, object] = {
+            "storm_id": case["storm_id"], "storm_name": case.get("storm_name", case["storm_id"]),
+            "basin": case.get("basin", ""), "issue_time": case["issue_time"],
+            "lat": case.get("analysis_lat"), "lon": case.get("analysis_lon"),
+            "vmax_kt": case.get("analysis_vmax_kt"), "mslp_hpa": case.get("analysis_mslp_hpa"),
+            "catch_up": True, "lag_hours": cr.lag_hours(now, t), "published": False,
+        }
+        try:
+            rec.update(shadow_forecasts(case, v9, v10, ships_raw_fetcher, adeck_fetcher, challengers, ir_fetcher))
+        except Exception as exc:  # noqa: BLE001
+            err = {"status": f"error: {type(exc).__name__}: {exc}"}
+            rec.update({k: dict(err) for k in keys})
+        out.append(rec)
     return out
 
 
@@ -836,15 +958,29 @@ def _canonical_sha256(obj) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
-def forecast_content_sha256(forecast_id: str, storms: list[dict]) -> str:
+def forecast_content(forecast_id: str, storms: list[dict], catch_up: list[dict] | None = None) -> dict:
+    """What a forecast file said: its id, every storm record and -- when it has any -- its catch-up
+    records (amendment 7 rule 2). A file without catch-up records hashes exactly as before."""
+    body: dict[str, object] = {"forecast_id": forecast_id, "storms": storms}
+    if catch_up:
+        body[cr.CATCH_UP_KEY] = catch_up
+    return body
+
+
+def forecast_content_sha256(forecast_id: str, storms: list[dict], catch_up: list[dict] | None = None) -> str:
     """SHA-256 of what a forecast said -- its id and every storm record (published number, every
-    shadow, every stored input). The site build rewrites the replay's envelope, never its storms,
-    so this is recomputable from the replay file at any later time."""
-    return _canonical_sha256({"forecast_id": forecast_id, "storms": storms})
+    shadow, every stored input), and its catch-up records. The site build rewrites the replay's
+    envelope, never these, so this is recomputable from the replay file at any later time."""
+    return _canonical_sha256(forecast_content(forecast_id, storms, catch_up))
+
+
+def _ledger_shadows(s: dict) -> dict:
+    return {k: {"model_version": v.get("model_version"), "probability": v.get("probability")}
+            for k, v in s.items() if k.endswith("_shadow") and isinstance(v, dict) and v.get("status") == "ok"}
 
 
 def append_hurricane_ledger(forecast_id: str, now: dt.datetime, model_version: str, storms: list[dict],
-                            path: Path | None = None) -> dict:
+                            path: Path | None = None, catch_up: list[dict] | None = None) -> dict:
     """Append one hash-chained entry per forecast (the earthquake and tornado ledgers' scheme:
     ``hash`` = SHA-256 of the entry without ``hash``, ``prev_hash`` = the previous entry's hash).
     The entry carries the forecast's content hash, so editing any stored storm record, shadow or
@@ -863,17 +999,18 @@ def append_hurricane_ledger(forecast_id: str, now: dt.datetime, model_version: s
         "timestamp": now.isoformat() + "Z",
         "forecast_id": forecast_id,
         "model_version": model_version,
-        "content_sha256": forecast_content_sha256(forecast_id, storms),
+        "content_sha256": forecast_content_sha256(forecast_id, storms, catch_up),
         "storms": [{
             "id": s.get("storm_id"), "issue_time": s.get("issue_time"),
             "published": s.get("ri_probability"), "source": s.get("ri_source_label") or s.get("ri_source"),
             "published_model_version": s.get("model_version"),
-            "shadows": {k: {"model_version": v.get("model_version"), "probability": v.get("probability")}
-                        for k, v in s.items() if k.endswith("_shadow") and isinstance(v, dict)
-                        and v.get("status") == "ok"},
+            "shadows": _ledger_shadows(s),
         } for s in storms],
         "prev_hash": prev_hash,
     }
+    if catch_up:
+        entry["catch_up"] = [{"id": s.get("storm_id"), "issue_time": s.get("issue_time"),
+                              "lag_hours": s.get("lag_hours"), "shadows": _ledger_shadows(s)} for s in catch_up]
     entry["hash"] = _canonical_sha256(entry)
     with open(path, "a", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(entry, sort_keys=True, separators=(",", ":")) + "\n")
@@ -1011,12 +1148,14 @@ def write_outputs(
     now: dt.datetime,
     model_version: str = SERVED_MODEL_VERSION,
     note: str | None = None,
+    catch_up: list[dict[str, object]] | None = None,
 ) -> None:
     """Write scored results to dist/data/.
 
     ``model_version`` is the model behind the headline (top-storm) number; each storm carries
     its own ``model_version`` and ``ri_source``, and ``model_versions`` lists every model that
-    produced a number in this run.
+    produced a number in this run. ``catch_up``: the run's shadow-only records of missed cycles
+    (amendment 7 rule 2), kept beside the storms -- never among them, so nothing publishes them.
     """
     forecast_id = f"hu_fcst_{now.strftime('%Y%m%d_%H%M')}"
     sources: dict[str, int] = {}
@@ -1035,6 +1174,8 @@ def write_outputs(
         "n_active_storms": len(scored_storms),
         "storms": scored_storms,
     }
+    if catch_up:
+        output[cr.CATCH_UP_KEY] = catch_up
     storms_path = DIST / "data" / "live-storms.json"
     storms_path.parent.mkdir(parents=True, exist_ok=True)
     storms_path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
@@ -1058,9 +1199,11 @@ def write_outputs(
         "n_active_storms": len(scored_storms),
         "storms": scored_storms,
     }
+    if catch_up:
+        replay_payload[cr.CATCH_UP_KEY] = catch_up
     replay_path.write_text(json.dumps(replay_payload, indent=2) + "\n", encoding="utf-8")
-    print(f"  Wrote {replay_path}")
-    entry = append_hurricane_ledger(forecast_id, now, model_version, scored_storms)
+    print(f"  Wrote {replay_path}" + (f" (+{len(catch_up)} catch-up shadow records)" if catch_up else ""))
+    entry = append_hurricane_ledger(forecast_id, now, model_version, scored_storms, catch_up=catch_up)
     print(f"  Ledger: {HU_LEDGER_PATH.name} +1 (hash {entry['hash'][:12]}, prev {entry['prev_hash'][:12]})")
 
     # Update live-pulse.json hurricane entry
@@ -1297,6 +1440,20 @@ def main() -> None:
         print(f"  {s.get('storm_name', s['storm_id'])}: P(RI) = {ri:.1%} from {s['ri_source_label']}"
               f"{why} ({s['category']}, {s['vmax_kt']} kt)")
 
+    # Catch-up (docs/HURRICANE_RI_V9_PROGRAM.md amendment 7 rule 2): every cycle of an active NHC storm
+    # that no run recorded after its advisory, still within t + 12 h, forecast in shadow from the same
+    # deck read above. A failure here must not touch the published forecast.
+    catch_up: list[dict[str, object]] = []
+    if _shadow_keys(v9, v10, challengers):
+        try:
+            due = catch_up_cases(live_cases, adeck_by_storm, now, recorded_test_cycles(now))
+            catch_up = catch_up_forecasts(due, now, v9, v10, challengers,
+                                          adeck_fetcher=lambda s: adeck_by_storm.get(str(s).upper(), []))
+        except Exception as exc:  # noqa: BLE001
+            print(f"  Catch-up: skipped ({type(exc).__name__}: {exc})")
+        for c in catch_up:
+            print(f"  Catch-up (shadow only): {c['storm_id']} {c['issue_time']}, {c['lag_hours']:.1f} h after t")
+
     # Trust layer: recalibrate RI probabilities on live outcomes + attach honest
     # [conf_lo, conf_hi] bands + Ed25519-signed receipts. Fail-safe: the model's
     # own held-out calibrated ri_probability stands until a live calibrator exists.
@@ -1336,7 +1493,7 @@ def main() -> None:
     print()
     print("Step 5: Writing outputs...")
     headline_version = headline_model_version(scored, stack["model_version"])
-    write_outputs(scored, now, headline_version, note=note)
+    write_outputs(scored, now, headline_version, note=note, catch_up=catch_up)
     build_site_artifacts()
 
     # ---- Alert manager evaluation ----

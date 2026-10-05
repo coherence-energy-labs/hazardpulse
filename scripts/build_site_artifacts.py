@@ -402,6 +402,10 @@ def _ensure_live_publish_artifacts() -> tuple[dict, dict]:
             "source_artifacts": ["/data/live-storms.json"],
             "storms": storms.get("storms", []),
         }
+        if storms.get("shadow_catch_up"):
+            # the run's shadow-only records of missed cycles (hurricane RI amendment 7 rule 2): part of
+            # the forecast's record and its ledger content hash, never among the published storms
+            artifact["shadow_catch_up"] = storms["shadow_catch_up"]
         replay_path = REPLAY_DIR / f"{forecast_id}.json"
         _write_json(replay_path, artifact)
         _upsert_replay_index_item(replay_index, forecast_id, replay_path)

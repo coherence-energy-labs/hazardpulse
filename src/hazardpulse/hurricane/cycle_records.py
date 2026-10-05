@@ -149,6 +149,36 @@ def select(candidates: Iterable[Candidate]) -> Selection:
     return sel
 
 
+def has_shadow(entry: Mapping[str, Any]) -> bool:
+    """A record of the prospective test carries at least one shadow forecast that was computed."""
+    return any(str(k).endswith("_shadow") and isinstance(v, Mapping) and v.get("status") == "ok"
+               for k, v in entry.items())
+
+
+def file_candidates(artifact: Mapping[str, Any]) -> list[Candidate]:
+    """Every shadow-carrying record in one forecast file -- its published storms and its catch-up
+    records -- keyed by the record's own cycle (``issue_time``; the shadows' ``cycle`` for a record
+    that has none), made at the file's own time. ``ref`` is ``(forecast id, list name, record)``."""
+    made = record_time(artifact)
+    out = []
+    for kind in ("storms", CATCH_UP_KEY):
+        for s in artifact.get(kind) or []:
+            if not isinstance(s, Mapping) or not has_shadow(s):
+                continue
+            sc = storm_cycle(s)
+            if sc is None:
+                sh = next(v for k, v in s.items() if str(k).endswith("_shadow") and isinstance(v, Mapping)
+                          and v.get("status") == "ok")
+                t = parse_utc(sh.get("cycle"))
+                sid = str(s.get("storm_id") or "").strip().upper()
+                sc = (sid, t) if sid and t is not None else None
+            if sc is None:
+                continue
+            out.append(Candidate(sc[0], sc[1], made, catch_up=bool(s.get("catch_up")),
+                                 rebuilt=bool(s.get("rebuilt")), ref=(artifact.get("forecast_id"), kind, s)))
+    return out
+
+
 def due_catch_up_cycles(cycles: Iterable[dt.datetime], now: dt.datetime,
                         have: set[dt.datetime] | frozenset = frozenset(),
                         start: dt.datetime = CATCH_UP_START) -> list[dt.datetime]:

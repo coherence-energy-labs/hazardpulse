@@ -61,32 +61,15 @@ def _iso(s: str) -> dt.datetime:
     return dt.datetime.fromisoformat(s.replace("Z", ""))
 
 
-def _has_a_shadow(entry: dict) -> bool:
-    return any(k.endswith("_shadow") and isinstance(v, dict) and v.get("status") == "ok" for k, v in entry.items())
-
-
 def candidates(replay_dir: Path | None = None) -> list[cr.Candidate]:
     """Every forecast record of a test-population storm-cycle (an NHC-basin numbered storm, t >= the
     start) that carries the shadows: the published storms of each forecast file and its catch-up
-    records (amendment 7 rule 2), each with the time its file was made."""
+    records (amendment 7 rule 2), each with the time its file was made (cycle_records.file_candidates,
+    the reader the live scorer's catch-up uses too)."""
     out = []
     for path in sorted((replay_dir or REPLAY).glob("hu_fcst_*.json")):
         art = json.loads(path.read_text(encoding="utf-8"))
-        made = cr.record_time(art)
-        for kind in ("storms", cr.CATCH_UP_KEY):
-            for s in art.get(kind) or []:
-                if not _has_a_shadow(s):
-                    continue
-                sc = cr.storm_cycle(s)
-                if sc is None:          # a record without issue_time: the shadows name the cycle
-                    sh = next(v for k, v in s.items() if k.endswith("_shadow") and isinstance(v, dict)
-                              and v.get("status") == "ok")
-                    t = cr.parse_utc(sh.get("cycle"))
-                    sc = (str(s.get("storm_id") or "").upper(), t) if t is not None else None
-                if sc is None or not cr.is_nhc_numbered(sc[0]) or sc[1] < START:
-                    continue
-                out.append(cr.Candidate(sc[0], sc[1], made, catch_up=bool(s.get("catch_up")),
-                                        rebuilt=bool(s.get("rebuilt")), ref=(art.get("forecast_id"), kind, s)))
+        out.extend(c for c in cr.file_candidates(art) if cr.is_nhc_numbered(c.storm_id) and c.cycle >= START)
     return out
 
 
