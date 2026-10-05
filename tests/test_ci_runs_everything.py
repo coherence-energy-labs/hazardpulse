@@ -19,7 +19,8 @@ def test_the_test_workflow_runs_the_whole_tests_directory():
 #: packages a test may import-or-skip although CI does not install them, each for a stated reason
 NOT_IN_CI = {
     "omega": "the omega_one sibling repository, not on PyPI (tests/test_forest_serve.py, test_train_best_tabular.py)",
-    "xgboost": "used only with omega in tests/test_forest_serve.py, which skips without omega anyway",
+    "xgboost": "used only together with omega_one (test_forest_serve.py, test_train_best_tabular.py), "
+               "whose tests skip without it anyway",
 }
 #: import name -> pip name, where they differ
 PIP_NAME = {"sklearn": "scikit-learn", "PIL": "pillow"}
