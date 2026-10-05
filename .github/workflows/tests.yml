@@ -20,7 +20,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - name: Checkout
         # SHA-pinned from main -- a floating @v4 tag is a supply-chain hole, and this branch
@@ -38,95 +38,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install numpy scipy pytest
+          pip install numpy scipy pytest pillow
           pip install -e .
 
       - name: Verify vendored omega_one trust subset has not drifted
         run: python scripts/vendor_omega_trust.py --verify
 
-      - name: Run trust + gate + calibration + verifier tests
-        run: |
-          python -m pytest -q \
-            tests/test_vendor_omega.py \
-            tests/test_calibration.py \
-            tests/test_venn_abers.py \
-            tests/test_trusted_forecast.py \
-            tests/test_gate_engine.py \
-            tests/test_fit_calibration.py \
-            tests/test_scoring_integration.py \
-            tests/test_external_verify.py
-
-      # BOTH sides kept. The branch added the accuracy/HRRR suite; main added the determinism gate,
-      # the CLI smoke test and receipt verification. Neither replaces the other, and taking one side
-      # would have deleted a whole class of checks from a workflow that still looked healthy.
-      - name: Run accuracy + tornado-HRRR pipeline tests
-        run: |
-          python -m pytest -q \
-            tests/test_hrrr_pooling.py \
-            tests/test_group_conformal.py \
-            tests/test_forest_serve.py \
-            tests/test_tornado_hrrr_dataset.py \
-            tests/test_tornado_hrrr_env.py \
-            tests/test_eq_forest_wiring.py
-
-      # Each of these failed on the code it guards before 2026-10: order-dependent AUC on
-      # tied cells, the 20,000-row USGS truncation, risk bands contradicting calibrated
-      # probabilities, the 400-day serving window, invented "no RI" hurricane outcomes,
-      # and publish gates fed inputs that could not fail.
-      - name: Verification-truth regression tests
-        run: |
-          python -m pytest -q \
-            tests/test_ranking_metrics.py \
-            tests/test_usgs_catalog_completeness.py \
-            tests/test_risk_band_truth.py \
-            tests/test_eq_history_window.py \
-            tests/test_hurricane_verification.py \
-            tests/test_gate_inputs.py \
-            tests/test_earthquake_operational_forecast.py \
-            tests/test_earthquake_operational_serving.py \
-            tests/test_earthquake_program_metrics.py
-
-      # The site quotes only numbers bound to the SERVED artifacts (2026-10: five pages had drifted to
-      # five superseded models), the public tornado ledger keeps updating (it froze 2026-03-31 while
-      # every run printed success), a storm's numbers are measured rather than invented, and live
-      # verification scores v3 storms against the event v3 forecasts.
-      - name: Served-model evidence, live tornado page and v3 verification tests
-        run: |
-          python -m pytest -q \
-            tests/test_served_evidence.py \
-            tests/test_tornado_page_evidence.py \
-            tests/test_tornado_verify_v3.py \
-            tests/test_reliability_table.py \
-            tests/test_live_record_by_version.py \
-            tests/test_verification_rollup.py \
-            tests/test_build_writes_are_byte_stable.py \
-            tests/test_platt_fit.py \
-            tests/test_scoring_push.py \
-            tests/test_hurricane_v9.py \
-            tests/test_hurricane_v9_prospective.py \
-            tests/test_hurricane_v10.py \
-            tests/test_ir_features.py \
-            tests/test_hurricane_records.py \
-            tests/test_model_registry.py \
-            tests/test_tornado_records.py \
-            tests/test_data_records.py
-
-      - name: Determinism gate — identical training regardless of global RNG
-        run: python -m pytest -q tests/test_determinism.py
-
-      # Operational regressions: the hurricane job serves a pinned model and never trains
-      # (it timed out daily from 2026-05-27), ingests only active storms with their true
-      # identity, every scorer re-renders the cross-hazard pages, liveness is per hazard.
-      - name: Ops regression tests (hurricane serving, live ingest, the site, liveness)
-        run: |
-          python -m pytest -q \
-            tests/test_hurricane_ri_serving.py \
-            tests/test_hurricane_training_clock.py \
-            tests/test_hurricane_live_ingest.py \
-            tests/test_site_pages.py \
-            tests/test_liveness.py \
-            tests/test_scheduler.py \
-            tests/test_ships_archive.py
+      # The WHOLE suite, never a hand-picked list: the lists this replaced had left 39 of 88 test files out of
+      # CI (found 2026-10-05), every integrity test of that day's audit among them, so a fix could regress
+      # with nothing to stop it. tests/test_ci_runs_everything.py keeps it that way.
+      - name: The full test suite
+        run: python -m pytest -q -p no:cacheprovider tests/
 
       - name: Set up Node (the Worker's checks)
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -154,9 +76,6 @@ jobs:
           ARTIFACT=$(ls dist/data/replay/eq_fcst_*.json | tail -n 1)
           echo "verifying $ARTIFACT"
           python scripts/verify_forecast.py --artifact "$ARTIFACT"
-
-      - name: Run site integrity checks
-        run: python -m pytest tests/test_site_integrity.py -q
 
       # The product's claim is "this prediction was recorded before the event". An append-only
       # evidence artifact that silently SHRINKS is indistinguishable from backdating. A long-lived
