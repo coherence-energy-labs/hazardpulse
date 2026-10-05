@@ -545,6 +545,7 @@ def _v82_composition(root: Path, evaluation: dict, heldout: dict) -> dict | None
     on_test = (list((cal.get("fitted_on") or {}).get("storm_years") or []) == list(comp.get("test_storm_years") or [None])
                and int(cal.get("n") or -1) == int(heldout.get("n") or 0))
     jt = comp.get("single_jtwc_warning") or {}
+    lf = comp.get("late_best_track_fix") or {}
     return {
         "by_basin": [{"basin": b, "name": HURRICANE_BASIN_NAMES.get(b, b), "n": int(v.get("n") or 0),
                       "events": int(v.get("events") or 0)} for b, v in basins.items()],
@@ -558,6 +559,12 @@ def _v82_composition(root: Path, evaluation: dict, heldout: dict) -> dict | None
             "log_loss_full_inputs": _finite(jt.get("log_loss_full_inputs")),
             "log_loss_climatology": _finite(jt.get("log_loss_climatology")),
         } if jt else None,
+        # since 2026-10-05: RAL's history with the warning as the analysis (its cycle's fix not yet published)
+        "late_best_track_fix": {
+            "inputs": sorted(lf.get("inputs_missing_live") or []),
+            "n_missing": len(lf.get("inputs_missing_live") or []),
+            "log_loss": _finite(lf.get("log_loss")),
+        } if lf else None,
     }
 
 

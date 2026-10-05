@@ -357,7 +357,7 @@ def fetch_live_space_weather() -> LiveSpaceWeather:
         sw_density=density,
         xray_flares=_fetch_live_xray_flares(),
         f107=_fetch_live_f107(),
-        fetched_at=dt.datetime.utcnow(),
+        fetched_at=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -469,7 +469,7 @@ def space_weather_features_for_window(
     cache = get_cache()
     live = None
     # Decide whether to use live: anything in the last 3 days needs live data
-    age_days = (dt.datetime.utcnow() - event_time).total_seconds() / 86400.0
+    age_days = (dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - event_time).total_seconds() / 86400.0
     if age_days < 3.5:
         try:
             live = get_live()

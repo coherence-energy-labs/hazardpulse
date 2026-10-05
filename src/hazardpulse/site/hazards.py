@@ -29,7 +29,7 @@ EARTHQUAKE = Hazard(
     event="at least one magnitude 6+ earthquake in a 2&deg; grid cell",
     window="30 days", window_short="30 d",
     coverage="the globe on a 2&deg; grid",
-    schedule="every 6 hours", max_age_hours=12,
+    schedule="every 6 hours", max_age_hours=9,
     official=(("USGS Earthquake Hazards Program", "https://earthquake.usgs.gov/"),
               ("your national geological survey", None)),
 )
@@ -38,7 +38,7 @@ HURRICANE = Hazard(
     event="rapid intensification: maximum sustained winds rising 30 knots or more",
     window="24 hours", window_short="24 h",
     coverage="every active tropical cyclone worldwide",
-    schedule="every 6 hours, after each forecast cycle", max_age_hours=14,
+    schedule="every 6 hours, after each forecast cycle", max_age_hours=9,
     official=(("National Hurricane Center", "https://www.nhc.noaa.gov/"),
               ("Central Pacific Hurricane Center", "https://www.nhc.noaa.gov/?cpac"),
               ("Joint Typhoon Warning Center", "https://www.metoc.navy.mil/jtwc/jtwc.html")),
@@ -49,7 +49,7 @@ TORNADO = Hazard(
     window="60 minutes", window_short="60 min",
     coverage=("every thunderstorm NOAA&rsquo;s ProbSevere system tracks on radar over and near the contiguous "
               "United States"),
-    schedule="every 2 hours, or every 30 minutes while tornado risk is elevated", max_age_hours=6,
+    schedule="every 2 hours, or every 30 minutes while tornado risk is elevated", max_age_hours=3,
     official=(("National Weather Service", "https://www.weather.gov/"),
               ("Storm Prediction Center", "https://www.spc.noaa.gov/")),
 )

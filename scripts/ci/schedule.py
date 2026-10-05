@@ -67,6 +67,10 @@ WORKFLOWS = {
     "earthquake": "earthquake-score.yml",
     "verification": "verification-score.yml",
 }
+# monitors: dispatched on the same clock, every LIVENESS_EVERY, counted by their last COMPLETED run (a failed
+# liveness check is the signal, not a reason to run it again at once -- each failure is an email)
+MONITORS = {"liveness": "liveness-check.yml"}
+LIVENESS_EVERY = dt.timedelta(hours=4)
 
 
 @dataclass(frozen=True)
@@ -114,6 +118,10 @@ def decide(hazard: str, now: dt.datetime, last_success: dt.datetime | None, in_f
         if age + TOLERANCE >= VERIFICATION_EVERY:
             return Decision(hazard, True, f"last run {_minutes(age)} ago, due every 4 h")
         return Decision(hazard, False, f"last run {_minutes(age)} ago, due every 4 h")
+    if hazard == "liveness":
+        if age + TOLERANCE >= LIVENESS_EVERY:
+            return Decision(hazard, True, f"last check {_minutes(age)} ago, due every 4 h")
+        return Decision(hazard, False, f"last check {_minutes(age)} ago, due every 4 h")
     raise ValueError(f"unknown hazard {hazard!r}")
 
 
@@ -167,9 +175,31 @@ def _scored(run_id: int) -> bool:
     return any(j.get("name") == "score" and j.get("conclusion") == "success" for j in jobs)
 
 
+def main_runs(runs: list[dict]) -> list[dict]:
+    """The runs of the main branch, filtered HERE, by each run's own ``headBranch``.
+
+    Never ask GitHub to filter (``gh run list --branch main``): on 2026-10-05 that query returned nothing
+    after 2026-09-23 while today's runs, listed unfiltered, all said ``headBranch: main``. Every scheduler
+    decision had rested on runs two weeks old -- the cause of the "slot not yet run" dispatch at 03:32Z."""
+    return [r for r in runs if r.get("headBranch") == "main"]
+
+
+def _runs(workflow: str, limit: int) -> list[dict]:
+    return main_runs(_gh_json(["run", "list", "--workflow", workflow, "--limit", str(limit), "--json",
+                               "databaseId,status,conclusion,createdAt,startedAt,event,headBranch"]) or [])
+
+
+def monitor_state(workflow: str) -> tuple[dt.datetime | None, bool]:
+    """(start of the last COMPLETED run, whatever its conclusion; whether a run is queued or running)."""
+    runs = _runs(workflow, 30)
+    in_flight = any(r.get("status") in IN_FLIGHT for r in runs)
+    done = [_parse(r.get("startedAt") or r["createdAt"]) for r in runs if r.get("status") == "completed"
+            and r.get("conclusion") in ("success", "failure")]
+    return (max(done) if done else None), in_flight
+
+
 def run_state(workflow: str, exclude_run_id: int | None = None) -> tuple[dt.datetime | None, bool]:
-    runs = _gh_json(["run", "list", "--workflow", workflow, "--branch", "main", "--limit", "40",
-                     "--json", "databaseId,status,conclusion,createdAt,startedAt,event"]) or []
+    runs = _runs(workflow, 60)
     # a scheduled run may have been a gate that found nothing due: look at its jobs (newest first, and
     # only until the newest run that really scored -- older ones cannot change the answer)
     for r in sorted(runs, key=lambda r: r.get("createdAt") or "", reverse=True):
@@ -229,9 +259,9 @@ def main(argv: list[str] | None = None) -> int:
                 fh.write(f"run={'true' if run else 'false'}\n")
         return 0
     failed = False
-    for hazard, workflow in WORKFLOWS.items():
+    for hazard, workflow in {**WORKFLOWS, **MONITORS}.items():
         try:
-            last, in_flight = run_state(workflow)
+            last, in_flight = monitor_state(workflow) if hazard in MONITORS else run_state(workflow)
         except Exception as exc:
             print(f"  {hazard:12s} UNKNOWN  could not read the run history: {exc}")
             failed = True

@@ -122,7 +122,7 @@ class USGSStreamingClient:
             coords = geom.get("coordinates", [None, None, None])
             return {
                 "id": feature.get("id") or props.get("ids", "").split(",")[0],
-                "time": dt.datetime.utcfromtimestamp(props["time"] / 1000.0).isoformat() + "Z",
+                "time": dt.datetime.fromtimestamp(props["time"] / 1000.0, dt.timezone.utc).replace(tzinfo=None).isoformat() + "Z",
                 "time_epoch_ms": int(props["time"]),
                 "mag": props.get("mag"),
                 "magType": props.get("magType"),
@@ -165,7 +165,7 @@ class USGSStreamingClient:
     def _poll_once(self) -> int:
         """Poll the feed once. Returns number of new events emitted."""
         self.metrics.polls_attempted += 1
-        self.metrics.last_poll_at = dt.datetime.utcnow()
+        self.metrics.last_poll_at = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
         payload = self._fetch()
         if payload is None:
             return 0
@@ -197,7 +197,7 @@ class USGSStreamingClient:
                 except Exception as exc:
                     _log.debug("Signalbook forwarder failed: %s", exc)
             self.metrics.events_emitted += 1
-            self.metrics.last_event_at = dt.datetime.utcnow()
+            self.metrics.last_event_at = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
             emitted += 1
         return emitted
 

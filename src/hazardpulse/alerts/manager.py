@@ -273,7 +273,7 @@ class AlertManager:
         """Evaluate every rule against the live pulse JSON. Returns fired alerts."""
         alerts_fired: list[Alert] = []
         hazards = pulse_payload.get("hazards", []) or []
-        updated_at = pulse_payload.get("updated_at", dt.datetime.utcnow().isoformat() + "Z")
+        updated_at = pulse_payload.get("updated_at", dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat() + "Z")
         with self._lock:
             for hazard in hazards:
                 hkey = hazard.get("key", "")
@@ -318,7 +318,7 @@ class AlertManager:
                         forecast_id=forecast_id,
                         probability=prob,
                         issued_at=updated_at,
-                        triggered_at=dt.datetime.utcnow().isoformat() + "Z",
+                        triggered_at=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat() + "Z",
                         message=msg,
                         coincidence=coincidence,
                     )
@@ -434,7 +434,7 @@ class RollingRecentSink(AlertSink):
         existing = existing[: self.max_alerts]
         out = {
             "schema_version": 1,
-            "updated_at": dt.datetime.utcnow().isoformat() + "Z",
+            "updated_at": dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat() + "Z",
             "n_alerts": len(existing),
             "alerts": existing,
         }

@@ -36,15 +36,29 @@ def _basis(storm: dict) -> str:
 
 
 def _single_warning(s: dict) -> bool:
-    """The published number is v8.2 scored from ONE JTWC warning (the West Pacific path)."""
-    return (str(s.get("ri_source") or "") != "noaa_aid_stack"
-            and str((s.get("ri_inputs") or {}).get("analysis_model") or "") == "JTWC")
+    """The published v8.2 number was scored without inputs the model needs. Since 2026-10-05 a record says
+    which (``ri_inputs.inputs_missing``): a West Pacific storm now carries its best-track history from RAL's
+    b-deck, so the caution shows only when that history was not there. Older records: a JTWC analysis."""
+    if str(s.get("ri_source") or "") == "noaa_aid_stack":
+        return False
+    inputs = s.get("ri_inputs") or {}
+    if "inputs_missing" in inputs:
+        return bool(inputs["inputs_missing"])
+    return str(inputs.get("analysis_model") or "") == "JTWC"
 
 
-def _single_warning_caveat(composition: dict | None) -> str:
-    """A plain warning for a number scored from one JTWC warning, with the measured cost of that when the
-    evidence is bound (served_evidence: the served model on 2022-2024 West Pacific cycles)."""
+def _single_warning_caveat(composition: dict | None, s: dict | None = None) -> str:
+    """A plain warning for a number scored without some of its inputs, with the measured cost when the record's
+    missing inputs are the pattern that was measured (served_evidence: the served model on 2022-2024 West
+    Pacific cycles scored from a single warning)."""
     jt = (composition or {}).get("single_jtwc_warning") or {}
+    inputs = (s or {}).get("ri_inputs") or {}
+    missing = inputs.get("inputs_missing")
+    measured_pattern = missing is None or (inputs.get("track_source") == "jtwc_warning"
+                                           and len(missing) == jt.get("n_missing"))
+    if missing is not None and not measured_pattern:
+        return (f"{len(missing)} of the model&rsquo;s {inputs.get('n_inputs') or len(missing)} inputs were not "
+                "available for this storm and are filled with typical values. Treat this number as rough.")
     if jt.get("n_missing") and jt.get("log_loss") is not None and jt.get("log_loss_climatology") is not None:
         return (f"Scored from a single JTWC warning, which does not carry the storm&rsquo;s recent track: "
                 f"{jt['n_missing']} of the model&rsquo;s {jt['n_inputs']} inputs are unknown and filled with "
@@ -54,6 +68,29 @@ def _single_warning_caveat(composition: dict | None) -> str:
                 f"{fmt.num(jt.get('log_loss_full_inputs'), 3)} with every input). Treat this number as rough.")
     return ("Scored from a single JTWC warning, which does not carry the storm&rsquo;s recent track, so several "
             "of the model&rsquo;s inputs are filled with typical values. Treat this number as rough.")
+
+
+def _which_inputs(names: list[str]) -> str:
+    if names and all(n == "analysis_mslp_hpa" or n.startswith("analysis_dp_") for n in names):
+        return "the storm&rsquo;s central pressure and its changes"
+    return f"{len(names)} of the model&rsquo;s inputs"
+
+
+def _late_fix_note(composition: dict | None, s: dict) -> str | None:
+    """The measured note for a record scored with RAL's history but the warning as its analysis (this cycle's
+    fix not yet published) -- only when its missing inputs are exactly the measured pattern."""
+    lf = (composition or {}).get("late_best_track_fix") or {}
+    jt = (composition or {}).get("single_jtwc_warning") or {}
+    inputs = s.get("ri_inputs") or {}
+    missing = sorted(inputs.get("inputs_missing") or [])
+    if (inputs.get("track_source") != "ral_bdeck" or not missing or lf.get("log_loss") is None
+            or missing != list(lf.get("inputs") or [])):
+        return None
+    return (f"This cycle&rsquo;s best-track fix was not yet published, so {_which_inputs(missing)} are filled with "
+            "typical values; the storm&rsquo;s track and winds are known. Scored the same way, the 2022&ndash;2024 "
+            f"West Pacific cycles had a log loss of {fmt.num(lf['log_loss'], 3)} "
+            f"({fmt.num(jt.get('log_loss_full_inputs'), 3)} with every input, "
+            f"{fmt.num(jt.get('log_loss_climatology'), 3)} for always forecasting the average).")
 
 
 def _storm_card(s: dict, composition: dict | None = None) -> str:
@@ -70,7 +107,8 @@ def _storm_card(s: dict, composition: dict | None = None) -> str:
         ("Where the number comes from", _basis(s)),
     ]
     if _single_warning(s):
-        rows.append(("Caution", _single_warning_caveat(composition)))
+        late = _late_fix_note(composition, s)
+        rows.append(("Inputs", late) if late else ("Caution", _single_warning_caveat(composition, s)))
     if ours:
         fallback = ("" if ours.get("gate_ok", True) else
                     " (the early intensity guidance was missing for this cycle, so it equals NOAA&rsquo;s DTOPS)")
@@ -128,11 +166,18 @@ def v82_test_text(other_basins: dict | None) -> str:
                  if comp.get("served_calibration_fitted_on_test_cases") else ".")
     jt = comp.get("single_jtwc_warning") or {}
     if jt.get("log_loss") is not None and jt.get("log_loss_climatology") is not None:
-        text += (" In the West Pacific we score each storm from a single JTWC warning, which leaves "
-                 f"{jt['n_missing']} of its {jt['n_inputs']} inputs unknown; scored that way, the {when} West "
-                 f"Pacific cycles had a log loss of {fmt.num(jt['log_loss'], 3)}, against "
-                 f"{fmt.num(jt['log_loss_climatology'], 3)} for always forecasting the average "
-                 f"({fmt.num(jt.get('log_loss_full_inputs'), 3)} with every input).")
+        text += (" In the West Pacific, Indian Ocean and southern hemisphere a storm&rsquo;s recent track comes from "
+                 "the working best track (UCAR RAL&rsquo;s real-time copy), the kind of track the model was trained "
+                 "on before its post-season revision. Scored from a single JTWC warning instead &mdash; which "
+                 f"leaves {jt['n_missing']} of its {jt['n_inputs']} inputs unknown, as it did until 2026-10-05 and "
+                 f"still does if that file cannot be read &mdash; the {when} West Pacific cycles had a log loss of "
+                 f"{fmt.num(jt['log_loss'], 3)}, against {fmt.num(jt['log_loss_climatology'], 3)} for always "
+                 f"forecasting the average ({fmt.num(jt.get('log_loss_full_inputs'), 3)} with every input).")
+        lf = comp.get("late_best_track_fix") or {}
+        if lf.get("log_loss") is not None:
+            text += (" When a cycle&rsquo;s best-track fix is not yet published, the warning is the analysis and "
+                     f"{_which_inputs(lf.get('inputs') or [])} are filled with typical values: scored that way, "
+                     f"{fmt.num(lf['log_loss'], 3)}.")
     return text
 
 

@@ -286,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--since", type=int, default=2005,
                         help="Earliest year to download (default 2005)")
-    parser.add_argument("--end", type=int, default=dt.datetime.utcnow().year,
+    parser.add_argument("--end", type=int, default=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).year,
                         help="Latest year (default current year)")
     parser.add_argument("--force", action="store_true",
                         help="Re-download even if cache file exists")

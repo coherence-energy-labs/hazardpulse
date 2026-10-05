@@ -311,10 +311,16 @@ def methods_hurricane(ev: dict) -> str:
             limits.append("the published model is the method refitted, with its calibration fitted on the test "
                           "cycles themselves, so the AUC is not a test of it on unseen data")
         if jt.get("log_loss") is not None:
-            limits.append(f"live West Pacific storms are scored from one JTWC warning, leaving {jt['n_missing']} of "
-                          f"{jt['n_inputs']} inputs unknown; scored that way the {_when(o)} West Pacific cycles had "
-                          f"log loss {_f(jt['log_loss'], 4)} against {_f(jt.get('log_loss_climatology'), 4)} for "
-                          f"climatology ({_f(jt.get('log_loss_full_inputs'), 4)} with every input)")
+            lf = comp.get("late_best_track_fix") or {}
+            limits.append(f"until 2026-10-05 live West Pacific storms were scored from one JTWC warning, leaving "
+                          f"{jt['n_missing']} of {jt['n_inputs']} inputs unknown (and still are when RAL&rsquo;s "
+                          f"real-time best track cannot be read); scored that way the {_when(o)} West Pacific cycles "
+                          f"had log loss {_f(jt['log_loss'], 4)} against {_f(jt.get('log_loss_climatology'), 4)} for "
+                          f"climatology ({_f(jt.get('log_loss_full_inputs'), 4)} with every input"
+                          + (f"; {_f(lf['log_loss'], 4)} with the history but this cycle&rsquo;s fix not yet "
+                             f"published, {lf['n_missing']} inputs filled" if lf.get("log_loss") is not None else "")
+                          + ")")
+            limits.append("the live history is the working best track, which the post-season one the test read revises")
         out.append(_card(
             "hz-hu", "Hurricane, other basins: HazardPulse v8.2 <code>hurricane_ri_v8_2</code>", _facts([
                 _kv("Architecture", "Histogram-GBT (depth 3 + 4) + L2 logistic + bagged logistic ensemble, "

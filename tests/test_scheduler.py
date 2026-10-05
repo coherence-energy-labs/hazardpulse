@@ -65,6 +65,32 @@ def test_earthquake_once_per_six_hour_slot():
     assert due("earthquake", "2026-10-05 12:01", "2026-10-05 06:20")
 
 
+def test_main_runs_are_filtered_by_their_own_branch_never_by_githubs_query():
+    """`gh run list --branch main` returned nothing after 2026-09-23 while today's runs all said main."""
+    runs = [{"databaseId": 1, "headBranch": "main"}, {"databaseId": 2, "headBranch": "audit/x"},
+            {"databaseId": 3, "headBranch": None}]
+    assert [r["databaseId"] for r in schedule.main_runs(runs)] == [1]
+    src = (ROOT / "scripts" / "ci" / "schedule.py").read_text(encoding="utf-8")
+    assert '"--branch"' not in src, "GitHub's branch filter served a stale index; filter on headBranch"
+
+
+def test_liveness_is_checked_every_four_hours_on_the_same_clock():
+    assert not due("liveness", "2026-10-05 12:00", "2026-10-05 09:00")
+    assert due("liveness", "2026-10-05 13:00", "2026-10-05 09:00")
+    assert "liveness" in schedule.MONITORS and "liveness" not in schedule.WORKFLOWS   # not a gated scorer
+    text = (ROOT / ".github" / "workflows" / schedule.MONITORS["liveness"]).read_text(encoding="utf-8")
+    assert "workflow_dispatch" in text and "scripts/check_liveness.py" in text
+
+
+def test_one_missed_run_shows_on_the_status_page_and_in_the_liveness_check():
+    """The limits are the slot plus slack, small enough that ONE missed run is overdue: a missed hurricane
+    cycle never reached the old 14 h limit, because the next cycle's run landed first."""
+    from hazardpulse.site.hazards import MAX_AGE_HOURS
+    assert MAX_AGE_HOURS["to"] < 2 * schedule.TORNADO_QUIET.total_seconds() / 3600
+    assert MAX_AGE_HOURS["hu"] < 12 and MAX_AGE_HOURS["eq"] < 12          # two 6-hour slots
+    assert MAX_AGE_HOURS["hu"] > 6 + 1 and MAX_AGE_HOURS["eq"] > 6 + 1    # but not one on time
+
+
 def test_verification_every_four_hours():
     assert not due("verification", "2026-10-05 12:00", "2026-10-05 09:00")
     assert due("verification", "2026-10-05 13:00", "2026-10-05 09:00")
