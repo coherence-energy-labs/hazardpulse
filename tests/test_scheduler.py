@@ -91,6 +91,45 @@ def test_one_missed_run_shows_on_the_status_page_and_in_the_liveness_check():
     assert MAX_AGE_HOURS["hu"] > 6 + 1 and MAX_AGE_HOURS["eq"] > 6 + 1    # but not one on time
 
 
+def test_the_shared_queue_is_never_overfilled():
+    """GitHub's concurrency group holds one running and ONE pending job; a job joining while one is pending
+    cancels it (2026-10-05 17:31Z: four dispatched at once, hurricane and earthquake cancelled within 5 s)."""
+    assert schedule.queue_room(0, 0) == 2          # one runs, one waits
+    assert schedule.queue_room(1, 0) == 1          # it waits behind the running one
+    assert schedule.queue_room(0, 1) == 0 and schedule.queue_room(1, 1) == 0
+    every = list(schedule.WORKFLOWS)
+    assert schedule.by_priority(list(reversed(every)), False) == ["hurricane", "tornado", "earthquake", "verification"]
+    assert schedule.by_priority(every, True)[0] == "tornado"
+    assert sorted(schedule.PRIORITY) == sorted(schedule.WORKFLOWS)
+
+
+def _run_main(monkeypatch, queue, argv=()):
+    """main() with every scorer and the monitor due, the queue as given; returns the workflows dispatched."""
+    dispatched = []
+    monkeypatch.setattr(schedule, "nws_tornado_warnings", lambda: 0)
+    monkeypatch.setattr(schedule, "run_state", lambda wf, exclude_run_id=None: (None, False))
+    monkeypatch.setattr(schedule, "monitor_state", lambda wf: (None, False))
+    monkeypatch.setattr(schedule, "queue_state", lambda exclude_run_id=None: queue)
+    monkeypatch.setattr(schedule.subprocess, "run", lambda cmd, check=False: dispatched.append(cmd[3]))
+    schedule.main(list(argv))
+    return dispatched
+
+
+def test_the_scheduler_dispatches_only_what_the_queue_can_hold(monkeypatch):
+    assert _run_main(monkeypatch, (0, 0)) == ["liveness-check.yml", "hurricane-score.yml", "tornado-score.yml"]
+    assert _run_main(monkeypatch, (1, 0)) == ["liveness-check.yml", "hurricane-score.yml"]
+    assert _run_main(monkeypatch, (1, 1)) == ["liveness-check.yml"]         # the monitor is not in the queue
+    assert _run_main(monkeypatch, (0, 0), ["--dry-run"]) == []
+
+
+def test_a_scorers_own_gate_does_not_join_a_full_queue(monkeypatch):
+    monkeypatch.setattr(schedule, "run_state", lambda wf, exclude_run_id=None: (None, False))
+    now = t("2026-10-05 18:00")
+    for queue, joins in (((0, 0), True), ((1, 0), True), ((1, 1), False), ((0, 1), False)):
+        monkeypatch.setattr(schedule, "queue_state", lambda exclude_run_id=None, q=queue: q)
+        assert schedule.gate("hurricane", now, False) is joins, queue
+
+
 def test_verification_every_four_hours():
     assert not due("verification", "2026-10-05 12:00", "2026-10-05 09:00")
     assert due("verification", "2026-10-05 13:00", "2026-10-05 09:00")
