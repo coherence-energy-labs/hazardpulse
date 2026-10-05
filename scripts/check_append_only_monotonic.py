@@ -69,21 +69,29 @@ def is_ancestor(a: str, b: str) -> bool:
                           capture_output=True, check=False).returncode == 0
 
 
-def effective_base(base: str, head: str) -> tuple[str | None, str]:
-    """``(ref, why)``: the state ``head`` must not have shrunk from.
+def effective_base(base: str, head: str) -> tuple[str | None, str | None, str]:
+    """``(ref, since, why)``: the state ``head`` must not have shrunk from, and -- for a change not yet in it
+    -- the merge base, so that only the ledger files the change itself modified are compared.
 
-    ``head`` not yet in ``base``'s history (a pull request, a branch): ``base``, the live branch it merges
-    into. ``head`` already in it (a push to main; or main moved on while this ran): ``base`` is then either
-    ``head`` itself -- a comparison that cannot fail -- or a LATER commit, a shrink by construction (the merge
-    of PR #28 read one record "destroyed" in four ledgers on 2026-10-05, because a scorer pushed during its
-    test run). The question is then what ``head`` did to the state it was built on: its first parent. None
-    when it has none (a root commit cannot have lost a record)."""
+    ``head`` already in ``base``'s history (a push to main; or main moved on while this ran): ``base`` is
+    either ``head`` itself -- a comparison that cannot fail -- or a LATER commit, a shrink by construction (the
+    merge of PR #28 read one record "destroyed" in four ledgers on 2026-10-05, because a scorer pushed during
+    its test run). The question is then what ``head`` did to the state it was built on: its first parent.
+    ``ref`` is None when there is none (a root commit cannot have lost a record).
+
+    ``head`` not yet in it (a pull request's merge ref, a branch): would merging it shrink ``base``? Only a
+    ledger file the change modified since the merge base can land; a file it never touched keeps main's copy,
+    however far main has moved since (PR #29's merge ref was built before two scorer commits and read one
+    record "destroyed" for files it never touched). A stale fork that REGENERATED the ledgers modified them,
+    so it is still compared with the live branch -- the case this gate exists for."""
     if not is_ancestor(head, base):
-        return base, f"{head} merges into {base}"
+        since = git("merge-base", head, base).strip() or None
+        return base, since, (f"{head} merges into {base}: ledger files changed since "
+                             f"{since[:12] if since else 'the (unknown) merge base'} are compared with it")
     parent = git("rev-parse", "--verify", "--quiet", f"{head}^1").strip()
     why = (f"{head} is already in {base}'s history, so it is checked against the commit it was built on "
            f"({head}^1)")
-    return (parent or None), why
+    return (parent or None), None, why
 
 
 def blob_at(ref: str, path: str) -> str | None:
@@ -121,17 +129,25 @@ def discover(ref: str) -> list[str]:
     return sorted(found)
 
 
-def check(base: str, head: str) -> tuple[list[str], list[str]]:
+def check(base: str, head: str, since: str | None = None) -> tuple[list[str], list[str], int, list[str]]:
+    """``(violations, notes, n_compared, untouched)``: ``untouched`` are the files the change did not modify
+    since ``since`` (not compared: a merge keeps the live copy)."""
     violations: list[str] = []
     notes: list[str] = []
+    untouched: list[str] = []
+    n_compared = 0
     for path in discover(head):
         base_text, head_text = blob_at(base, path), blob_at(head, path)
         if base_text is None or head_text is None:
             continue                                  # new or removed file: not a shrink
+        if since is not None and blob_at(since, path) == head_text:
+            untouched.append(path)
+            continue
         base_n, _ = record_count(base_text)
         head_n, head_declares = record_count(head_text)
         if base_n is None or head_n is None:
             continue
+        n_compared += 1
         if not head_declares:
             notes.append(f"{path}: treated as append-only evidence but does NOT declare "
                          f'"mode": "append_only" -- add the marker so the contract is in the file')
@@ -139,7 +155,7 @@ def check(base: str, head: str) -> tuple[list[str], list[str]]:
             violations.append(
                 f"{path}: {base_n} records at {base} -> {head_n} at {head} "
                 f"({base_n - head_n} DESTROYED). An append-only ledger may grow, never shrink.")
-    return violations, notes
+    return violations, notes, n_compared, untouched
 
 
 def self_test() -> int:
@@ -186,13 +202,13 @@ def main() -> int:
         print("APPEND-ONLY GATE VACUOUS: no evidence artifacts discovered", file=sys.stderr)
         return 1
 
-    base, why = effective_base(args.base, args.head)
+    base, since, why = effective_base(args.base, args.head)
     print(f"  base: {why}")
     if base is None:
         print(f"APPEND-ONLY GATE GREEN - {args.head} is a root commit: there is no earlier state to have lost "
               "records from.")
         return 0
-    violations, notes = check(base, args.head)
+    violations, notes, compared, untouched = check(base, args.head, since)
     for note in notes:
         print(f"  note: {note}")
     if violations:
@@ -200,8 +216,9 @@ def main() -> int:
         print("\nResolve these files toward the LIVE branch. A regenerated evidence artifact from an "
               "older fork point is stale data, not a change.")
         return 1
-    print(f"APPEND-ONLY GATE GREEN - {len(checked)} evidence artifact(s) checked against {base}; "
-          f"none lost records.")
+    print(f"APPEND-ONLY GATE GREEN - {compared} evidence artifact(s) compared with {base}, none lost records"
+          + (f"; {len(untouched)} not modified by this change (a merge keeps the live copy)" if untouched else "")
+          + ".")
     return 0
 
 

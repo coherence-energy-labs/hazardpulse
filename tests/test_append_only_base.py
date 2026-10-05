@@ -84,6 +84,49 @@ def test_main_moving_on_during_the_run_is_not_a_shrink(repo):
     assert gate(repo, "HEAD", lossy)[0] == 1
 
 
+def other_file(repo: Path, msg: str) -> str:
+    (repo / "code.py").write_text(f"# {msg}\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", msg)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def test_a_pull_request_that_never_touched_a_ledger_is_not_a_shrink_however_far_main_moved(repo):
+    """PR #29, 2026-10-05: its merge ref was built before two scorer commits, and every ledger it never
+    touched read one record 'destroyed' against the newer main."""
+    fork = commit(repo, 2, "fork point")
+    _git(repo, "checkout", "-q", "-b", "feature")
+    other_file(repo, "the feature")
+    _git(repo, "checkout", "-q", "main")
+    commit(repo, 3, "a scorer adds a record")
+    _git(repo, "checkout", "-q", "-b", "pull-merge")              # refs/pull/N/merge: beside main, not on it
+    _git(repo, "merge", "-q", "--no-ff", "-m", "the merge ref", "feature")
+    merge_ref = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "main")
+    later = commit(repo, 4, "main moved on after the merge ref was built")
+    code, out = gate(repo, later, merge_ref)
+    assert code == 0 and "merges into" in out and "not modified by this change" in out, out
+    # a plain branch behind main, ledgers untouched: not a shrink either
+    code, out = gate(repo, later, _git(repo, "rev-parse", "feature"))
+    assert code == 0 and "0 evidence artifact(s) compared" in out, out
+    assert fork
+
+
+def test_a_merge_resolved_toward_a_stale_ledger_is_refused(repo):
+    commit(repo, 2, "fork point")
+    _git(repo, "checkout", "-q", "-b", "stale")
+    commit(repo, 2, "regenerated at the fork point")
+    _git(repo, "checkout", "-q", "main")
+    commit(repo, 3, "a scorer adds a record")
+    _git(repo, "merge", "-q", "-X", "theirs", "--no-ff", "-m", "resolved toward the branch", "stale")
+    merge_ref = _git(repo, "rev-parse", "HEAD")
+    assert json.loads((repo / LEDGER).read_text(encoding="utf-8"))["entries"] == [0, 1]   # the record is gone
+    _git(repo, "checkout", "-q", "-b", "main-later", "HEAD^1")
+    later = commit(repo, 4, "main moved on")
+    code, out = gate(repo, later, merge_ref)
+    assert code == 1 and "DESTROYED" in out, out
+
+
 def test_a_root_commit_has_nothing_to_lose(repo):
     root = commit(repo, 1, "root")
     code, out = gate(repo, root, root)
