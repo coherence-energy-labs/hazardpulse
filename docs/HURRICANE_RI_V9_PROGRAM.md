@@ -453,6 +453,50 @@ no image in NOAA's archive, and those cycles are NaN as registered.
 - **Descriptive comparisons:** v10.3 vs v10.1 and v10.3 vs v10.2 on shared cycles. Amendment 4's
   display rule applies unchanged: the newest carried challenger is v10.3.
 
+## Amendment 7 -- what counts as a test cycle (2026-10-05 ~02Z, before any test cycle has matured)
+
+Written before the first test outcome can exist: the earliest test cycle (2026-10-04 06Z) matures at
+2026-10-05 06Z. No outcome of any test cycle has been looked at.
+
+**Why.** Amendment 1 defined the test set as "every cycle ... that the live scorer forecast in shadow".
+That made GitHub's scheduler part of the test design. An audit (2026-10-05) found:
+- **Missed cycles.** Scheduled runs were dropped or started hours late. From 2026-10-01 00Z to 10-04 18Z,
+  Nolo, Rachel and Choi-Wan each missed 9 of 16 cycles, and EP15 and EP18 both missed 10-04 00Z.
+- **No catch-up.** The scorer reads only each storm's latest cycle, so a missed cycle never returns.
+- **Preliminary inputs.** A run that lands soon after a cycle reads preliminary inputs, as Rachel
+  10-03 18Z did at t + 46 min: no OFCL, no IR, and a SHIPS text NHC later rewrote, so DTOPS 0% became
+  SHIPS-RII 13%. Nolo 10-03 12Z is the same case: v10.1 gave 0.076 before the advisory and 0.181 after.
+- **Repeats.** Repeat runs of one cycle were kept as separate records (Nolo 12Z: 6).
+
+None of these choices depends on outcomes, but all of them change which records are scored.
+
+1. **The unit is the storm-cycle.** Each NHC-basin numbered storm at synoptic time t has at most one
+   test record. That record is the first one made at or after t + 3 h 30 min, judged by the time the
+   record itself carries.
+   - Records made earlier read preliminary inputs, so they are never test records.
+   - Later records of the same cycle are duplicates and are not scored.
+2. **Catch-up.** From this amendment on, each scorer run also forecasts, in shadow, every cycle that
+   meets all of these:
+   - the storm is active;
+   - t >= 2026-10-04 00Z and t + 3 h 30 min has passed;
+   - the cycle has no test record yet.
+
+   It reads the deck and the SHIPS text as they stand at that run, in the same single read. A catch-up
+   record carries `catch_up: true` and its lag (record time minus t). It counts only if made before
+   t + 12 h, which keeps it within one cycle of operational timing.
+3. **Cycles missed before this amendment.** These are EP15 and EP18 at 10-04 00Z, and any other cycle
+   between 10-04 00Z and the first run under rule 2.
+   - They may be rebuilt from archived inputs (a-deck, the SHIPS archive, GMGSI), but only by a
+     procedure that, run blind on the 6 cycles that already have qualifying live records (EP15 and
+     EP18 at 10-04 06, 12 and 18Z), reproduces all four shadows' probabilities exactly (to 1e-12).
+   - If the procedure cannot do that, those cycles stay missing. Rebuilt records carry `rebuilt: true`.
+4. **Outcomes** are the best-track intensity change from t to t + 24 h, for the storm's own synoptic
+   time t. The run time never enters. This applies to the prospective scorer and to the verifier of
+   the published numbers.
+5. **Reported both ways.** At each look the claim is evaluated on the full test set (rules 1-3). The
+   result is also reported without catch-up and rebuilt records, so the effect of this amendment is
+   visible. The claim rule, the looks and the error budgets of amendments 1, 4 and 6 are unchanged.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
