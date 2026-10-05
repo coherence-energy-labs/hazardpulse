@@ -14,6 +14,7 @@ Each time step contains storm objects with:
 
 from __future__ import annotations
 
+import datetime as dt
 import gzip
 import json
 import os
@@ -162,37 +163,7 @@ def fetch_probsevere_day(
         print(f"  ProbSevere: {len(s3_files)} files found in S3 for {date_str}")
         # One file per 30-minute slot (the first in each), downloaded
         # concurrently; time steps keep slot order.
-        import re as _re
-        from concurrent.futures import ThreadPoolExecutor
-
-        picked: list[tuple[str, str]] = []
-        seen_slots: set[str] = set()
-        for key in s3_files:
-            m = _re.search(r"_(\d{8})_(\d{6})\.json", key)
-            if not m:
-                continue
-            hhmm = m.group(2)[:4]  # HHMM
-            slot = hhmm[:2] + ("00" if int(hhmm[2:]) < 30 else "30")  # round to 30min
-            if slot in seen_slots:
-                continue
-            seen_slots.add(slot)
-            picked.append((key, hhmm))
-
-        def _get(item: tuple[str, str]) -> dict | None:
-            key, hhmm = item
-            try:
-                raw = fetch_bytes(f"{PS_S3_BUCKET}/{key}", namespace="probsevere", timeout=30, use_cache=False)
-                data = json.loads(raw.decode("utf-8", errors="replace"))
-            except Exception:
-                return None
-            storms = _parse_storms(data)
-            if storms is None:
-                return None
-            valid_time = data.get("validTime", f"{year}-{month}-{day}T{hhmm[:2]}:{hhmm[2:]}:00Z")
-            return {"valid_time": valid_time, "storms": storms}
-
-        with ThreadPoolExecutor(PS_FETCH_THREADS) as ex:
-            time_steps = [ts for ts in ex.map(_get, picked) if ts is not None]
+        time_steps = _fetch_steps(slot_start_keys(s3_files))
     elif s3_listing_ok:
         # The bucket answered and holds NO files under this day's prefix. That
         # is authoritative -- the archive has gaps (e.g. 2021-05-15/16) -- so
@@ -232,6 +203,160 @@ def fetch_probsevere_day(
         fh.write(payload)
 
     return time_steps
+
+
+# ---------------------------------------------------------------------------
+# Which files make a day's time steps
+# ---------------------------------------------------------------------------
+
+SLOT_MINUTES = 30
+_KEY_TIME_RE = _re.compile(r"_(\d{8})_(\d{6})\.json")
+
+
+def key_time(key: str) -> dt.datetime | None:
+    """The UTC valid time a ProbSevere file name carries (``MRMS_PROBSEVERE_20261004_235839.json``)."""
+    m = _KEY_TIME_RE.search(str(key))
+    if not m:
+        return None
+    try:
+        return dt.datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S").replace(tzinfo=dt.timezone.utc)
+    except ValueError:
+        return None
+
+
+def _slot_of(t: dt.datetime) -> dt.datetime:
+    return t.replace(minute=t.minute - t.minute % SLOT_MINUTES, second=0, microsecond=0)
+
+
+def slot_start_keys(keys: list[str]) -> list[str]:
+    """The TRAINING selection (and the day cache's): the first file of each 30-minute slot, in listing order.
+
+    Every training row and every archived track was built from these files, so the track-history features
+    (block E: deltas, slopes, maxima over up to ``STORM_HISTORY_LOOKBACK`` steps, and the step cadence) mean
+    "the storm at each of the last few half-hour slot starts"."""
+    picked: list[str] = []
+    seen: set[dt.datetime] = set()
+    for key in keys:
+        t = key_time(key)
+        if t is None:
+            continue
+        slot = _slot_of(t)
+        if slot in seen:
+            continue
+        seen.add(slot)
+        picked.append(key)
+    return picked
+
+
+def live_keys(keys: list[str]) -> list[str]:
+    """The LIVE selection: the NEWEST file for the storm's current state, and for every earlier 30-minute slot
+    of the day the file at the same phase within its slot (nearest the newest file's offset from its slot
+    start; ties to the earlier file) -- so the history keeps the 30-minute cadence it was trained on, anchored
+    back from the newest file instead of from the slot starts.
+
+    Measured 2026-10-05: the live scorer took the FIRST file of the latest slot, so its input was a median
+    17.5 minutes old at issue over the 1,757 tornado records of 2026 (the 00:25Z run read 00:00:38 data while
+    12 newer files existed). When the newest file IS a slot start the selection is exactly ``slot_start_keys``
+    on complete days (tests/test_probsevere_live_selection.py checks every slot start of a recorded day; on
+    real files the block P and E features of all 145 storms of the 2026-10-04 20:30 run were identical). The
+    exception is a slot whose first file is missing: then the history keeps the newest file's phase."""
+    timed = sorted((t, k) for k in keys if (t := key_time(k)) is not None)
+    if not timed:
+        return []
+    newest_t, newest_key = timed[-1]
+    newest_slot = _slot_of(newest_t)
+    phase = newest_t - newest_slot
+    by_slot: dict[dt.datetime, list[tuple[dt.datetime, str]]] = {}
+    for t, k in timed:
+        by_slot.setdefault(_slot_of(t), []).append((t, k))
+    picked = []
+    for slot in sorted(s for s in by_slot if s < newest_slot):
+        target = slot + phase
+        picked.append(min(by_slot[slot], key=lambda e: (abs((e[0] - target).total_seconds()), e[0]))[1])
+    return picked + [newest_key]
+
+
+def _fetch_one(key: str) -> tuple[dict | None, dict | None]:
+    """(time step, raw document) of one file; (None, None) if it cannot be read or parsed."""
+    try:
+        raw = fetch_bytes(f"{PS_S3_BUCKET}/{key}", namespace="probsevere", timeout=30, use_cache=False)
+        data = json.loads(raw.decode("utf-8", errors="replace"))
+    except Exception:
+        return None, None
+    storms = _parse_storms(data)
+    if storms is None:
+        return None, None
+    t = key_time(key)
+    default = t.strftime("%Y-%m-%dT%H:%M:00Z") if t is not None else ""
+    return {"valid_time": data.get("validTime", default), "storms": storms}, data
+
+
+def _fetch_steps(keys: list[str]) -> list[dict]:
+    """The time steps of ``keys``, downloaded concurrently, in the order given (unreadable files dropped)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(PS_FETCH_THREADS) as ex:
+        return [ts for ts, _ in ex.map(_fetch_one, keys) if ts is not None]
+
+
+def fetch_probsevere_live(date_str: str, *, max_newest_tries: int = 3) -> tuple[list[dict], dict | None]:
+    """The day's time steps for a LIVE run (``live_keys``) and the attribute census of the newest file.
+
+    Never cached: the day cache holds the training selection (slot starts), which the prospective scorer's
+    track labels read. If the newest file cannot be read (still being written), the next newest is the
+    anchor. If the S3 listing itself fails, this falls back to ``fetch_probsevere_day`` (slot starts, no
+    census). The census (``property_census``) is what the scorer's input-format guard reads: which of the
+    attributes the model was trained on the feed still carries."""
+    keys, listing_ok = _list_s3_files(date_str)
+    if not keys:
+        if listing_ok:
+            return [], None
+        return fetch_probsevere_day(date_str, refresh=True), None
+    keys = list(keys)
+    for _ in range(max_newest_tries):
+        picked = live_keys(keys)
+        if not picked:
+            return [], None
+        newest, raw = _fetch_one(picked[-1])
+        if newest is not None:
+            steps = _fetch_steps(picked[:-1]) + [newest]
+            print(f"  ProbSevere: {len(keys)} files for {date_str}; newest {picked[-1].rsplit('/', 1)[-1]} "
+                  f"+ {len(steps) - 1} earlier slots at the same phase")
+            return steps, property_census(raw)
+        keys = [k for k in keys if k != picked[-1]]
+    return [], None
+
+
+_DOCUMENTED_FORMAT = {"MAXRC_EMISS": "rate", "MAXRC_ICECF": "rate", "AVG_BEAM_HGT": "km"}
+
+
+def property_census(data: dict) -> dict:
+    """Which attributes one ProbSevere document carries, over its storm objects: per ``properties`` key the
+    number of objects carrying it (``N/A`` counts as absent), per ``models`` entry the number with a PROB, and
+    for the three string-valued attributes how many are in the documented string format (``parse_string_
+    attributes``). The parser itself never reports an absent key -- it reads it as 0.0 or leaves it missing --
+    so this is how a run can know (NOAA's 2025-08-06 format change removed PS, VIL_DENSITY and MAXRC_ICECF)."""
+    features = data.get("features") or []
+    props: dict[str, int] = {}
+    models: dict[str, int] = {}
+    documented = {k: 0 for k in _DOCUMENTED_FORMAT}
+    for feat in features:
+        p = feat.get("properties") or {}
+        for k, v in p.items():
+            if v is None or v == "N/A":
+                continue
+            props[str(k)] = props.get(str(k), 0) + 1
+        feat_models = feat.get("models") if isinstance(feat.get("models"), dict) else {}
+        for name, m in feat_models.items():
+            if isinstance(m, dict) and m.get("PROB") not in (None, "N/A"):
+                models[str(name)] = models.get(str(name), 0) + 1
+        for k, kind in _DOCUMENTED_FORMAT.items():
+            text = str(p.get(k, ""))
+            if (kind == "rate" and _RATE_RE.match(text)) or (kind == "km" and _KM_RE.search(text)):
+                documented[k] += 1
+    return {"valid_time": data.get("validTime"), "n_objects": len(features),
+            "n_attributes": len(props), "properties": dict(sorted(props.items())),
+            "models": dict(sorted(models.items())), "documented_string_format": documented}
 
 
 # ---------------------------------------------------------------------------
