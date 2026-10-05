@@ -10,7 +10,7 @@
   <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://hazardpulse.com/api/">
   <link rel="preload" href="/assets/fonts/inter-latin.woff2?v=3100e775e8" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/assets/styles.css?v=0bc7973123">
+  <link rel="stylesheet" href="/assets/styles.css?v=3fe91c6bb8">
   <script src="/assets/site-shell.js?v=79cd26787c"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=95b74caff8">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=afff227e57">
@@ -74,6 +74,19 @@
             <tr><td><code>/api/v1/live/hurricane</code></td><td>Every active tropical cyclone with its rapid-intensification chance</td><td>5 min</td></tr>
             <tr><td><code>/api/v1/live/tornado</code></td><td>Every tracked thunderstorm with its tornado chance</td><td>5 min</td></tr>
             <tr><td><code>/api/v1/alerts/recent</code></td><td>Recent high-chance forecasts across hazards</td><td>1 min</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="now">
+      <div class="section-head"><h2 id="now">Live events</h2><p>What the agencies that observe hazards are reporting now, read from their public feeds at most once a minute. A source that did not answer is named under <code>sources</code>, and the counts it supplies are <code>null</code> &mdash; unknown, never zero.</p></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Endpoint</th><th>Returns</th><th>Cache</th></tr></thead>
+          <tbody>
+            <tr><td><code>/api/v1/now</code></td><td>The earthquakes of the last 24 hours (M2.5+, from the USGS) and the week&rsquo;s largest; every active tropical cyclone (NOAA&rsquo;s positions where NOAA forecasts, the HazardPulse feed elsewhere, each with its rapid-intensification chance); the US tornado warnings in effect (from the National Weather Service); and the counts of each</td><td>1 min</td></tr>
+            <tr><td><code>/api/v1/near</code></td><td>&ldquo;Near you&rdquo; for the caller&rsquo;s approximate location, as the home page shows it; <code>reliable</code> is false where no location is available. The location is used for that one request only (see <a href="/legal/privacy/#location">Privacy</a>)</td><td>none</td></tr>
           </tbody>
         </table>
       </div>

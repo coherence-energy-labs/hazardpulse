@@ -236,11 +236,14 @@ BASIN_NAMES = {
 
 def basin_of(storm: dict) -> str:
     """The basin a storm is IN now. NHC keeps an East Pacific number (EP) for a storm that has crossed
-    140&deg;W, where the Central Pacific Hurricane Center takes over."""
+    140&deg;W, where the Central Pacific Hurricane Center takes over; the Central Pacific runs to the dateline,
+    where NOAA reports a position as +180 (Nolo, 2026-10-04). West of it the storm has left NOAA's area."""
     b = str(storm.get("basin") or "").upper()
     lon = _num(storm.get("lon"))
     if b in ("EP", "CP") and lon is not None:
-        return "Central Pacific" if lon < -140.0 else "East Pacific"
+        if 0.0 < lon < 180.0:
+            return "West Pacific"
+        return "Central Pacific" if lon < -140.0 or lon >= 180.0 else "East Pacific"
     return BASIN_NAMES.get(b, b or "&mdash;")
 
 

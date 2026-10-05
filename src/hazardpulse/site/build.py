@@ -32,6 +32,9 @@ GENERATED: dict[str, Callable[[SiteData], str]] = {
     "/verification/cross-modality/": research.page,
 }
 
+# the live pages run the app (the globe, and the minute-by-minute refresh); every page works without it
+SCRIPTS: dict[str, tuple[str, ...]] = {"/": ("app.js",), "/live/": ("app.js",)}
+
 # pages whose evidence blocks (hp-evidence markers) are re-rendered from the served-model evidence
 EVIDENCE_PAGES = ("methods/index.html", "registry/index.html", "verification/tornado/index.html")
 
@@ -65,7 +68,7 @@ def render(d: SiteData) -> dict[str, str]:
     out = {}
     for path, fn in GENERATED.items():
         main = _withheld(d, path) or fn(d)
-        out[path] = shell.document(path, main, extra_head=shell.jsonld_for(path, d))
+        out[path] = shell.document(path, main, extra_head=shell.jsonld_for(path, d), scripts=SCRIPTS.get(path, ()))
     return out
 
 
@@ -168,7 +171,11 @@ def area_index(d: SiteData) -> str:
     view parses ~0.1 MB instead of the 1.5 MB of full forecast files."""
     eq = d.earthquake
     gate, _ = d.gate_of(eq.get("forecast_id"))
-    storms = [{k: s.get(k) for k in ("storm_id", "storm_name", "basin", "category", "lat", "lon", "ri_probability")}
+    # vmax_kt names the storm's strength where NOAA's feed does not reach (West Pacific, Indian Ocean, southern
+    # hemisphere); position_time is the advisory the position comes from, so the edge can refuse a stale one
+    storms = [{**{k: s.get(k) for k in ("storm_id", "storm_name", "basin", "category", "lat", "lon", "vmax_kt",
+                                        "ri_probability")},
+               "position_time": fmt.iso(s.get("issue_time")) or None}
               for s in d.hurricanes.get("storms") or []]
     tornadoes = [{"lat": s.get("lat"), "lon": s.get("lon"), "tornado_probability": s.get("tornado_probability"),
                   "warned": bool(((s.get("v3") or {}).get("nws_warning") or {}).get("active"))}
@@ -223,6 +230,8 @@ def build_site(dist: Path | None = None, root: Path | None = None) -> list[str]:
     dist = dist or (root / "dist")
     d = SiteData(root=root, dist=dist)
     changed = maps.write_assets(dist)
+    if shell.version_stylesheet():          # before the pages: each names the stylesheet by its hash
+        changed.append(f"/assets/{shell.STYLESHEET}")
     for path, html in render(d).items():
         if _write(page_file(dist, path), html):
             changed.append(path)
@@ -241,6 +250,9 @@ def check_site(dist: Path | None = None, root: Path | None = None) -> list[str]:
     dist = dist or (root / "dist")
     d = SiteData(root=root, dist=dist)
     stale = []
+    css = shell.DIST / "assets" / shell.STYLESHEET
+    if css.exists() and shell.versioned_stylesheet(css.read_text(encoding="utf-8")) != css.read_text(encoding="utf-8"):
+        stale.append(f"/assets/{shell.STYLESHEET}")
     for path, html in render(d).items():
         f = page_file(dist, path)
         if not f.exists() or f.read_text(encoding="utf-8") != html:

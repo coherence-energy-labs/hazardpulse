@@ -77,8 +77,22 @@ def test_versioned_assets_carry_the_hash_of_the_file_they_name():
     """/assets is cached for a year: a URL must change whenever its file does."""
     text = (DIST / "index.html").read_text(encoding="utf-8")
     refs = re.findall(r'/assets/([^"?#]+)\?v=([0-9a-f]{10})', text)
-    assert {"styles.css", "site-shell.js", "hp-mark.svg"} <= {r[0] for r in refs}
+    assert {"styles.css", "site-shell.js", "hp-mark.svg", "app.js", "maps/land-2048.png"} <= {r[0] for r in refs}
     for name, v in refs:
+        data = (DIST / "assets" / name).read_bytes().replace(b"\r\n", b"\n")
+        assert hashlib.sha256(data).hexdigest()[:10] == v, name
+
+
+def test_a_preloaded_font_is_the_url_the_stylesheet_asks_for():
+    """A preload under one URL and an @font-face under another is two downloads and a wasted preload
+    (Chrome: "preloaded ... but not used"); found 2026-10-05 on every page."""
+    text = (DIST / "index.html").read_text(encoding="utf-8")
+    preloads = re.findall(r'<link rel="preload" href="([^"]+)" as="font"', text)
+    css = (DIST / "assets" / "styles.css").read_text(encoding="utf-8")
+    faces = re.findall(r'url\("(/assets/fonts/[^"]+)"\)', css)
+    assert preloads and set(preloads) <= set(faces), (preloads, faces)
+    for url in faces:                     # each one names its file's current bytes
+        name, v = re.fullmatch(r"/assets/(.+)\?v=([0-9a-f]{10})", url).groups()
         data = (DIST / "assets" / name).read_bytes().replace(b"\r\n", b"\n")
         assert hashlib.sha256(data).hexdigest()[:10] == v, name
 
@@ -110,6 +124,40 @@ def test_the_sitemap_lists_every_indexable_page_and_nothing_else():
 def test_the_map_base_drawings_are_current():
     for proj in (maps.WORLD, maps.CONUS):
         assert (DIST / "assets" / "maps" / f"{proj.name}.svg").read_text(encoding="utf-8") == maps.base_svg(proj)
+
+
+def test_the_live_hero_and_its_script_are_on_the_live_pages_and_nowhere_else():
+    """The globe and the minute-by-minute refresh load where the live hero is; every other page stays static."""
+    script = re.compile(r'<script src="/assets/app\.js\?v=[0-9a-f]{10}" defer></script>')
+    for page in shell.PAGES.values():
+        text = shell.static_page_file(page.path).read_text(encoding="utf-8")
+        live = page.path in ("/", "/live/")
+        assert bool(script.search(text)) == live, page.path
+        assert ('id="globe"' in text) == live, page.path
+        if live:
+            # without the script (or without WebGL) the page still shows the forecast map, not an empty stage
+            assert re.search(r'<div id="globe" class="globe"[^>]*\shidden>', text), page.path
+            assert '<div class="globe-fallback"><figure class="map' in text, page.path
+            assert text.count('id="near-you"') == 1 and text.count('id="live-feed"') == 1, page.path
+            # [data-live] is the counters' selector, at the edge and in app.js: nothing else may carry it
+            assert sorted(re.findall(r'data-live="([^"]*)"', text)) == sorted(k for k, _, _ in overview.LIVE_STATS), page.path
+
+
+def test_the_globe_texture_is_a_land_mask_the_right_way_up():
+    """The globe's shader reads land-2048.png as equirectangular, north at the top: Earth is 29% land."""
+    np = pytest.importorskip("numpy")
+    Image = pytest.importorskip("PIL.Image")
+    img = Image.open(DIST / "assets" / "maps" / "land-2048.png")
+    assert img.size == (2048, 1024) and img.mode == "L"
+    a = np.asarray(img).astype(float) / 255.0
+    lat = 90.0 - (np.arange(a.shape[0]) + 0.5) * 180.0 / a.shape[0]
+    w = np.cos(np.radians(lat))[:, None]
+    assert 0.28 < float((a * w).sum() / (w.sum() * a.shape[1])) < 0.30
+
+    def at(la, lo):
+        return a[int((90 - la) / 180 * a.shape[0]), int((lo + 180) / 360 * a.shape[1])]
+    assert at(23, 10) == 1.0 and at(-25, 134) == 1.0 and at(-85, 0) == 1.0      # Sahara, Australia, Antarctica
+    assert at(0, -150) == 0.0 and at(30, -40) == 0.0 and at(85, 0) == 0.0       # Pacific, Atlantic, Arctic Ocean
 
 
 def test_every_quality_check_the_engine_runs_is_described_in_words():
@@ -161,6 +209,11 @@ def test_the_heat_grid_merges_runs_and_refuses_a_grid_that_does_not_fit_its_doma
 def test_a_storm_is_credited_to_the_agency_responsible_where_it_is_now():
     assert basin_of({"basin": "EP", "lon": -175.9}) == "Central Pacific"
     assert basin_of({"basin": "EP", "lon": -113.0}) == "East Pacific"
+    # NOAA reports a storm on the dateline at +180 (Nolo, 2026-10-04, advised from Honolulu)
+    assert basin_of({"basin": "EP", "lon": 180.0}) == "Central Pacific"
+    assert official_center({"basin": "EP", "lon": 180.0})[0] == "Central Pacific Hurricane Center"
+    assert basin_of({"basin": "EP", "lon": 178.5}) == "West Pacific"
+    assert official_center({"basin": "CP", "lon": 178.5})[0] == "Joint Typhoon Warning Center"
     assert official_center({"basin": "EP", "lon": -175.9})[0] == "Central Pacific Hurricane Center"
     assert official_center({"basin": "WP", "lon": 147.0})[0] == "Joint Typhoon Warning Center"
 
@@ -237,6 +290,18 @@ def test_the_hurricane_headline_names_the_storm_its_number_belongs_to(site):
     assert head.source == "HazardPulse v8.2"
     cards = overview.hazard_cards(site)
     assert "rapid intensification: Choi-Wan" in cards and "West Pacific" in cards and "NOLO" not in cards
+
+
+def test_the_area_index_gives_the_edge_each_storms_strength_and_the_age_of_its_position(site):
+    """The edge names a West Pacific storm from this file alone (NOAA's feed does not cover it), and refuses a
+    position older than a day; without the wind it called a Category 4 typhoon a "tropical cyclone"."""
+    idx = json.loads(build.area_index(site))
+    storms = {s["storm_id"]: s for s in idx["storms"]}
+    assert set(storms["WP262026"]) == {"storm_id", "storm_name", "basin", "category", "lat", "lon", "vmax_kt",
+                                       "ri_probability", "position_time"}
+    assert storms["WP262026"]["vmax_kt"] == 125
+    assert storms["WP262026"]["position_time"] == "2026-10-04T06:00:00Z"     # the advisory, in UTC, explicitly
+    assert storms["EP152026"]["position_time"] == "2026-10-04T06:00:00Z"
 
 
 def test_the_change_is_against_the_previous_forecast_in_points(site):
