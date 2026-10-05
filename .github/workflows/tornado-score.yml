@@ -4,11 +4,10 @@ env:
   HAZARDPULSE_SIGNING_KEY: ${{ secrets.HAZARDPULSE_SIGNING_KEY }}
 
 on:
-  schedule:
-    # Run every 2 hours for timely severe weather coverage.
-    # During active outbreaks, use workflow_dispatch for manual triggers
-    # to increase frequency beyond the cron schedule.
-    - cron: "0 */2 * * *"
+  # Dispatched by scheduler.yml (scripts/ci/schedule.py), which decides when this scorer is due. Its own
+  # cron was removed 2026-10-05: GitHub dropped or delayed most scheduled runs (measured in schedule.py).
+  # Every 2 hours, every 30 minutes while tornado risk is elevated (a storm at 5% or more, or any NWS
+  # tornado warning). A manual dispatch runs it at once.
   workflow_dispatch:
     inputs:
       date:

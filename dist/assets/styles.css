@@ -3,20 +3,14 @@
    here. Light and dark themes share one set of tokens; the visitor's choice (data-theme on <html>) wins
    over the system setting. */
 
-/* ---------- Fonts: self-hosted, so no request leaves the site for a font ---------- */
+/* ---------- Fonts: self-hosted, so no request leaves the site for a font. Code and counters use the
+   system monospace: a 31 KB webfont for a few code samples cost more than it gave (2026-10-05). ---------- */
 @font-face {
   font-family: "Inter";
   font-style: normal;
   font-weight: 400 800;
   font-display: swap;
   src: url("/assets/fonts/inter-latin.woff2?v=3100e775e8") format("woff2");
-}
-@font-face {
-  font-family: "JetBrains Mono";
-  font-style: normal;
-  font-weight: 400 700;
-  font-display: swap;
-  src: url("/assets/fonts/jetbrains-mono-latin.woff2?v=e907e50647") format("woff2");
 }
 
 /* ---------- Tokens ---------- */
@@ -57,7 +51,7 @@
   --map-grid: #d7e1ee;
 
   --font: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Menlo, monospace;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   --fs-xs: 0.8125rem;
   --fs-sm: 0.875rem;

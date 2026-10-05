@@ -194,7 +194,7 @@ def live_hero(d: SiteData, *, eyebrow: str, title: str, lede: str, ident: str = 
         f'<span class="live-stat-label">{label}</span></li>' for key, label, k in LIVE_STATS)
     globe = (
         f'<div class="globe-wrap" id="{ident}-globe-wrap">'
-        f'<div id="globe" class="globe" data-land="{asset("maps/land-2048.png")}" data-area="/data/area-index.json" hidden>'
+        f'<div id="globe" class="globe" data-land="{asset("maps/land-2048.webp")}" data-area="/data/area-index.json" hidden>'
         '<canvas class="globe-gl" aria-hidden="true"></canvas>'
         '<canvas class="globe-overlay" role="img" aria-label="A globe showing the earthquakes of the last day, active '
         'tropical cyclones, tornado warnings and the 30-day earthquake forecast"></canvas>'

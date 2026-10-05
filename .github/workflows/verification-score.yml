@@ -4,11 +4,9 @@ env:
   HAZARDPULSE_SIGNING_KEY: ${{ secrets.HAZARDPULSE_SIGNING_KEY }}
 
 on:
-  schedule:
-    # Every 4 hours so recovery from model fixes is visible same-day
-    # (was daily; tightened on 2026-04-28 to track tier1_ml AUC recovery
-    # after the HRRR + mlcape fix).
-    - cron: "0 */4 * * *"
+  # Dispatched by scheduler.yml (scripts/ci/schedule.py), which decides when this scorer is due. Its own
+  # cron was removed 2026-10-05: GitHub dropped or delayed most scheduled runs (measured in schedule.py).
+  # Every 4 hours, so a model fix shows in the scores the same day.
   workflow_dispatch:
 
 concurrency:

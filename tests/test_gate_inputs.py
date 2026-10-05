@@ -87,10 +87,20 @@ def test_calibration_gate_ignores_in_sample_metrics(site):
     (d,) = bsa._build_gate_decisions(entries, {"hazards": []}, now=now)
     assert _gate(d, "G4_CALIBRATION_FLOOR")["outcome"] == "degrade"
 
-    rec["metrics_after_heldout"] = {"ece": 0.3, "brier_skill_score": 0.1}  # out-of-sample, bad ECE
+    # a calibrator that is applied (enough events, beats the model held-out) but is badly calibrated
+    # out of sample: block
+    rec.update({"n_calibration": 100_000, "n_positive": 40, "metrics_before": {"brier": 0.01},
+                "metrics_after_heldout": {"ece": 0.3, "brier": 0.005, "brier_skill_score": 0.1}})
     (root / "results" / "calibration" / "earthquake_calibration.json").write_text(json.dumps(rec))
     (d,) = bsa._build_gate_decisions(entries, {"hazards": []}, now=now)
     assert _gate(d, "G4_CALIBRATION_FLOOR")["outcome"] == "block"
+
+    # one fitted on zero events is never applied, so its held-out numbers do not describe the published
+    # forecasts: calibration not yet measured (the tornado record of 2026-10-04 passed G4 on ECE 0.037)
+    rec.update({"n_positive": 0, "metrics_after_heldout": {"ece": 0.037, "brier": 0.0047}})
+    (root / "results" / "calibration" / "earthquake_calibration.json").write_text(json.dumps(rec))
+    (d,) = bsa._build_gate_decisions(entries, {"hazards": []}, now=now)
+    assert _gate(d, "G4_CALIBRATION_FLOOR")["outcome"] == "degrade"
 
 
 def test_heldout_calibration_metrics_are_not_in_sample():

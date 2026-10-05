@@ -71,7 +71,7 @@ tracked them is under 3 hours old.
 
 The server renders everything first (`HTMLRewriter`: the counters `[data-live]`, `#live-feed`, `#near-you`,
 the notice, the globe's centre), so the page is complete without JavaScript. `/assets/app.js` then draws
-the globe (WebGL: a land mask, `/assets/maps/land-2048.png`, and the 30-day earthquake forecast as a heat
+the globe (WebGL: a land mask, `/assets/maps/land-2048.webp`, and the 30-day earthquake forecast as a heat
 layer, under the live markers), polls `/api/v1/now` every minute and `/api/v1/near` every five while the
 page is visible, and keeps the relative times current. Without WebGL the static forecast map stays.
 
@@ -93,4 +93,4 @@ Rules, each with a test in `tests/worker_api_check.mjs`:
 `scripts/build_site_geodata.py` builds `src/hazardpulse/site/data/` from public-domain sources: Census
 Bureau places (US) and Natural Earth populated places (elsewhere), the Flinn-Engdahl regions (USGS,
 1995 revision), and Natural Earth 1:110m land and US state outlines. Given Natural Earth's 1:50m land
-(`ne_50m_land.geojson`), it also draws the globe's land mask, `dist/assets/maps/land-2048.png`.
+(`ne_50m_land.geojson`), it also draws the globe's land mask, `dist/assets/maps/land-2048.webp`.

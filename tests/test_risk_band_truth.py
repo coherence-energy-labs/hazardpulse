@@ -42,7 +42,13 @@ def _shrinking_forecaster(tmp_path):
     p = rng.uniform(0, 1, 20000)
     y = (rng.uniform(0, 1, p.size) < 0.05 * p).astype(float)
     cal = VennAbersCalibrator().fit(p, y)
-    rec = {"hazard": "earthquake", "model_version": "eq_coherence_v1_0", "calibrator": cal.to_dict()}
+    # with the evidence that makes the scorers apply it (calibrator_admissible): ~500 events, and a
+    # held-out Brier that beats the raw scores (which overstate the rate 20x)
+    rec = {"hazard": "earthquake", "model_version": "eq_coherence_v1_0", "inflated": False,
+           "n_calibration": int(p.size), "n_positive": int(y.sum()),
+           "metrics_before": {"brier": float(np.mean((p - y) ** 2))},
+           "metrics_after_heldout": {"brier": float(np.mean((0.05 * p - y) ** 2))},
+           "calibrator": cal.to_dict()}
     (tmp_path / "earthquake_calibration.json").write_text(json.dumps(rec), encoding="utf-8")
     return load_forecaster("earthquake", models_dir=tmp_path)
 
