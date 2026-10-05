@@ -82,6 +82,10 @@ HURRICANE_FINAL = "results/calibration/hurricane_ri_stack_final.json"
 HURRICANE_ADVERSARY = "results/calibration/hurricane_ri_stack_adversary.json"
 # the model served outside the NHC basins, and its own temporal hold-out (scripts/evaluate_hurricane_ri.py)
 HURRICANE_V82_EVALUATION = "results/calibration/hurricane_ri_evaluation.json"
+# what that hold-out was a test OF: its basins, its inputs, the served artifact's calibration, and the
+# served model on West Pacific cycles with a single JTWC warning's inputs (scripts/hurricane_v82_test_composition.py)
+HURRICANE_V82_COMPOSITION = "results/calibration/hurricane_ri_v8_2_test_composition.json"
+HURRICANE_V82_SERVED = "results/models/hurricane_ri_v8_2.json"
 HURRICANE_PROGRAM = "docs/HURRICANE_RI_PROGRAM.md"
 HURRICANE_CANDIDATES = {
     "A": "NOAA DTOPS (the NHC's deterministic-to-probabilistic RI guidance)",
@@ -485,11 +489,13 @@ def hurricane_evidence(root: Path = ROOT) -> dict | None:
         test_years = origin.get("test") or ["?", "?"]
         other_basins = {
             "model": "hurricane_ri_v8_2",
-            "test": {"period": f"{test_years[0]}-{test_years[1]} NHC cases (held out)",
+            "test": {"period": f"{test_years[0]}-{test_years[1]} cycles from every basin, held out from the "
+                               "recipe's fit",
                      "when": f"{test_years[0]}-{test_years[1]}",
                      "n": int(v82_heldout.get("n") or 0), "auc": _finite(v82_heldout.get("auc")),
                      "auc_ci": _ci((v82_heldout.get("ci95") or {}).get("auc")),
                      "bss": _finite(v82_heldout.get("bss_vs_climatology"))},
+            "composition": _v82_composition(root, evaluation, v82_heldout),
         }
     return {
         "hazard": "hurricane", "program": HURRICANE_PROGRAM, "file": HURRICANE_SERVED,
@@ -512,6 +518,46 @@ def hurricane_evidence(root: Path = ROOT) -> dict | None:
         "adversary": {"verdict": adv.get("verdict"), "statement": adv.get("surviving_statement")} if adv else None,
         "other_basins": other_basins,
         "ours": ours_hurricane(root),
+    }
+
+
+HURRICANE_BASIN_NAMES = {"WP": "West Pacific", "SI": "South Indian", "NA": "Atlantic", "EP": "East Pacific",
+                         "SP": "South Pacific", "NI": "North Indian", "SA": "South Atlantic"}
+
+
+def _v82_composition(root: Path, evaluation: dict, heldout: dict) -> dict | None:
+    """What v8.2's held-out figure tests (site audit 2026-10-05): the test's basins and inputs, whether
+    the SERVED artifact's calibration was fitted on the test cases (read from the artifact itself), and
+    the served model on West Pacific cycles with a single JTWC warning's inputs. Refused when the file
+    describes another evaluation (its count, AUC or data hash differ)."""
+    comp = _read(root, HURRICANE_V82_COMPOSITION)
+    if comp is None:
+        return None
+    ev = comp.get("evaluation") or {}
+    if (int(ev.get("n") or -1) != int(heldout.get("n") or 0) or _finite(ev.get("auc")) != _finite(heldout.get("auc"))
+            or (comp.get("dataset") or {}).get("sha256") != (evaluation.get("data_sha256") or {}).get("v8.2")):
+        raise EvidenceError(f"{HURRICANE_V82_COMPOSITION} does not describe the evaluation in {HURRICANE_V82_EVALUATION}")
+    basins = comp.get("by_basin") or {}
+    if sum(int(b.get("n") or 0) for b in basins.values()) != int(heldout.get("n") or 0):
+        raise EvidenceError(f"{HURRICANE_V82_COMPOSITION}: its basins do not add up to the test's cycles")
+    served = _read(root, HURRICANE_V82_SERVED) or {}
+    cal = served.get("calibration") or {}
+    on_test = (list((cal.get("fitted_on") or {}).get("storm_years") or []) == list(comp.get("test_storm_years") or [None])
+               and int(cal.get("n") or -1) == int(heldout.get("n") or 0))
+    jt = comp.get("single_jtwc_warning") or {}
+    return {
+        "by_basin": [{"basin": b, "name": HURRICANE_BASIN_NAMES.get(b, b), "n": int(v.get("n") or 0),
+                      "events": int(v.get("events") or 0)} for b, v in basins.items()],
+        "inputs": "best track",
+        "served_calibration_fitted_on_test_cases": bool(on_test) if served else None,
+        "single_jtwc_warning": {
+            "n_inputs": int(jt.get("n_selected_inputs") or 0),
+            "n_missing": len(jt.get("inputs_missing_live") or []),
+            "n_cycles": int(jt.get("west_pacific_test_cycles") or 0),
+            "log_loss": _finite(jt.get("log_loss_single_warning_inputs")),
+            "log_loss_full_inputs": _finite(jt.get("log_loss_full_inputs")),
+            "log_loss_climatology": _finite(jt.get("log_loss_climatology")),
+        } if jt else None,
     }
 
 

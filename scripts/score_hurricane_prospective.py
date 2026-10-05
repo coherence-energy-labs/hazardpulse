@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
-"""Score frozen hurricane replay artifacts against realized intensity changes.
+"""Score the PUBLISHED hurricane numbers against the realized intensity change.
 
-Reads replay artifacts from dist/data/replay/hu_fcst_*.json, evaluates
-only forecasts whose windows have fully matured, fetches NHC ATCF
-best-track data to determine if rapid intensification actually occurred,
-and writes:
+Reads the forecast files ``dist/data/replay/hu_fcst_*.json`` and writes
 
 - results/hurricane_prospective/prospective_summary.json
 - results/hurricane_prospective/per_forecast_scores.jsonl
 
-Outcomes are three-valued. A storm whose best track cannot be found, or whose
-track does not bracket [issue, issue + 24 h], is UNVERIFIABLE -- it is counted and
-reported, never scored as "no RI" (that used to turn every 404 -- e.g. all West
-Pacific storms, which NHC's btk folder does not carry -- into a confident
-negative). Forecasts with no active storms carry no prediction to verify and are
-counted separately, not averaged into the Brier score as perfect 0.0 entries.
+The unit is the storm-cycle (docs/HURRICANE_RI_V9_PROGRAM.md, amendment 7, rules 1 and 4 --
+``hazardpulse.hurricane.cycle_records``):
+
+* every published storm number is the forecast of ONE storm at ONE synoptic time ``t`` (its
+  ``issue_time``), and its outcome is the best-track change from ``t`` to ``t + 24 h``. The time the
+  scorer ran never enters: aligning the truth to the run time scored storm-cycles against the wrong
+  24 hours (a run at 04:54 for the 00Z cycle verified 04:54 -> 04:54 the next day);
+* a storm-cycle is scored ONCE, from the first record made at or after ``t + 3 h 30 min``. Repeat runs
+  of one cycle (Nolo 2026-10-03 12Z was recorded six times) are duplicates; records made earlier read
+  preliminary inputs. Both are listed, with the reason, never scored.
+
+Outcomes are three-valued. A storm whose best track has no fix at ``t`` or at ``t + 24 h`` is
+UNVERIFIABLE -- counted, never scored as "no RI". Forecast files with no active storms carry no
+prediction and are counted separately. Metrics are POOLED over storm-cycles with their counts; a
+ranking score (AUC) is reported only when both outcomes occurred and the cycles span at least
+``MIN_AUC_STORMS`` storms (an AUC inside one forecast of two or three storms is noise).
 """
 
 from __future__ import annotations
@@ -23,7 +30,6 @@ import argparse
 import datetime as dt
 import gzip
 import json
-import math
 import sys
 from pathlib import Path
 
@@ -34,10 +40,10 @@ sys.path.insert(0, str(SRC))
 
 from hazardpulse.core.metrics import roc_auc  # noqa: E402
 from hazardpulse.data.http import fetch_bytes  # noqa: E402
+from hazardpulse.hurricane import cycle_records as cr  # noqa: E402
 from hazardpulse.hurricane.atcf import (  # noqa: E402
     ATCF_ROOT,
     ATCFRecord,
-    DEFAULT_ANALYSIS_PRIORITY,
     parse_atcf_deck,
 )
 
@@ -45,12 +51,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPLAY_DIR = PROJECT_ROOT / "dist" / "data" / "replay"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "results" / "hurricane_prospective"
 
-# RI definition: ≥30 kt increase in 24 hours (NHC standard)
-RI_THRESHOLD_KT = 30.0
+# RI definition: >= 30 kt increase in 24 hours (NHC standard)
+RI_THRESHOLD_KT = cr.RI_THRESHOLD_KT
 RI_WINDOW_HOURS = 24
-# A best-track fix further than this from the issue / window-end time cannot
-# stand in for the intensity at that time.
-MAX_FIX_OFFSET_HOURS = 12.0
+# A ranking score needs both outcomes and more than a handful of storms.
+MIN_AUC_STORMS = 5
 
 # Best-track sources, tried in order. NHC's btk folder carries only its own basins
 # (al/ep/cp) -- every West Pacific / Indian Ocean / Southern Hemisphere storm 404s
@@ -115,53 +120,16 @@ def fetch_best_track(storm_id: str) -> list[ATCFRecord]:
 
 def check_ri_occurred(
     records: list[ATCFRecord],
-    issue_time: dt.datetime,
-    window_hours: int = RI_WINDOW_HOURS,
-    threshold_kt: float = RI_THRESHOLD_KT,
+    cycle: dt.datetime,
 ) -> tuple[bool | None, float | None, float | None]:
-    """Did rapid intensification occur in [issue_time, issue_time + window]?
+    """Did the storm intensify by >= 30 kt from its synoptic time ``cycle`` to ``cycle + 24 h``?
 
-    Returns (ri_occurred, vmax_at_issue, vmax_at_window_end). ``ri_occurred`` is
-    None -- UNVERIFIABLE -- when the best track has no fix within
-    MAX_FIX_OFFSET_HOURS of either end of the window: absence of a track is not
-    evidence that the storm did not intensify.
+    ``(ri_occurred, best-track wind at cycle, at cycle + 24 h)`` from the BEST fixes at exactly those
+    two times (amendment 7, rule 4). ``ri_occurred`` is None -- UNVERIFIABLE -- when either fix is
+    missing: absence of a track is not evidence that the storm did not intensify.
     """
-    window_end = issue_time + dt.timedelta(hours=window_hours)
-
-    # Find analysis records (BEST track, tau=0)
-    best_records = [
-        r for r in records
-        if r.model in ("BEST", "CARQ", "OFCL")
-        and r.tau_hours == 0
-        and r.vmax_kt is not None
-    ]
-    if not best_records:
-        return None, None, None
-
-    # Find vmax closest to issue time
-    best_at_issue = min(
-        best_records,
-        key=lambda r: abs((r.cycle - issue_time).total_seconds()),
-    )
-    dt_issue = abs((best_at_issue.cycle - issue_time).total_seconds()) / 3600.0
-    if dt_issue > MAX_FIX_OFFSET_HOURS:  # too far from issue time
-        return None, None, None
-
-    vmax_issue = best_at_issue.vmax_kt
-
-    # Find vmax closest to issue + 24h
-    best_at_end = min(
-        best_records,
-        key=lambda r: abs((r.cycle - window_end).total_seconds()),
-    )
-    dt_end = abs((best_at_end.cycle - window_end).total_seconds()) / 3600.0
-    if dt_end > MAX_FIX_OFFSET_HOURS:
-        return None, vmax_issue, None
-
-    vmax_end = best_at_end.vmax_kt
-
-    dv = vmax_end - vmax_issue
-    return dv >= threshold_kt, vmax_issue, vmax_end
+    o = cr.outcome(cr.best_track_intensity(records), cycle)
+    return o.ri, o.v_t, o.v_t24
 
 
 def compute_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
@@ -199,6 +167,31 @@ def matured_artifacts(
     return matured
 
 
+def _storm_ref(artifact: dict, index: int) -> tuple[str, int]:
+    return str(artifact.get("forecast_id")), index
+
+
+def select_published(artifacts: list[dict]) -> tuple[cr.Selection, dict[tuple[str, int], str]]:
+    """Amendment 7 rule 1 over every PUBLISHED storm number (``storms`` of each forecast file; a
+    catch-up record is a shadow, never a published number): ``(selection, {storm ref: why it is
+    not scored})`` -- storms that name no synoptic time are unverifiable, not selectable."""
+    cands, no_cycle = [], {}
+    for art in artifacts:
+        made = cr.record_time(art)
+        for i, storm in enumerate(art.get("storms") or []):
+            sc = cr.storm_cycle(storm)
+            if sc is None:
+                no_cycle[_storm_ref(art, i)] = "the record names no synoptic time"
+                continue
+            cands.append(cr.Candidate(sc[0], sc[1], made, catch_up=bool(storm.get("catch_up")),
+                                      rebuilt=bool(storm.get("rebuilt")), ref=_storm_ref(art, i)))
+    sel = cr.select(cands)
+    why = dict(no_cycle)
+    for c, reason in sel.excluded:
+        why[c.ref] = reason
+    return sel, why
+
+
 # Forecasts made before model identities were recorded per storm.
 LEGACY_HURRICANE_MODEL = "hurricane_ri_v8_1"
 # Reserved key in the calibration accumulator: the model version being pooled.
@@ -230,6 +223,20 @@ def newest_model_version(artifacts: list[dict]) -> str:
     return min(newest, key=lambda v: (-counts[v], v))
 
 
+def calibrator_input(storm: dict) -> tuple[float, str]:
+    """``(value, key)`` the trust-layer calibrator would be applied to for this storm.
+
+    The live scorer hands the trust layer ``ri_probability`` (fetch_and_score.py, ``enrich_cells(...,
+    prob_key="ri_probability")``); when it runs it replaces ``ri_probability`` and keeps the number it
+    was given as ``raw_probability``. So the pool takes ``raw_probability`` when the trust layer ran and
+    ``ri_probability`` otherwise. ``ri_probability_raw`` is NOT that number: it is v8.2's ensemble
+    before v8.2's own calibration, which the trust layer never sees -- pooling it would fit a calibrator
+    on one quantity and apply it to another."""
+    if storm.get("raw_probability") is not None:
+        return float(storm["raw_probability"]), "raw_probability"
+    return float(storm.get("ri_probability", storm.get("result_probability", 0.0))), "ri_probability"
+
+
 def _accumulate_calibration(calib_acc: dict, scores: np.ndarray, y_true: np.ndarray) -> None:
     """Pool (storm RI probability -> #positive, #total) into a histogram."""
     rscore = np.round(scores, 6)
@@ -254,6 +261,7 @@ def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "
     payload = {
         "hazard": hazard,
         "model_version": calib_acc.get(_CALIB_VERSION_KEY),
+        "unit": "storm-cycle (docs/HURRICANE_RI_V9_PROGRAM.md amendment 7, rule 1)",
         "n": n,
         "n_groups": len(keys),
         "base_rate": (sum(pos) / n) if n else 0.0,
@@ -267,17 +275,19 @@ def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "
 
 
 def score_single_forecast(artifact: dict, calib_acc: dict | None = None,
-                          best_track_fetcher=None) -> dict:
-    """Score a single hurricane forecast.
+                          best_track_fetcher=None, set_aside: dict[tuple[str, int], str] | None = None,
+                          tracks: dict | None = None) -> dict:
+    """Score the storms of one forecast file, each against ITS OWN cycle (rule 4).
 
-    For forecasts with storms: fetch the best track and check whether RI occurred.
-    Only storms with a VERIFIABLE outcome enter the Brier score, the AUC and the
-    calibration pool. A forecast with no storms has nothing to verify: its Brier
-    is None (not a perfect 0.0) and it is counted as a null forecast.
+    ``set_aside`` (from select_published) names the storms of this file that are not the storm-cycle's
+    scored record -- duplicates, preliminary records, storms with no cycle; they are listed with the
+    reason and never scored. Without it every storm of the file is scored. Only storms with a
+    VERIFIABLE outcome enter the Brier score and the calibration pool. A forecast with no storms has
+    nothing to verify: its Brier is None (not a perfect 0.0) and it is counted as a null forecast.
     """
-    issued_at = parse_utc(artifact["issued_at"])
     storms = artifact.get("storms", [])
     forecast_id = artifact["forecast_id"]
+    made_at = cr.record_time(artifact)
 
     if not storms:
         # No active TCs: no probability was issued for anything, so there is
@@ -290,41 +300,56 @@ def score_single_forecast(artifact: dict, calib_acc: dict | None = None,
             "n_unverifiable": 0,
             "n_ri_events": 0,
             "predictions": [],
-            "auc": float("nan"),
+            "set_aside": [],
             "brier": None,
             "null_forecast": True,
         }
 
     fetcher = best_track_fetcher or fetch_best_track_with_source
+    tracks = {} if tracks is None else tracks
+    set_aside = set_aside or {}
     predictions: list[dict] = []
-    tracks: dict[str, tuple[list[ATCFRecord], str | None]] = {}
+    aside: list[dict] = []
 
-    for storm in storms:
-        storm_id = storm.get("storm_id", "")
+    for i, storm in enumerate(storms):
+        storm_id = str(storm.get("storm_id", "")).upper()
+        ref = _storm_ref(artifact, i)
+        sc = cr.storm_cycle(storm)
+        if ref in set_aside or sc is None:
+            aside.append({"storm_id": storm_id, "issue_time": storm.get("issue_time"),
+                          "why": set_aside.get(ref, "the record names no synoptic time")})
+            continue
+        _, cycle = sc
         pred_prob = float(storm.get("ri_probability", storm.get("result_probability", 0.0)))
+        cal_value, cal_key = calibrator_input(storm)
 
-        if storm_id not in tracks:      # a storm can be listed twice in one artifact
+        if storm_id not in tracks:      # one fetch per storm per run
             tracks[storm_id] = fetcher(storm_id)
         records, source = tracks[storm_id]
-        ri_occurred, vmax_issue, vmax_end = check_ri_occurred(records, issued_at)
+        ri_occurred, vmax_t, vmax_t24 = check_ri_occurred(records, cycle)
 
         predictions.append({
             "storm_id": storm_id,
+            "cycle": format_utc_z(cycle),
+            "record_made_at": format_utc_z(made_at) if made_at else None,
+            "lag_hours": cr.lag_hours(made_at, cycle) if made_at else None,
             "model_version": str(storm.get("model_version") or artifact.get("model_version")
                                  or LEGACY_HURRICANE_MODEL),
             # which family produced the number (NOAA's aids or v8.2); absent before 2026-10
             "ri_source": storm.get("ri_source", "v8.2"),
             "storm_name": storm.get("storm_name", storm_id),
             "predicted_ri_probability": round(pred_prob, 4),
-            "raw_ri_probability": round(float(storm.get("raw_probability", pred_prob)), 4),
+            "calibrator_input_probability": round(cal_value, 4),
+            "calibrator_input_key": cal_key,
             "ri_occurred": ri_occurred,
             "verifiable": ri_occurred is not None,
             "outcome_source": source,
-            "vmax_at_issue": vmax_issue,
-            "vmax_at_end": vmax_end,
+            # the best-track wind at the storm's own synoptic time t and at t + 24 h
+            "vmax_at_issue": vmax_t,
+            "vmax_at_end": vmax_t24,
             "intensity_change_kt": (
-                round(vmax_end - vmax_issue, 1)
-                if vmax_issue is not None and vmax_end is not None
+                round(vmax_t24 - vmax_t, 1)
+                if vmax_t is not None and vmax_t24 is not None
                 else None
             ),
         })
@@ -338,7 +363,7 @@ def score_single_forecast(artifact: dict, calib_acc: dict | None = None,
         # one model's curve (v8.1 and v8.2 forecasts must never share one).
         want = calib_acc.get(_CALIB_VERSION_KEY)
         keep = [want is None or p["model_version"] == want for p in verified]
-        raw = np.array([p["raw_ri_probability"] for p, k in zip(verified, keep) if k],
+        raw = np.array([p["calibrator_input_probability"] for p, k in zip(verified, keep) if k],
                        dtype=np.float64)
         if raw.size:
             _accumulate_calibration(calib_acc, raw, y_true[np.array(keep, dtype=bool)])
@@ -351,21 +376,42 @@ def score_single_forecast(artifact: dict, calib_acc: dict | None = None,
         "n_unverifiable": len(predictions) - len(verified),
         "n_ri_events": int(np.sum(y_true)) if verified else 0,
         "predictions": predictions,
-        "auc": compute_auc(y_true, y_score) if verified else float("nan"),
+        "set_aside": aside,
+        # within one forecast file: a Brier over its few storms, kept for the record; the summary
+        # pools storm-cycles instead of averaging these
         "brier": brier_score(y_true, y_score) if verified else None,
         "null_forecast": False,
     }
 
 
-def summarize_results(per_forecast_results: list[dict]) -> dict:
-    """Aggregate per-forecast scores. Only VERIFIED storm predictions are scored:
-    null forecasts (no storms) and unverifiable storms are counted, never averaged."""
+def pooled_metrics(predictions: list[dict]) -> dict:
+    """Pooled over storm-cycles, with the counts that make them readable."""
+    verified = [p for p in predictions if p.get("ri_occurred") is not None]
+    y = np.array([1.0 if p["ri_occurred"] else 0.0 for p in verified])
+    s = np.array([p["predicted_ri_probability"] for p in verified], dtype=np.float64)
+    storms = {p["storm_id"] for p in verified}
+    n_ev = int(y.sum()) if verified else 0
+    out = {"n_storm_cycles": len(verified), "n_events": n_ev, "n_storms": len(storms),
+           "brier": round(brier_score(y, s), 6) if verified else None,
+           "mean_forecast": round(float(s.mean()), 6) if verified else None,
+           "observed_rate": round(n_ev / len(verified), 6) if verified else None,
+           "auc": None, "auc_withheld": None}
+    if not verified:
+        out["auc_withheld"] = "nothing verified"
+    elif n_ev == 0 or n_ev == len(verified):
+        out["auc_withheld"] = "only one outcome occurred: a ranking score is undefined"
+    elif len(storms) < MIN_AUC_STORMS:
+        out["auc_withheld"] = f"the cycles span {len(storms)} storms (< {MIN_AUC_STORMS})"
+    else:
+        out["auc"] = round(compute_auc(y, s), 6)
+    return out
+
+
+def summarize_results(per_forecast_results: list[dict], selection: cr.Selection | None = None) -> dict:
+    """Pool the scored storm-cycles. Null forecasts (no storms) and unverifiable storms are counted,
+    never averaged; storms set aside by rule 1 are counted by reason."""
     n_null = sum(1 for r in per_forecast_results if r.get("null_forecast"))
     n_with_storms = len(per_forecast_results) - n_null
-    aucs = [r["auc"] for r in per_forecast_results
-            if r.get("auc") is not None and math.isfinite(r["auc"])]
-    briers = [r["brier"] for r in per_forecast_results
-              if r.get("brier") is not None and math.isfinite(r["brier"])]
     predictions = [p for r in per_forecast_results for p in r.get("predictions", [])]
     verified = [p for p in predictions if p.get("ri_occurred") is not None]
     unverifiable_by_basin: dict[str, int] = {}
@@ -373,31 +419,33 @@ def summarize_results(per_forecast_results: list[dict]) -> dict:
         if p.get("ri_occurred") is None:
             basin = str(p.get("storm_id", ""))[:2].lower() or "unknown"
             unverifiable_by_basin[basin] = unverifiable_by_basin.get(basin, 0) + 1
-    total_ri = sum(1 for p in verified if p["ri_occurred"])
-    pooled_brier = (
-        float(np.mean([(p["predicted_ri_probability"] - (1.0 if p["ri_occurred"] else 0.0)) ** 2
-                       for p in verified]))
-        if verified else None
-    )
+    set_aside: dict[str, int] = {}
+    for r in per_forecast_results:
+        for a in r.get("set_aside") or []:
+            set_aside[a["why"]] = set_aside.get(a["why"], 0) + 1
+    pooled = pooled_metrics(predictions)
+    by_version: dict[str, list[dict]] = {}
+    for p in predictions:
+        by_version.setdefault(str(p.get("model_version")), []).append(p)
+    total_ri = pooled["n_events"]
     return {
+        "unit": "storm-cycle: one scored record per storm and synoptic time t, the first made at or after "
+                "t + 3 h 30 min (docs/HURRICANE_RI_V9_PROGRAM.md amendment 7, rule 1)",
+        "outcome": "best-track (BEST) wind at t + 24 h minus at t, both fixes present; >= 30 kt is RI (rule 4)",
         "n_null_forecasts": n_null,
         "n_forecasts_with_storms": n_with_storms,
-        "n_forecasts_with_verified_storms": len(briers),
         "total_storms_scored": len(verified),
         "total_storm_predictions": len(predictions),
         "n_unverifiable_predictions": len(predictions) - len(verified),
         "unverifiable_by_basin": unverifiable_by_basin,
         "total_ri_events": total_ri,
         "ri_rate": round(total_ri / len(verified), 4) if verified else None,
-        "mean_auc": round(float(np.mean(aucs)), 4) if aucs else None,
-        "median_auc": round(float(np.median(aucs)), 4) if aucs else None,
-        # Mean over forecasts that verified at least one storm (null and fully
-        # unverifiable forecasts excluded), plus the per-prediction pooled Brier.
-        "mean_brier": round(float(np.mean(briers)), 4) if briers else None,
-        "pooled_brier_verified_predictions": (
-            round(pooled_brier, 4) if pooled_brier is not None else None
-        ),
-        "n_forecasts_with_valid_auc": len(aucs),
+        "pooled": pooled,
+        "pooled_brier_verified_predictions": (round(pooled["brier"], 4) if pooled["brier"] is not None else None),
+        "by_model_version": {v: pooled_metrics(ps) for v, ps in sorted(by_version.items())},
+        "set_aside_records": set_aside,
+        "cycles_without_a_qualifying_record": (
+            [f"{sid} {format_utc_z(t)}" for sid, t in selection.cycles_without_a_record()] if selection else []),
     }
 
 
@@ -430,6 +478,9 @@ def main(argv: list[str] | None = None) -> int:
 
     artifacts = load_replay_artifacts(args.replay_dir)
     matured = matured_artifacts(artifacts, score_as_of)
+    # rule 1 over EVERY record (a cycle's first qualifying record may not have matured yet; then the
+    # cycle waits -- a later duplicate never stands in for it)
+    selection, set_aside = select_published(artifacts)
 
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -453,9 +504,10 @@ def main(argv: list[str] | None = None) -> int:
     per_forecast_results: list[dict] = []
 
     if matured:
+        tracks: dict = {}
         with open(per_forecast_path, "w", encoding="utf-8") as handle:
             for artifact in matured:
-                result = score_single_forecast(artifact, calib_acc=calib_acc)
+                result = score_single_forecast(artifact, calib_acc=calib_acc, set_aside=set_aside, tracks=tracks)
                 per_forecast_results.append(result)
                 handle.write(json.dumps(result) + "\n")
 
@@ -467,7 +519,7 @@ def main(argv: list[str] | None = None) -> int:
             ))
             summary["calibration_model_version"] = calib_acc.get(_CALIB_VERSION_KEY)
 
-        summary.update(summarize_results(per_forecast_results))
+        summary.update(summarize_results(per_forecast_results, selection))
     else:
         summary["status"] = "waiting_for_matured_forecasts"
         summary["message"] = (
@@ -484,11 +536,13 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  Matured forecasts:   {len(matured)} / {len(artifacts)}")
     print(f"  Summary:             {summary_path}")
     if matured:
+        pooled = summary.get("pooled") or {}
         print(f"  Per-forecast scores: {per_forecast_path}")
         print(f"  Null forecasts:      {summary.get('n_null_forecasts')}")
-        print(f"  With storms:         {summary.get('n_forecasts_with_storms')}")
-        print(f"  Mean AUC:            {summary.get('mean_auc')}")
-        print(f"  Mean Brier:          {summary.get('mean_brier')}")
+        print(f"  Storm-cycles scored: {pooled.get('n_storm_cycles')} ({pooled.get('n_events')} RI, "
+              f"{pooled.get('n_storms')} storms); set aside {summary.get('set_aside_records')}")
+        print(f"  Pooled Brier:        {pooled.get('brier')}; AUC {pooled.get('auc')}"
+              + (f" (withheld: {pooled.get('auc_withheld')})" if pooled.get("auc_withheld") else ""))
     else:
         print("  Waiting for matured forecast windows.")
 

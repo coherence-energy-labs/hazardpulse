@@ -7,6 +7,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -37,6 +39,85 @@ def test_records_are_deduplicated_and_old_or_failed_shadows_ignored(tmp_path):
     recs = m.collect(tmp_path)
     assert [(r["storm_id"], r["cycle"], r["p"]) for r in recs] == [("EP202026", "2026-10-04T00:00:00Z", 0.4)]
     assert recs[0]["a"] == 0.10
+
+
+def _art(d: Path, fid: str, issued_at: str, storms: list[dict], catch_up: list[dict] | None = None) -> None:
+    body = {"forecast_id": fid, "issued_at": issued_at, "storms": storms}
+    if catch_up is not None:
+        body["shadow_catch_up"] = catch_up
+    (d / f"{fid}.json").write_text(json.dumps(body), encoding="utf-8")
+
+
+def _rec(sid, cycle, p, **extra):
+    s = _storm(sid, cycle, p)
+    s["issue_time"] = cycle.replace("Z", "")
+    s.update(extra)
+    return s
+
+
+def test_the_test_record_is_the_first_made_after_the_advisory_by_its_own_time(tmp_path):
+    """Amendment 7 rule 1. Rachel 10-03 18Z was recorded at t + 46 min with preliminary inputs; the old
+    collector kept whichever record came first. The record's own time decides, not its file name."""
+    m = _mod()
+    cyc = "2026-10-04T06:00:00Z"
+    _art(tmp_path, "hu_fcst_20261004_0646", "2026-10-04T06:46:31Z", [_rec("EP182026", cyc, 0.11)])   # t + 46 min
+    _art(tmp_path, "hu_fcst_20261004_0959", "2026-10-04T09:59:43Z", [_rec("EP182026", cyc, 0.22)])   # t + 3 h 59
+    _art(tmp_path, "hu_fcst_20261004_1013", "2026-10-04T10:13:05Z", [_rec("EP182026", cyc, 0.33)])   # duplicate
+    _art(tmp_path, "hu_fcst_20261004_0930", "2026-10-04T09:29:59Z", [_rec("EP182026", cyc, 0.44)])   # t + 3 h 29 59 s
+    _art(tmp_path, "hu_fcst_20261004_1001", "2026-10-04T10:01:00Z", [_rec("EP902026", cyc, 0.55)])   # an invest
+    recs = m.collect(tmp_path)
+    assert [(r["storm_id"], r["p"], r["forecast_id"]) for r in recs] == [("EP182026", 0.22, "hu_fcst_20261004_0959")]
+    assert recs[0]["lag_hours"] == pytest.approx(3.9953, abs=1e-4) and recs[0]["catch_up"] is False
+    sel = m.select_test_records(tmp_path)
+    assert m.collect(tmp_path, selection=sel) == recs
+    assert sel.counts() == {"made before t + 3 h 30 min (preliminary inputs)": 2,
+                            "a later record of a cycle that already has one": 1}
+    # every entrant reads the SAME record: v10.1's shadow on a later duplicate never stands in
+    v10 = {"status": "ok", "probability": 0.5, "probabilities": {"30": 0.5}, "noaa_24h": {"30": 0.1},
+           "cycle": cyc, "dtops_pct": 10, "gate_ok": True}
+    _art(tmp_path, "hu_fcst_20261004_1013", "2026-10-04T10:13:05Z", [_rec("EP182026", cyc, 0.33, ri_v10_shadow=v10)])
+    assert m.collect(tmp_path, key="ri_v10_shadow") == []
+
+
+def test_a_catch_up_record_counts_only_before_t_plus_12_h_and_is_reported_apart(tmp_path):
+    """Amendment 7 rules 2 and 5: the live scorer writes catch-up records for cycles it missed."""
+    m = _mod()
+    early = "2026-10-04T00:00:00Z"
+    _art(tmp_path, "hu_fcst_20261004_0047", "2026-10-04T00:47:12Z", [_rec("EP152026", early, 0.1)])       # preliminary
+    _art(tmp_path, "hu_fcst_20261004_0703", "2026-10-04T07:03:41Z", [_rec("EP152026", "2026-10-04T00:00:00Z", 0.9)],
+         catch_up=[_rec("EP182026", early, 0.2, catch_up=True, lag_hours=7.06)])
+    _art(tmp_path, "hu_fcst_20261004_1307", "2026-10-04T13:07:00Z", [],
+         catch_up=[_rec("EP192026", early, 0.3, catch_up=True)])                                          # t + 13 h 07
+    recs = m.collect(tmp_path)
+    got = {(r["storm_id"], r.get("catch_up")): r["p"] for r in recs}
+    assert got == {("EP152026", False): 0.9, ("EP182026", True): 0.2}
+    assert m.select_test_records(tmp_path).counts()["catch-up made at or after t + 12 h"] == 1
+    assert [r["storm_id"] for r in m.without_catch_up(recs)] == ["EP152026"]
+
+
+def test_the_output_reports_the_test_set_with_and_without_catch_up(tmp_path, monkeypatch):
+    m = _mod()
+    replay = tmp_path / "replay"
+    replay.mkdir()
+    cyc = "2026-10-04T06:00:00Z"
+    storms = [_rec(f"EP{i:02d}2026", cyc, 0.8 if i % 3 == 0 else 0.05) for i in range(1, 13)]
+    cus = [_rec(f"AL{i:02d}2026", cyc, 0.7 if i % 3 == 0 else 0.03, catch_up=True) for i in range(1, 7)]
+    _art(replay, "hu_fcst_20261004_1022", "2026-10-04T10:22:08Z", storms, catch_up=cus)
+    monkeypatch.setattr(m, "REPLAY", replay)
+    monkeypatch.setattr(m, "REBUILT", tmp_path / "rebuilt")
+    monkeypatch.setattr(m, "OUT", tmp_path / "v9.json")
+    t0 = dt.datetime(2026, 10, 4, 6)
+
+    def bt(sid):
+        rise = 35.0 if int(sid[2:4]) % 3 == 0 else 0.0
+        return {t0: 50.0, t0 + dt.timedelta(hours=24): 50.0 + rise}
+    monkeypatch.setattr(m, "fetch_best_track", bt)
+    m.main(["--as-of", "2026-10-06"])
+    out = json.loads((tmp_path / "v9.json").read_text())
+    assert out["test_set"]["test_records"] == 18 and out["test_set"]["catch_up_records"] == 6
+    e = out["entrants"]["v9_1"]
+    assert e["matured_and_scored"] == 18 and e["catch_up_or_rebuilt_scored"] == 6
+    assert e["running_95"]["ours"]["n"] == 18 and e["running_95_without_catch_up_or_rebuilt"]["ours"]["n"] == 12
 
 
 def test_only_matured_cycles_with_both_fixes_are_scored_and_the_event_is_30_kt():

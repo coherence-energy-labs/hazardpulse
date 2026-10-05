@@ -169,8 +169,11 @@ def methods_simple(ev: dict) -> str:
             + f"in a test written down in advance and run once on {_when(t)}: AUC {_f(t['auc'])}"
             + (f", against {_f(same.get('auc'))} for our v8.2 model on the same cycles" if same.get("auc") is not None else "")
             + "."
-            + (f" Everywhere else we publish v8.2 (AUC {_f(ob.get('auc'))} on held-out {_when(ob)} Atlantic and "
-               "East Pacific cases; it has not been tested in the basins where it publishes)."
+            + (f" Everywhere else we publish v8.2 (its method: AUC {_f(ob.get('auc'))} on {_n(ob.get('n'))} held-out "
+               f"{_when(ob)} cycles from every basin, with best-track inputs"
+               + ("; the published model&rsquo;s calibration was fitted on those same cycles"
+                  if ((hu.get("other_basins") or {}).get("composition") or {}).get(
+                      "served_calibration_fitted_on_test_cases") else "") + ")."
                if ob.get("auc") is not None else "")
             + " Each storm says which."
             + (f" Our newer model, v10.1, scored better than DTOPS over 2022&ndash;2025, each season forecast only "
@@ -298,19 +301,34 @@ def methods_hurricane(ev: dict) -> str:
     ob = hu.get("other_basins")
     if ob:
         o = ob["test"]
+        comp = ob.get("composition") or {}
+        basins = ", ".join(f"{_e(b['name'])} {_n(b['n'])}" for b in comp.get("by_basin") or [])
+        jt = comp.get("single_jtwc_warning") or {}
+        limits = []
+        if comp.get("inputs") == "best track":
+            limits.append("the test read every input from the best track")
+        if comp.get("served_calibration_fitted_on_test_cases"):
+            limits.append("the published model is the method refitted, with its calibration fitted on the test "
+                          "cycles themselves, so the AUC is not a test of it on unseen data")
+        if jt.get("log_loss") is not None:
+            limits.append(f"live West Pacific storms are scored from one JTWC warning, leaving {jt['n_missing']} of "
+                          f"{jt['n_inputs']} inputs unknown; scored that way the {_when(o)} West Pacific cycles had "
+                          f"log loss {_f(jt['log_loss'], 4)} against {_f(jt.get('log_loss_climatology'), 4)} for "
+                          f"climatology ({_f(jt.get('log_loss_full_inputs'), 4)} with every input)")
         out.append(_card(
             "hz-hu", "Hurricane, other basins: HazardPulse v8.2 <code>hurricane_ri_v8_2</code>", _facts([
                 _kv("Architecture", "Histogram-GBT (depth 3 + 4) + L2 logistic + bagged logistic ensemble, "
                                     "Newton-calibrated"),
                 _kv("Key inputs", "Analysis intensity and pressure (CARQ) and their 6&ndash;24 h tendencies, "
                                   "aid-model intensity forecasts, climatological potential intensity, motion, storm age"),
-                _kv("AUC", f"{_f(o['auc'])}{_ci(o['auc_ci'])} on {_n(o['n'])} held-out "
-                           f"{_when(o)} NHC cases (Atlantic and East Pacific)"
+                _kv("AUC (its method)", f"{_f(o['auc'])}{_ci(o['auc_ci'])} on {_n(o['n'])} held-out "
+                                        f"{_when(o)} cycles from every basin" + (f" ({basins})" if basins else "")
                     + (f"; {_f((hu.get('v8_2_same_cases') or {}).get('auc'))} on the 2025 NHC cycles above"
                        if (hu.get("v8_2_same_cases") or {}).get("auc") is not None else "")),
                 _kv("Used for", "West Pacific, Indian Ocean and Southern Hemisphere storms (no public RI guidance), "
                                 "and NHC cycles without SHIPS text"),
-                _kv("Not yet tested", "In the basins where it publishes: its test cases are NHC&rsquo;s"),
+                *([_kv("Limits of that test", "; ".join(limits)[:1].upper() + "; ".join(limits)[1:] + ".")]
+                  if limits else []),
             ])))
     return "\n\n".join(out)
 
@@ -566,7 +584,8 @@ def registry_active(ev: dict) -> str:
         if ob:
             o = ob["test"]
             rows.append(_registry_row(ob["model"], "Hurricane RI (other basins)", "published",
-                                      f"{_when(o)} (NHC cases only)", f"{_f(o['auc'])}{_ci(o['auc_ci'])}",
+                                      f"{_when(o)} (its method; every basin, best-track inputs)",
+                                      f"{_f(o['auc'])}{_ci(o['auc_ci'])}",
                                       f"BSS {_signed(o['bss'])}", "GBT + logistic ensemble, Newton-calibrated"))
     if to:
         t = to["test"]
