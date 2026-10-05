@@ -1,8 +1,8 @@
 {
-  "scored_as_of": "2026-10-05T10:51:32Z",
+  "scored_as_of": "2026-10-05T12:32:41Z",
   "replay_dir": "/home/runner/work/hazardpulse/hazardpulse/dist/data/replay",
   "n_replay_artifacts": 67,
-  "n_matured_forecasts": 54,
+  "n_matured_forecasts": 55,
   "ri_threshold_kt": 30.0,
   "ri_window_hours": 24,
   "outcome_source": "ATCF working best track (NHC btk for al/ep/cp; UCAR RAL open b-decks for all basins)",
@@ -10,20 +10,67 @@
   "calibration_dataset": "/home/runner/work/hazardpulse/hazardpulse/results/hurricane_prospective/calibration_dataset.json",
   "calibration_n": 4,
   "calibration_model_version": "hurricane_ri_stack_v1-35938d6c09b7",
+  "unit": "storm-cycle: one scored record per storm and synoptic time t, the first made at or after t + 3 h 30 min (docs/HURRICANE_RI_V9_PROGRAM.md amendment 7, rule 1)",
+  "outcome": "best-track (BEST) wind at t + 24 h minus at t, both fixes present; >= 30 kt is RI (rule 4)",
   "n_null_forecasts": 41,
-  "n_forecasts_with_storms": 13,
-  "n_forecasts_with_verified_storms": 11,
-  "total_storms_scored": 16,
-  "total_storm_predictions": 20,
-  "n_unverifiable_predictions": 4,
+  "n_forecasts_with_storms": 14,
+  "total_storms_scored": 11,
+  "total_storm_predictions": 13,
+  "n_unverifiable_predictions": 2,
   "unverifiable_by_basin": {
-    "wp": 4
+    "wp": 2
   },
   "total_ri_events": 2,
-  "ri_rate": 0.125,
-  "mean_auc": 0.5,
-  "median_auc": 0.5,
-  "mean_brier": 0.0722,
-  "pooled_brier_verified_predictions": 0.1398,
-  "n_forecasts_with_valid_auc": 2
+  "ri_rate": 0.1818,
+  "pooled": {
+    "n_storm_cycles": 11,
+    "n_events": 2,
+    "n_storms": 4,
+    "brier": 0.127084,
+    "mean_forecast": 0.092664,
+    "observed_rate": 0.181818,
+    "auc": null,
+    "auc_withheld": "the cycles span 4 storms (< 5)"
+  },
+  "pooled_brier_verified_predictions": 0.1271,
+  "by_model_version": {
+    "hurricane_ri_stack_v1-35938d6c09b7": {
+      "n_storm_cycles": 4,
+      "n_events": 1,
+      "n_storms": 2,
+      "brier": 0.12625,
+      "mean_forecast": 0.225,
+      "observed_rate": 0.25,
+      "auc": null,
+      "auc_withheld": "the cycles span 2 storms (< 5)"
+    },
+    "hurricane_ri_v8_2": {
+      "n_storm_cycles": 2,
+      "n_events": 1,
+      "n_storms": 1,
+      "brier": 0.446465,
+      "mean_forecast": 0.05965,
+      "observed_rate": 0.5,
+      "auc": null,
+      "auc_withheld": "the cycles span 1 storms (< 5)"
+    },
+    "jtwc_warning_ingest": {
+      "n_storm_cycles": 5,
+      "n_events": 0,
+      "n_storms": 1,
+      "brier": 0.0,
+      "mean_forecast": 0.0,
+      "observed_rate": 0.0,
+      "auc": null,
+      "auc_withheld": "only one outcome occurred: a ranking score is undefined"
+    }
+  },
+  "set_aside_records": {
+    "made before t + 3 h 30 min (preliminary inputs)": 4,
+    "the record names no synoptic time": 3,
+    "a later record of a cycle that already has one": 3
+  },
+  "cycles_without_a_qualifying_record": [
+    "WP042026 2026-04-13T12:00:00Z"
+  ]
 }
