@@ -53,6 +53,9 @@ function resolveAssetPath(urlPath) {
 // the agencies the live layer reads; each test sets the fixtures and the mode (ok | fail | hang)
 const UPSTREAM_HOSTS = new Set(["earthquake.usgs.gov", "www.nhc.noaa.gov", "api.weather.gov"]);
 const upstream = { mode: "ok", fixtures: {}, calls: [] };
+// GitHub, as the Worker's cron dispatcher sees it
+const githubCalls = [];
+let githubStatus = 204;
 
 const context = vm.createContext({
   console,
@@ -67,6 +70,11 @@ const context = vm.createContext({
   fetch: async (input, init = {}) => {
     const request = input instanceof Request ? input : new Request(input);
     const url = new URL(request.url);
+    if (url.hostname === "api.github.com") {
+      githubCalls.push({ url: request.url, method: init.method || request.method, auth: (init.headers || {}).Authorization,
+                         body: init.body });
+      return new Response(null, { status: githubStatus });
+    }
     if (UPSTREAM_HOSTS.has(url.hostname)) {
       upstream.calls.push({ url: request.url, ua: request.headers.get("user-agent") });
       if (upstream.mode === "fail") return new Response("upstream error", { status: 503 });
@@ -865,5 +873,30 @@ for (const p of listed) {
 }
 const apiPage = readFileSync(path.join(root, "dist", "api", "index.html"), "utf8");
 for (const p of ["/api/v1/now", "/api/v1/near"]) assert.ok(apiPage.includes(`<code>${p}</code>`), `${p} is not documented`);
+
+// the scorers' clock: Cloudflare's cron asks GitHub to run scheduler.yml -- only with a token, exactly once
+{
+  githubCalls.length = 0;
+  const pending = [];
+  await worker.scheduled({ cron: "*/10 * * * *" }, {}, { waitUntil: (p) => pending.push(p) });
+  await Promise.all(pending);
+  assert.equal(githubCalls.length, 0, "no token, no request");
+  pending.length = 0;
+  await worker.scheduled({ cron: "*/10 * * * *" }, { GH_DISPATCH_TOKEN: "t0ken" }, { waitUntil: (p) => pending.push(p) });
+  await Promise.all(pending);
+  assert.equal(githubCalls.length, 1);
+  assert.equal(githubCalls[0].url, workerTest.SCHEDULER_DISPATCH);
+  assert.equal(githubCalls[0].method, "POST");
+  assert.equal(githubCalls[0].auth, "Bearer t0ken");
+  assert.deepEqual(JSON.parse(githubCalls[0].body), { ref: "main" });
+  githubStatus = 401;                                   // a refused token is reported, never thrown
+  const refused = await workerTest.dispatchScheduler({ GH_DISPATCH_TOKEN: "bad" });
+  assert.equal(refused.dispatched, false);
+  assert.equal(refused.status, 401);
+  githubStatus = 204;
+}
+const wranglerToml = readFileSync(path.join(root, "wrangler.toml"), "utf8");
+assert.match(wranglerToml, /\[triggers\]\s*crons = \["\*\/10 \* \* \* \*"\]/);
+assert.match(wranglerToml, /\[env\.preview\][^[]*triggers = \{ crons = \[\] \}/, "the preview must not dispatch too");
 
 console.log("worker api smoke checks passed");
