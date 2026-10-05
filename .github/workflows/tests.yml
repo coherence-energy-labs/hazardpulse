@@ -38,7 +38,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install numpy scipy pytest pillow scikit-learn
+          # every package a test imports-or-skips, so no test is skipped here for want of one
+          # (tests/test_ci_runs_everything.py): without lightgbm the served tornado model's payload tests
+          # (test_lgbm_payload.py, test_tornado_v3_live.py) had never run in CI, nor without pyproj the HRRR
+          # projection's check against an independent implementation
+          pip install numpy scipy pytest pillow scikit-learn lightgbm pyproj
           pip install -e .
 
       - name: Verify vendored omega_one trust subset has not drifted
@@ -47,8 +51,9 @@ jobs:
       # The WHOLE suite, never a hand-picked list: the lists this replaced had left 39 of 88 test files out of
       # CI (found 2026-10-05), every integrity test of that day's audit among them, so a fix could regress
       # with nothing to stop it. tests/test_ci_runs_everything.py keeps it that way.
+      # -rs: every skip prints its reason, so a test that quietly stopped running shows in the log
       - name: The full test suite
-        run: python -m pytest -q -p no:cacheprovider tests/
+        run: python -m pytest -q -rs -p no:cacheprovider tests/
 
       - name: Set up Node (the Worker's checks)
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
