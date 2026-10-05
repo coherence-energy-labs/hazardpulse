@@ -1419,7 +1419,42 @@ async function handleStreamRequest(request, env) {
   return null;
 }
 
+// ---------------------------------------------------------------------------------------------
+// The scorers' clock. GitHub's own cron is best-effort, and for this repository it was far from it:
+// 2026-10-01..05 a 2-hour tornado cron ran every 5.5 h at the median, the hurricane scorer went 23 h
+// without a run, and on 2026-10-05 GitHub fired no scheduled run of any workflow from 00:23Z for hours
+// (status page: all systems operational). Cloudflare's cron fires on time, so every 10 minutes this asks
+// GitHub to run scheduler.yml, which decides from the run history what is due (scripts/ci/schedule.py)
+// and never doubles a run. It needs a GitHub token allowed to run workflows in this repository
+// (`wrangler secret put GH_DISPATCH_TOKEN`: a fine-grained token, this repository only, Actions: read and
+// write); without one it does nothing.
+// ---------------------------------------------------------------------------------------------
+
+const SCHEDULER_DISPATCH = "https://api.github.com/repos/coherence-energy-labs/hazardpulse/actions/workflows/scheduler.yml/dispatches";
+
+async function dispatchScheduler(env) {
+  if (!env || !env.GH_DISPATCH_TOKEN) return { dispatched: false, reason: "no GH_DISPATCH_TOKEN" };
+  const res = await fetch(SCHEDULER_DISPATCH, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.GH_DISPATCH_TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "hazardpulse-scheduler",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ref: "main" }),
+  });
+  // 204 is success; anything else is logged (visible in the Worker's logs), never thrown into the runtime
+  if (res.status !== 204) console.log(`scheduler dispatch failed: HTTP ${res.status}`);
+  return { dispatched: res.status === 204, status: res.status };
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(dispatchScheduler(env));
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const pathname = url.pathname;
@@ -1566,6 +1601,8 @@ if (typeof globalThis !== "undefined") {
     earthquakeCell,
     officialCenter,
     opsSnapshot,
+    dispatchScheduler,
+    SCHEDULER_DISPATCH,
     getLive,
     publicLive,
     nwsPointAlerts,

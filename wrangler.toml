@@ -21,5 +21,12 @@ run_worker_first = [
   "!/COMMERCIAL_LICENSE.md",
 ]
 
+# The scorers' clock: every 10 minutes the Worker asks GitHub to run scheduler.yml (see dispatchScheduler in
+# src/worker.js; GitHub's own cron is best-effort). Production only, and a no-op until GH_DISPATCH_TOKEN is set.
+[triggers]
+crons = ["*/10 * * * *"]
+
 [env.preview]
 name = "hazardpulse-preview"
+# never the preview: one clock is enough
+triggers = { crons = [] }
