@@ -28,9 +28,12 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC))
 
 from hazardpulse.core.metrics import average_precision, roc_auc  # noqa: E402
+from hazardpulse.earthquake import live_record  # noqa: E402
 from hazardpulse.earthquake.coherence_engine import grid_cell_to_latlon, latlon_to_grid_cell  # noqa: E402
 from hazardpulse.earthquake.prospective import (  # noqa: E402
-    fetch_usgs_catalog_range,
+    AUDIT_MAX_MAGNITUDE,
+    CATALOG_MAX_GAP_DAYS,
+    fetch_target_catalog,
     format_utc_z,
     parse_utc_datetime,
 )
@@ -207,11 +210,20 @@ def _accumulate_calibration(calib_acc: dict, y_score: np.ndarray, y_true: np.nda
 
 
 def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "earthquake",
-                              model_version: str | None = None) -> Path:
+                              model_version: str | None = None, independent: dict | None = None) -> Path:
+    """The pooled (score -> outcome) histogram the calibrator is fitted on.
+
+    ``pos`` counts positive CELL-WINDOWS summed over overlapping windows (one earthquake is
+    positive in ~100 of them: the retired model's pool held 5,931 positives from 64
+    earthquakes), so ``independent`` (``live_record.version_counts`` of the pooled windows:
+    ``n_distinct_events``, ``n_independent_windows``) is written beside it; the earthquake
+    scorer applies a calibrator only on that independent evidence
+    (fetch_and_score_earthquake.calibration_evidence)."""
     keys = sorted(calib_acc.keys())
     total = [int(calib_acc[k][0]) for k in keys]
     pos = [int(calib_acc[k][1]) for k in keys]
     n = int(sum(total))
+    independent = independent or {}
     payload = {
         "hazard": hazard,
         # the ONE model whose forecasts were pooled; fit_calibration binds the calibrator to it
@@ -219,6 +231,8 @@ def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "
         "n": n,
         "n_groups": len(keys),
         "base_rate": (sum(pos) / n) if n else 0.0,
+        "n_distinct_events": independent.get("n_distinct_events"),
+        "n_independent_windows": independent.get("n_independent_windows"),
         "scores": [round(float(k), 6) for k in keys],
         "pos": pos,
         "total": total,
@@ -328,7 +342,10 @@ def score_single_forecast(
         "window_end": format_utc_z(window_end),
         "n_cells": n_cells,
         "n_active_cells": len(active_sorted),
+        # events in THIS window; overlapping windows share events, so a version's record counts
+        # them by id (observed_event_ids -> live_record.version_counts), never by summing these
         "n_observed_events": total_events,
+        "observed_event_ids": sorted({live_record.event_key(event) for event in observed_events}),
         "n_positive_cells": int(np.sum(y_true)),
         "n_negative_cells": int(n_cells - np.sum(y_true)),
         "auc": compute_auc(y_true, y_score),
@@ -352,7 +369,14 @@ def live_record_by_version(results: list[dict]) -> dict[str, dict]:
     """The live record of EACH model version on its own. The pooled means above mix every version
     that ever served; a page quoting them under the current model would show the replaced model's
     record (2026-10: 600 matured windows, mean AUC 0.697, information gain -14.6 per event -- all
-    from eq_coherence_v1_0 -- beside the newly served C0)."""
+    from eq_coherence_v1_0 -- beside the newly served C0).
+
+    Windows overlap (a forecast every few hours, each 30 days long), so the counts are the
+    independent ones (``live_record.version_counts``): ``n_distinct_events`` (by USGS id) and
+    ``n_independent_windows``; ``n_event_windows`` is the per-window sum, which counts one
+    earthquake once per window it falls in (613 windows: 6,955 event-windows, 64 earthquakes).
+    The means are over overlapping windows and are quoted only through ``live_record.quotable``.
+    """
     groups: dict[str, list[dict]] = {}
     for r in results:
         groups.setdefault(str(r.get("model_version") or "unknown"), []).append(r)
@@ -360,19 +384,108 @@ def live_record_by_version(results: list[dict]) -> dict[str, dict]:
     for version, rs in groups.items():
         aucs = [r["auc"] for r in rs if math.isfinite(r["auc"])]
         active = [r["auc_active_cells"] for r in rs if math.isfinite(r["auc_active_cells"])]
-        n_events = sum(r["n_observed_events"] for r in rs)
+        counts = live_record.version_counts(rs)
+        n_event_windows = counts["n_event_windows"]
         out[version] = {
             "n_matured_forecasts": len(rs),
             "first_issued_at": min(r.get("issued_at", "") for r in rs) or None,
             "last_issued_at": max(r.get("issued_at", "") for r in rs) or None,
-            "n_observed_events": int(n_events),
+            **counts,
             "mean_auc": float(np.mean(aucs)) if aucs else None,
             "mean_auc_active_cells": float(np.mean(active)) if active else None,
             "mean_brier": float(np.mean([r["brier"] for r in rs])),
+            # per (earthquake, window) pair: the Poisson log-likelihood gain of each window over a
+            # uniform map, summed, divided by the event-windows
             "event_weighted_information_gain_per_event": float(
-                sum(r["poisson_log_likelihood"] - r["uniform_log_likelihood"] for r in rs) / max(1, n_events)),
+                sum(r["poisson_log_likelihood"] - r["uniform_log_likelihood"] for r in rs) / max(1, n_event_windows)),
+            **{f"top_{k}_hit_rate": float(np.mean([bool(r[f"top_{k}_hit"]) for r in rs]))
+               for k in (1, 5, 10, 20) if all(f"top_{k}_hit" in r for r in rs)},
         }
     return out
+
+
+def summarize_results(results: list[dict]) -> dict:
+    """Every aggregate of the summary, computed from the per-forecast results alone (so a stored
+    ``per_forecast_scores.jsonl`` re-summarises exactly, ``--from-stored``)."""
+    aucs = [r["auc"] for r in results if math.isfinite(r["auc"])]
+    pr_aucs = [r["pr_auc"] for r in results if math.isfinite(r["pr_auc"])]
+    active_aucs = [r["auc_active_cells"] for r in results if math.isfinite(r["auc_active_cells"])]
+    n_event_windows = sum(r["n_observed_events"] for r in results)
+    n_events_active = sum(r["n_events_in_active_cells"] for r in results)
+    info_gains = [r["information_gain_per_event"] for r in results]
+    pooled = live_record.version_counts(results)
+    return {
+        # every version pooled; the per-version record is by_model_version
+        "n_distinct_observed_events": pooled["n_distinct_events"],
+        "n_independent_windows": pooled["n_independent_windows"],
+        "total_event_windows": int(n_event_windows),
+        "auc_estimator": AUC_ESTIMATOR,
+        "pr_auc_estimator": PR_AUC_ESTIMATOR,
+        "mean_auc": float(np.mean(aucs)) if aucs else None,
+        "median_auc": float(np.median(aucs)) if aucs else None,
+        "mean_pr_auc": float(np.mean(pr_aucs)) if pr_aucs else None,
+        "mean_auc_active_cells": float(np.mean(active_aucs)) if active_aucs else None,
+        "n_forecasts_with_active_cell_auc": len(active_aucs),
+        "fraction_events_in_active_cells": (
+            float(n_events_active / n_event_windows) if n_event_windows else None
+        ),
+        "mean_brier": float(np.mean([r["brier"] for r in results])) if results else None,
+        "mean_information_gain_per_event": float(np.mean(info_gains)) if info_gains else None,
+        "event_weighted_information_gain_per_event": float(
+            sum(r["poisson_log_likelihood"] - r["uniform_log_likelihood"] for r in results)
+            / max(1, n_event_windows)
+        ),
+        **{f"top_{k}_hit_rate": float(np.mean([r[f"top_{k}_hit"] for r in results])) if results else None
+           for k in (1, 5, 10, 20)},
+        "by_model_version": live_record_by_version(results),
+    }
+
+
+def _stored_event_ids(path: Path) -> list[str]:
+    """The event keys of one window's observed-events CSV (written by write_observed_events_csv)."""
+    with open(path, newline="", encoding="utf-8") as handle:
+        return sorted({
+            live_record.event_key({"id": row.get("id"), "time": row.get("time"), "latitude": row["latitude"],
+                                   "longitude": row["longitude"], "mag": row["mag"]})
+            for row in csv.DictReader(handle)
+        })
+
+
+def resummarize_from_stored(output_dir: Path) -> dict:
+    """Rebuild the summary's aggregates from what a previous run stored, with no catalog fetch.
+
+    Reads ``per_forecast_scores.jsonl`` and, for results written before ``observed_event_ids``
+    existed, each window's ``observed_events/<forecast_id>_observed.csv`` -- the very events
+    that window was scored on. A window whose CSV is missing, or whose CSV holds a different
+    number of events than its score says, stops the rebuild: nothing is guessed. Rewrites the
+    per-forecast file (with the ids) and the summary (aggregates replaced, catalog window,
+    calibration fields and timestamps kept, ``resummarized_at`` added).
+    """
+    per_forecast_path = output_dir / "per_forecast_scores.jsonl"
+    summary_path = output_dir / "prospective_summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    results = [json.loads(line) for line in per_forecast_path.read_text(encoding="utf-8").splitlines()
+               if line.strip()]
+    for r in results:
+        if r.get("observed_event_ids") is not None:
+            continue
+        csv_path = output_dir / "observed_events" / f"{r['forecast_id']}_observed.csv"
+        if not csv_path.is_file():
+            raise SystemExit(f"{csv_path} is missing: cannot count {r['forecast_id']}'s events")
+        ids = _stored_event_ids(csv_path)
+        if len(ids) != int(r["n_observed_events"]):
+            raise SystemExit(f"{csv_path} holds {len(ids)} distinct events, the score says "
+                             f"{r['n_observed_events']}")
+        r["observed_event_ids"] = ids
+    for stale in ("total_observed_events",):     # the pre-2026-10 summed count, misread as events
+        summary.pop(stale, None)
+    summary.update(summarize_results(results) if results else {})
+    summary["resummarized_at"] = format_utc_z(dt.datetime.now(dt.timezone.utc))
+    with open(per_forecast_path, "w", encoding="utf-8", newline="\n") as handle:
+        for r in results:
+            handle.write(json.dumps(r) + "\n")
+    summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8", newline="\n")
+    return summary
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -402,7 +515,22 @@ def main(argv: list[str] | None = None) -> int:
         help="Pool per-cell (probability -> outcome) into calibration_dataset.json "
         "for the calibrator fitter (scripts/fit_calibration.py).",
     )
+    parser.add_argument(
+        "--from-stored",
+        action="store_true",
+        help="Do not fetch or score: rebuild the summary's aggregates from the stored "
+        "per_forecast_scores.jsonl and observed_events/ (resummarize_from_stored).",
+    )
     args = parser.parse_args(argv)
+
+    if args.from_stored:
+        summary = resummarize_from_stored(args.output_dir.resolve())
+        record = summary.get("by_model_version") or {}
+        print("Earthquake prospective summary rebuilt from stored scores")
+        for version, r in sorted(record.items()):
+            print(f"  {version}: {r['n_matured_forecasts']} windows ({r['n_independent_windows']} non-overlapping), "
+                  f"{r['n_distinct_events']} distinct M6+ earthquakes ({r['n_event_windows']} event-windows)")
+        return 0
 
     score_as_of = (
         parse_utc_datetime(args.score_as_of)
@@ -438,10 +566,14 @@ def main(argv: list[str] | None = None) -> int:
             + dt.timedelta(days=int(artifact.get("forecast_horizon_days", 30)))
             for artifact in matured
         )
-        observed_catalog = fetch_usgs_catalog_range(
+        # The truth catalog, AUDITED: an M6+ pull cannot be checked for holes (one M6+ in
+        # 2018-06), so the window is pulled at M4.5+, audited (an empty month or a multi-day gap
+        # raises CatalogIncompleteError -- a missed M6+ would otherwise score as a correct "no"),
+        # then filtered to M6.0+.
+        observed_catalog = fetch_target_catalog(
             earliest,
             latest,
-            min_magnitude=6.0,
+            target_min_magnitude=6.0,
             namespace="earthquake_prospective_score",
             verbose=False,
         )
@@ -469,23 +601,13 @@ def main(argv: list[str] | None = None) -> int:
                 handle.write(json.dumps(result) + "\n")
 
         if calib_acc is not None:
+            pooled = [r for r in per_forecast_results if r.get("model_version") == calib_version]
             calib_path = write_calibration_dataset(output_dir, calib_acc, hazard="earthquake",
-                                                   model_version=calib_version)
+                                                   model_version=calib_version,
+                                                   independent=live_record.version_counts(pooled))
             summary["calibration_dataset"] = str(calib_path)
             summary["calibration_model_version"] = calib_version
             summary["calibration_n"] = int(sum(slot[0] for slot in calib_acc.values()))
-
-        aucs = [result["auc"] for result in per_forecast_results if math.isfinite(result["auc"])]
-        pr_aucs = [result["pr_auc"] for result in per_forecast_results if math.isfinite(result["pr_auc"])]
-        active_aucs = [
-            result["auc_active_cells"]
-            for result in per_forecast_results
-            if math.isfinite(result["auc_active_cells"])
-        ]
-        n_events_total = sum(result["n_observed_events"] for result in per_forecast_results)
-        n_events_active = sum(result["n_events_in_active_cells"] for result in per_forecast_results)
-        briers = [result["brier"] for result in per_forecast_results]
-        info_gains = [result["information_gain_per_event"] for result in per_forecast_results]
 
         summary.update(
             {
@@ -493,54 +615,11 @@ def main(argv: list[str] | None = None) -> int:
                     "start": format_utc_z(earliest),
                     "end": format_utc_z(latest),
                     "n_events": len(observed_catalog),
+                    "completeness_audit": (
+                        f"pulled at M{AUDIT_MAX_MAGNITUDE:.1f}+ and audited (no empty month, no gap over "
+                        f"{CATALOG_MAX_GAP_DAYS:g} d), then filtered to M6.0+"),
                 },
-                "total_observed_events": int(
-                    sum(result["n_observed_events"] for result in per_forecast_results)
-                ),
-                "auc_estimator": AUC_ESTIMATOR,
-                "pr_auc_estimator": PR_AUC_ESTIMATOR,
-                "mean_auc": float(np.mean(aucs)) if aucs else None,
-                "median_auc": float(np.median(aucs)) if aucs else None,
-                "mean_pr_auc": float(np.mean(pr_aucs)) if pr_aucs else None,
-                "mean_auc_active_cells": float(np.mean(active_aucs)) if active_aucs else None,
-                "n_forecasts_with_active_cell_auc": len(active_aucs),
-                "fraction_events_in_active_cells": (
-                    float(n_events_active / n_events_total) if n_events_total else None
-                ),
-                "mean_brier": float(np.mean(briers)) if briers else None,
-                "mean_information_gain_per_event": (
-                    float(np.mean(info_gains)) if info_gains else None
-                ),
-                "event_weighted_information_gain_per_event": (
-                    float(
-                        (
-                            sum(
-                                (
-                                    result["poisson_log_likelihood"]
-                                    - result["uniform_log_likelihood"]
-                                )
-                                for result in per_forecast_results
-                            )
-                        )
-                        / max(
-                            1,
-                            sum(result["n_observed_events"] for result in per_forecast_results),
-                        )
-                    )
-                ),
-                "top_1_hit_rate": float(
-                    np.mean([result["top_1_hit"] for result in per_forecast_results])
-                ),
-                "top_5_hit_rate": float(
-                    np.mean([result["top_5_hit"] for result in per_forecast_results])
-                ),
-                "top_10_hit_rate": float(
-                    np.mean([result["top_10_hit"] for result in per_forecast_results])
-                ),
-                "top_20_hit_rate": float(
-                    np.mean([result["top_20_hit"] for result in per_forecast_results])
-                ),
-                "by_model_version": live_record_by_version(per_forecast_results),
+                **summarize_results(per_forecast_results),
             }
         )
     else:

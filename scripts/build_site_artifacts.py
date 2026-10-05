@@ -140,16 +140,22 @@ def _served_benchmark(hazard: str, model_version: str) -> dict | None:
     t = match["test"]
     if hazard == "earthquake":
         ig = t["ig_per_target"]["value"]
+        # S1's 2023-2025 numbers are a DECLARED SECOND READ of years C0 was already scored on
+        # (amendment E1), not a read-once final test; the information gain is per cell-window
+        # that had an M6+ (ig_per_target = (LL - LL0) / positives), not per earthquake.
+        how = ("a declared second read (reported, never used to decide) of" if t.get("second_read")
+               else "scored once on")
         return {
             "availability": "exact_model_benchmark",
-            "label": (f"Pre-registered programme ({ev['program']}): scored once on {t['when']} "
+            "label": (f"Pre-registered programme ({ev['program']}): {how} {t['when']} "
                       f"({t['n_issue_times']} issue times, {t['n_positive']} M6+ cell-windows); "
-                      f"{ig:+.2f} nats of information per quake over a uniform map."),
+                      f"{ig:+.2f} nats of information per M6+ cell-window over a uniform map."),
             "model_version": model_version,
+            "second_read": bool(t.get("second_read")),
             "auc": round(float(t["auc"]["value"]), 4),
             "auc_ci95": [round(float(x), 4) for x in (t["auc"]["ci"] or [])],
             "brier_skill_score": round(float(t["bss"]["value"]), 4),
-            "information_gain_per_event": round(float(ig), 4),
+            "information_gain_per_positive_cell_window": round(float(ig), 4),
             "n_cases": int(t["n_cell_times"]),
         }
     return {
@@ -1134,20 +1140,11 @@ def _build_verification_summary(pulse: dict) -> dict:
         for artifact in eq_artifacts
         if _artifact_mature_at(artifact) is not None and _artifact_mature_at(artifact) <= score_as_of
     ]
+    from hazardpulse.earthquake import live_record as eq_live_record
+
+    # All versions: the scorer's count and the system backlog (the rollup-violation check binds these).
     eq_scored = int(eq_prospective_summary.get("n_matured_forecasts", 0) or 0)
     eq_backlog = max(0, len(eq_matured) - eq_scored)
-    if eq_scored > 0:
-        eq_status = "prospective_scored"
-        eq_status_label = "Prospective live scoring is active for matured earthquake windows."
-    elif eq_backlog > 0:
-        eq_status = "matured_unscored"
-        eq_status_label = "Matured earthquake windows exist, but they have not been scored yet."
-    elif eq_artifacts:
-        eq_status = "logging_waiting_maturity"
-        eq_status_label = "Prospective earthquake logging is live; the 30-day windows have not matured yet."
-    else:
-        eq_status = "no_live_artifacts"
-        eq_status_label = "No live earthquake replay artifacts are present."
 
     eq_latest = eq_artifacts[-1] if eq_artifacts else {}
     # The live record is THIS version's only: the pooled means mix every version that ever served
@@ -1156,11 +1153,42 @@ def _build_verification_summary(pulse: dict) -> dict:
     eq_exact = _served_benchmark("earthquake", eq_version)
     eq_live = ((eq_prospective_summary.get("by_model_version") or {}).get(eq_version) or {}) if eq_scored > 0 else {}
     eq_live_n = int(eq_live.get("n_matured_forecasts", 0) or 0)
-    eq_live_text = (
-        f"Live record of this version: {eq_live_n} matured 30-day windows scored"
-        + (f", mean AUC {_fmt_float(eq_live.get('mean_auc'))}." if eq_live.get("mean_auc") is not None else ".")
-        if eq_live_n else "This version's live record starts when its first 30-day windows mature."
-    )
+    # Windows overlap (a forecast every few hours, each 30 days long): a live score is quoted only on
+    # distinct earthquakes and non-overlapping windows (hazardpulse.earthquake.live_record).
+    eq_quotable, eq_unquotable_why = eq_live_record.quotable(eq_live)
+    if eq_live_n:
+        n_ev, n_ind = eq_live.get("n_distinct_events"), eq_live.get("n_independent_windows")
+        eq_live_text = (
+            f"Live record of this version: {eq_live_n} overlapping 30-day windows closed"
+            + (f" ({n_ind} non-overlapping)" if n_ind is not None else "")
+            + (f", {n_ev} distinct M6+ earthquakes" if n_ev is not None else "")
+            + (f"; mean AUC over those windows {_fmt_float(eq_live.get('mean_auc'))}."
+               if eq_quotable and eq_live.get("mean_auc") is not None
+               else f"; no live score is quoted yet: {eq_unquotable_why}.")
+        )
+    else:
+        eq_live_text = "This version's live record starts when its first 30-day windows mature."
+
+    # The status describes the SERVED version's windows, never another version's (until 2026-10 the
+    # badge read "Scored" because the retired eq_coherence_v1_0 had scored windows).
+    eq_served_artifacts = [a for a in eq_artifacts if a.get("model_version") == eq_version] if eq_version else []
+    eq_served_matured = sum(1 for a in eq_matured if a.get("model_version") == eq_version) if eq_version else 0
+    if eq_live_n > 0:
+        eq_status = "prospective_scored"
+        eq_status_label = "Matured 30-day windows of the published model version have been scored."
+    elif eq_served_matured > 0:
+        eq_status = "matured_unscored"
+        eq_status_label = ("Matured 30-day windows of the published model version exist, but they have not been "
+                           "scored yet.")
+    elif eq_served_artifacts:
+        eq_status = "logging_waiting_maturity"
+        eq_status_label = ("The published model version's forecasts are being recorded; none of its 30-day windows "
+                           "has closed yet"
+                           + (f" (scored windows of earlier versions: {eq_scored}, each version's record is kept "
+                              "under its own name)." if eq_scored > eq_live_n else "."))
+    else:
+        eq_status = "no_live_artifacts"
+        eq_status_label = "No replay artifact of the published earthquake model version is present."
     hazards.append(
         {
             "key": "eq",
@@ -1176,18 +1204,20 @@ def _build_verification_summary(pulse: dict) -> dict:
             "verification_status_label": eq_status_label,
             "metric_source": (
                 "retrospective_holdout_exact_model" if eq_exact
-                else ("prospective_live" if eq_live_n else "no_exact_model_benchmark")
+                else ("prospective_live" if eq_quotable else "no_exact_model_benchmark")
             ),
             "metric_source_label": (
                 (eq_exact["label"] + " " + eq_live_text) if eq_exact
                 else (eq_live_text if eq_live_n
                       else "The current live earthquake model does not yet have an exact benchmark in this repo.")
             ),
-            "auc": eq_exact["auc"] if eq_exact else (eq_live.get("mean_auc") if eq_live_n else None),
-            "brier": None if eq_exact else (eq_live.get("mean_brier") if eq_live_n else None),
+            "auc": eq_exact["auc"] if eq_exact else (eq_live.get("mean_auc") if eq_quotable else None),
+            "brier": None if eq_exact else (eq_live.get("mean_brier") if eq_quotable else None),
             "brier_skill_score": eq_exact.get("brier_skill_score") if eq_exact else None,
             "homepage_line": (
-                f"AUC {_fmt_float(eq_exact['auc'])} pre-registered final test"
+                (f"AUC {_fmt_float(eq_exact['auc'])}, "
+                 + ("pre-registered second read of years already scored" if eq_exact.get("second_read")
+                    else "pre-registered final test"))
                 if eq_exact
                 else (f"{eq_live_n} matured windows of this model scored" if eq_live_n
                       else f"{len(eq_artifacts)} frozen forecasts · {eq_backlog} matured backlog")
@@ -1215,7 +1245,9 @@ def _build_verification_summary(pulse: dict) -> dict:
                 "status": eq_prospective_summary.get("status", "not_run"),
                 "scored_as_of": eq_prospective_summary.get("scored_as_of"),
                 "message": eq_prospective_summary.get("message"),
-                "top_5_hit_rate": eq_prospective_summary.get("top_5_hit_rate"),
+                # the published version's own, and only once its record is quotable (the pooled rate was
+                # the retired eq_coherence_v1_0's, shown under S1)
+                "top_5_hit_rate": eq_live.get("top_5_hit_rate") if eq_quotable else None,
                 "this_model_version": eq_live or None,
             },
             "exact_model_benchmark": eq_exact,

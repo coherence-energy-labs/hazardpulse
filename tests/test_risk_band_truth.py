@@ -79,31 +79,33 @@ def test_enrich_cells_with_band_fn_never_contradicts(tmp_path):
 
 
 def test_earthquake_trust_step_publishes_consistent_bands(tmp_path):
+    """The calibrated path maps the WHOLE scored grid (calibrate_scored_grid) and the listed cells are
+    banded from what they publish -- the calibrated value -- so no band describes the raw score."""
+    import datetime as dt
+
+    from hazardpulse.earthquake import operational_forecast as of
+
     eq = _eq_module()
     tf = _shrinking_forecaster(tmp_path)
-    cells = [{"probability": p, "risk_band": eq._risk_band(p), "conditions_met": 0}
-             for p in (0.996, 0.98, 0.7, 0.2)]
-    eq.apply_trust_layer(cells, tf, issued_at="2026-10-01T22:00:00Z")
+    grid = np.full(of.N_CELLS, 1e-4)
+    for flat, p in ((40 * of.N_LON + 160, 0.996), (41 * of.N_LON + 160, 0.98), (10 * of.N_LON + 20, 0.7),
+                    (11 * of.N_LON + 21, 0.2)):
+        grid[flat] = p
+    operational = eq.calibrate_scored_grid(
+        {"probability": grid, "lambda_long": grid * 0.5, "lambda_short": grid * 0.5}, tf)
+    cells = eq.score_grid_cells([], candidate_events=[], now=dt.datetime(2026, 10, 1, tzinfo=dt.timezone.utc),
+                                operational=operational)
+    eq.check_published_bands(cells)                       # raises on any contradiction
     assert band_contradictions(cells, eq._risk_band) == []
-    top = cells[0]
-    assert top["raw_probability"] >= 0.5 and top["raw_risk_band"] == "critical"
-    assert top["risk_band"] == eq._risk_band(top["probability"])
+    top = next(c for c in cells if (c["row"], c["col"]) == (40, 160))
+    assert top["raw_probability"] == pytest.approx(0.996) and eq._risk_band(top["raw_probability"]) == "critical"
+    assert top["probability"] < 0.5 and top["risk_band"] == eq._risk_band(top["probability"])
+    assert eq.listed_cells_off_grid(cells, operational["probability"]) == []
 
 
-def test_earthquake_trust_step_refuses_a_contradiction(tmp_path, monkeypatch):
-    """If enrichment ever stops re-deriving the band, the run fails loudly instead of
-    publishing (the RiskBandContradiction is not swallowed by the trust-layer guard)."""
+def test_earthquake_trust_step_refuses_a_contradiction():
+    """A band that contradicts the published probability fails the run loudly instead of publishing."""
     eq = _eq_module()
-    tf = _shrinking_forecaster(tmp_path)
-    import hazardpulse.trust.scoring as scoring
-
-    real = scoring.enrich_cells
-
-    def no_band(cells, forecaster, **kw):
-        kw.pop("band_fn", None)
-        return real(cells, forecaster, **kw)
-
-    monkeypatch.setattr(scoring, "enrich_cells", no_band)
-    cells = [{"probability": 0.996, "risk_band": "critical"}]
     with pytest.raises(eq.RiskBandContradiction):
-        eq.apply_trust_layer(cells, tf, issued_at="2026-10-01T22:00:00Z")
+        eq.check_published_bands([{"probability": 0.0454, "risk_band": "critical"}])
+    eq.check_published_bands([{"probability": 0.0454, "risk_band": eq._risk_band(0.0454)}])   # can pass

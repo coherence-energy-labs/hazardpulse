@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-05T02:53:09Z",
+  "generated_at": "2026-10-05T03:25:58Z",
   "score_as_of": "2026-10-05T02:00:00Z",
   "system": {
     "frozen_forecasts": 2551,
@@ -12,22 +12,23 @@
     "alerts": [
       "10 matured forecast windows are waiting for scoring."
     ],
-    "rollup_violations": []
+    "rollup_violations": [],
+    "ledger_violations": []
   },
   "hazards": [
     {
       "key": "eq",
       "hazard": "earthquake",
       "model_version": "eq_operational_S1_gear1_v1-d409c534bb4c",
-      "verification_status": "prospective_scored",
-      "status_badge": "Scored",
-      "verification_status_label": "Prospective live scoring is active for matured earthquake windows.",
+      "verification_status": "logging_waiting_maturity",
+      "status_badge": "Waiting",
+      "verification_status_label": "The published model version's forecasts are being recorded; none of its 30-day windows has closed yet (scored windows of earlier versions: 613, each version's record is kept under its own name).",
       "metric_source": "retrospective_holdout_exact_model",
-      "metric_source_label": "Pre-registered programme (docs/EARTHQUAKE_FORECAST_PROGRAM.md): scored once on 2023-2025 (153 issue times, 1384 M6+ cell-windows); +2.60 nats of information per quake over a uniform map. This version's live record starts when its first 30-day windows mature.",
+      "metric_source_label": "Pre-registered programme (docs/EARTHQUAKE_FORECAST_PROGRAM.md): a declared second read (reported, never used to decide) of 2023-2025 (153 issue times, 1384 M6+ cell-windows); +2.60 nats of information per M6+ cell-window over a uniform map. This version's live record starts when its first 30-day windows mature.",
       "auc": 0.9687,
       "brier": null,
       "brier_skill_score": 0.0208,
-      "homepage_line": "AUC 0.969 pre-registered final test",
+      "homepage_line": "AUC 0.969, pre-registered second read of years already scored",
       "forecast_storage": {
         "n_replay_artifacts": 727,
         "n_matured_forecasts": 613,
@@ -51,20 +52,21 @@
         "status": "ok",
         "scored_as_of": "2026-10-05T02:50:41Z",
         "message": null,
-        "top_5_hit_rate": 0.01957585644371941,
+        "top_5_hit_rate": null,
         "this_model_version": null
       },
       "exact_model_benchmark": {
         "availability": "exact_model_benchmark",
-        "label": "Pre-registered programme (docs/EARTHQUAKE_FORECAST_PROGRAM.md): scored once on 2023-2025 (153 issue times, 1384 M6+ cell-windows); +2.60 nats of information per quake over a uniform map.",
+        "label": "Pre-registered programme (docs/EARTHQUAKE_FORECAST_PROGRAM.md): a declared second read (reported, never used to decide) of 2023-2025 (153 issue times, 1384 M6+ cell-windows); +2.60 nats of information per M6+ cell-window over a uniform map.",
         "model_version": "eq_operational_S1_gear1_v1-d409c534bb4c",
+        "second_read": true,
         "auc": 0.9687,
         "auc_ci95": [
           0.9644,
           0.9726
         ],
         "brier_skill_score": 0.0208,
-        "information_gain_per_event": 2.6047,
+        "information_gain_per_positive_cell_window": 2.6047,
         "n_cases": 1790100
       },
       "related_benchmark": {
@@ -181,7 +183,12 @@
         "supported": true,
         "path": "/data/tornado-ledger.jsonl",
         "n_rows": 1825,
-        "prev_hash_mismatches": 0
+        "prev_hash_mismatches": 0,
+        "content_hash_verified": 1655,
+        "content_hash_verified_without_forecast_id": 170,
+        "content_hash_legacy_note": "170 rows (2026-03-22T04:11:35.843464Z to 2026-04-13T02:14:12.996567Z) were hashed before forecast_id was added to them; each verifies with forecast_id removed",
+        "content_hash_mismatches": 0,
+        "content_hash_mismatched_rows": []
       },
       "prospective": {
         "summary_path": "results/tornado_prospective/prospective_summary.json",
@@ -203,7 +210,7 @@
           "bss_vs_sample_climatology": null,
           "n_with_causal_reference": 939,
           "brier_causal_climatology": 7.24e-06,
-          "bss_vs_causal_climatology": 0.9986,
+          "bss_vs_causal_climatology": null,
           "n_forecasts": 7,
           "first_issued_at": "2026-10-03T03:39:53Z",
           "last_issued_at": "2026-10-04T00:21:28Z"

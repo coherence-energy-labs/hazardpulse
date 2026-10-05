@@ -59,15 +59,41 @@ def _first_issue_of(d: SiteData, key: str, version: str) -> str | None:
     return min(times) if times else None
 
 
+def _eq_live_row(version: str, r: dict) -> tuple[str, str, str]:
+    """(forecasts closed, events observed, score) for one earthquake model version.
+
+    A 30-day forecast is issued several times a day, so its windows overlap and one earthquake falls
+    in ~100 of them: the record counts DISTINCT earthquakes (USGS event ids) and non-overlapping
+    windows, and quotes a score only through ``live_record.quotable`` (the retired model's 613
+    windows held 64 earthquakes, which this table once showed as 6,955)."""
+    from hazardpulse.earthquake import live_record
+
+    n = int(r.get("n_matured_forecasts") or 0)
+    n_ind, n_ev = r.get("n_independent_windows"), r.get("n_distinct_events")
+    closed = f"{n:,}" + (f" ({int(n_ind):,} non-overlapping)" if n_ind is not None else "")
+    events = f"{int(n_ev):,}" if n_ev is not None else "not counted"
+    ok, why = live_record.quotable(r)
+    if not n:
+        score = "nothing closed yet"
+    elif not ok:
+        score = f"no score yet: {esc(why)}"
+    else:
+        auc, ig = r.get("mean_auc"), r.get("event_weighted_information_gain_per_event")
+        score = f"ranking {fmt.pct(auc, 1)}" if auc is not None else "&mdash;"
+        if ig is not None:
+            score += f"; information gain per M6+ earthquake per window vs a uniform map {fmt.num(ig, 2)}"
+        score += " (averaged over overlapping windows)"
+    return closed, events, score
+
+
 def _live_rows(d: SiteData) -> list[list[str]]:
     """Every model version's live record, published or retired."""
     rows = []
     served = {k: (d.verification_by_key.get(k) or {}).get("model_version") for k in HAZARDS}
     eq = _prospective(d, "earthquake").get("by_model_version") or {}
-    for version, r in sorted(eq.items()):
-        n_ev = int(r.get("n_observed_events") or 0)
-        rows.append(["eq", version, int(r.get("n_matured_forecasts") or 0), n_ev, r.get("mean_auc"),
-                     r.get("event_weighted_information_gain_per_event"), "information gain per quake vs a uniform map"])
+    eq_out = [[common.hazard_label("eq"), f"<code>{esc(version)}</code>",
+               "published" if version == served.get("eq") else "retired", *_eq_live_row(version, r)]
+              for version, r in sorted(eq.items())]
     to = _prospective(d, "tornado").get("pooled_by_model_version") or {}
     for version, r in sorted(to.items()):
         rows.append(["to", version, int(r.get("n_storm_forecasts") or 0), int(r.get("n_positive") or 0),
@@ -76,7 +102,7 @@ def _live_rows(d: SiteData) -> list[list[str]]:
     if hu:
         rows.append(["hu", "all published hurricane numbers", int(hu.get("total_storm_predictions") or 0),
                      int(hu.get("total_ri_events") or 0), None, None, ""])
-    out = []
+    out = eq_out
     for key, version, n, n_ev, auc, skill, skill_name in rows:
         status = ("published" if version == served.get(key) else
                   ("&mdash;" if key == "hu" else "retired"))
@@ -111,7 +137,8 @@ def _hazard_record_card(d: SiteData, key: str) -> str:
             rows.append(((f"Second look at {fmt.years(t.get('when'))}" if t.get("second_read")
                           else f"Test, {fmt.years(t.get('when'))} (scored once)"),
                          f"ranking accuracy {fmt.pct(auc.get('value'), 1)}; information gain "
-                         f"{fmt.num((t.get('ig_per_target') or {}).get('value'), 2)} nats per quake over a uniform map"))
+                         f"{fmt.num((t.get('ig_per_target') or {}).get('value'), 2)} nats per M6+ cell-window "
+                         "(a cell&rsquo;s 30 days that held an M6+) over a uniform map"))
         elif key == "hu":
             rows.append((f"Test, {esc(t.get('when'))} season (scored once)",
                          f"DTOPS ranking accuracy {fmt.pct(t.get('auc'), 1)}, Brier skill {fmt.num(t.get('bss'), 2)}; "
@@ -152,9 +179,11 @@ def _published_live(d: SiteData, key: str, version: str) -> str:
                 t = fmt.parse_time(first) + dt.timedelta(days=30)
                 return f"none yet: its first 30-day window closes on {fmt.date(t)}"
             return "none yet"
-        n_ev = int(r.get("n_observed_events") or 0)
-        return (f"{int(r.get('n_matured_forecasts') or 0):,} closed forecasts, {n_ev:,} M6+ events"
-                + (f"; ranking accuracy {fmt.pct(r.get('mean_auc'), 1)}" if n_ev >= LIVE_MIN_EVENTS else ""))
+        closed, events, score = _eq_live_row(version, r)
+        n_ev = r.get("n_distinct_events")
+        events = (f"{events} distinct M6+ earthquake{'s' if n_ev != 1 else ''}" if n_ev is not None
+                  else "distinct M6+ earthquakes not counted")
+        return f"{closed} closed 30-day forecasts (they overlap), {events}; {score}"
     if key == "to":
         r = (_prospective(d, "tornado").get("pooled_by_model_version") or {}).get(version)
         if not r:
@@ -230,7 +259,9 @@ def verification(d: SiteData) -> str:
                              intro="Every model version that has published a number, including retired ones. A score "
                                    f"is shown only once {LIVE_MIN_EVENTS} or more events have been observed for that "
                                    "version: with fewer, a model that always says &ldquo;no&rdquo; would look as good "
-                                   "as a skilful one.")
+                                   "as a skilful one. Earthquake forecasts are issued several times a day for 30 "
+                                   "days ahead, so their windows overlap: each earthquake is counted once, and a "
+                                   "score also needs two windows that do not overlap.")
             + common.section("calibration", "Does a 10% forecast come true 1 time in 10?", _reliability(d),
                              intro="Calibration compares what was forecast with what happened. The published tornado "
                                    "model&rsquo;s 2025 test, split by how high the forecast was. Live calibration "

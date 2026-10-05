@@ -89,6 +89,7 @@ __all__ = [
     "load_artifact",
     "load_stack",
     "omori_window_integral",
+    "served_sha256",
     "sha256_text_file",
     "stack_model_version",
     "target_matrix",
@@ -695,6 +696,32 @@ class LoadedStack:
     b: float
     g_log10: np.ndarray
     meta: dict
+    sha256: str = ""          # CRLF-normalised SHA-256 of the stack file (sha256_text_file)
+
+
+SERVED_DIGEST_SCHEMA = "hazardpulse/earthquake-served-digest/v1"
+
+
+def served_sha256(art: LoadedArtifact, stack: LoadedStack | None = None) -> str:
+    """The digest of EVERYTHING that computes the published probability.
+
+    Without a stack it is the artifact's own ``sha256``. With the S1 stack (amendment E1) the
+    published number is the stack applied to the base artifact's forecast, and the stack names
+    its base only by a 12-hex prefix of the base's digest, so a receipt carrying either file's
+    hash alone would not pin the served pair. The digest is
+
+        sha256( "hazardpulse/earthquake-served-digest/v1\\nbase <base sha256>\\nstack <stack sha256>\\n" )
+
+    over the two CRLF-normalised file digests: anyone holding both files recomputes it with
+    ``sha256_text_file``.
+    """
+    if stack is None:
+        return art.sha256
+    if not stack.sha256 or stack.base_model_version != art.model_version:
+        raise OperationalArtifactError(
+            f"stack {stack.model_version!r} is not bound to the served base {art.model_version!r}")
+    text = f"{SERVED_DIGEST_SCHEMA}\nbase {art.sha256}\nstack {stack.sha256}\n"
+    return hashlib.sha256(text.encode("ascii")).hexdigest()
 
 
 def stack_model_version(path) -> str:
@@ -733,9 +760,10 @@ def load_stack(path, base: LoadedArtifact) -> LoadedStack:
     if g.shape != (N_CELLS,) or not np.all(np.isfinite(g)):
         raise OperationalArtifactError(f"{path}: map is not {N_CELLS} finite values")
     co = meta["coefficients"]
-    return LoadedStack(path=path, model_name=meta["model_name"], model_version=stack_model_version(path),
+    sha = sha256_text_file(path)
+    return LoadedStack(path=path, model_name=meta["model_name"], model_version=f"{meta['model_name']}-{sha[:12]}",
                        base_model_version=base.model_version, a=float(co["a"]), c=float(co["c"]),
-                       b=float(co["b"]), g_log10=g, meta=meta)
+                       b=float(co["b"]), g_log10=g, meta=meta, sha256=sha)
 
 
 def apply_stack(stack: LoadedStack, p_base: np.ndarray) -> np.ndarray:
