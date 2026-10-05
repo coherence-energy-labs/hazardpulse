@@ -95,6 +95,28 @@ tornado deploy or merge. Cheap fix: give `earthquake-score.yml` the same deploy 
 2. **E2.** The margin over smoothed seismicity is at the edge of zero.
    - Decide whether this is power (number of M6+ quakes) or a real limit, with a per-year
      breakdown and a power estimate before any new features.
+3. **E3. An earthquakes-only catalog** (recorded 2026-10-05 from the integrity audit; not yet
+   pre-registered). Every model in the programme (A, B, C0, S1) is fitted and scored on ComCat
+   rows of every event type and every depth.
+   - Witness, explosions: 70 of the 7,498 M6+ rows 1973 to 2026-10-01 in the programme's own
+     `comcat_m4.5_<year>.csv` files are not earthquakes (69 `nuclear explosion`, 1 `explosion`;
+     41 in Kazakhstan, 12 Nevada, 8 Russia, 6 China; the last one North Korea, 2017-09-03). They
+     enter the long-term map as M5+ seismicity and the targets as M6+ "earthquakes". In the served
+     forecast `eq_fcst_20261004_2100` the Semipalatinsk test-site cell (row 54, col 129) has
+     P = 5.90e-4, 51x the central-Kazakhstan cell (row 54, col 125, 1.15e-5) and 44x the grid
+     median (1.34e-5); the catalog's last M6+ explosion there is 1989-10-19.
+   - Reproduce: count `type` among M >= 6 rows of `.cache/earthquake/program/comcat_m4.5_*.csv`
+     before the cutoff; read the two cells from that replay's `probability_grid`.
+   - Witness, depth: there is no depth limit. 1,540 of the 7,498 M6+ rows (20.5%) are deeper than
+     70 km (1,038 at 70-300 km, 502 deeper), while GEAR1, the term S1 adds, is a forecast of
+     shallow (0-70 km) seismicity.
+   - Experiment: candidates (a) `type == "earthquake"` only, (b) (a) plus a depth split
+     (shallow targets scored against GEAR1-shallow, intermediate/deep against the rest), with the
+     served S1 as the control reproduced bit for bit. Pre-register and tag first; refit every rate
+     and the trees on CHOOSE, decide on DEV, report FINAL as a further read.
+   - Carried rule: as E1 (DEV paired IG 95% interval above zero against the control). The
+     targets change with (a), so the paired comparison scores both arms on the earthquakes-only
+     targets and reports the unfiltered targets beside them.
 
 ### Tornado
 
