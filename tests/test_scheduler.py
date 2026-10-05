@@ -83,11 +83,32 @@ def test_tornado_risk_is_elevated_by_the_forecast_or_a_warning_and_unknown_is_no
     assert not schedule.tornado_elevated({"hazards": [{"key": "eq", "probability": 0.9}]}, 0)[0]
 
 
-def test_every_scheduled_workflow_exists_and_has_no_cron_of_its_own():
-    """The scheduler is the only clock: a scorer with its own cron as well would run twice."""
-    for workflow in schedule.WORKFLOWS.values():
+def test_every_scorer_gates_its_own_cron_and_keeps_the_queue_for_scoring_jobs():
+    """Two independent clocks, one rule: each scorer's off-peak cron starts a `due` gate that lets the scoring
+    job run only when due (GitHub left the new scheduler's own cron unfired for its first 3 slots), and the
+    shared queue holds scoring jobs only. Plain text, not a YAML parser (CI installs no PyYAML)."""
+    for hazard, workflow in schedule.WORKFLOWS.items():
         text = (ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
-        assert "workflow_dispatch" in text, workflow
-        assert "cron:" not in text, workflow
+        assert "workflow_dispatch" in text and "cron:" in text, workflow
+        cron = text.split("cron:")[1].split("\n")[0]
+        assert not cron.strip().strip('"').startswith("0 "), (workflow, "the top of the hour is when GitHub drops runs")
+        assert f"python scripts/ci/schedule.py --hazard {hazard}" in text, workflow
+        assert "needs: due" in text and "needs.due.outputs.run == 'true'" in text, workflow
+        top, jobs = text.split("\njobs:\n", 1)
+        assert "concurrency:" not in top, (workflow, "a workflow-level queue would hold the gates too")
+        assert "group: hazardpulse-scoring" in jobs.split("\n  score:\n", 1)[1], workflow
     sched = (ROOT / ".github" / "workflows" / "scheduler.yml").read_text(encoding="utf-8")
     assert "scripts/ci/schedule.py" in sched and "actions: write" in sched
+
+
+def test_a_gate_does_not_see_itself_and_a_gate_that_skipped_is_not_a_scoring_run():
+    def run(i, status, conclusion=None, at="2026-10-05T10:00:00Z", scored=True):
+        return {"databaseId": i, "status": status, "conclusion": conclusion, "createdAt": at, "startedAt": at,
+                "scored": scored}
+    runs = [run(9, "in_progress", at="2026-10-05T12:13:00Z"),                       # the asking gate itself
+            run(8, "completed", "success", "2026-10-05T11:43:00Z", scored=False),    # a gate that skipped
+            run(7, "completed", "success", "2026-10-05T10:05:00Z")]                  # the last real run
+    last, in_flight = schedule.summarize_runs(runs, exclude_run_id=9)
+    assert in_flight is False and last == t("2026-10-05 10:05")
+    last, in_flight = schedule.summarize_runs(runs)                                  # seen from outside: busy
+    assert in_flight is True
