@@ -1,0 +1,43 @@
+name: Scheduler
+
+# The one clock for the scorers. GitHub's cron dropped or delayed most scheduled scoring runs (2026-10-01
+# to 05: a 2-hour tornado cron ran every 5.5 h at the median, the hurricane scorer went 23 h without a
+# run with three storms active), so the scorers have no cron of their own: this job runs at four off-peak
+# minutes an hour, works out from the run history which scorer is due, and dispatches it.
+# The rules are in scripts/ci/schedule.py; tests/test_scheduler.py pins them.
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: scheduler
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # only the script and the latest pulse: the full repository is ~200 MB and checking it out took
+      # 83 s of every tornado run
+      - name: Checkout (the scheduler and the latest pulse only)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 1
+          sparse-checkout: |
+            scripts/ci/schedule.py
+            dist/data/live-pulse.json
+          sparse-checkout-cone-mode: false
+
+      - name: Dispatch the scorers that are due
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python scripts/ci/schedule.py

@@ -14,9 +14,14 @@ for attempt in 1 2 3; do
     exit 0
   fi
   echo "push rejected (${branch} moved); rebasing onto ${remote}/${branch} (attempt ${attempt})"
-  if ! git pull --rebase "$remote" "$branch"; then
+  # files the job changed but does not commit must not block the rebase: on 2026-10-03 an earthquake run
+  # lost its forecast to "cannot pull with rebase: You have unstaged changes", reported as a conflict.
+  # --autostash sets them aside and puts them back; the list is printed so the cause is never hidden.
+  git status --short | grep -v '^[AMDR] ' | head -20 || true
+  if ! git pull --rebase --autostash "$remote" "$branch"; then
     git rebase --abort || true
     echo "::error::rebase conflict: another writer changed the same generated files; nothing was pushed"
+    git status --short | head -40 || true
     exit 1
   fi
 done

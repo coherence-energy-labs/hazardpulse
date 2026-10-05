@@ -4,10 +4,9 @@ env:
   HAZARDPULSE_SIGNING_KEY: ${{ secrets.HAZARDPULSE_SIGNING_KEY }}
 
 on:
-  schedule:
-    # Run every 6 hours to accumulate data while building the site.
-    # Increase frequency when going live to public.
-    - cron: "30 */6 * * *"
+  # Dispatched by scheduler.yml (scripts/ci/schedule.py), which decides when this scorer is due. Its own
+  # cron was removed 2026-10-05: GitHub dropped or delayed most scheduled runs (measured in schedule.py).
+  # Once per 6-hour slot (the forecast is stamped 00/06/12/18 UTC).
   workflow_dispatch:
 
 concurrency:

@@ -141,11 +141,15 @@ def rings(geojson: Path, keep=lambda props: True) -> list[list[list[float]]]:
     return out
 
 
-GLOBE_TEXTURE = ROOT / "dist" / "assets" / "maps" / "land-2048.png"
+# WebP at quality 88: 85 KB against the PNG's 135 KB. Measured in the shader's own terms (its
+# smoothstep(0.25, 0.75) land weight): the largest error is 0.14 at a few coastline pixels, and 0.008% of
+# pixels change side of 0.5 (2026-10-05).
+GLOBE_TEXTURE = ROOT / "dist" / "assets" / "maps" / "land-2048.webp"
+GLOBE_TEXTURE_QUALITY = 88
 
 
 def globe_texture(geojson: Path, out: Path = GLOBE_TEXTURE, width: int = 2048, supersample: int = 3) -> None:
-    """The globe's land mask: an equirectangular 8-bit image (land 255, sea 0) of Natural Earth's 1:50m land,
+    """The globe's land mask: an equirectangular 8-bit image (land 255, sea 0; WebP) of Natural Earth's 1:50m land,
     drawn at ``supersample`` times the size and filtered down so coastlines are anti-aliased. The globe's
     shader samples it; nothing else does."""
     from PIL import Image, ImageDraw
@@ -167,7 +171,7 @@ def globe_texture(geojson: Path, out: Path = GLOBE_TEXTURE, width: int = 2048, s
                 draw.polygon(xy(hole), fill=0)
     img = img.resize((width, width // 2), Image.LANCZOS)
     out.parent.mkdir(parents=True, exist_ok=True)
-    img.save(out, optimize=True)
+    img.save(out, "WEBP", quality=GLOBE_TEXTURE_QUALITY, method=6)
 
 
 def main(argv: list[str] | None = None) -> int:

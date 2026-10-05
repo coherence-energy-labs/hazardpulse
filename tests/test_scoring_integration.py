@@ -17,7 +17,12 @@ def _write_calibration(models_dir, hazard="earthquake"):
     p = rng.uniform(0, 1, 8000)
     y = (rng.uniform(0, 1, p.size) < p).astype(float)
     cal = VennAbersCalibrator().fit(p, y)
-    record = {"hazard": hazard, "model_version": "eq_coherence_v1_0",
+    # the evidence a fitted record carries (scripts/fit_calibration.py); without it the scorers refuse
+    # the curve (hazardpulse.trust.scoring.calibrator_admissible)
+    raw_brier = float(np.mean((p - y) ** 2))
+    record = {"hazard": hazard, "model_version": "eq_coherence_v1_0", "inflated": False,
+              "n_calibration": int(p.size), "n_positive": int(y.sum()),
+              "metrics_before": {"brier": raw_brier}, "metrics_after_heldout": {"brier": raw_brier * 0.99},
               "calibrator": cal.to_dict()}
     path = models_dir / f"{hazard}_calibration.json"
     path.write_text(json.dumps(record), encoding="utf-8")

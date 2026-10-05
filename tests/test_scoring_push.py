@@ -85,6 +85,22 @@ def test_a_stale_job_rebases_onto_the_moved_branch_and_both_commits_land(repos):
     assert "hurricane data" in msgs and "earthquake data" in msgs
 
 
+def test_files_the_job_changed_but_does_not_commit_do_not_block_the_rebase(repos):
+    """2026-10-03T16:33Z: an earthquake run lost its forecast to "cannot pull with rebase: You have
+    unstaged changes" (a tracked file it modified outside dist/), reported as a rebase conflict."""
+    remote, a, b = repos
+    (a / "eq.json").write_text("earthquake\n", encoding="utf-8")
+    _git(a, "add", "eq.json"); _git(a, "commit", "-q", "-m", "earthquake data"); _git(a, "push", "-q", "origin", "HEAD:main")
+    (b / "hu.json").write_text("hurricane\n", encoding="utf-8")
+    _git(b, "add", "hu.json"); _git(b, "commit", "-q", "-m", "hurricane data")
+    (b / "shared.txt").write_text("touched by the job, not committed\n", encoding="utf-8")   # unstaged
+    r = _run_script(b)
+    assert r.returncode == 0, r.stdout + r.stderr
+    head = _git(a, "ls-remote", str(remote), "refs/heads/main").split()[0]
+    assert "hurricane data" in _git(b, "log", "--format=%s", head)
+    assert (b / "shared.txt").read_text(encoding="utf-8") == "touched by the job, not committed\n"   # put back
+
+
 def test_a_conflicting_writer_fails_loudly_and_nothing_is_forced(repos):
     remote, a, b = repos
     (a / "shared.txt").write_text("from a\n", encoding="utf-8")

@@ -435,11 +435,22 @@ def _ensure_live_publish_artifacts() -> tuple[dict, dict]:
             "storms": tornadoes.get("storms", []),
         }
         replay_path = REPLAY_DIR / f"{forecast_id}.json"
-        _write_json(replay_path, artifact)
+        if replay_path.exists():
+            # issued, so frozen: never rewritten (its hashes are in the provenance envelopes)
+            _write_json(LIVE_TORNADOES_PATH, tornadoes)
+        else:
+            # ONE object for the record and the live file, so git stores the forecast once. Written as
+            # two different documents, every tornado run committed the same ~1.2 MB of storms twice:
+            # 74 KB compressed of a ~170 KB commit (measured 2026-10-05). The record takes the live
+            # file's three extra fields; the live file (and /api/v1/live/tornado) gains the record's.
+            for key in ("disclaimer", "updated_at", "recent_predictions"):
+                if key in tornadoes:
+                    artifact[key] = tornadoes[key]
+            _write_json(replay_path, artifact)
+            _write_json(LIVE_TORNADOES_PATH, artifact)
         _upsert_replay_index_item(replay_index, forecast_id, replay_path)
         update_hazard("to", forecast_id)
         stamp_hazard("to", tornadoes_updated)
-        _write_json(LIVE_TORNADOES_PATH, tornadoes)
 
     eq_hazard = next((item for item in pulse.get("hazards", []) if item.get("key") == "eq"), {})
     eq_forecast_id = eq_hazard.get("forecast_id")
@@ -624,11 +635,15 @@ def _load_calibration_metrics() -> dict:
     measured on the histogram the calibrator was fit to (ECE ~0 by construction), so
     a hazard without a held-out measurement counts as calibration-not-yet-measured.
     """
+    from hazardpulse.trust.scoring import calibrator_admissible
+
     metrics: dict[str, dict] = {}
     for name in ("earthquake", "tornado", "hurricane"):
         rec = _read_json(ROOT / "results" / "calibration" / f"{name}_calibration.json", {})
         heldout = rec.get("metrics_after_heldout") if isinstance(rec, dict) else None
-        if heldout:
+        # only a calibrator that is actually applied describes the published numbers: the tornado one
+        # fitted on zero tornadoes passed G4 on ECE 0.037 while it was inflating them 567-1,822x
+        if heldout and calibrator_admissible(rec)[0]:
             metrics[name] = heldout
     return metrics
 

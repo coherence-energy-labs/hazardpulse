@@ -117,6 +117,7 @@ def fit_one(dataset_path: Path, out_path: Path, *, model_version: str,
         "model_version": data.get("model_version") or model_version,
         "fitted_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "n_calibration": int(np.sum(total)),
+        "n_positive": int(np.sum(pos)),
         "n_groups": int(scores.size),
         "inflated": bool(cal.inflated),
         "metrics_before": before,
@@ -126,6 +127,11 @@ def fit_one(dataset_path: Path, out_path: Path, *, model_version: str,
         "calibrator": cal.to_dict(),
         "source_dataset": str(dataset_path),
     }
+    # the verdict the scorers apply (hazardpulse.trust.scoring.calibrator_admissible), written into the
+    # record so a reader sees at once whether this curve reaches the published numbers
+    from hazardpulse.trust.scoring import calibrator_admissible
+
+    payload["admissible"], payload["admissible_reason"] = calibrator_admissible(payload)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload

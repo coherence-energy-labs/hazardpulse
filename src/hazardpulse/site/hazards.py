@@ -49,7 +49,7 @@ TORNADO = Hazard(
     window="60 minutes", window_short="60 min",
     coverage=("every thunderstorm NOAA&rsquo;s ProbSevere system tracks on radar over and near the contiguous "
               "United States"),
-    schedule="every 2 hours", max_age_hours=6,
+    schedule="every 2 hours, or every 30 minutes while tornado risk is elevated", max_age_hours=6,
     official=(("National Weather Service", "https://www.weather.gov/"),
               ("Storm Prediction Center", "https://www.spc.noaa.gov/")),
 )

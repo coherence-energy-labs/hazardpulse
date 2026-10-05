@@ -77,7 +77,7 @@ def test_versioned_assets_carry_the_hash_of_the_file_they_name():
     """/assets is cached for a year: a URL must change whenever its file does."""
     text = (DIST / "index.html").read_text(encoding="utf-8")
     refs = re.findall(r'/assets/([^"?#]+)\?v=([0-9a-f]{10})', text)
-    assert {"styles.css", "site-shell.js", "hp-mark.svg", "app.js", "maps/land-2048.png"} <= {r[0] for r in refs}
+    assert {"styles.css", "site-shell.js", "hp-mark.svg", "app.js", "maps/land-2048.webp"} <= {r[0] for r in refs}
     for name, v in refs:
         data = (DIST / "assets" / name).read_bytes().replace(b"\r\n", b"\n")
         assert hashlib.sha256(data).hexdigest()[:10] == v, name
@@ -144,11 +144,11 @@ def test_the_live_hero_and_its_script_are_on_the_live_pages_and_nowhere_else():
 
 
 def test_the_globe_texture_is_a_land_mask_the_right_way_up():
-    """The globe's shader reads land-2048.png as equirectangular, north at the top: Earth is 29% land."""
+    """The globe's shader reads land-2048.webp as equirectangular, north at the top: Earth is 29% land."""
     np = pytest.importorskip("numpy")
     Image = pytest.importorskip("PIL.Image")
-    img = Image.open(DIST / "assets" / "maps" / "land-2048.png")
-    assert img.size == (2048, 1024) and img.mode == "L"
+    img = Image.open(DIST / "assets" / "maps" / "land-2048.webp").convert("L")   # lossy: compare as a mask
+    assert img.size == (2048, 1024)
     a = np.asarray(img).astype(float) / 255.0
     lat = 90.0 - (np.arange(a.shape[0]) + 0.5) * 180.0 / a.shape[0]
     w = np.cos(np.radians(lat))[:, None]
@@ -156,8 +156,8 @@ def test_the_globe_texture_is_a_land_mask_the_right_way_up():
 
     def at(la, lo):
         return a[int((90 - la) / 180 * a.shape[0]), int((lo + 180) / 360 * a.shape[1])]
-    assert at(23, 10) == 1.0 and at(-25, 134) == 1.0 and at(-85, 0) == 1.0      # Sahara, Australia, Antarctica
-    assert at(0, -150) == 0.0 and at(30, -40) == 0.0 and at(85, 0) == 0.0       # Pacific, Atlantic, Arctic Ocean
+    assert min(at(23, 10), at(-25, 134), at(-85, 0)) > 0.95       # Sahara, Australia, Antarctica
+    assert max(at(0, -150), at(30, -40), at(85, 0)) < 0.05        # Pacific, Atlantic, Arctic Ocean
 
 
 def test_every_quality_check_the_engine_runs_is_described_in_words():

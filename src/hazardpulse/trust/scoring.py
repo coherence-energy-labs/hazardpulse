@@ -57,11 +57,52 @@ def publish_public_key(signer, out_path: Path) -> dict | None:
     return payload
 
 
+MIN_CALIBRATION_EVENTS = 30
+
+
+def calibration_events(record: dict) -> int:
+    """Positive outcomes in the data a calibration record was fitted on."""
+    if record.get("n_positive") is not None:
+        return int(record["n_positive"])
+    before = record.get("metrics_before") or {}
+    return int(round(float(before.get("base_rate") or 0.0) * float(record.get("n_calibration") or 0)))
+
+
+def calibrator_admissible(record: dict) -> tuple[bool, str]:
+    """Whether a fitted calibrator may REPLACE the model's own published probabilities.
+
+    All of:
+    * it is not inflated (fitted from too few groups to be a curve at all);
+    * its data holds at least MIN_CALIBRATION_EVENTS positive outcomes;
+    * on cells it never saw (``metrics_after_heldout``) its Brier score beats the model's own
+      probabilities on the same cells (``metrics_before``).
+
+    Why: on 2026-10-04 at 22:47Z a Venn-Abers calibrator was fitted to 794 tornado storm-forecasts with
+    ZERO tornadoes. With no positives it maps every storm to 1/(group size + 2), so storms the model put at
+    0.03% were published at 16.7-33.3% -- inflation of 567-1,822x on every published tornado number --
+    although its own held-out Brier was 4.67e-3 against the model's 1e-8, 467x worse. Nothing checked
+    either. The earthquake record was set to do the same from a single matured window (2026-11-02).
+    """
+    if record.get("inflated"):
+        return False, "inflated (too few groups to fit a curve)"
+    events = calibration_events(record)
+    if events < MIN_CALIBRATION_EVENTS:
+        return False, f"{events} events in its data (needs {MIN_CALIBRATION_EVENTS})"
+    before = (record.get("metrics_before") or {}).get("brier")
+    held = (record.get("metrics_after_heldout") or {}).get("brier")
+    if before is None or held is None:
+        return False, "no held-out comparison with the model's own probabilities"
+    if not float(held) < float(before):
+        return False, f"held-out Brier {held:.3g} does not beat the model's own {before:.3g}"
+    return True, f"{events} events; held-out Brier {held:.3g} beats the model's own {before:.3g}"
+
+
 def load_forecaster(hazard: str, *, models_dir: Path | None = None, signer=None,
                     alpha: float = 0.1) -> TrustedForecaster | None:
-    """Build a TrustedForecaster from results/models/<hazard>_calibration.json.
+    """Build a TrustedForecaster from results/calibration/<hazard>_calibration.json.
 
-    Returns None if no calibration record exists yet (scorer then stays raw).
+    Returns None -- the scorer then publishes the model's own probabilities -- if no record exists or the
+    record is not admissible (``calibrator_admissible``).
     """
     models_dir = models_dir or (Path(__file__).resolve().parents[3] / "results" / "calibration")
     path = models_dir / f"{hazard}_calibration.json"
@@ -70,6 +111,11 @@ def load_forecaster(hazard: str, *, models_dir: Path | None = None, signer=None,
     try:
         record = json.loads(path.read_text(encoding="utf-8"))
         if "calibrator" not in record:
+            return None
+        ok, why = calibrator_admissible(record)
+        if not ok:
+            print(f"  Trust layer: the {hazard} calibrator is not applied -- {why}; "
+                  "publishing the model's own probabilities.")
             return None
         return TrustedForecaster.from_calibration_dict(record, signer=signer, alpha=alpha)
     except Exception:
