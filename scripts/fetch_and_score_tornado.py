@@ -1535,10 +1535,8 @@ def main() -> None:
                 f"(model {_forecaster.model_version}, signed={_signer is not None})"
             )
         elif scored:
-            print(
-                "  Trust layer: no calibrator yet "
-                "(results/models/tornado_calibration.json); emitting raw forecasts."
-            )
+            # load_forecaster has already said why when it refused one (results/calibration/)
+            print("  Trust layer: no admissible calibrator; publishing the model's own probabilities.")
     except Exception as exc:  # never let the trust layer break a live forecast
         print(f"  Trust layer: skipped ({exc})")
 
