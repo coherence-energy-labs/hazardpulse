@@ -513,9 +513,11 @@ def test_the_calibration_pool_is_deterministic_with_two_models():
     assert shp.newest_model_version([new_a]) == stack_v   # 1-1 tie: by name ("..._stack_..." < "..._v8_2")
     acc = {shp._CALIB_VERSION_KEY: stack_v}
     res = shp.score_single_forecast(
-        {"forecast_id": "x", "issued_at": "2026-10-02T00:00:00Z", "storms": [
-            {"storm_id": "AL01", "ri_probability": 0.15, "model_version": stack_v, "ri_source": "noaa_aid_stack"},
-            {"storm_id": "WP01", "ri_probability": 0.40, "model_version": "hurricane_ri_v8_2"}]},
+        {"forecast_id": "x", "issued_at": "2026-10-02T04:13:52Z", "storms": [
+            {"storm_id": "AL01", "issue_time": "2026-10-02T00:00:00", "ri_probability": 0.15,
+             "model_version": stack_v, "ri_source": "noaa_aid_stack"},
+            {"storm_id": "WP01", "issue_time": "2026-10-02T00:00:00", "ri_probability": 0.40,
+             "model_version": "hurricane_ri_v8_2"}]},
         calib_acc=acc, best_track_fetcher=lambda sid: (_track(), "test"))
     pooled = {k: v for k, v in acc.items() if k != shp._CALIB_VERSION_KEY}
     assert pooled == {0.15: [1, 0]}, "only the stack's storm enters the stack's pool"

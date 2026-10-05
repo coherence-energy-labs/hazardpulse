@@ -1217,8 +1217,11 @@ def _build_verification_summary(pulse: dict) -> dict:
             },
             "prospective": {
                 **hu_binding["prospective"],
-                "mean_brier": hu_prospective_summary.get("mean_brier") if hu_scored > 0 else None,
-                "mean_auc": hu_prospective_summary.get("mean_auc") if hu_scored > 0 else None,
+                # pooled over storm-cycles with their counts (amendment 7 rule 1); a per-forecast mean of
+                # AUCs over two or three storms is never carried
+                "unit": hu_prospective_summary.get("unit") if hu_scored > 0 else None,
+                "pooled": hu_prospective_summary.get("pooled") if hu_scored > 0 else None,
+                "by_model_version": hu_prospective_summary.get("by_model_version") if hu_scored > 0 else None,
                 "total_storms_scored": hu_prospective_summary.get("total_storms_scored") if hu_scored > 0 else None,
                 "total_ri_events": hu_prospective_summary.get("total_ri_events") if hu_scored > 0 else None,
             },

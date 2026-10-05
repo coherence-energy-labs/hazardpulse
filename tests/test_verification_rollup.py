@@ -176,15 +176,19 @@ def test_a_live_record_of_another_model_version_is_never_shown_as_the_live_model
 def test_hurricane_rollup_is_bound_to_its_scorer_too(tmp_path):
     m = _load(tmp_path)
     _write_replays(m, "hu", "hurricane", 4)
+    pooled = {"n_storm_cycles": 3, "n_events": 0, "n_storms": 2, "brier": 0.0014, "auc": None,
+              "auc_withheld": "only one outcome occurred: a ranking score is undefined"}
     _write_summary(m, m.HU_PROSPECTIVE_DIR, {
         "scored_as_of": _z(NOW - dt.timedelta(hours=2)), "n_matured_forecasts": 4, "status": "ok",
-        "total_storms_scored": 3, "total_ri_events": 0, "mean_brier": 0.0014, "mean_auc": None,
+        "total_storms_scored": 3, "total_ri_events": 0, "pooled": pooled,
+        "mean_auc": 0.9,                       # a stale per-forecast mean in an old summary: never carried
     })
     item = _hazard(m._build_verification_summary(json.loads(m.LIVE_PULSE_PATH.read_text())), "hu")
     assert item["forecast_storage"]["n_scored_forecasts"] == 4
     assert item["verification_status"] == "prospective_scored"
     assert item["prospective"]["status"] == "ok"
     assert item["prospective"]["total_ri_events"] == 0
+    assert item["prospective"]["pooled"] == pooled and "mean_auc" not in item["prospective"]
 
 
 def test_a_stale_summary_is_labelled_stale_not_zero(tmp_path):
