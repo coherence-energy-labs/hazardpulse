@@ -1450,6 +1450,27 @@ def _build_verification_summary(pulse: dict) -> dict:
     return summary
 
 
+def _withhold_pulse_bands_excluding_probability(pulse: dict) -> bool:
+    """A pulse band ``[conf_lo, conf_hi]`` is published only when it contains the pulse's own probability;
+    otherwise both become null. The tornado scorer's 02:05Z run of 2026-10-05 put 0.06% beside a band of
+    0.07%-0.07% (a Venn-Abers pair beside a Platt probability), and every deploy gates on
+    tests/test_site_integrity.py, which asserts containment. The scorers withhold such bands themselves; this
+    keeps a pulse written before that rule from being republished. Returns True when the pulse changed."""
+    changed = False
+    for hazard in pulse.get("hazards", []):
+        lo, hi, p = hazard.get("conf_lo"), hazard.get("conf_hi"), hazard.get("probability")
+        if lo is None or hi is None:
+            continue
+        try:
+            ok = p is not None and 0.0 <= float(lo) <= float(p) <= float(hi) <= 1.0
+        except (TypeError, ValueError):
+            ok = False
+        if not ok:
+            hazard["conf_lo"] = hazard["conf_hi"] = None
+            changed = True
+    return changed
+
+
 def _stamp_pulse_from_records(pulse: dict, gate_decisions: list[dict]) -> bool:
     """Write each current forecast's REAL quality-check outcome into the live pulse.
 
@@ -1458,7 +1479,7 @@ def _stamp_pulse_from_records(pulse: dict, gate_decisions: list[dict]) -> bool:
     here, after the scorers; the pulse now carries their outcome, or "unknown" when no decision exists.
     Returns True when the pulse changed."""
     by_id = {d.get("forecast_id"): d for d in gate_decisions}
-    changed = False
+    changed = _withhold_pulse_bands_excluding_probability(pulse)
     for hazard in pulse.get("hazards", []):
         decision = by_id.get(hazard.get("forecast_id"))
         status = str(decision.get("decision")) if decision else "unknown"
