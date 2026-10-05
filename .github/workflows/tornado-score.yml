@@ -4,8 +4,11 @@ env:
   HAZARDPULSE_SIGNING_KEY: ${{ secrets.HAZARDPULSE_SIGNING_KEY }}
 
 on:
-  # Dispatched by scheduler.yml (scripts/ci/schedule.py), which decides when this scorer is due. Its own
-  # cron was removed 2026-10-05: GitHub dropped or delayed most scheduled runs (measured in schedule.py).
+  # Attempts at off-peak minutes; the `due` job lets the scoring job run only when it is due (and
+  # scheduler.yml dispatches it too, by the same rule). GitHub drops or delays many scheduled runs
+  # (measured in scripts/ci/schedule.py), so no single cron slot is relied on.
+  schedule:
+    - cron: "13,43 * * * *"
   # Every 2 hours, every 30 minutes while tornado risk is elevated (a storm at 5% or more, or any NWS
   # tornado warning). A manual dispatch runs it at once.
   workflow_dispatch:
@@ -15,12 +18,44 @@ on:
         required: false
         type: string
 
-concurrency:
-  group: hazardpulse-scoring
-  cancel-in-progress: false
-
 jobs:
+  # seconds long, on a sparse checkout: is a scoring run due? (cron-triggered runs only; a manual or
+  # scheduler dispatch always scores)
+  due:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - name: Checkout (the gate and the latest pulse only)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+          sparse-checkout: |
+            scripts/ci/schedule.py
+            dist/data/live-pulse.json
+          sparse-checkout-cone-mode: false
+      - name: Is a run due?
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python scripts/ci/schedule.py --hazard tornado
+
   score:
+    needs: due
+    # a gate that failed to answer lets the run go: a duplicate costs a commit, a skip costs a forecast
+    if: always() && (github.event_name != 'schedule' || needs.due.outputs.run == 'true' || needs.due.result == 'failure')
+    # the shared queue holds scoring jobs only: a gate that found nothing due must never sit in it (a newly
+    # queued run cancels the pending one in the same group)
+    concurrency:
+      group: hazardpulse-scoring
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

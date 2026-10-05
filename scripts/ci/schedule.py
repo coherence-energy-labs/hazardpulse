@@ -10,10 +10,15 @@ from the run history, scheduled runs against their crons:
     earthquake    cron every 6 h      median gap 7.1 h, worst 9.5 h
 
 Most missing runs were never created at all (GitHub drops scheduled runs under load, worst at the top of
-the hour); a few were cancelled by the shared scoring queue. So the scorers no longer depend on hitting a
-cron slot. This script runs at four off-peak minutes an hour, asks GitHub when each scorer last succeeded,
-and dispatches the ones that are due and not already queued or running. A dropped attempt now costs 15
-minutes, not a cycle.
+the hour); a few were cancelled by the shared scoring queue. So no scorer depends on hitting a cron slot.
+Two independent paths decide, by the same rule:
+
+* each scorer's own frequent off-peak cron starts a seconds-long `due` job (``--hazard``) that lets the
+  scoring job run only if it is due and no other run of it is queued or running;
+* scheduler.yml runs this script at four other off-peak minutes an hour and dispatches what is due.
+
+Neither can double a run, and a dropped attempt costs minutes, not a cycle. (The first version had the
+scheduler alone: GitHub then did not fire its own new cron for its first 3 slots, 2026-10-05.)
 
 When each is due:
 
@@ -139,14 +144,40 @@ def _gh_json(args: list[str]):
     return json.loads(out or "null")
 
 
-def run_state(workflow: str) -> tuple[dt.datetime | None, bool]:
-    """(start of the last successful run, whether a run is queued or in progress)."""
-    runs = _gh_json(["run", "list", "--workflow", workflow, "--branch", "main", "--limit", "30",
-                     "--json", "status,conclusion,createdAt,startedAt"]) or []
-    in_flight = any(r.get("status") in ("queued", "in_progress", "waiting", "pending", "requested") for r in runs)
-    ok = [_parse(r.get("startedAt") or r["createdAt"]) for r in runs
-          if r.get("status") == "completed" and r.get("conclusion") == "success"]
+IN_FLIGHT = ("queued", "in_progress", "waiting", "pending", "requested")
+
+
+def summarize_runs(runs: list[dict], exclude_run_id: int | None = None) -> tuple[dt.datetime | None, bool]:
+    """(start of the last successful SCORING run, whether another run is queued or in progress).
+
+    ``exclude_run_id`` is the run asking (a scorer's own gate must not see itself as "already running").
+    A run counts as a scoring run only if its scoring job ran: a cron-triggered run whose gate said "not
+    due" also ends in success, and counting it would push the next due time back forever.
+    """
+    others = [r for r in runs if exclude_run_id is None or int(r.get("databaseId") or 0) != int(exclude_run_id)]
+    in_flight = any(r.get("status") in IN_FLIGHT for r in others)
+    ok = [_parse(r.get("startedAt") or r["createdAt"]) for r in others
+          if r.get("status") == "completed" and r.get("conclusion") == "success" and r.get("scored", True)]
     return (max(ok) if ok else None), in_flight
+
+
+def _scored(run_id: int) -> bool:
+    """Whether a completed run's scoring job actually ran (not skipped by its gate)."""
+    jobs = (_gh_json(["run", "view", str(run_id), "--json", "jobs"]) or {}).get("jobs") or []
+    return any(j.get("name") == "score" and j.get("conclusion") == "success" for j in jobs)
+
+
+def run_state(workflow: str, exclude_run_id: int | None = None) -> tuple[dt.datetime | None, bool]:
+    runs = _gh_json(["run", "list", "--workflow", workflow, "--branch", "main", "--limit", "40",
+                     "--json", "databaseId,status,conclusion,createdAt,startedAt,event"]) or []
+    # a scheduled run may have been a gate that found nothing due: look at its jobs (newest first, and
+    # only until the newest run that really scored -- older ones cannot change the answer)
+    for r in sorted(runs, key=lambda r: r.get("createdAt") or "", reverse=True):
+        if r.get("status") == "completed" and r.get("conclusion") == "success":
+            r["scored"] = r.get("event") != "schedule" or _scored(int(r["databaseId"]))
+            if r["scored"]:
+                break
+    return summarize_runs(runs, exclude_run_id)
 
 
 def nws_tornado_warnings() -> int | None:
@@ -160,16 +191,43 @@ def nws_tornado_warnings() -> int | None:
         return None
 
 
+def gate(hazard: str, now: dt.datetime, elevated: bool) -> bool:
+    """A scorer's own gate (its cron-triggered `due` job): run only if due, never doubling a run already
+    queued or running. If GitHub's run history cannot be read, run: a duplicate costs a commit, a skip
+    costs a forecast."""
+    import os
+    me = os.environ.get("GITHUB_RUN_ID")
+    try:
+        last, in_flight = run_state(WORKFLOWS[hazard], exclude_run_id=int(me) if me else None)
+    except Exception as exc:
+        print(f"  {hazard}: run history unreadable ({exc}); running")
+        return True
+    d = decide(hazard, now, last, in_flight, elevated=elevated)
+    print(f"  {hazard:12s} {'RUN ' if d.due else 'skip'} {d.reason}")
+    return d.due
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--dry-run", action="store_true", help="decide and print, dispatch nothing")
     ap.add_argument("--ref", default="main")
+    ap.add_argument("--hazard", choices=sorted(WORKFLOWS),
+                    help="gate mode: decide for this scorer only and write run=true|false to $GITHUB_OUTPUT")
     args = ap.parse_args(argv)
     now = dt.datetime.now(UTC)
     pulse_path = ROOT / "dist" / "data" / "live-pulse.json"
     pulse = json.loads(pulse_path.read_text(encoding="utf-8")) if pulse_path.exists() else None
-    elevated, why = tornado_elevated(pulse, nws_tornado_warnings())
+    needs_risk = args.hazard in (None, "tornado")
+    elevated, why = tornado_elevated(pulse, nws_tornado_warnings()) if needs_risk else (False, "not needed")
     print(f"{now:%Y-%m-%d %H:%MZ}  tornado risk: {'ELEVATED' if elevated else 'quiet'} ({why})")
+    if args.hazard:
+        import os
+        run = gate(args.hazard, now, elevated)
+        out = os.environ.get("GITHUB_OUTPUT")
+        if out:
+            with open(out, "a", encoding="utf-8") as fh:
+                fh.write(f"run={'true' if run else 'false'}\n")
+        return 0
     failed = False
     for hazard, workflow in WORKFLOWS.items():
         try:
