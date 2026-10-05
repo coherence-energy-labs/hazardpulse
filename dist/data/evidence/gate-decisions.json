@@ -1,7 +1,66 @@
 {
   "gate_set_version": "2026.04",
-  "generated_at": "2026-10-04T21:49:30Z",
+  "generated_at": "2026-10-05T00:03:36Z",
   "decisions": [
+    {
+      "gate_decision_id": "gdec_hu_fcst_20261005_0002",
+      "forecast_id": "hu_fcst_20261005_0002",
+      "hazard": "hurricane",
+      "gate_set_version": "hp-gates-v1",
+      "decision": "degrade",
+      "reasons": [],
+      "warnings": [
+        "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
+        "model calibration not yet measured"
+      ],
+      "emitted_at": "2026-10-05T00:02:54Z",
+      "artifact_refs": [
+        "/data/replay/hu_fcst_20261005_0002.json"
+      ],
+      "gates": [
+        {
+          "gate_id": "G0_SCHEMA_VALIDITY",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G1_SOURCE_FRESHNESS",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G3_PROVENANCE_COMPLETE",
+          "outcome": "degrade",
+          "reason": "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256"
+        },
+        {
+          "gate_id": "G4_CALIBRATION_FLOOR",
+          "outcome": "degrade",
+          "reason": "model calibration not yet measured"
+        },
+        {
+          "gate_id": "G5_SPATIOTEMPORAL_SANITY",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G6_ALERT_HARM_GUARD",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G8_REPLAYABILITY_REQUIRED",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G9_PUBLIC_PROJECTION_POLICY",
+          "outcome": "pass",
+          "reason": null
+        }
+      ],
+      "issued_at": "2026-10-05T00:02:54Z"
+    },
     {
       "gate_decision_id": "gdec_eq_fcst_20261004_2100",
       "forecast_id": "eq_fcst_20261004_2100",
