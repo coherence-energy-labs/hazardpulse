@@ -72,14 +72,16 @@ def _live_rows(d: SiteData) -> list[list[str]]:
     for version, r in sorted(to.items()):
         rows.append(["to", version, int(r.get("n_storm_forecasts") or 0), int(r.get("n_positive") or 0),
                      r.get("auc"), r.get("bss_vs_causal_climatology"), "Brier skill vs climatology"])
-    hu = _prospective(d, "hurricane")
-    if hu:
-        rows.append(["hu", "all published hurricane numbers", int(hu.get("total_storm_predictions") or 0),
-                     int(hu.get("total_ri_events") or 0), None, None, ""])
+    # hurricane: one row per model version, over storm-cycles (amendment 7: each scored once, against its
+    # own 24 h); two versions publish at once (NOAA's aids in the NHC basins, v8.2 elsewhere)
+    hu_served = _hurricane_served_versions(d)
+    for version, r in sorted((_prospective(d, "hurricane").get("by_model_version") or {}).items()):
+        rows.append(["hu", version, int(r.get("n_storm_cycles") or 0), int(r.get("n_events") or 0),
+                     r.get("auc"), r.get("brier"), "Brier score"])
     out = []
     for key, version, n, n_ev, auc, skill, skill_name in rows:
-        status = ("published" if version == served.get(key) else
-                  ("&mdash;" if key == "hu" else "retired"))
+        status = ("published" if (version in hu_served if key == "hu" else version == served.get(key))
+                  else "retired")
         enough = n_ev >= LIVE_MIN_EVENTS
         if enough:
             score = f"ranking {fmt.pct(auc, 1)}" if auc is not None else "&mdash;"
@@ -87,8 +89,23 @@ def _live_rows(d: SiteData) -> list[list[str]]:
                 score += f"; {skill_name} {fmt.num(skill, 2)}"
         else:
             score = (f"too few events to score yet (need {LIVE_MIN_EVENTS})" if n else "nothing closed yet")
-        out.append([common.hazard_label(key), f"<code>{esc(version)}</code>" if key != "hu" else esc(version),
-                     status, f"{n:,}", f"{n_ev:,}", score])
+        out.append([common.hazard_label(key), f"<code>{esc(version)}</code>", status, f"{n:,}", f"{n_ev:,}", score])
+    return out
+
+
+def _hurricane_served_versions(d: SiteData) -> dict[str, str]:
+    """``{model version: what it publishes}`` for the hurricane models published now, from the evidence
+    bound to the served artifacts (the NOAA-aid stack in the NHC basins, v8.2 elsewhere)."""
+    ev = d.evidence.get("hurricane") or {}
+    out = {}
+    if ev.get("model_version"):
+        out[str(ev["model_version"])] = "NOAA DTOPS (SHIPS-RII as fallback), Atlantic, East and Central Pacific"
+    if (ev.get("other_basins") or {}).get("model"):
+        out[str(ev["other_basins"]["model"])] = "HazardPulse v8.2, elsewhere"
+    if not out:
+        version = (d.verification_by_key.get("hu") or {}).get("model_version")
+        if version:
+            out[str(version)] = "the published model"
     return out
 
 
@@ -99,9 +116,13 @@ def _hazard_record_card(d: SiteData, key: str) -> str:
     version = v.get("model_version") or ""
     rows = [("Published model", f"<code>{esc(version)}</code>")]
     if key == "hu":
+        comp = ((ev or {}).get("other_basins") or {}).get("composition") or {}
+        v82 = ("HazardPulse v8.2 elsewhere, its method tested on held-out cycles from every basin with best-track "
+               "inputs" + ("; the published model&rsquo;s calibration was fitted on those same cycles"
+                           if comp.get("served_calibration_fitted_on_test_cases") else "")
+               if comp else "HazardPulse v8.2 elsewhere")
         rows[0] = ("Published numbers", "NOAA DTOPS (SHIPS-RII as fallback) for the Atlantic, East and Central "
-                                        "Pacific; HazardPulse v8.2 elsewhere, tested only on Atlantic and East "
-                                        "Pacific cases")
+                                        f"Pacific; {v82}")
     rows.append(("Window", h.window))
     # the test result, from the evidence bound to the served artifact
     if ev:
@@ -122,9 +143,9 @@ def _hazard_record_card(d: SiteData, key: str) -> str:
                          f"{int(t.get('n') or 0):,} storm observations, {int(t.get('pos') or 0):,} tornadic"))
     else:
         rows.append(("Test", "No final test is bound to the published model in this build"))
-    # the live record of THIS version
+    # the live record of THIS version (hurricane: of each version published now)
     live = _published_live(d, key, version)
-    rows.append(("Live record of this version", live))
+    rows.append(("Live record of the published models" if key == "hu" else "Live record of this version", live))
     storage = v.get("forecast_storage") or {}
     rows.append(("Forecasts recorded", f"{int(storage.get('n_replay_artifacts') or 0):,} "
                                        f"({int(storage.get('n_scored_forecasts') or 0):,} closed and scored, "
@@ -158,12 +179,23 @@ def _published_live(d: SiteData, key: str, version: str) -> str:
             return (f"{n:,} storm forecasts closed, {pos:,} followed by a tornado: too few tornadoes to score yet "
                     f"(the record is quoted from {LIVE_MIN_EVENTS})")
         return f"{n:,} storm forecasts, {pos:,} tornadic; ranking accuracy {fmt.pct(r.get('auc'), 1)}"
-    hu = _prospective(d, "hurricane")
-    n, ev = int(hu.get("total_storm_predictions") or 0), int(hu.get("total_ri_events") or 0)
-    if ev < LIVE_MIN_EVENTS:
-        return (f"{n:,} storm forecasts closed against the best track, {ev:,} rapid intensifications: too few to "
-                "score yet")
-    return f"{n:,} storm forecasts, {ev:,} rapid intensifications"
+    # hurricane: only the versions published now -- the pooled count mixed every version that ever served
+    # (on 2026-10-05 all 14 "forecasts" were April West Pacific numbers of models no longer published)
+    by_version = _prospective(d, "hurricane").get("by_model_version") or {}
+    parts = []
+    for v, what in _hurricane_served_versions(d).items():
+        r = by_version.get(v) or {}
+        n, ev = int(r.get("n_storm_cycles") or 0), int(r.get("n_events") or 0)
+        if not n:
+            parts.append(f"{what}: none closed yet")
+        elif ev < LIVE_MIN_EVENTS:
+            parts.append(f"{what}: {n:,} storm-cycles closed against the best track, {ev:,} rapid "
+                         "intensifications, too few to score yet")
+        else:
+            parts.append(f"{what}: {n:,} storm-cycles, {ev:,} rapid intensifications; Brier score "
+                         f"{fmt.num(r.get('brier'), 3)}"
+                         + (f", ranking accuracy {fmt.pct(r.get('auc'), 1)}" if r.get("auc") is not None else ""))
+    return "; ".join(parts) if parts else "none yet"
 
 
 def _reliability(d: SiteData) -> str:

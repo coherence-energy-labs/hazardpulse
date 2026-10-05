@@ -35,7 +35,28 @@ def _basis(storm: dict) -> str:
     return "HazardPulse v8.2: NOAA&rsquo;s guidance was not usable for this cycle"
 
 
-def _storm_card(s: dict) -> str:
+def _single_warning(s: dict) -> bool:
+    """The published number is v8.2 scored from ONE JTWC warning (the West Pacific path)."""
+    return (str(s.get("ri_source") or "") != "noaa_aid_stack"
+            and str((s.get("ri_inputs") or {}).get("analysis_model") or "") == "JTWC")
+
+
+def _single_warning_caveat(composition: dict | None) -> str:
+    """A plain warning for a number scored from one JTWC warning, with the measured cost of that when the
+    evidence is bound (served_evidence: the served model on 2022-2024 West Pacific cycles)."""
+    jt = (composition or {}).get("single_jtwc_warning") or {}
+    if jt.get("n_missing") and jt.get("log_loss") is not None and jt.get("log_loss_climatology") is not None:
+        return (f"Scored from a single JTWC warning, which does not carry the storm&rsquo;s recent track: "
+                f"{jt['n_missing']} of the model&rsquo;s {jt['n_inputs']} inputs are unknown and filled with "
+                "typical values. Scored the same way, the 2022&ndash;2024 West Pacific cycles were barely better "
+                "than always forecasting the average (log loss "
+                f"{fmt.num(jt['log_loss'], 3)} against {fmt.num(jt['log_loss_climatology'], 3)}; "
+                f"{fmt.num(jt.get('log_loss_full_inputs'), 3)} with every input). Treat this number as rough.")
+    return ("Scored from a single JTWC warning, which does not carry the storm&rsquo;s recent track, so several "
+            "of the model&rsquo;s inputs are filled with typical values. Treat this number as rough.")
+
+
+def _storm_card(s: dict, composition: dict | None = None) -> str:
     sid = esc(s.get("storm_id"))
     name = esc(storm_name(s))
     lat, lon = float(s["lat"]), float(s["lon"])
@@ -48,6 +69,8 @@ def _storm_card(s: dict) -> str:
         ("Forecast cycle", fmt.time_tag(s.get("issue_time"))),
         ("Where the number comes from", _basis(s)),
     ]
+    if _single_warning(s):
+        rows.append(("Caution", _single_warning_caveat(composition)))
     if ours:
         fallback = ("" if ours.get("gate_ok", True) else
                     " (the early intensity guidance was missing for this cycle, so it equals NOAA&rsquo;s DTOPS)")
@@ -71,7 +94,6 @@ def _sources(d: SiteData) -> str:
     beaten = [c["against"] for c in hu.get("claims", []) if c.get("better")]
     seasons = hu.get("chosen_on_seasons") or []
     span = f"{seasons[0]}&ndash;{seasons[-1]}" if seasons else "earlier seasons"
-    ob = (hu.get("other_basins") or {}).get("test") or {}
     nhc = (f"<p><strong>Atlantic, East and Central Pacific.</strong> NOAA&rsquo;s own probability, read from the "
            "National Hurricane Center&rsquo;s SHIPS text for the same forecast cycle: DTOPS as issued, or SHIPS-RII "
            f"when DTOPS is missing. We chose it in a comparison written down in advance and run on {span}, then "
@@ -80,11 +102,38 @@ def _sources(d: SiteData) -> str:
            f"and {t.get('storms', 0):,} storms"
            + (f", and beat {_join([esc(b) for b in beaten])} on the same cycles" if beaten else "") + ".</p>")
     other = ("<p><strong>West Pacific, Indian Ocean and Southern Hemisphere</strong>, where no public "
-             "rapid-intensification guidance exists, and any NHC cycle without usable SHIPS text: our v8.2 model"
-             + (f". Its test, on held-out {fmt.years(ob.get('when', ''))} Atlantic and East Pacific cases, ranked "
-                f"them correctly {fmt.pct(ob.get('auc'), 1)} of the time; it has not been tested in the basins where it "
-                "now publishes" if ob.get("auc") is not None else "") + ".</p>")
+             "rapid-intensification guidance exists, and any NHC cycle without usable SHIPS text: our v8.2 model."
+             + v82_test_text(hu.get("other_basins")) + "</p>")
     return nhc + other + '<p><a href="/methods/#hurricane">Read the full test</a></p>'
+
+
+def v82_test_text(other_basins: dict | None) -> str:
+    """What v8.2's test figure is, stated as it was measured (site audit 2026-10-05): a test of its METHOD on
+    held-out cycles from every basin with best-track inputs -- not of the published model, whose calibration
+    was fitted on those same cycles, and not with the inputs a live West Pacific forecast has."""
+    ob = (other_basins or {}).get("test") or {}
+    if ob.get("auc") is None:
+        return ""
+    comp = (other_basins or {}).get("composition") or {}
+    when = fmt.years(ob.get("when", ""))
+    basins = ", ".join(f"{esc(b['name'])} {int(b['n']):,}" for b in comp.get("by_basin") or [])
+    where = f" in every basin ({basins})" if basins else ""
+    text = (f" Its method was tested on {int(ob.get('n') or 0):,} forecast cycles from {when}{where}, none of them "
+            "used to fit it: it ranked a cycle that went on to intensify rapidly above one that did not "
+            f"{fmt.pct(ob.get('auc'), 1)} of the time.")
+    if comp.get("inputs") == "best track":
+        text += " That test read each storm&rsquo;s inputs from the best track"
+        text += (", and the model now published is the same method refitted with its calibration fitted on those "
+                 "same cycles, so the figure is not a test of the published model on unseen data."
+                 if comp.get("served_calibration_fitted_on_test_cases") else ".")
+    jt = comp.get("single_jtwc_warning") or {}
+    if jt.get("log_loss") is not None and jt.get("log_loss_climatology") is not None:
+        text += (" In the West Pacific we score each storm from a single JTWC warning, which leaves "
+                 f"{jt['n_missing']} of its {jt['n_inputs']} inputs unknown; scored that way, the {when} West "
+                 f"Pacific cycles had a log loss of {fmt.num(jt['log_loss'], 3)}, against "
+                 f"{fmt.num(jt['log_loss_climatology'], 3)} for always forecasting the average "
+                 f"({fmt.num(jt.get('log_loss_full_inputs'), 3)} with every input).")
+    return text
 
 
 def _join(items: list[str]) -> str:
@@ -138,7 +187,8 @@ def page(d: SiteData) -> str:
                              desc="Each ringed marker is an active tropical cyclone, labelled with its name and "
                                   "coloured by its chance of rapid intensification. The cards below give each storm.",
                              legend=fmt.legend("Chance of rapid intensification, next 24 hours"))
-        cards = f'<div class="storm-cards">{"".join(_storm_card(s) for s in storms)}</div>'
+        comp = ((d.evidence.get("hurricane") or {}).get("other_basins") or {}).get("composition")
+        cards = f'<div class="storm-cards">{"".join(_storm_card(s, comp) for s in storms)}</div>'
         body = (common.section("storms", "Active storms", notices + themap + cards))
     else:
         body = common.section("storms", "Active storms", notices + '<p class="empty">No tropical cyclones are '
