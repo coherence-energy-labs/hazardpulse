@@ -14,7 +14,7 @@ esc = fmt.esc
 # the three hazard cards (home and /live/)
 # ------------------------------------------------------------------------------------------------
 
-def _card(key: str, d: SiteData, *, label: str, where: str, count: str, empty: str) -> str:
+def _card(key: str, d: SiteData, *, label: str, where: str, count: str, empty: str, expiry: str = "") -> str:
     h = {"eq": EARTHQUAKE, "hu": HURRICANE, "to": TORNADO}[key]
     head = d.headlines[key]
     gate = "" if head.gate in ("pass", "unknown") else common.gate_chip(head.gate)
@@ -31,7 +31,7 @@ def _card(key: str, d: SiteData, *, label: str, where: str, count: str, empty: s
     return (f'<a class="card card-link hazard-card hz-{key}" href="{h.path}"{fid}>'
             f'<div class="hazard-card-top">{common.hazard_label(key)}<span class="hazard-card-window">next '
             f"{h.window}</span></div>{body}"
-            f'<p class="hazard-card-meta">{count} &middot; issued {issued} {gate}</p>'
+            f'<p class="hazard-card-meta">{count} &middot; issued {issued} {gate}{expiry}</p>'
             f'<span class="card-cta">{h.name} forecast</span></a>')
 
 
@@ -60,12 +60,17 @@ def hazard_cards(d: SiteData) -> str:
         empty="No tropical cyclones are active anywhere right now.")
 
     tstorms = d.tornadoes.get("storms") or []
+    from hazardpulse.site.pages.tornado import data_valid_time
+    to_head = d.headlines["to"]
     to_card = _card(
         "to", d,
         label="Highest chance a tracked thunderstorm produces a tornado",
-        where=esc(d.headlines["to"].where),
+        where=esc(to_head.where),
         count=fmt.plural(len(tstorms), "storm") + " tracked",
-        empty="No thunderstorms are being tracked over the US right now.")
+        empty="No thunderstorms are being tracked over the US right now.",
+        # the edge fills it once the 60-minute window (from the data's valid time) has passed
+        expiry=common.forecast_age(to_head.issued_at, 60, TORNADO.schedule,
+                                   valid_at=data_valid_time(d.tornadoes), short=True))
     return f'<div class="cards cards-3 hazard-cards">{eq_card}{hu_card}{to_card}</div>'
 
 
@@ -110,6 +115,12 @@ def world_map(d: SiteData, ident: str = "world-map") -> str:
 # home
 # ------------------------------------------------------------------------------------------------
 
+def _points(x: float) -> str:
+    """A difference of two proportions in percentage points, signed, two decimals."""
+    v = 100.0 * float(x)
+    return ("+" if v >= 0 else "&minus;") + f"{abs(v):.2f}"
+
+
 def _proofs(d: SiteData) -> str:
     """How each served model tested, from the evidence bound to the served artifacts."""
     ev = d.evidence
@@ -122,9 +133,16 @@ def _proofs(d: SiteData) -> str:
         how = "a second look at those years" if t.get("second_read") else "scored once"
         ref = ((eq.get("vs") or {}).get("A") or {}).get("auc") or {}
         ref_auc = auc - ref["diff"] if auc is not None and ref.get("diff") is not None else None
-        cards.append(("eq", fmt.pct(auc, 0) if auc is not None else "&mdash;",
+        # One decimal, both figures: rounded to whole percents the 96.9% beside the reference's 96.7%
+        # read as "97%" against it, a gap that is really 0.19 points [0.09, 0.28] (paired, by month).
+        ci = ref.get("ci") or [None, None]
+        gap = (f"; difference {_points(ref['diff'])} points"
+               + (f", 95% interval {_points(ci[0])} to {_points(ci[1])}" if ci[0] is not None else "")
+               if ref.get("diff") is not None else "")
+        cards.append(("eq", fmt.pct(auc, 1) if auc is not None else "&mdash;",
                       "of the time, a cell that went on to have an M6+ earthquake was ranked above one that did not"
-                      + (f" (a long-term seismicity map alone: {fmt.pct(ref_auc, 1)})" if ref_auc is not None else ""),
+                      + (f" (a long-term seismicity map alone: {fmt.pct(ref_auc, 1)}{gap})" if ref_auc is not None
+                         else ""),
                       f"Every 2&deg; cell, {when} ({how})"))
     hu = ev.get("hurricane")
     if hu:

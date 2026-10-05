@@ -12,8 +12,16 @@ Per storm observation, from the payloads exported by scripts/audit_20261001/expo
   additive in log-odds), in plain words.
 
 The four probabilities describe nested events, so they are served COHERENT: p30 <= p60 <= p90 and
-p_ef2 <= p60 (each product is clipped into the range its nesting implies; how often that bites is
-measured on 2025 and recorded in the payload provenance by the exporter's caller).
+p_ef2 <= p60 (each product is clipped into the range its nesting implies). How often that bites is recorded
+per storm (``coherence_clipped``) and per run in the forecast record (``product_coherence``, written by
+scripts/fetch_and_score_tornado.py); it is NOT in the payload provenance (this docstring said it was; no
+payload carries it). Measured on the v3 records to 2026-10-05 02:05Z: the 90-min probability was clipped up
+to p60 for 348 of 1,602 storm forecasts (21.7%), the 30-min one down for 44, the EF2+ one for 1.
+
+Every scored storm carries the SHA-256 of the served payload (``model_sha256``: of its canonical bytes, which
+are the file's bytes and the digest whose first 12 hex digits name the version) and of the exact input
+vector the payload read (``input_sha256``: canonical JSON of ``{input name: value or null}`` over the
+payload's ``feature_names``, recomputable from the record's ``inputs`` alone -- ``input_digest``).
 
 Features come from ``storm_features.feature_vector`` with the storm's history from
 ``definitive_model.build_storm_history`` and the day's ProbSevere cadence -- the functions that
@@ -22,6 +30,8 @@ built every training row -- and the 80 km HRRR analysis (grids + derived) the sc
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -131,14 +141,16 @@ class V3Suite:
         p60 = float(lp.predict_proba(model, X)[0])
         lo, hi = (float(v[0]) for v in lp.predict_interval(model, X))
         uses_hrrr = any(n.startswith("h80_") for n in model["feature_names"])
+        inputs = record_inputs(fv, warning)
         out: dict = {"p60": p60, "model": "v3_w" if use_w else "v3", "model_version": lp.model_version(model),
+                     "model_sha256": model_digest(model), "input_sha256": input_digest(model, inputs),
                      "band": [lo, hi] if np.isfinite(lo) and np.isfinite(hi) else None,
                      "hrrr_used": h80 is not None and uses_hrrr, "warning": None if warning is None else
                      {"active": bool(warning[0] > 0.5),
                       "minutes_since_issue": None if not np.isfinite(warning[1]) else float(warning[1])},
                      # the exact feature vector and warning state every served product read: the
                      # record alone recomputes the forecast (recompute_p60)
-                     "inputs": record_inputs(fv, warning)}
+                     "inputs": inputs}
         try:
             bias, contrib = lp.contributions(model, X)
             order = np.argsort(-np.abs(contrib[0]))[:n_drivers]
@@ -162,6 +174,27 @@ def record_inputs(fv: np.ndarray, warning: tuple[float, float] | None) -> dict[s
         for n, v in zip(W_NAMES, warning):
             vals[n] = float(v) if np.isfinite(v) else None
     return vals
+
+
+def _canonical_json(obj) -> bytes:
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+
+
+def model_digest(payload: dict) -> str:
+    """SHA-256 of the served payload: of its canonical bytes, which ``lgbm_payload.save`` writes as the file
+    (so it equals ``sha256sum results/models/<file>``) and whose first 12 hex digits are the model version."""
+    return hashlib.sha256(lp.canonical_bytes(payload)).hexdigest()
+
+
+def input_vector(payload: dict, inputs: dict[str, float | None]) -> dict[str, float | None]:
+    """The values the payload read, by name (None = missing): exactly what ``recompute_p60`` feeds it."""
+    return {n: (None if inputs.get(n) is None else float(inputs[n])) for n in payload["feature_names"]}
+
+
+def input_digest(payload: dict, inputs: dict[str, float | None]) -> str:
+    """SHA-256 of the canonical JSON of ``input_vector`` -- the forecast's inputs, not its output (the trust
+    receipt used to hash the ROUNDED probability, e.g. 0.0004, and called it the input hash)."""
+    return hashlib.sha256(_canonical_json(input_vector(payload, inputs))).hexdigest()
 
 
 def recompute_p60(payload: dict, inputs: dict[str, float | None]) -> float:

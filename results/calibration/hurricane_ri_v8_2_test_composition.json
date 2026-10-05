@@ -1,0 +1,92 @@
+{
+ "generated_at": "2026-10-05T02:38Z",
+ "script": "scripts/hurricane_v82_test_composition.py",
+ "evaluation": {
+  "file": "results/calibration/hurricane_ri_evaluation.json",
+  "candidate": "C_v8_2_heldout_newton",
+  "n": 8317,
+  "events": 507,
+  "auc": 0.8474428424590938,
+  "members_storm_years": [
+   2000,
+   2018
+  ],
+  "calibration_storm_years": [
+   2019,
+   2021
+  ]
+ },
+ "dataset": {
+  "path": "results/hurricane_operational_ri_v8_2_2000_2024.jsonl",
+  "sha256": "58746a4aea3da0b19ba4e4cfa833b74be9b44ef49964c3ebeb8a89ab5bc2e84d",
+  "inputs": "IBTrACS best track, every basin (scripts/build_hurricane_training_data.py)"
+ },
+ "test_storm_years": [
+  2022,
+  2024
+ ],
+ "selection": "storms first seen in the test years (ri_model.select_years), as the evaluation selected them",
+ "n": 8317,
+ "events": 507,
+ "by_basin": {
+  "SI": {
+   "n": 2245,
+   "events": 116
+  },
+  "WP": {
+   "n": 2110,
+   "events": 157
+  },
+  "NA": {
+   "n": 1521,
+   "events": 58
+  },
+  "EP": {
+   "n": 1288,
+   "events": 100
+  },
+  "SP": {
+   "n": 673,
+   "events": 50
+  },
+  "NI": {
+   "n": 480,
+   "events": 26
+  }
+ },
+ "served_artifact": {
+  "model_version": "hurricane_ri_v8_2",
+  "members_storm_years": [
+   2000,
+   2021
+  ],
+  "calibration_storm_years": [
+   2022,
+   2024
+  ],
+  "calibration_n": 8317,
+  "calibration_fitted_on_the_test_cases": true
+ },
+ "single_jtwc_warning": {
+  "fixture": "tests/fixtures/jtwc/wp2626web_20261002.txt",
+  "n_selected_inputs": 17,
+  "inputs_missing_live": [
+   "analysis_dp_12h",
+   "analysis_dp_24h",
+   "analysis_dp_6h",
+   "analysis_dv_12h",
+   "analysis_dv_24h",
+   "analysis_dv_6h",
+   "analysis_mslp_hpa",
+   "storm_age_h",
+   "translation_speed_kmh"
+  ],
+  "west_pacific_test_cycles": 2110,
+  "west_pacific_events": 157,
+  "log_loss_full_inputs": 0.20572747350445508,
+  "log_loss_single_warning_inputs": 0.25889457580887726,
+  "log_loss_climatology": 0.26489359498108933,
+  "climatology": "the West Pacific test cycles' own event rate (a constant fitted in sample)",
+  "note": "descriptive: the served artifact's calibration was fitted on these cycles"
+ }
+}

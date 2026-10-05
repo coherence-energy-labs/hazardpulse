@@ -6,31 +6,31 @@
 # system for safety-critical decisions.
 
 #!/usr/bin/env python3
-"""Fetch USGS earthquake catalog, score with coherence model, output static HTML.
+"""Fetch the USGS catalog, forecast every 2-degree cell, publish the frozen forecast.
 
-Designed to run every 6 hours via GitHub Actions cron.  Outputs:
+Run by the earthquake workflow (``.github/workflows/earthquake-score.yml``). Outputs:
 
-  - dist/live/earthquake/index.html   (static HTML page, zero JavaScript)
-  - dist/data/live-pulse.json         (updated earthquake entry)
-  - dist/data/earthquake-ledger.jsonl (append-only SHA-256 prediction chain)
+  - dist/data/replay/<forecast_id>.json  (the frozen forecast: every cell's probability)
+  - dist/data/live-pulse.json            (updated earthquake entry)
+  - dist/data/earthquake-ledger.jsonl    (append-only SHA-256 prediction chain)
 
-All data is baked directly into HTML.  Zero JavaScript.
-Same architecture as the tornado scorer.
+then re-renders the site from those artifacts (``build_site_artifacts``).
+
+FAIL CLOSED: a catalog pull that is empty, fails, or has a hole (an empty month, a stale
+tail, a multi-day gap -- ``hazardpulse.earthquake.prospective.audit_catalog``) raises before
+anything is written, so the previous forecast stays the published one and the run fails
+visibly. Nothing here publishes a default probability in place of a forecast.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import hashlib
-import io
 import json
 import math
 import sys
 from pathlib import Path
-from urllib.request import urlopen, Request
-from urllib.error import URLError
 
 import numpy as np
 
@@ -51,8 +51,6 @@ from hazardpulse.earthquake.coherence_engine import (  # noqa: E402
     LON_MAX,
     N_LAT,
     N_LON,
-    ELL_BACKGROUND_KM,
-    B_VALUE_BACKGROUND,
     compute_seismic_coherence_field,
     extract_coherence_features,
     grid_cell_to_latlon,
@@ -138,108 +136,6 @@ def _risk_band(prob: float) -> str:
         if prob >= threshold:
             return band
     return "minimal"
-
-
-RISK_COLORS = {
-    "critical": "#b71c1c",
-    "very_high": "#d32f2f",
-    "elevated": "#e65100",
-    "guarded": "#f9a825",
-    "low": "#1976d2",
-    "minimal": "#757575",
-}
-
-RISK_LABELS = {
-    "critical": "Critical",
-    "very_high": "Very High",
-    "elevated": "Elevated",
-    "guarded": "Guarded",
-    "low": "Low",
-    "minimal": "Minimal",
-}
-
-# ---------------------------------------------------------------------------
-# USGS earthquake catalog fetch
-# ---------------------------------------------------------------------------
-
-USGS_CSV_URL = (
-    "https://earthquake.usgs.gov/fdsnws/event/1/query"
-    "?format=csv&starttime={start}&endtime={end}"
-    "&minmagnitude=2.5&orderby=time"
-)
-
-
-def fetch_usgs_catalog(
-    days: int = 30,
-    end_time: dt.datetime | None = None,
-) -> list[dict]:
-    """Fetch USGS earthquake catalog (M2.5+) for the last N days.
-
-    Returns list of event dicts with keys:
-        time, latitude, longitude, depth, mag, magType, place, id
-    """
-    if end_time is None:
-        end_time = dt.datetime.now(dt.timezone.utc)
-    start_time = end_time - dt.timedelta(days=days)
-
-    url = USGS_CSV_URL.format(
-        start=start_time.strftime("%Y-%m-%dT%H:%M:%S"),
-        end=end_time.strftime("%Y-%m-%dT%H:%M:%S"),
-    )
-
-    print(f"  Fetching USGS catalog: M2.5+, {days} days...")
-    print(f"  URL: {url[:100]}...")
-
-    req = Request(url, headers={"User-Agent": "HazardPulse/1.0 (research)"})
-    try:
-        with urlopen(req, timeout=60) as resp:
-            raw = resp.read().decode("utf-8")
-    except URLError as e:
-        # Distinct failure mode from "API healthy but no events".
-        print(f"  ERROR: USGS catalog fetch failed (network/HTTP): {e}")
-        raise RuntimeError(f"USGS FDSNWS unreachable: {e}") from e
-
-    # Validate we got a real CSV response, not an empty body or HTML error page.
-    if not raw or not raw.strip():
-        raise RuntimeError(
-            "USGS returned HTTP 200 with empty body — API may be degraded."
-        )
-    first_line = raw.splitlines()[0].lower() if raw.splitlines() else ""
-    if "time" not in first_line or "latitude" not in first_line:
-        raise RuntimeError(
-            f"USGS response missing expected CSV header (got first line: "
-            f"{first_line[:120]!r})."
-        )
-
-    reader = csv.DictReader(io.StringIO(raw))
-    events: list[dict] = []
-    for row in reader:
-        try:
-            ev = {
-                "time": row.get("time", ""),
-                "latitude": float(row["latitude"]),
-                "longitude": float(row["longitude"]),
-                "depth": float(row.get("depth", 0) or 0),
-                "mag": float(row["mag"]),
-                "magType": row.get("magType", ""),
-                "place": row.get("place", ""),
-                "id": row.get("id", ""),
-            }
-            events.append(ev)
-        except (ValueError, KeyError):
-            continue
-
-    if not events:
-        # Empty response but healthy API. Unusual for a 30-day global M2.5+
-        # window (baseline ~2000/month); log distinctly from a fetch failure.
-        print(
-            "  WARNING: USGS returned zero events in {}-day window "
-            "(API healthy, just no matches). This is unusual for global "
-            "M2.5+; verify window parameters.".format(days)
-        )
-    else:
-        print(f"  Fetched {len(events)} events from USGS catalog")
-    return events
 
 
 # ---------------------------------------------------------------------------
@@ -422,315 +318,6 @@ def bin_events_to_grid(events: list[dict]) -> dict[tuple[int, int], list[dict]]:
     return grid
 
 
-def score_grid_cells(
-    events: list[dict],
-    grid_fields: dict[str, np.ndarray] | None = None,
-    now: dt.datetime | None = None,
-    pretrained_gbt: dict | None = None,
-) -> list[dict]:
-    """Score all active grid cells and return ranked list.
-
-    For each 2-degree cell with recent seismicity, compute:
-    - b-value and trend
-    - Correlation length and trend
-    - Rate acceleration
-    - Singularity conditions (0-5)
-    - Estimated days to criticality
-
-    If ``pretrained_gbt`` is provided and the earthquake ML module is
-    importable, cell probability comes from the trained GBT (Block S + C,
-    73 features). Otherwise falls back to the heuristic scorer.
-    """
-    if now is None:
-        now = dt.datetime.now(dt.timezone.utc)
-    ref_epoch = now.replace(tzinfo=dt.timezone.utc).timestamp()
-
-    cell_bins = bin_events_to_grid(events)
-    scored_cells: list[dict] = []
-
-    # If ML tier available, pre-build the CatalogArrays once for the run.
-    cat_arrays = None
-    if pretrained_gbt is not None and HAS_EQ_ML:
-        try:
-            cat_arrays = CatalogArrays(events, verbose=False)
-        except Exception as exc:
-            print(f"  WARNING: CatalogArrays build failed ({exc}); disabling ML tier.")
-            cat_arrays = None
-            pretrained_gbt = None
-
-    for (row, col), cell_events in cell_bins.items():
-        if len(cell_events) < 5:
-            continue
-
-        lat, lon = grid_cell_to_latlon(row, col)
-
-        # Extract coherence features (used for both tiers — diagnostics always
-        # ride along with the output regardless of which tier produced prob).
-        features = extract_coherence_features(
-            events, lat, lon,
-            radius_km=300.0,
-            time_window_days=365.0,
-            ref_epoch=ref_epoch,
-            grid_fields=grid_fields,
-        )
-
-        # Test singularity conditions
-        sing = test_earthquake_singularity(features)
-
-        prob = None
-        cell_tier = "tier2_heuristic"
-        if pretrained_gbt is not None and cat_arrays is not None:
-            try:
-                block_s = compute_block_s(lat, lon, ref_epoch, cat_arrays)
-                if block_s is not None:
-                    block_c = compute_block_c(events, lat, lon, ref_epoch)
-                    full_vec = np.concatenate([block_s, block_c])
-                    if full_vec.shape[0] == len(DEFINITIVE_EQ_FEATURE_NAMES):
-                        prob = float(_predict_eq_with_gbt(pretrained_gbt, full_vec))
-                        cell_tier = "tier1_ml"
-            except Exception as exc:
-                print(f"  WARNING: ML scoring failed for cell ({row},{col}): {exc}")
-                prob = None
-
-        if prob is None:
-            # Heuristic fallback (original scorer behaviour).
-            base_prob = sing.conditions_met * 0.08
-            rate_accel = features.get("rate_acceleration", 1.0)
-            if not math.isnan(rate_accel) and rate_accel > 1.0:
-                base_prob *= min(rate_accel, 3.0) / 1.5
-            b_val = features.get("b_value", 1.0)
-            if not math.isnan(b_val) and b_val < 0.85:
-                base_prob *= 1.2
-            prob = min(max(base_prob, 0.0), 0.95)
-
-        # Max magnitude in cell in last 30 days
-        max_mag = max(
-            (e["mag"] for e in cell_events if e.get("mag") is not None),
-            default=0.0,
-        )
-
-        risk = _risk_band(prob)
-
-        entry = {
-            "row": row,
-            "col": col,
-            "lat": round(lat, 2),
-            "lon": round(lon, 2),
-            "n_events": len(cell_events),
-            "max_mag": round(max_mag, 1),
-            "probability": round(prob, 4),
-            "risk_band": risk,
-            "scoring_tier": cell_tier,
-            "b_value": round(features.get("b_value", float("nan")), 3),
-            "b_trend": round(features.get("b_trend", float("nan")), 4),
-            "ell_km": round(features.get("ell", float("nan")), 1),
-            "ell_trend": round(features.get("ell_trend", float("nan")), 2),
-            "rate_acceleration": round(
-                features.get("rate_acceleration", float("nan")), 2
-            ),
-            "delta_aic_iet": round(
-                features.get("delta_aic_iet", float("nan")), 2
-            ),
-            "S_over_Gamma": round(
-                features.get("S_over_Gamma", float("nan")), 3
-            ),
-            "days_to_criticality": round(
-                features.get("days_to_criticality", float("nan")), 1
-            ),
-            "conditions_met": sing.conditions_met,
-            "singularity_detail": {
-                "ell_elevated": sing.ell_elevated,
-                "b_depressed": sing.b_depressed,
-                "iet_lorentzian": sing.iet_lorentzian,
-                "rate_accelerating": sing.rate_accelerating,
-                "loading_exceeds_healing": sing.loading_exceeds_healing,
-            },
-            "tau_local": round(features.get("tau_local", float("nan")), 4),
-            "grad_tau_local": round(
-                features.get("grad_tau_local", float("nan")), 4
-            ),
-            "depth_trend": round(
-                features.get("depth_trend", float("nan")), 2
-            ),
-            "spatial_concentration": round(
-                features.get("spatial_concentration", float("nan")), 1
-            ),
-            "model_version": MODEL_VERSION,
-        }
-        scored_cells.append(entry)
-
-    # Sort by probability descending, then by conditions_met
-    scored_cells.sort(
-        key=lambda c: (c["probability"], c["conditions_met"]),
-        reverse=True,
-    )
-    return scored_cells
-
-
-# ---------------------------------------------------------------------------
-# HTML rendering helpers
-# ---------------------------------------------------------------------------
-
-
-def _esc(s: str) -> str:
-    """Escape HTML special characters."""
-    return (
-        str(s)
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
-
-
-def _pct(p: float) -> str:
-    """Format a probability as a percentage string."""
-    if math.isnan(p):
-        return "--"
-    return f"{p * 100:.1f}%"
-
-
-def _fmt(val: float, fmt: str = ".2f") -> str:
-    """Format a float, handling NaN."""
-    if isinstance(val, float) and math.isnan(val):
-        return "--"
-    return f"{val:{fmt}}"
-
-
-def _format_time(ts: str) -> str:
-    """Format a timestamp string for display."""
-    if not ts:
-        return "--"
-    try:
-        d = dt.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-        return d.strftime("%a, %d %b %Y %H:%M:%S UTC")
-    except Exception:
-        return str(ts)
-
-
-def _lat_lon_to_svg(lat: float, lon: float) -> tuple[float, float]:
-    """Convert lat/lon to SVG coordinates for 960x480 equirectangular map."""
-    x = ((lon + 180) / 360) * 960
-    y = ((90 - lat) / 180) * 480
-    return (x, y)
-
-
-# ---------------------------------------------------------------------------
-# SVG grid heatmap
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# Cell row rendering (details/summary, no JS)
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# Coherence deep dive for #1 cell
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# Full page rendering (zero JavaScript)
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# Output writers
-# ---------------------------------------------------------------------------
-
-
-def write_outputs(
-    scored_cells: list[dict],
-    now: dt.datetime,
-) -> None:
-    """Write scored results to dist/data/."""
-    # Update live-pulse.json earthquake entry
-    pulse_path = DIST / "data" / "live-pulse.json"
-    if pulse_path.exists():
-        pulse = json.loads(pulse_path.read_text(encoding="utf-8"))
-        for hazard in pulse.get("hazards", []):
-            if hazard.get("key") == "eq":
-                if scored_cells:
-                    top = scored_cells[0]
-                    hazard["probability"] = top["probability"]
-                    hazard["conf_lo"] = None
-                    hazard["conf_hi"] = None
-                    hazard["risk_band"] = top["risk_band"]
-                    hazard["gate_status"] = "pass"
-                    hazard["model_version"] = MODEL_VERSION
-                    hazard["forecast_id"] = (
-                        f"eq_fcst_{now.strftime('%Y%m%d')}_"
-                        f"{now.strftime('%H')}00"
-                    )
-                else:
-                    hazard["probability"] = 0.0
-                    hazard["conf_lo"] = None
-                    hazard["conf_hi"] = None
-                    hazard["risk_band"] = "minimal"
-                    hazard["gate_status"] = "pass"
-                    hazard["model_version"] = MODEL_VERSION
-                break
-        pulse["updated_at"] = now.isoformat() + "Z"
-        pulse_path.write_text(
-            json.dumps(pulse, indent=2) + "\n", encoding="utf-8"
-        )
-        print(f"  Updated {pulse_path}")
-
-
-def append_ledger(
-    scored_cells: list[dict],
-    now: dt.datetime,
-) -> None:
-    """Append prediction to SHA-256 chain ledger."""
-    LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-    # Read previous hash
-    prev_hash = "0" * 64
-    if LEDGER_PATH.exists():
-        lines = LEDGER_PATH.read_text(encoding="utf-8").strip().split("\n")
-        if lines and lines[-1].strip():
-            try:
-                last = json.loads(lines[-1])
-                prev_hash = last.get("hash", prev_hash)
-            except json.JSONDecodeError:
-                pass
-
-    # Build ledger entry
-    entry = {
-        "timestamp": now.isoformat() + "Z",
-        "model_version": MODEL_VERSION,
-        "n_cells_scored": len(scored_cells),
-        "top_probability": (
-            scored_cells[0]["probability"] if scored_cells else 0.0
-        ),
-        "top_conditions": (
-            scored_cells[0]["conditions_met"] if scored_cells else 0
-        ),
-        "prev_hash": prev_hash,
-    }
-    # Add top 5 cells summary
-    entry["top_cells"] = [
-        {
-            "lat": c["lat"],
-            "lon": c["lon"],
-            "probability": c["probability"],
-            "conditions_met": c["conditions_met"],
-            "max_mag": c["max_mag"],
-        }
-        for c in scored_cells[:5]
-    ]
-
-    # Compute SHA-256 hash
-    payload = json.dumps(entry, sort_keys=True)
-    entry["hash"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-    # Append
-    with open(LEDGER_PATH, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry) + "\n")
-    print(f"  Appended to {LEDGER_PATH}")
-
-
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
@@ -773,7 +360,13 @@ def fetch_usgs_catalog(
     *,
     min_magnitude: float = 2.5,
 ) -> list[dict]:
-    """Fetch USGS earthquake catalog for the last N days."""
+    """The USGS catalog for the last N days, AUDITED for holes.
+
+    ``fetch_usgs_catalog_range`` raises ``CatalogIncompleteError`` on an empty pull, an empty
+    month (FDSN answers a failed month 200/204 exactly like a quiet one), a stale tail or a
+    multi-day gap; any network failure raises too. Nothing downstream ever sees a partial
+    catalog.
+    """
     from hazardpulse.earthquake.prospective import fetch_usgs_catalog_range
 
     if end_time is None:
@@ -883,6 +476,13 @@ def score_grid_cells(
                 "lambda_long": _publish_prob(float(operational["lambda_long"][flat])),
                 "lambda_short": _publish_prob(float(operational["lambda_short"][flat])),
             }
+            if "probability_uncalibrated" in operational:      # calibrate_scored_grid ran
+                op_fields.update({
+                    "raw_probability": _publish_prob(float(operational["probability_uncalibrated"][flat])),
+                    "confidence_lo": _publish_prob(float(operational["confidence_lo"][flat])),
+                    "confidence_hi": _publish_prob(float(operational["confidence_hi"][flat])),
+                    "calibrated": True,
+                })
             n_ml += 1
         # Tier 1a: deep GRU nowcast (champion). Reads the raw event sequence directly --
         # no Block S/C needed. P(M5+ within radius/365d) precursory-state score.
@@ -1018,6 +618,13 @@ def score_grid_cells(
     return scored_cells
 
 
+def _fmt(val: float, fmt: str = ".2f") -> str:
+    """Format a float for the run log, handling NaN."""
+    if isinstance(val, float) and math.isnan(val):
+        return "--"
+    return f"{val:{fmt}}"
+
+
 def _publish_prob(p: float) -> float:
     """Six significant digits: the operational model's quiet cells sit at 1e-5..1e-3, which
     the old ``round(p, 4)`` would have published as 0."""
@@ -1044,6 +651,43 @@ def _make_json_serializable(obj):
     return obj
 
 
+class NoForecastError(RuntimeError):
+    """There is no forecast to publish (no catalog, no grid, no listed cell): the run fails
+    and the previous forecast stays the published one."""
+
+
+class ListedCellOffGridError(RuntimeError):
+    """A listed cell publishes a probability that the scored grid does not hold."""
+
+
+def listed_cells_off_grid(cells: list[dict], grid) -> list[str]:
+    """Listed cells whose published ``probability`` differs from the scored grid's value.
+
+    The replay's ``probability_grid`` is what the prospective verifier scores; the listed
+    cells are what the pages show. If a calibrator (or anything else) changed the listed
+    numbers but not the grid, the site would show calibrated numbers while the record scores
+    raw ones. Both are written at six significant digits (``_publish_prob``), so the
+    comparison is exact.
+    """
+    grid = np.asarray(grid, dtype=np.float64).ravel()
+    off = []
+    for cell in cells:
+        try:
+            row, col = int(cell["row"]), int(cell["col"])
+        except (KeyError, TypeError, ValueError):
+            off.append(f"a cell without a grid position: {sorted(cell)[:6]}")
+            continue
+        flat = row * N_LON + col
+        if not (0 <= row < N_LAT and 0 <= col < N_LON):
+            off.append(f"({row},{col}) is outside the grid")
+            continue
+        want = _publish_prob(grid[flat])
+        got = cell.get("probability")
+        if got is None or float(got) != want:
+            off.append(f"({row},{col}) publishes {got}, the scored grid holds {want}")
+    return off
+
+
 def write_outputs(
     scored_cells: list[dict],
     now: dt.datetime,
@@ -1051,36 +695,34 @@ def write_outputs(
     forecast_id: str,
     pulse_path: Path = DIST / "data" / "live-pulse.json",
 ) -> None:
-    """Write scored results to dist/data/."""
+    """Write scored results to dist/data/.
+
+    Refuses an empty cell list: until 2026-10 an empty catalog pull published
+    ``probability 0.0, risk_band minimal, gate_status pass`` here -- a confident "nothing"
+    that no model computed.
+    """
     from hazardpulse.earthquake.prospective import format_utc_z
 
+    if not scored_cells:
+        raise NoForecastError(f"{forecast_id}: no scored cell to publish; the previous forecast stands")
     if pulse_path.exists():
         pulse = json.loads(pulse_path.read_text(encoding="utf-8"))
         for hazard in pulse.get("hazards", []):
             if hazard.get("key") == "eq":
-                if scored_cells:
-                    top = scored_cells[0]
-                    hazard["probability"] = top["probability"]
-                    # Real uncertainty band from the calibrator (None until a
-                    # calibrator exists) — populates HazardForecastV1 and removes
-                    # the universal confidence_interval_unavailable gate warning.
-                    hazard["conf_lo"] = top.get("confidence_lo")
-                    hazard["conf_hi"] = top.get("confidence_hi")
-                    hazard["uncertainty_class"] = top.get("uncertainty_class")
-                    hazard["abstained"] = top.get("abstained", False)
-                    hazard["receipt_sha256"] = top.get("receipt_sha256")
-                    hazard["risk_band"] = top["risk_band"]
-                    hazard["gate_status"] = "pass"
-                    hazard["model_version"] = MODEL_VERSION
-                    hazard["forecast_id"] = forecast_id
-                else:
-                    hazard["probability"] = 0.0
-                    hazard["conf_lo"] = None
-                    hazard["conf_hi"] = None
-                    hazard["risk_band"] = "minimal"
-                    hazard["gate_status"] = "pass"
-                    hazard["model_version"] = MODEL_VERSION
-                    hazard["forecast_id"] = forecast_id
+                top = scored_cells[0]
+                hazard["probability"] = top["probability"]
+                # Real uncertainty band from the calibrator (None until a
+                # calibrator exists) — populates HazardForecastV1 and removes
+                # the universal confidence_interval_unavailable gate warning.
+                hazard["conf_lo"] = top.get("confidence_lo")
+                hazard["conf_hi"] = top.get("confidence_hi")
+                hazard["uncertainty_class"] = top.get("uncertainty_class")
+                hazard["abstained"] = top.get("abstained", False)
+                hazard["receipt_sha256"] = top.get("receipt_sha256")
+                hazard["risk_band"] = top["risk_band"]
+                hazard["gate_status"] = "pass"
+                hazard["model_version"] = MODEL_VERSION
+                hazard["forecast_id"] = forecast_id
                 break
         pulse["updated_at"] = format_utc_z(now)
         pulse_path.write_text(json.dumps(pulse, indent=2) + "\n", encoding="utf-8")
@@ -1099,8 +741,25 @@ def write_replay_artifact(
     probability_grid=None,
     operational_meta: dict | None = None,
 ) -> Path:
-    """Write a frozen replay artifact for later prospective scoring."""
+    """Write a frozen replay artifact for later prospective scoring.
+
+    Refuses to write a forecast without its full ``probability_grid`` (the verifier would
+    score every unlisted cell at ``default_probability`` 0 -- a forecast nobody made), and one
+    whose listed cells publish a number the grid does not hold (``listed_cells_off_grid``):
+    the grid is what is scored, so a listed cell may never say anything else.
+    """
     from hazardpulse.earthquake.prospective import format_utc_z
+
+    if probability_grid is None:
+        raise NoForecastError(f"{forecast_id}: no probability grid; nothing is published")
+    grid = np.asarray(probability_grid, dtype=np.float64).ravel()
+    if grid.size != N_LAT * N_LON:
+        raise ValueError(f"probability_grid has {grid.size} cells, the domain has {N_LAT * N_LON}")
+    off = listed_cells_off_grid(scored_cells, grid)
+    if off:
+        raise ListedCellOffGridError(
+            f"{forecast_id}: {len(off)} listed cell(s) publish a probability the scored grid does not "
+            f"hold (first: {off[0]})")
 
     replay_dir.mkdir(parents=True, exist_ok=True)
     replay_path = replay_dir / f"{forecast_id}.json"
@@ -1138,16 +797,12 @@ def write_replay_artifact(
         "top_probability": scored_cells[0]["probability"] if scored_cells else 0.0,
         "active_cells": scored_cells,
     }
-    if probability_grid is not None:
-        grid = np.asarray(probability_grid, dtype=np.float64).ravel()
-        if grid.size != N_LAT * N_LON:
-            raise ValueError(f"probability_grid has {grid.size} cells, the domain has {N_LAT * N_LON}")
-        # The forecast for EVERY cell (row-major, row = latitude band from lat_min), as ONE
-        # comma-separated string of 6-significant-digit values: a JSON list would be written
-        # one value per line by indent=2 (~210 KB per forecast). The verifier scores this
-        # grid; default_probability applies only to artifacts without it.
-        artifact["probability_grid"] = ",".join(f"{float(p):.6g}" for p in grid)
-        artifact["forecast_domain"]["grid_order"] = "row_major_lat_then_lon"
+    # The forecast for EVERY cell (row-major, row = latitude band from lat_min), as ONE
+    # comma-separated string of 6-significant-digit values: a JSON list would be written
+    # one value per line by indent=2 (~210 KB per forecast). The verifier scores this
+    # grid; default_probability applies only to pre-2026-10 artifacts without it.
+    artifact["probability_grid"] = ",".join(f"{float(p):.6g}" for p in grid)
+    artifact["forecast_domain"]["grid_order"] = "row_major_lat_then_lon"
     if operational_meta:
         artifact["operational_model"] = operational_meta
     replay_path.write_text(
@@ -1209,9 +864,12 @@ def append_ledger(
     ledger_path: Path = LEDGER_PATH,
     replay_path: Path | None = None,
 ) -> None:
-    """Append prediction to the ledger without duplicate forecast ids."""
+    """Append prediction to the ledger without duplicate forecast ids. An empty forecast is
+    refused: a ledger row with ``top_probability 0.0`` would record a forecast nobody made."""
     from hazardpulse.earthquake.prospective import format_utc_z
 
+    if not scored_cells:
+        raise NoForecastError(f"{forecast_id}: no scored cell; no ledger row is written")
     # FAIL CLOSED on the tracked production ledger: it is a 340+-entry hash chain committed
     # in git. If it is missing from disk the checkout is partial (e.g. sparse); appending
     # would silently fork a fresh chain from genesis and clobber the real one on the next
@@ -1287,6 +945,16 @@ class RiskBandContradiction(RuntimeError):
     """A published cell's risk band disagrees with its published probability."""
 
 
+def receipt_model_sha256(served_sha256: str, forecaster=None) -> str:
+    """What a receipt's ``model_sha256`` binds: the served model files' digest
+    (``eq_operational.served_sha256``: the C0 artifact, plus the S1 stack when it is served)
+    and, when a calibrator maps the published number, that calibrator's fingerprint too."""
+    if forecaster is None:
+        return served_sha256
+    text = f"{served_sha256}\ncalibrator {forecaster.model_sha256_}\n"
+    return hashlib.sha256(text.encode("ascii")).hexdigest()
+
+
 def attach_operational_receipts(
     scored: list[dict],
     *,
@@ -1298,38 +966,45 @@ def attach_operational_receipts(
 ) -> list[dict]:
     """Receipt (spec hazardpulse/forecast/v1) for each listed operational cell.
 
-    Binds the published probability to the artifact (``model_sha256``, CRLF-normalised)
-    and to the exact model input (the canonical M5+ rows before the issue time) plus the
-    cell. No calibrator is involved, so ``raw_probability == probability`` and the
-    interval is absent (``uncertainty_class = "no_interval"``) -- nothing is claimed that
-    was not computed. Signed when a signing key is configured, integrity-only otherwise.
+    Binds the published probability to the served model files (``model_sha256``:
+    ``receipt_model_sha256``) and to the exact model input (the canonical M5+ rows before
+    the issue time) plus the cell. Without a calibrator ``raw_probability == probability``
+    and the interval is absent (``uncertainty_class = "no_interval"``); with one
+    (``calibrate_scored_grid``) the cell carries the grid's raw value and the calibrator's
+    Venn-Abers band, so nothing is claimed that was not computed. Signed when a signing key
+    is configured, integrity-only otherwise.
     """
-    from hazardpulse.trust.forecast import RECEIPT_SPEC, sign_forecast_receipt
+    from hazardpulse.trust.forecast import RECEIPT_SPEC, _uncertainty_class, sign_forecast_receipt
 
     for cell in scored:
         cell_input = hashlib.sha256(
             f"{input_sha256}|{issued_at}|{cell['row']},{cell['col']}".encode("utf-8")).hexdigest()
+        lo, hi = cell.get("confidence_lo"), cell.get("confidence_hi")
+        has_band = cell.get("calibrated") and lo is not None and hi is not None
+        uclass = _uncertainty_class(float(lo), float(hi)) if has_band else "no_interval"
         core = {
             "spec": RECEIPT_SPEC,
             "model_version": model_version,
             "model_sha256": model_sha256,
             "input_sha256": cell_input,
             "issued_at": issued_at,
-            "raw_probability": cell["probability"],
+            "raw_probability": cell.get("raw_probability", cell["probability"]),
             "probability": cell["probability"],
-            "confidence_lo": None,
-            "confidence_hi": None,
-            "uncertainty_class": "no_interval",
+            "confidence_lo": lo if has_band else None,
+            "confidence_hi": hi if has_band else None,
+            "uncertainty_class": uclass,
             "ood_score": None,
             "ood_flag": False,
             "abstained": False,
             "abstain_reason": None,
-            "gateway_mode": "NORMAL",
+            "gateway_mode": "CAUTIOUS" if uclass == "wide" else "NORMAL",
             "coverage_target": None,
         }
         receipt = sign_forecast_receipt(core, signer)
         cell["receipt"] = receipt
         cell["receipt_sha256"] = receipt["receipt_sha256"]
+        if has_band:
+            cell["uncertainty_class"] = uclass
     return scored
 
 
@@ -1344,17 +1019,68 @@ def trust_layer_applies(forecaster, served_model_version: str) -> bool:
     return forecaster is not None and getattr(forecaster, "model_version", None) == served_model_version
 
 
-def apply_trust_layer(scored: list[dict], forecaster, *, issued_at: str) -> list[dict]:
-    """Calibrate every scored cell in place and keep its risk band truthful.
+# The pool the earthquake calibrator is fitted on (score_earthquake_prospective --emit-calibration;
+# fit_calibration fits results/calibration/earthquake_calibration.json from it in the same job).
+CALIBRATION_DATASET_PATH = (
+    Path(__file__).resolve().parents[1] / "results" / "earthquake_prospective" / "calibration_dataset.json"
+)
 
-    The band is first computed from the RAW score in score_grid_cells; the trust
-    layer then replaces ``probability`` with the calibrated value. Re-deriving the
-    band from the published probability (band_fn) is what stops a 4.54% cell from
-    being labelled "critical". Raises if any contradiction survives.
+
+def calibration_evidence(forecaster, dataset_path: Path | None = None) -> tuple[bool, str]:
+    """Whether the calibrator rests on INDEPENDENT evidence: distinct earthquakes and windows that
+    do not overlap, counted by the scorer beside the pool it was fitted on.
+
+    The shared admissibility gate (hazardpulse.trust.scoring.calibrator_admissible) counts the
+    pool's positives, which are cell-windows summed over overlapping 30-day windows: the retired
+    model's pool held 5,931 "events" from 64 earthquakes, so its 30-event floor can pass on ONE
+    earthquake seen by ~100 windows. Fails closed: a pool of another model, or one written before
+    these counts existed, is not evidence.
     """
-    from hazardpulse.trust.scoring import band_contradictions, enrich_cells
+    from hazardpulse.earthquake import live_record
+    from hazardpulse.trust.scoring import MIN_CALIBRATION_EVENTS
 
-    enrich_cells(scored, forecaster, issued_at=issued_at, band_fn=_risk_band)
+    path = dataset_path or CALIBRATION_DATASET_PATH
+    try:
+        pool = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False, f"no calibration pool at {path}"
+    if pool.get("model_version") != getattr(forecaster, "model_version", None):
+        return False, f"the pool is {pool.get('model_version')!r}'s, the calibrator {forecaster.model_version!r}'s"
+    n_ev, n_ind = pool.get("n_distinct_events"), pool.get("n_independent_windows")
+    if n_ev is None or n_ind is None:
+        return False, "the pool predates distinct-earthquake counting"
+    if int(n_ev) < MIN_CALIBRATION_EVENTS or int(n_ind) < live_record.LIVE_MIN_INDEPENDENT_WINDOWS:
+        return False, (f"{int(n_ev)} distinct earthquakes in {int(n_ind)} non-overlapping windows (needs "
+                       f"{MIN_CALIBRATION_EVENTS} and {live_record.LIVE_MIN_INDEPENDENT_WINDOWS})")
+    return True, f"{int(n_ev)} distinct earthquakes, {int(n_ind)} non-overlapping windows"
+
+
+def calibrate_scored_grid(operational: dict, forecaster) -> dict:
+    """Apply a calibrator to the WHOLE grid that is scored, or nothing is calibrated.
+
+    The replay's ``probability_grid`` is what the prospective verifier scores and the listed
+    cells are read from it (``score_grid_cells``). Until 2026-10 the calibrated path mapped
+    only the listed cells (``enrich_cells`` on ~100 of 11,700) and left the scored grid raw,
+    so the site would have shown calibrated numbers while the record scored raw ones. Here the
+    calibrator maps every cell; the raw grid and the Venn-Abers band ride along so each listed
+    cell can state both. Returns a new dict; the input is not modified.
+    """
+    raw = np.asarray(operational["probability"], dtype=np.float64)
+    p, lo, hi = forecaster.calibrator.predict(raw)
+    out = dict(operational)
+    out["probability_uncalibrated"] = raw
+    out["probability"] = np.asarray(p, dtype=np.float64).reshape(raw.shape)
+    out["confidence_lo"] = np.asarray(lo, dtype=np.float64).reshape(raw.shape)
+    out["confidence_hi"] = np.asarray(hi, dtype=np.float64).reshape(raw.shape)
+    out["calibrator_model_version"] = forecaster.model_version
+    return out
+
+
+def check_published_bands(scored: list[dict]) -> None:
+    """Raise if any listed cell's risk band contradicts its published probability (a 4.54%
+    cell labelled "critical" was published this way before 2026-10)."""
+    from hazardpulse.trust.scoring import band_contradictions
+
     bad = band_contradictions(scored, _risk_band)
     if bad:
         raise RiskBandContradiction(
@@ -1362,7 +1088,6 @@ def apply_trust_layer(scored: list[dict], forecaster, *, issued_at: str) -> list
             f"published probability (first: {scored[bad[0]].get('probability')} -> "
             f"{scored[bad[0]].get('risk_band')})"
         )
-    return scored
 
 
 def build_arg_parser():
@@ -1409,43 +1134,21 @@ def run_pipeline(
         f"Step 1: Fetching USGS earthquake catalog "
         f"(M2.5+, {FEATURE_HISTORY_DAYS} days history)..."
     )
+    # FAIL CLOSED: a failed, empty or holed pull raises inside fetch_usgs_catalog (audited);
+    # this guard holds even if a substitute fetcher returns nothing. Until 2026-10 an empty
+    # pull wrote a replay with no grid, a pulse at probability 0 ("minimal", gate "pass") and
+    # a ledger row -- a published forecast no model computed.
     history_events = fetch_usgs_catalog(days=FEATURE_HISTORY_DAYS, end_time=now)
+    if not history_events:
+        raise NoForecastError(
+            f"{forecast_id}: the USGS catalog pull returned no events; nothing is published and the "
+            "previous forecast stands")
     recent_cutoff = now - dt.timedelta(days=RECENT_ACTIVITY_DAYS)
     recent_events = [
         event
         for event in history_events
         if parse_utc_datetime(event["time"]) >= recent_cutoff
     ]
-
-    if not history_events:
-        replay_path = write_replay_artifact(
-            [],
-            now,
-            forecast_id=forecast_id,
-            n_history_events=0,
-            n_recent_events=0,
-            replay_dir=replay_dir,
-            update_index=not skip_replay_index,
-        )
-        if not skip_live_pulse:
-            write_outputs([], now, forecast_id=forecast_id)
-        append_ledger(
-            [],
-            now,
-            forecast_id=forecast_id,
-            ledger_path=ledger_path,
-            replay_path=replay_path,
-        )
-        if not skip_site and not skip_live_pulse:
-            build_site_artifacts()
-        return {
-            "forecast_id": forecast_id,
-            "issued_at": format_utc_z(now),
-            "n_history_events": 0,
-            "n_recent_events": 0,
-            "n_active_cells": 0,
-            "replay_path": str(replay_path),
-        }
 
     print(f"  {len(history_events)} history events fetched")
     print(f"  {len(recent_events)} recent events kept for active-cell discovery")
@@ -1480,6 +1183,34 @@ def run_pipeline(
         f"{eq_operational.CATALOG_START[:10]}; expected cells with an M6+ (sum of P) "
         f"{float(np.sum(operational['probability'])):.2f}; max P {float(np.max(operational['probability'])):.4f}"
     )
+    # Trust layer, decided BEFORE any cell is listed: a calibrator applies to the whole grid
+    # that is scored (calibrate_scored_grid) or not at all, and only when it is bound to the
+    # served model version (trust_layer_applies) and admissible (load_forecaster). If the
+    # trust layer cannot even be loaded, the forecast stays raw, as computed.
+    _signer = _forecaster = None
+    try:
+        from hazardpulse.trust.scoring import load_forecaster, load_signer
+
+        _signer = load_signer()
+        _forecaster = load_forecaster("earthquake", signer=_signer)
+    except Exception as exc:  # never let a broken trust layer change a live forecast
+        print(f"  Trust layer: not loaded ({exc}); the forecast stays as computed")
+    calibrator = _forecaster if trust_layer_applies(_forecaster, MODEL_VERSION) else None
+    if calibrator is not None:
+        evidence_ok, evidence_why = calibration_evidence(calibrator)
+        if not evidence_ok:
+            print(f"  Trust layer: calibrator {calibrator.model_version} not applied -- {evidence_why}")
+            calibrator = None
+    if calibrator is not None:
+        operational = calibrate_scored_grid(operational, calibrator)
+        print(f"  Trust layer: calibrator {calibrator.model_version} applied to all "
+              f"{np.asarray(operational['probability']).size} cells of the scored grid ({evidence_why})")
+    elif not trust_layer_applies(_forecaster, MODEL_VERSION):
+        bound = _forecaster.model_version if _forecaster is not None else "none"
+        print(f"  Trust layer: calibrator bound to {bound}, not the served {MODEL_VERSION}; not applied "
+              "(the operational model is calibrated by its own likelihood fit)")
+    served_digest = eq_operational.served_sha256(artifact, stack)
+
     deep_eq_scorer_st = load_deep_eq_shortterm_model()  # short-term local watch (2nd field)
     deep_eq_scorer_op = load_deep_eq_operational_model()  # M5+/100 km research field (3rd)
     scored = score_grid_cells(
@@ -1492,36 +1223,14 @@ def run_pipeline(
         operational=operational,
     )
     print(f"  {len(scored)} cells listed")
-
-    # Trust layer: calibrate probabilities, attach honest [conf_lo, conf_hi]
-    # bands + Ed25519-signed re-runnable receipts. Fails safe — if no calibrator
-    # has been produced yet, forecasts stay raw (uncalibrated) and honest. A calibrator
-    # fitted to ANOTHER model's scores is never applied (trust_layer_applies).
+    check_published_bands(scored)       # never publish a label that contradicts its own probability
     try:
-        from hazardpulse.trust.scoring import load_forecaster, load_signer
-
-        _signer = load_signer()
-        _forecaster = load_forecaster("earthquake", signer=_signer)
-        if not trust_layer_applies(_forecaster, MODEL_VERSION):
-            bound = _forecaster.model_version if _forecaster is not None else "none"
-            attach_operational_receipts(
-                scored, model_version=MODEL_VERSION, model_sha256=artifact.sha256,
-                input_sha256=operational["input_sha256"], issued_at=format_utc_z(now), signer=_signer)
-            print(
-                f"  Trust layer: calibrator bound to {bound}, not the served {MODEL_VERSION}; "
-                "not applied (the operational model is calibrated by its own likelihood fit). "
-                f"Receipts attached to {len(scored)} cells (signed={_signer is not None})."
-            )
-        else:
-            apply_trust_layer(scored, _forecaster, issued_at=format_utc_z(now))
-            print(
-                f"  Trust layer: calibrated {len(scored)} cells "
-                f"(model {_forecaster.model_version}, signed={_signer is not None})"
-            )
-    except RiskBandContradiction:
-        raise  # never publish a label that contradicts its own probability
-    except Exception as exc:  # never let the trust layer break a live forecast
-        print(f"  Trust layer: skipped ({exc})")
+        attach_operational_receipts(
+            scored, model_version=MODEL_VERSION, model_sha256=receipt_model_sha256(served_digest, calibrator),
+            input_sha256=operational["input_sha256"], issued_at=format_utc_z(now), signer=_signer)
+        print(f"  Receipts attached to {len(scored)} cells (signed={_signer is not None})")
+    except Exception as exc:  # a receipt failure leaves the forecast unreceipted (the gate degrades it)
+        print(f"  Receipts: skipped ({exc})")
 
     for cell in scored[:10]:
         print(
@@ -1549,6 +1258,16 @@ def run_pipeline(
             "base_artifact": "results/models/" + OPERATIONAL_ARTIFACT_PATH.name,
             "base_model_version": artifact.model_version,
             "artifact_sha256_lf": artifact.sha256,
+            # what the receipts' model_sha256 binds (eq_operational.served_sha256): the base
+            # artifact alone, or with the S1 stack both files' digests under one hash
+            **({"stack_sha256_lf": stack.sha256} if stack is not None else {}),
+            "served_sha256": served_digest,
+            "served_sha256_recipe": (
+                f"sha256('{eq_operational.SERVED_DIGEST_SCHEMA}' LF 'base ' artifact_sha256_lf LF "
+                "'stack ' stack_sha256_lf LF)" if stack is not None else "artifact_sha256_lf"),
+            **({"calibrator_model_version": calibrator.model_version,
+                "receipt_model_sha256": receipt_model_sha256(served_digest, calibrator)}
+               if calibrator is not None else {}),
             "n_input_events_m5": operational["n_input_events"],
             # E[number of cells with an M6+ in the window] = sum of the published probabilities
             "expected_positive_cells": round(float(np.sum(operational["probability"])), 4),

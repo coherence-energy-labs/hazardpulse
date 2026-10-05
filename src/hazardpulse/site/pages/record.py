@@ -59,27 +59,56 @@ def _first_issue_of(d: SiteData, key: str, version: str) -> str | None:
     return min(times) if times else None
 
 
+def _eq_live_row(version: str, r: dict) -> tuple[str, str, str]:
+    """(forecasts closed, events observed, score) for one earthquake model version.
+
+    A 30-day forecast is issued several times a day, so its windows overlap and one earthquake falls
+    in ~100 of them: the record counts DISTINCT earthquakes (USGS event ids) and non-overlapping
+    windows, and quotes a score only through ``live_record.quotable`` (the retired model's 613
+    windows held 64 earthquakes, which this table once showed as 6,955)."""
+    from hazardpulse.earthquake import live_record
+
+    n = int(r.get("n_matured_forecasts") or 0)
+    n_ind, n_ev = r.get("n_independent_windows"), r.get("n_distinct_events")
+    closed = f"{n:,}" + (f" ({int(n_ind):,} non-overlapping)" if n_ind is not None else "")
+    events = f"{int(n_ev):,}" if n_ev is not None else "not counted"
+    ok, why = live_record.quotable(r)
+    if not n:
+        score = "nothing closed yet"
+    elif not ok:
+        score = f"no score yet: {esc(why)}"
+    else:
+        auc, ig = r.get("mean_auc"), r.get("event_weighted_information_gain_per_event")
+        score = f"ranking {fmt.pct(auc, 1)}" if auc is not None else "&mdash;"
+        if ig is not None:
+            score += f"; information gain per M6+ earthquake per window vs a uniform map {fmt.num(ig, 2)}"
+        score += " (averaged over overlapping windows)"
+    return closed, events, score
+
+
 def _live_rows(d: SiteData) -> list[list[str]]:
     """Every model version's live record, published or retired."""
     rows = []
     served = {k: (d.verification_by_key.get(k) or {}).get("model_version") for k in HAZARDS}
     eq = _prospective(d, "earthquake").get("by_model_version") or {}
-    for version, r in sorted(eq.items()):
-        n_ev = int(r.get("n_observed_events") or 0)
-        rows.append(["eq", version, int(r.get("n_matured_forecasts") or 0), n_ev, r.get("mean_auc"),
-                     r.get("event_weighted_information_gain_per_event"), "information gain per quake vs a uniform map"])
+    eq_out = [[common.hazard_label("eq"), f"<code>{esc(version)}</code>",
+               "published" if version == served.get("eq") else "retired", *_eq_live_row(version, r)]
+              for version, r in sorted(eq.items())]
     to = _prospective(d, "tornado").get("pooled_by_model_version") or {}
     for version, r in sorted(to.items()):
         rows.append(["to", version, int(r.get("n_storm_forecasts") or 0), int(r.get("n_positive") or 0),
                      r.get("auc"), r.get("bss_vs_causal_climatology"), "Brier skill vs climatology"])
-    hu = _prospective(d, "hurricane")
-    if hu:
-        rows.append(["hu", "all published hurricane numbers", int(hu.get("total_storm_predictions") or 0),
-                     int(hu.get("total_ri_events") or 0), None, None, ""])
-    out = []
+    # hurricane: one row per model version, over storm-cycles (amendment 7: each scored once, against its
+    # own 24 h); two versions publish at once (NOAA's aids in the NHC basins, v8.2 elsewhere)
+    hu_served = _hurricane_served_versions(d)
+    for version, r in sorted((_prospective(d, "hurricane").get("by_model_version") or {}).items()):
+        rows.append(["hu", version, int(r.get("n_storm_cycles") or 0), int(r.get("n_events") or 0),
+                     r.get("auc"), r.get("brier"), "Brier score"])
+    # earthquake rows come first, counted by distinct earthquakes (_eq_live_row)
+    out = eq_out
     for key, version, n, n_ev, auc, skill, skill_name in rows:
-        status = ("published" if version == served.get(key) else
-                  ("&mdash;" if key == "hu" else "retired"))
+        status = ("published" if (version in hu_served if key == "hu" else version == served.get(key))
+                  else "retired")
         enough = n_ev >= LIVE_MIN_EVENTS
         if enough:
             score = f"ranking {fmt.pct(auc, 1)}" if auc is not None else "&mdash;"
@@ -87,8 +116,23 @@ def _live_rows(d: SiteData) -> list[list[str]]:
                 score += f"; {skill_name} {fmt.num(skill, 2)}"
         else:
             score = (f"too few events to score yet (need {LIVE_MIN_EVENTS})" if n else "nothing closed yet")
-        out.append([common.hazard_label(key), f"<code>{esc(version)}</code>" if key != "hu" else esc(version),
-                     status, f"{n:,}", f"{n_ev:,}", score])
+        out.append([common.hazard_label(key), f"<code>{esc(version)}</code>", status, f"{n:,}", f"{n_ev:,}", score])
+    return out
+
+
+def _hurricane_served_versions(d: SiteData) -> dict[str, str]:
+    """``{model version: what it publishes}`` for the hurricane models published now, from the evidence
+    bound to the served artifacts (the NOAA-aid stack in the NHC basins, v8.2 elsewhere)."""
+    ev = d.evidence.get("hurricane") or {}
+    out = {}
+    if ev.get("model_version"):
+        out[str(ev["model_version"])] = "NOAA DTOPS (SHIPS-RII as fallback), Atlantic, East and Central Pacific"
+    if (ev.get("other_basins") or {}).get("model"):
+        out[str(ev["other_basins"]["model"])] = "HazardPulse v8.2, elsewhere"
+    if not out:
+        version = (d.verification_by_key.get("hu") or {}).get("model_version")
+        if version:
+            out[str(version)] = "the published model"
     return out
 
 
@@ -99,9 +143,13 @@ def _hazard_record_card(d: SiteData, key: str) -> str:
     version = v.get("model_version") or ""
     rows = [("Published model", f"<code>{esc(version)}</code>")]
     if key == "hu":
+        comp = ((ev or {}).get("other_basins") or {}).get("composition") or {}
+        v82 = ("HazardPulse v8.2 elsewhere, its method tested on held-out cycles from every basin with best-track "
+               "inputs" + ("; the published model&rsquo;s calibration was fitted on those same cycles"
+                           if comp.get("served_calibration_fitted_on_test_cases") else "")
+               if comp else "HazardPulse v8.2 elsewhere")
         rows[0] = ("Published numbers", "NOAA DTOPS (SHIPS-RII as fallback) for the Atlantic, East and Central "
-                                        "Pacific; HazardPulse v8.2 elsewhere, tested only on Atlantic and East "
-                                        "Pacific cases")
+                                        f"Pacific; {v82}")
     rows.append(("Window", h.window))
     # the test result, from the evidence bound to the served artifact
     if ev:
@@ -111,7 +159,8 @@ def _hazard_record_card(d: SiteData, key: str) -> str:
             rows.append(((f"Second look at {fmt.years(t.get('when'))}" if t.get("second_read")
                           else f"Test, {fmt.years(t.get('when'))} (scored once)"),
                          f"ranking accuracy {fmt.pct(auc.get('value'), 1)}; information gain "
-                         f"{fmt.num((t.get('ig_per_target') or {}).get('value'), 2)} nats per quake over a uniform map"))
+                         f"{fmt.num((t.get('ig_per_target') or {}).get('value'), 2)} nats per M6+ cell-window "
+                         "(a cell&rsquo;s 30 days that held an M6+) over a uniform map"))
         elif key == "hu":
             rows.append((f"Test, {esc(t.get('when'))} season (scored once)",
                          f"DTOPS ranking accuracy {fmt.pct(t.get('auc'), 1)}, Brier skill {fmt.num(t.get('bss'), 2)}; "
@@ -122,9 +171,9 @@ def _hazard_record_card(d: SiteData, key: str) -> str:
                          f"{int(t.get('n') or 0):,} storm observations, {int(t.get('pos') or 0):,} tornadic"))
     else:
         rows.append(("Test", "No final test is bound to the published model in this build"))
-    # the live record of THIS version
+    # the live record of THIS version (hurricane: of each version published now)
     live = _published_live(d, key, version)
-    rows.append(("Live record of this version", live))
+    rows.append(("Live record of the published models" if key == "hu" else "Live record of this version", live))
     storage = v.get("forecast_storage") or {}
     rows.append(("Forecasts recorded", f"{int(storage.get('n_replay_artifacts') or 0):,} "
                                        f"({int(storage.get('n_scored_forecasts') or 0):,} closed and scored, "
@@ -133,6 +182,12 @@ def _hazard_record_card(d: SiteData, key: str) -> str:
     if ledger.get("supported"):
         rows.append(("Ledger", f'<a href="{esc(ledger.get("path"))}">{int(ledger.get("n_rows") or 0):,} chained rows</a>, '
                                f"{int(ledger.get('prev_hash_mismatches') or 0):,} breaks"))
+        if ledger.get("content_hash_verified") is not None:      # the tornado ledger: every row's own hash
+            legacy = int(ledger.get("content_hash_verified_without_forecast_id") or 0)
+            rows.append(("Row hashes", f"{int(ledger['content_hash_verified']):,} rows match their own hash"
+                         + (f"; {legacy:,} earlier rows match it with <code>forecast_id</code> removed (they were "
+                            "hashed before that field was added)" if legacy else "")
+                         + f"; {int(ledger.get('content_hash_mismatches') or 0):,} mismatches"))
     return (f'<article class="card record-card hz-{key}"><div class="record-card-head">{common.hazard_label(key)}</div>'
             f"{common.facts(rows)}</article>")
 
@@ -146,9 +201,11 @@ def _published_live(d: SiteData, key: str, version: str) -> str:
                 t = fmt.parse_time(first) + dt.timedelta(days=30)
                 return f"none yet: its first 30-day window closes on {fmt.date(t)}"
             return "none yet"
-        n_ev = int(r.get("n_observed_events") or 0)
-        return (f"{int(r.get('n_matured_forecasts') or 0):,} closed forecasts, {n_ev:,} M6+ events"
-                + (f"; ranking accuracy {fmt.pct(r.get('mean_auc'), 1)}" if n_ev >= LIVE_MIN_EVENTS else ""))
+        closed, events, score = _eq_live_row(version, r)
+        n_ev = r.get("n_distinct_events")
+        events = (f"{events} distinct M6+ earthquake{'s' if n_ev != 1 else ''}" if n_ev is not None
+                  else "distinct M6+ earthquakes not counted")
+        return f"{closed} closed 30-day forecasts (they overlap), {events}; {score}"
     if key == "to":
         r = (_prospective(d, "tornado").get("pooled_by_model_version") or {}).get(version)
         if not r:
@@ -158,12 +215,23 @@ def _published_live(d: SiteData, key: str, version: str) -> str:
             return (f"{n:,} storm forecasts closed, {pos:,} followed by a tornado: too few tornadoes to score yet "
                     f"(the record is quoted from {LIVE_MIN_EVENTS})")
         return f"{n:,} storm forecasts, {pos:,} tornadic; ranking accuracy {fmt.pct(r.get('auc'), 1)}"
-    hu = _prospective(d, "hurricane")
-    n, ev = int(hu.get("total_storm_predictions") or 0), int(hu.get("total_ri_events") or 0)
-    if ev < LIVE_MIN_EVENTS:
-        return (f"{n:,} storm forecasts closed against the best track, {ev:,} rapid intensifications: too few to "
-                "score yet")
-    return f"{n:,} storm forecasts, {ev:,} rapid intensifications"
+    # hurricane: only the versions published now -- the pooled count mixed every version that ever served
+    # (on 2026-10-05 all 14 "forecasts" were April West Pacific numbers of models no longer published)
+    by_version = _prospective(d, "hurricane").get("by_model_version") or {}
+    parts = []
+    for v, what in _hurricane_served_versions(d).items():
+        r = by_version.get(v) or {}
+        n, ev = int(r.get("n_storm_cycles") or 0), int(r.get("n_events") or 0)
+        if not n:
+            parts.append(f"{what}: none closed yet")
+        elif ev < LIVE_MIN_EVENTS:
+            parts.append(f"{what}: {n:,} storm-cycles closed against the best track, {ev:,} rapid "
+                         "intensifications, too few to score yet")
+        else:
+            parts.append(f"{what}: {n:,} storm-cycles, {ev:,} rapid intensifications; Brier score "
+                         f"{fmt.num(r.get('brier'), 3)}"
+                         + (f", ranking accuracy {fmt.pct(r.get('auc'), 1)}" if r.get("auc") is not None else ""))
+    return "; ".join(parts) if parts else "none yet"
 
 
 def _reliability(d: SiteData) -> str:
@@ -224,7 +292,9 @@ def verification(d: SiteData) -> str:
                              intro="Every model version that has published a number, including retired ones. A score "
                                    f"is shown only once {LIVE_MIN_EVENTS} or more events have been observed for that "
                                    "version: with fewer, a model that always says &ldquo;no&rdquo; would look as good "
-                                   "as a skilful one.")
+                                   "as a skilful one. Earthquake forecasts are issued several times a day for 30 "
+                                   "days ahead, so their windows overlap: each earthquake is counted once, and a "
+                                   "score also needs two windows that do not overlap.")
             + common.section("calibration", "Does a 10% forecast come true 1 time in 10?", _reliability(d),
                              intro="Calibration compares what was forecast with what happened. The published tornado "
                                    "model&rsquo;s 2025 test, split by how high the forecast was. Live calibration "

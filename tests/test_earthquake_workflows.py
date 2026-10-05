@@ -91,6 +91,9 @@ def test_write_replay_artifact_serializes_nan_values(tmp_path, monkeypatch):
     monkeypatch.setattr(fetch_module, "DIST", tmp_path)
 
     issued = dt.datetime(2026, 4, 2, 0, 0, tzinfo=dt.timezone.utc)
+    # a forecast is only written with its full grid, and a listed cell must publish the grid's value
+    grid = np.full(fetch_module.N_LAT * fetch_module.N_LON, 1e-5)
+    grid[1 * fetch_module.N_LON + 2] = 0.25
     replay_path = fetch_module.write_replay_artifact(
         [
             {
@@ -109,6 +112,7 @@ def test_write_replay_artifact_serializes_nan_values(tmp_path, monkeypatch):
         n_recent_events=7,
         replay_dir=tmp_path / "data" / "replay",
         update_index=False,
+        probability_grid=grid,
     )
 
     payload = json.loads(replay_path.read_text(encoding="utf-8"))

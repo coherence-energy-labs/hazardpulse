@@ -2,15 +2,15 @@
   "key": "eq",
   "hazard": "earthquake",
   "model_version": "eq_operational_S1_gear1_v1-d409c534bb4c",
-  "verification_status": "prospective_scored",
-  "status_badge": "Scored",
-  "verification_status_label": "Prospective live scoring is active for matured earthquake windows.",
+  "verification_status": "logging_waiting_maturity",
+  "status_badge": "Waiting",
+  "verification_status_label": "The published model version's forecasts are being recorded; none of its 30-day windows has closed yet (scored windows of earlier versions: 615, each version's record is kept under its own name).",
   "metric_source": "retrospective_holdout_exact_model",
-  "metric_source_label": "Pre-registered programme (docs/EARTHQUAKE_FORECAST_PROGRAM.md): scored once on 2023-2025 (153 issue times, 1384 M6+ cell-windows); +2.60 nats of information per quake over a uniform map. This version's live record starts when its first 30-day windows mature.",
+  "metric_source_label": "Pre-registered programme (docs/EARTHQUAKE_FORECAST_PROGRAM.md): a declared second read (reported, never used to decide) of 2023-2025 (153 issue times, 1384 M6+ cell-windows); +2.60 nats of information per M6+ cell-window over a uniform map. This version's live record starts when its first 30-day windows mature.",
   "auc": 0.9687,
   "brier": null,
   "brier_skill_score": 0.0208,
-  "homepage_line": "AUC 0.969 pre-registered final test",
+  "homepage_line": "AUC 0.969, pre-registered second read of years already scored",
   "forecast_storage": {
     "n_replay_artifacts": 729,
     "n_matured_forecasts": 615,
@@ -34,20 +34,21 @@
     "status": "ok",
     "scored_as_of": "2026-10-05T10:50:04Z",
     "message": null,
-    "top_5_hit_rate": 0.022764227642276424,
+    "top_5_hit_rate": null,
     "this_model_version": null
   },
   "exact_model_benchmark": {
     "availability": "exact_model_benchmark",
-    "label": "Pre-registered programme (docs/EARTHQUAKE_FORECAST_PROGRAM.md): scored once on 2023-2025 (153 issue times, 1384 M6+ cell-windows); +2.60 nats of information per quake over a uniform map.",
+    "label": "Pre-registered programme (docs/EARTHQUAKE_FORECAST_PROGRAM.md): a declared second read (reported, never used to decide) of 2023-2025 (153 issue times, 1384 M6+ cell-windows); +2.60 nats of information per M6+ cell-window over a uniform map.",
     "model_version": "eq_operational_S1_gear1_v1-d409c534bb4c",
+    "second_read": true,
     "auc": 0.9687,
     "auc_ci95": [
       0.9644,
       0.9726
     ],
     "brier_skill_score": 0.0208,
-    "information_gain_per_event": 2.6047,
+    "information_gain_per_positive_cell_window": 2.6047,
     "n_cases": 1790100
   },
   "related_benchmark": {

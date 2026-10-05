@@ -182,6 +182,21 @@ def test_payload_identity_is_bound_to_the_weights(tmp_path):
     assert va != vb  # any change to the served bytes is a new identity
 
 
+def test_payload_identity_is_the_same_on_a_crlf_checkout(tmp_path):
+    """git checks the payload out with CRLF on Windows and LF on Linux: one model, one name."""
+    gbt, X, y = _small_model(seed=8)
+    norm = dm.FeatureNormalizer()
+    norm.fit(X)
+    lf = tmp_path / "lf.json"
+    dm.save_model(gbt, norm, [f"f{i}" for i in range(6)], lf, calibration={"method": "platt", "a": 1.0, "b": -4.0})
+    raw = lf.read_bytes().replace(bytes([13, 10]), bytes([10]))
+    lf.write_bytes(raw)
+    assert raw.count(bytes([10])) > 1, "the payload must span lines for this test to mean anything"
+    crlf = tmp_path / "crlf.json"
+    crlf.write_bytes(raw.replace(bytes([10]), bytes([13, 10])))
+    assert dm.model_version_of_payload(crlf) == dm.model_version_of_payload(lf)
+
+
 def test_legacy_payload_is_flagged_uncalibrated(tmp_path):
     gbt, X, y = _small_model(seed=6)
     norm = dm.FeatureNormalizer()

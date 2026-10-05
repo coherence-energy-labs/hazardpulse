@@ -54,6 +54,35 @@ To publish a new snapshot after the data changes:
 2. `python scripts/data_release.py --out <dir>`
 3. Create a new release with those archives, and add its record to `releases.json`.
 
+## How fast the records grow, and the decision it forces (measured 2026-10-05)
+
+Everything above lives in git and is deployed as static files. That was fine at the start; it does not
+scale indefinitely, and this is the arithmetic.
+
+| measure | value |
+|---|---|
+| `dist/data/replay/` | 943 MB, 2,552 files; tornado 882 MB of it (1,758 records, up to 2.2 MB each, pretty-printed) |
+| repository on GitHub | 185 MB packed, 3,687 commits; ~34 commits a day before 2026-10-05 |
+| growth per commit (thin pack against its parent) | tornado ~100-220 KB, verification ~135 KB, earthquake ~75 KB, hurricane 13-50 KB |
+| checkout time in every scoring job | 83 s of a 3.6-minute tornado run |
+| tornado record vs the live tornado file | were two documents with the same storms (74 KB of each tornado commit); one object since PR #22 |
+
+At the cadence the scheduler now keeps (tornado every 2 h, every 30 min while risk is elevated; the rest
+on their cycles) that is roughly **1 GB a year in git** in a quiet year, more with an active spring. GitHub
+asks repositories to stay well under 5 GB, checkout time grows with it, and Cloudflare's free plan allows
+20,000 static files per deployment (about two years at ~26 new records a day).
+
+**Options (a decision for the owner; nothing has been moved):**
+
+1. *Keep everything in git.* Simplest; costs ~1 GB a year and longer checkouts.
+2. *Move the replay records to object storage* (Cloudflare R2: S3-compatible, served by the same Worker
+   at the same URLs), keeping in git only what proves them: every record's content hash is already in git
+   (`output_hash`, a canonical-JSON SHA-256, in `dist/data/evidence/provenance-envelopes.json`), so a
+   record fetched from R2 is checked against git without git holding it. Recommended: the evidence chain
+   stays in git, the bulk leaves it. Needs an R2 bucket and the scorers' token to write it.
+3. *Archive by month to GitHub Releases* (as the research datasets already are), keeping the current
+   month in git. No new service; older records stop being served at their current URLs.
+
 ## Not kept yet (known gaps)
 
 - **Earthquake live catalog at forecast time.** The record keeps the model, the artifact hashes and

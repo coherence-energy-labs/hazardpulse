@@ -112,11 +112,11 @@
 <!-- hp-evidence:methods-simple -->
 <article class="card hz-eq">
   <h3>Earthquake</h3>
-  <p>The chance of a magnitude 6+ earthquake in each 2&deg; cell of the globe over the next 30 days, from where earthquakes happen in the long run, how they cluster after recent ones, and boosted trees on both, plus GEAR1, a published global model of where the crust is straining. Scored on 2023&ndash;2025 (a second look at those years): +2.60 nats of information per earthquake over a uniform map (C0 alone: +2.59). Earthquakes cannot be predicted; this ranks where the odds are higher.</p>
+  <p>The chance of a magnitude 6+ earthquake in each 2&deg; cell of the globe over the next 30 days, from where earthquakes happen in the long run, how they cluster after recent ones, and boosted trees on both, plus GEAR1, a published global model of where the crust is straining. Scored on 2023&ndash;2025 (a second look at those years): +2.60 nats per M6+ cell-window (a 2&deg; cell over a 30-day window in which an M6+ earthquake occurred) of information over a uniform map (C0 alone: +2.59). Earthquakes cannot be predicted; this ranks where the odds are higher.</p>
 </article>
 <article class="card hz-hu">
   <h3>Hurricane</h3>
-  <p>The chance of rapid intensification: maximum sustained winds rising 30 knots or more in 24 hours. For storms the National Hurricane Center covers we publish NOAA DTOPS, which beat NOAA SHIPS-RII, NOAA RIOC consensus and our previous model (v8.2) in a test written down in advance and run once on 2025: AUC 0.928, against 0.849 for our v8.2 model on the same cycles. Everywhere else we publish v8.2 (AUC 0.847 on held-out 2022&ndash;2024 Atlantic and East Pacific cases; it has not been tested in the basins where it publishes). Each storm says which. Our newer model, v10.1, scored better than DTOPS over 2022&ndash;2025, each season forecast only from earlier ones (log loss 0.144 against 0.165); it is shown beside DTOPS, labelled experimental, while a test written down in advance scores it on new forecasts.</p>
+  <p>The chance of rapid intensification: maximum sustained winds rising 30 knots or more in 24 hours. For storms the National Hurricane Center covers we publish NOAA DTOPS, which beat NOAA SHIPS-RII, NOAA RIOC consensus and our previous model (v8.2) in a test written down in advance and run once on 2025: AUC 0.928, against 0.849 for our v8.2 model on the same cycles. Everywhere else we publish v8.2 (its method: AUC 0.847 on 8,317 held-out 2022&ndash;2024 cycles from every basin, with best-track inputs; the published model&rsquo;s calibration was fitted on those same cycles). Each storm says which. Our newer model, v10.1, scored better than DTOPS over 2022&ndash;2025, each season forecast only from earlier ones (log loss 0.144 against 0.165); it is shown beside DTOPS, labelled experimental, while a test written down in advance scores it on new forecasts.</p>
 </article>
 <article class="card hz-to">
   <h3>Tornado</h3>
@@ -132,11 +132,11 @@
   <dl class="facts">
     <div><dt>Target</dt><dd>P(an M6.0+ epicentre in the 2&deg; cell within 30 days), every one of 11,700 cells, from events before the issue time only</dd></div>
     <div><dt>Architecture</dt><dd>C0 plus GEAR1&#x27;s long-term rate (geodetic strain and smoothed seismicity, Bird et al. 2015) as one extra term (156 trees, 22 inputs, scored in NumPy)</dd></div>
-    <div><dt>How it was chosen</dt><dd>Pre-registered comparison of smoothed seismicity, aftershock clustering, two boosted models and the previous model (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/EARTHQUAKE_FORECAST_PROGRAM.md" rel="noopener">docs/EARTHQUAKE_FORECAST_PROGRAM.md</a>); GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights fitted on 2018&ndash;2020, decided on 2021&ndash;2022 against C0 recalibrated on the same years, +0.016 [+0.002, +0.030] nats per quake</dd></div>
-    <div><dt>Test 2023&ndash;2025 (a second read)</dt><dd>+2.60 [2.48, 2.73] nats per quake over a uniform map; AUC 0.969 [0.964, 0.973] over all cells, 0.769 [0.735, 0.799] among recently active cells; Brier skill +0.021</dd></div>
-    <div><dt>Against the standard reference</dt><dd>vs long-term smoothed seismicity (the standard reference forecast): +0.072 [+0.018, +0.125] nats per quake, AUC +0.0019 [+0.0009, +0.0028] (paired, by month)</dd></div>
-    <div><dt>Replaced</dt><dd>C0 alone scored +2.59 nats per quake on the same test; 74% of the test&rsquo;s M6+ cell-windows fell outside recently active cells</dd></div>
-    <div><dt>Limits</dt><dd>Forecasts 13% more quakes than occurred in the test period (ratio 1.13 [1.03, 1.26]); live catalogs are preliminary in the first days after a large quake</dd></div>
+    <div><dt>How it was chosen</dt><dd>Pre-registered comparison of smoothed seismicity, aftershock clustering, two boosted models and the previous model (<a href="https://github.com/coherence-energy-labs/hazardpulse/blob/main/docs/EARTHQUAKE_FORECAST_PROGRAM.md" rel="noopener">docs/EARTHQUAKE_FORECAST_PROGRAM.md</a>); GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights fitted on 2018&ndash;2020, decided on 2021&ndash;2022 against C0 recalibrated on the same years, +0.016 [+0.002, +0.030] nats per M6+ cell-window</dd></div>
+    <div><dt>Test 2023&ndash;2025 (a second read)</dt><dd>+2.60 [2.48, 2.73] nats per M6+ cell-window (a 2&deg; cell over a 30-day window in which an M6+ earthquake occurred) over a uniform map (1,384 such cell-windows); AUC 0.969 [0.964, 0.973] over all cells, 0.769 [0.735, 0.799] among recently active cells; Brier skill +0.021</dd></div>
+    <div><dt>Against the standard reference</dt><dd>vs long-term smoothed seismicity (the standard reference forecast): +0.072 [+0.018, +0.125] nats per M6+ cell-window, AUC +0.0019 [+0.0009, +0.0028] (paired, by month)</dd></div>
+    <div><dt>Replaced</dt><dd>C0 alone scored +2.59 nats per M6+ cell-window on the same test; 74% of the test&rsquo;s M6+ cell-windows fell outside recently active cells</dd></div>
+    <div><dt>Limits</dt><dd>Forecasts 13% more M6+ cell-windows than occurred in the test period (ratio 1.13 [1.03, 1.26]); live catalogs are preliminary in the first days after a large quake</dd></div>
   </dl>
 </article>
 <!-- /hp-evidence:methods-earthquake -->
@@ -174,9 +174,9 @@
   <dl class="facts">
     <div><dt>Architecture</dt><dd>Histogram-GBT (depth 3 + 4) + L2 logistic + bagged logistic ensemble, Newton-calibrated</dd></div>
     <div><dt>Key inputs</dt><dd>Analysis intensity and pressure (CARQ) and their 6&ndash;24 h tendencies, aid-model intensity forecasts, climatological potential intensity, motion, storm age</dd></div>
-    <div><dt>AUC</dt><dd>0.847 [0.821, 0.874] on 8,317 held-out 2022&ndash;2024 NHC cases (Atlantic and East Pacific); 0.849 on the 2025 NHC cycles above</dd></div>
+    <div><dt>AUC (its method)</dt><dd>0.847 [0.821, 0.874] on 8,317 held-out 2022&ndash;2024 cycles from every basin (South Indian 2,245, West Pacific 2,110, Atlantic 1,521, East Pacific 1,288, South Pacific 673, North Indian 480); 0.849 on the 2025 NHC cycles above</dd></div>
     <div><dt>Used for</dt><dd>West Pacific, Indian Ocean and Southern Hemisphere storms (no public RI guidance), and NHC cycles without SHIPS text</dd></div>
-    <div><dt>Not yet tested</dt><dd>In the basins where it publishes: its test cases are NHC&rsquo;s</dd></div>
+    <div><dt>Limits of that test</dt><dd>The test read every input from the best track; the published model is the method refitted, with its calibration fitted on the test cycles themselves, so the AUC is not a test of it on unseen data; live West Pacific storms are scored from one JTWC warning, leaving 9 of 17 inputs unknown; scored that way the 2022&ndash;2024 West Pacific cycles had log loss 0.2589 against 0.2649 for climatology (0.2057 with every input).</dd></div>
   </dl>
 </article>
 <!-- /hp-evidence:methods-hurricane -->
@@ -216,7 +216,7 @@
     <div><dt>Brier score</dt><dd>The average squared gap between the forecast and the outcome (0 or 1). Lower is better.</dd></div>
     <div><dt>Brier skill score</dt><dd>The improvement over always forecasting the average rate. Above 0 beats that baseline.</dd></div>
     <div><dt>Log loss</dt><dd>Penalises confident wrong forecasts heavily. Lower is better.</dd></div>
-    <div><dt>Information gain</dt><dd>For earthquakes: how much better than a uniform map the forecast predicted the earthquakes that happened, in nats per earthquake. Higher is better.</dd></div>
+    <div><dt>Information gain</dt><dd>For earthquakes: how much better than a uniform map the forecast predicted where M6+ earthquakes happened, in nats per M6+ cell-window (a 2&deg; cell over a 30-day window in which an M6+ earthquake occurred). Higher is better.</dd></div>
     <div><dt>Calibration</dt><dd>Whether events happen as often as forecast: of many 10% forecasts, about 1 in 10 should come true.</dd></div>
   </dl>
 </div></section>

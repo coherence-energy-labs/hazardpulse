@@ -120,6 +120,15 @@ def _families(fam: dict[str, int]) -> str:
 _PRODUCT_NAMES = {"p30": "Tornado within 30 min", "p90": "Tornado within 90 min",
                   "p_ef2": "EF2+ tornado within 60 min"}
 
+# The earthquake programme's information gain is (LL - LL_uniform) / (cell-windows that held an M6+)
+# (scripts/earthquake_program/common.py: ig_per_target), NOT per earthquake. On the 2023-2025 test
+# there are 1,384 such cell-windows, 1,637 (earthquake, window) pairs (final.json n_target_events:
+# the weekly issue times' 30-day windows overlap ~4x) and 390 distinct M6+ earthquakes, so no
+# "per quake" figure follows from a division. Until 2026-10 nine places on the site said "per quake".
+EQ_IG_UNIT = "nats per M6+ cell-window"
+EQ_IG_UNIT_EXPLAINED = ("nats per M6+ cell-window (a 2&deg; cell over a 30-day window in which an M6+ "
+                        "earthquake occurred)")
+
 
 # ---------------------------------------------------------------------------
 # methods page
@@ -140,7 +149,7 @@ def methods_simple(ev: dict) -> str:
             + (", plus GEAR1, a published global model of where the crust is straining" if g1 else "")
             + (f". Scored on {_when(t)} (a second look at those years): " if t.get("second_read")
                else f". Tested once on {_when(t)}: ")
-            + f"{_signed(t['ig_per_target']['value'], 2)} nats of information per earthquake over a uniform map"
+            + f"{_signed(t['ig_per_target']['value'], 2)} {EQ_IG_UNIT_EXPLAINED} of information over a uniform map"
             + (f" ({_e(eq.get('replaced_name', 'the model it replaced'))}: {_signed(replaced.get('value'), 2)})"
                if replaced.get("value") is not None else "")
             + ". Earthquakes cannot be predicted; this ranks where the odds are higher.</p>"))
@@ -160,8 +169,11 @@ def methods_simple(ev: dict) -> str:
             + f"in a test written down in advance and run once on {_when(t)}: AUC {_f(t['auc'])}"
             + (f", against {_f(same.get('auc'))} for our v8.2 model on the same cycles" if same.get("auc") is not None else "")
             + "."
-            + (f" Everywhere else we publish v8.2 (AUC {_f(ob.get('auc'))} on held-out {_when(ob)} Atlantic and "
-               "East Pacific cases; it has not been tested in the basins where it publishes)."
+            + (f" Everywhere else we publish v8.2 (its method: AUC {_f(ob.get('auc'))} on {_n(ob.get('n'))} held-out "
+               f"{_when(ob)} cycles from every basin, with best-track inputs"
+               + ("; the published model&rsquo;s calibration was fitted on those same cycles"
+                  if ((hu.get("other_basins") or {}).get("composition") or {}).get(
+                      "served_calibration_fitted_on_test_cases") else "") + ")."
                if ob.get("auc") is not None else "")
             + " Each storm says which."
             + (f" Our newer model, v10.1, scored better than DTOPS over 2022&ndash;2025, each season forecast only "
@@ -206,7 +218,7 @@ def _gear1_sentence(g1: dict | None) -> str:
     d = g1["dev_vs_recalibrated"]["ig_per_target"]
     return ("; GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights fitted on "
             f"2018&ndash;2020, decided on {_e(g1['decided_on']).replace('-', '&ndash;')} against C0 recalibrated on the "
-            f"same years, {_signed(d['diff'])}{_ci(d['ci'], signed=True)} nats per quake")
+            f"same years, {_signed(d['diff'])}{_ci(d['ci'], signed=True)} {EQ_IG_UNIT}")
 
 
 def methods_earthquake(ev: dict) -> str:
@@ -225,8 +237,8 @@ def methods_earthquake(ev: dict) -> str:
             + _gear1_sentence(eq.get("gear1"))),
         _kv(f"{'Test' if t.get('second_read') else 'Final test'} {_when(t)}"
             + (" (a second read)" if t.get("second_read") else ""),
-            f"{_signed(t['ig_per_target']['value'], 2)}{_ci(t['ig_per_target']['ci'], 2)} nats per quake over a "
-            f"uniform map; AUC {_f(t['auc']['value'])}{_ci(t['auc']['ci'])} over all cells, "
+            f"{_signed(t['ig_per_target']['value'], 2)}{_ci(t['ig_per_target']['ci'], 2)} {EQ_IG_UNIT_EXPLAINED} over "
+            f"a uniform map ({_n(t.get('n_positive'))} such cell-windows); AUC {_f(t['auc']['value'])}{_ci(t['auc']['ci'])} over all cells, "
             f"{_f(t['auc_active_cells']['value'])}{_ci(t['auc_active_cells']['ci'])} among recently active cells; "
             f"Brier skill {_signed(t['bss']['value'])}"),
     ]
@@ -234,20 +246,20 @@ def methods_earthquake(ev: dict) -> str:
     if a and a.get("ig_per_target"):
         rows.append(_kv("Against the standard reference",
                         f"vs {_e(a['name'])}: {_signed(a['ig_per_target']['diff'])}"
-                        f"{_ci(a['ig_per_target']['ci'], signed=True)} nats per quake, AUC "
+                        f"{_ci(a['ig_per_target']['ci'], signed=True)} {EQ_IG_UNIT}, AUC "
                         f"{_signed(a['auc']['diff'], 4)}{_ci(a['auc']['ci'], 4, signed=True)} (paired, by month)"))
     replaced = eq.get("replaced_ig_per_target")
     if replaced and replaced.get("value") is not None:
         share = t.get("share_outside_active_cells")
         rows.append(_kv("Replaced", f"{_e(eq.get('replaced_name', 'The previous model'))[:1].upper()}"
                                     f"{_e(eq.get('replaced_name', 'The previous model'))[1:]} scored "
-                                    f"{_signed(replaced['value'], 2)} nats per quake on the same test"
+                                    f"{_signed(replaced['value'], 2)} {EQ_IG_UNIT} on the same test"
                         + (f"; {_pct(share, 0)} of the test&rsquo;s M6+ cell-windows fell outside recently active "
                            "cells" if share is not None else "")))
     cr = t.get("calib_ratio") or {}
     if cr.get("value") is not None:
         over = cr["value"] - 1.0
-        rows.append(_kv("Limits", f"Forecasts {_pct(abs(over), 0)} {'more' if over > 0 else 'fewer'} quakes than "
+        rows.append(_kv("Limits", f"Forecasts {_pct(abs(over), 0)} {'more' if over > 0 else 'fewer'} M6+ cell-windows than "
                                   f"occurred in the test period (ratio {_f(cr['value'], 2)}{_ci(cr.get('ci'), 2)}); "
                                   "live catalogs are preliminary in the first days after a large quake"))
     return _card("hz-eq", f'Earthquake <code>{_e(eq["model_version"])}</code>', _facts(rows), ident="earthquake-model")
@@ -289,19 +301,34 @@ def methods_hurricane(ev: dict) -> str:
     ob = hu.get("other_basins")
     if ob:
         o = ob["test"]
+        comp = ob.get("composition") or {}
+        basins = ", ".join(f"{_e(b['name'])} {_n(b['n'])}" for b in comp.get("by_basin") or [])
+        jt = comp.get("single_jtwc_warning") or {}
+        limits = []
+        if comp.get("inputs") == "best track":
+            limits.append("the test read every input from the best track")
+        if comp.get("served_calibration_fitted_on_test_cases"):
+            limits.append("the published model is the method refitted, with its calibration fitted on the test "
+                          "cycles themselves, so the AUC is not a test of it on unseen data")
+        if jt.get("log_loss") is not None:
+            limits.append(f"live West Pacific storms are scored from one JTWC warning, leaving {jt['n_missing']} of "
+                          f"{jt['n_inputs']} inputs unknown; scored that way the {_when(o)} West Pacific cycles had "
+                          f"log loss {_f(jt['log_loss'], 4)} against {_f(jt.get('log_loss_climatology'), 4)} for "
+                          f"climatology ({_f(jt.get('log_loss_full_inputs'), 4)} with every input)")
         out.append(_card(
             "hz-hu", "Hurricane, other basins: HazardPulse v8.2 <code>hurricane_ri_v8_2</code>", _facts([
                 _kv("Architecture", "Histogram-GBT (depth 3 + 4) + L2 logistic + bagged logistic ensemble, "
                                     "Newton-calibrated"),
                 _kv("Key inputs", "Analysis intensity and pressure (CARQ) and their 6&ndash;24 h tendencies, "
                                   "aid-model intensity forecasts, climatological potential intensity, motion, storm age"),
-                _kv("AUC", f"{_f(o['auc'])}{_ci(o['auc_ci'])} on {_n(o['n'])} held-out "
-                           f"{_when(o)} NHC cases (Atlantic and East Pacific)"
+                _kv("AUC (its method)", f"{_f(o['auc'])}{_ci(o['auc_ci'])} on {_n(o['n'])} held-out "
+                                        f"{_when(o)} cycles from every basin" + (f" ({basins})" if basins else "")
                     + (f"; {_f((hu.get('v8_2_same_cases') or {}).get('auc'))} on the 2025 NHC cycles above"
                        if (hu.get("v8_2_same_cases") or {}).get("auc") is not None else "")),
                 _kv("Used for", "West Pacific, Indian Ocean and Southern Hemisphere storms (no public RI guidance), "
                                 "and NHC cycles without SHIPS text"),
-                _kv("Not yet tested", "In the basins where it publishes: its test cases are NHC&rsquo;s"),
+                *([_kv("Limits of that test", "; ".join(limits)[:1].upper() + "; ".join(limits)[1:] + ".")]
+                  if limits else []),
             ])))
     return "\n\n".join(out)
 
@@ -538,7 +565,7 @@ def registry_active(ev: dict) -> str:
         t = eq["test"]
         rows.append(_registry_row(eq["model_version"], "Earthquake (30 days, M6+)", "published",
                                   _when(t), f"{_f(t['auc']['value'])}{_ci(t['auc']['ci'])}",
-                                  f"IG {_signed(t['ig_per_target']['value'], 2)} nats/quake",
+                                  f"IG {_signed(t['ig_per_target']['value'], 2)} {EQ_IG_UNIT}",
                                   "Boosted trees on long-term seismicity and aftershock-style clustering"
                                   + (", plus GEAR1&rsquo;s strain-rate model" if eq.get("gear1") else "")))
     if hu:
@@ -557,7 +584,8 @@ def registry_active(ev: dict) -> str:
         if ob:
             o = ob["test"]
             rows.append(_registry_row(ob["model"], "Hurricane RI (other basins)", "published",
-                                      f"{_when(o)} (NHC cases only)", f"{_f(o['auc'])}{_ci(o['auc_ci'])}",
+                                      f"{_when(o)} (its method; every basin, best-track inputs)",
+                                      f"{_f(o['auc'])}{_ci(o['auc_ci'])}",
                                       f"BSS {_signed(o['bss'])}", "GBT + logistic ensemble, Newton-calibrated"))
     if to:
         t = to["test"]
@@ -615,15 +643,15 @@ def registry_history(ev: dict) -> str:
         rows.append(row("promote", eq["model_version"],
                         "Adds GEAR1&rsquo;s long-term rate to C0"
                         + (f", decided by a test written down in advance on {_e(eq['gear1'].get('decided_on', '')).replace('-', '&ndash;')}: "
-                           f"{_signed(g1['ig_per_target']['diff'])}{_ci(g1['ig_per_target']['ci'], signed=True)} nats per "
-                           "earthquake" if g1.get("ig_per_target") else "")
-                        + f"; on {_when(t)} ({how} those years) {_signed(t['ig_per_target']['value'], 2)} nats per "
-                          f"earthquake, AUC {_f(t['auc']['value'])}"))
+                           f"{_signed(g1['ig_per_target']['diff'])}{_ci(g1['ig_per_target']['ci'], signed=True)} "
+                           f"{EQ_IG_UNIT}" if g1.get("ig_per_target") else "")
+                        + f"; on {_when(t)} ({how} those years) {_signed(t['ig_per_target']['value'], 2)} "
+                          f"{EQ_IG_UNIT}, AUC {_f(t['auc']['value'])}"))
         replaced = eq.get("replaced_ig_per_target")
         if replaced and replaced.get("value") is not None and eq.get("base_model_version"):
             rows.append(row("supersede", eq["base_model_version"],
                             f"Now the base of the published model rather than published itself; it scored "
-                            f"{_signed(replaced['value'], 2)} nats per earthquake on the same test"))
+                            f"{_signed(replaced['value'], 2)} {EQ_IG_UNIT} on the same test"))
         rows.append(row("retire", "eq_coherence_v1_0",
                         "Replaced by the pre-registered operational forecast (docs/EARTHQUAKE_FORECAST_PROGRAM.md); "
                         "its live record is on the track record page"))
