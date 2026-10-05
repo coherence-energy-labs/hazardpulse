@@ -10,7 +10,7 @@
   <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
   <link rel="canonical" href="https://hazardpulse.com/legal/privacy/">
   <link rel="preload" href="/assets/fonts/inter-latin.woff2?v=3100e775e8" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/assets/styles.css?v=0bc7973123">
+  <link rel="stylesheet" href="/assets/styles.css?v=3fe91c6bb8">
   <script src="/assets/site-shell.js?v=79cd26787c"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=95b74caff8">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=afff227e57">
@@ -57,15 +57,17 @@
   <ul>
     <li>No accounts, no sign-up, no advertising, no analytics and no tracking of any kind.</li>
     <li>One cookie, <code>hp_theme</code>, remembers whether you chose the light or dark theme. Nothing else is stored on your device.</li>
-    <li>Your approximate location, worked out by our hosting provider from your connection, is used for that one page view to show hazards near you, and then discarded.</li>
-    <li>Every font, script and map on the site is served from hazardpulse.com. No third party is contacted while you browse.</li>
+    <li>Your approximate location, worked out by our hosting provider from your connection, is used for that one page view to show hazards near you, and then discarded. In the US, a rounded version of it (a square about 11&nbsp;km across) is used to look up the official alerts in effect there.</li>
+    <li>Every font, script and map on the site is served from hazardpulse.com: your browser contacts no third party. Our server fetches the public live feeds of the USGS, the National Hurricane Center and the National Weather Service on its own behalf, at most once a minute.</li>
+    <li>While the home page or the live map is open, it asks our server for the latest events every minute, and for &ldquo;Near you&rdquo; every five minutes. Nothing is sent but the request itself.</li>
   </ul>
 </div></section>
 
 <section class="section" aria-labelledby="location"><div class="container prose">
   <h2 id="location">Your approximate location</h2>
-  <p>HazardPulse runs on Cloudflare&rsquo;s network. For each page request, Cloudflare gives our code an estimate of where the request came from (latitude and longitude, city and country). We use it, during that request only, to mark your approximate position on our maps and to say how far you are from the nearest active hazard.</p>
-  <p>We never store it, log it or send it anywhere. The API and the data files never use it.</p>
+  <p>HazardPulse runs on Cloudflare&rsquo;s network. For each page request, Cloudflare gives our code an estimate of where the request came from (latitude and longitude, city and country). We use it, during that request only, to centre the globe and mark your approximate position, and to say how far you are from the nearest earthquake, tropical cyclone and tracked thunderstorm.</p>
+  <p><strong>Official alerts (US only).</strong> If the estimate places you in the United States or a US territory, our server asks the <a href="https://www.weather.gov/documentation/services-web-api" rel="noopener">National Weather Service&rsquo;s public alerts service</a> which alerts are in effect at that position, rounded first to the nearest 0.1&deg; of latitude and longitude &mdash; a square about 11&nbsp;km across, shared with everyone else in it. The request comes from our server, not your browser, and carries nothing about you: no address, no identifier, only the rounded square. The answer is held in Cloudflare&rsquo;s cache for a minute and in our server&rsquo;s memory for at most 15 minutes, so visitors in the same square share it, and is never written to storage. Outside the US no such request is made.</p>
+  <p>We never store your location, log it or send it anywhere else. The one API endpoint that uses it, <code>/api/v1/near</code> (which the page calls to keep &ldquo;Near you&rdquo; current), uses it the same way and marks its answers as never to be cached. Every other endpoint and every data file is the same for everyone.</p>
 </div></section>
 
 <section class="section" aria-labelledby="cookies"><div class="container prose">
@@ -86,7 +88,7 @@
 
 <section class="section" aria-labelledby="sources"><div class="container prose">
   <h2 id="sources">Where the hazard data comes from</h2>
-  <p>Public data from government agencies and published science &mdash; the full list, model by model, is on the <a href="/methods/#data">methods page</a>. No personal or user-contributed data is used.</p>
+  <p>Public data from government agencies and published science &mdash; the full list, model by model, is on the <a href="/methods/#data">methods page</a>. The live events come from the <a href="https://earthquake.usgs.gov/earthquakes/feed/" rel="noopener">USGS real-time earthquake feeds</a>, the <a href="https://www.nhc.noaa.gov/" rel="noopener">National Hurricane Center&rsquo;s</a> list of active storms and the <a href="https://www.weather.gov/documentation/services-web-api" rel="noopener">National Weather Service&rsquo;s</a> active alerts. No personal or user-contributed data is used.</p>
 </div></section>
 
 <section class="section" aria-labelledby="contact"><div class="container prose">

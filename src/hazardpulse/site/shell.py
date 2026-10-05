@@ -138,6 +138,32 @@ def asset(name: str) -> str:
     return f"/assets/{name}?v={_asset_version(name, p.stat().st_mtime_ns)}" if p.exists() else f"/assets/{name}"
 
 
+STYLESHEET = "styles.css"
+_STYLESHEET_ASSET = re.compile(r'url\("/assets/([^"?#]+)(?:\?v=[0-9a-f]{10})?"\)')
+
+
+def versioned_stylesheet(text: str) -> str:
+    """The stylesheet's own references into /assets (its fonts) carry their content hash, exactly as the
+    page's preload does. The two must be one URL: with ``?v=`` on the preload alone, every visitor fetched
+    the font twice and the preload was wasted (found 2026-10-05). It also makes a changed font a new URL, and
+    so a new stylesheet hash, under the year-long cache."""
+    return _STYLESHEET_ASSET.sub(lambda m: f'url("{asset(m.group(1))}")', text)
+
+
+def version_stylesheet() -> bool:
+    """Rewrite the stylesheet's asset URLs to their current hashes; True if it changed. Run before pages are
+    rendered, since every page names the stylesheet by its own hash."""
+    p = DIST / "assets" / STYLESHEET
+    if not p.exists():
+        return False
+    text = p.read_text(encoding="utf-8")
+    new = versioned_stylesheet(text)
+    if new == text:
+        return False
+    p.write_text(new, encoding="utf-8", newline="\n")
+    return True
+
+
 def page_for(path: str) -> Page:
     if path not in PAGES:
         raise KeyError(f"{path} is not a registered page (add it to hazardpulse.site.shell.PAGES)")

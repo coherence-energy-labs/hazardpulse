@@ -127,6 +127,20 @@ jobs:
             tests/test_liveness.py \
             tests/test_ships_archive.py
 
+      - name: Set up Node (the Worker's checks)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+
+      # The edge, before it can reach a deploy: the live layer's honesty rules (unknown is never zero,
+      # "Quiet" only from a feed that answered), a dead or hanging agency, escaping of agency text, and the
+      # API contracts list matching the Worker's routes.
+      - name: Worker checks (live feeds, Near you, API routes)
+        run: |
+          node --check src/worker.js
+          node --check dist/assets/app.js
+          node tests/worker_api_check.mjs
+
       - name: Smoke-test every documented CLI entry point
         run: |
           hazardpulse --help

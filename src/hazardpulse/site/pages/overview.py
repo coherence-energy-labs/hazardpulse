@@ -174,22 +174,81 @@ STEPS = (
 )
 
 
+LIVE_STATS = (
+    ("quakes_day", "earthquakes M2.5+ in the last 24 hours", "eq"),
+    ("storms", "tropical cyclones active worldwide", "hu"),
+    ("tornado_warnings", "tornado warnings in effect in the US", "to"),
+    ("tracked_thunderstorms", "thunderstorms tracked in the latest tornado forecast", "to"),
+)
+
+
+def live_hero(d: SiteData, *, eyebrow: str, title: str, lede: str, ident: str = "hero", cta: str = "") -> str:
+    """The live hero: a globe of what is happening now, the visitor's own area, and live counters.
+
+    The edge worker fills ``#near-you``, the ``data-live`` counters and the visitor's position on the globe from
+    the live feeds as the page is served; /assets/app.js keeps them current. Without either, the page still
+    says what it is and shows the static map."""
+    from hazardpulse.site.shell import asset
+    stats = "".join(
+        f'<li class="live-stat live-stat-{k}"><span class="live-stat-figure" data-live="{key}">&mdash;</span>'
+        f'<span class="live-stat-label">{label}</span></li>' for key, label, k in LIVE_STATS)
+    globe = (
+        f'<div class="globe-wrap" id="{ident}-globe-wrap">'
+        f'<div id="globe" class="globe" data-land="{asset("maps/land-2048.png")}" data-area="/data/area-index.json" hidden>'
+        '<canvas class="globe-gl" aria-hidden="true"></canvas>'
+        '<canvas class="globe-overlay" role="img" aria-label="A globe showing the earthquakes of the last day, active '
+        'tropical cyclones, tornado warnings and the 30-day earthquake forecast"></canvas>'
+        '<div class="globe-tip" role="status" hidden></div>'
+        '<p class="globe-hint">Drag to turn the globe &middot; select a marker for details</p></div>'
+        f'<div class="globe-fallback">{world_map(d, ident + "-map")}</div>'
+        '<ul class="globe-key" aria-label="Globe key">'
+        '<li><span class="gk gk-quake" aria-hidden="true"></span>Earthquake, last 24 h</li>'
+        '<li><span class="gk gk-storm" aria-hidden="true"></span>Tropical cyclone</li>'
+        '<li><span class="gk gk-warn" aria-hidden="true"></span>Tornado warning</li>'
+        '<li><span class="gk gk-heat" aria-hidden="true"></span>30-day earthquake forecast</li>'
+        '<li><span class="gk gk-you" aria-hidden="true"></span>You</li></ul></div>')
+    return (
+        f'<section class="live-hero" aria-labelledby="{ident}-title"><div class="container live-hero-grid">'
+        f'<div class="live-hero-copy"><p class="eyebrow eyebrow-live"><span class="live-dot" aria-hidden="true"></span>'
+        f'{eyebrow}</p><h1 id="{ident}-title">{title}</h1><p class="lede">{lede}</p>'
+        '<div id="near-you" class="near-you" aria-live="polite"></div>'
+        f"{cta}"
+        # the page speaks to the visitor's own location, so it says what it is beside that, not further down
+        '<p class="live-hero-note">HazardPulse publishes research forecasts and relays official reports; it is not '
+        'a warning service. In an emergency, follow your official warnings and local authorities. '
+        '<a href="/legal/disclaimer/">Disclaimer</a></p></div>'
+        f'<div class="live-hero-visual">{globe}</div></div>'
+        f'<div class="container"><ul class="live-stats" aria-label="Live counts">{stats}</ul>'
+        '<p class="live-updated">Live counts and events update every minute &middot; '
+        '<span class="live-clock" data-live-clock>as of this page view</span></p></div></section>')
+
+
+def live_feed(title: str = "Happening now", ident: str = "happening") -> str:
+    return common.section(
+        ident, title,
+        '<ol id="live-feed" class="live-feed" aria-live="polite">'
+        '<li class="feed-empty">The latest earthquakes, storm advisories and tornado warnings appear here.</li></ol>'
+        '<p class="section-foot">Observations from the <a href="https://earthquake.usgs.gov/" rel="noopener">USGS</a>, '
+        'the <a href="https://www.nhc.noaa.gov/" rel="noopener">National Hurricane Center</a> and the '
+        '<a href="https://www.weather.gov/" rel="noopener">National Weather Service</a>, as they publish them. '
+        "Storms outside NOAA&rsquo;s areas come from the HazardPulse forecast feed.</p>",
+        intro="What the agencies that observe hazards have just reported, newest first.")
+
+
 def home(d: SiteData) -> str:
     built = fmt.time_tag(d.built_at) if d.built_at else "&mdash;"
-    hero = common.hero(
-        "Research forecasts &middot; not an official warning service",
-        "Hazard forecasts you can verify.",
-        "The chance of a magnitude 6+ earthquake in the next 30 days, of a hurricane strengthening rapidly in the "
-        "next 24 hours, and of a tracked thunderstorm producing a tornado in the next hour &mdash; each traceable to "
-        "the data, the model and the track record behind it.",
-        extra=('<div class="cta-row"><a class="btn btn-primary" href="/live/">See the live forecasts</a>'
-               '<a class="btn btn-secondary" href="/verification/">How the forecasts score</a></div>'),
-        cls="page-hero-home")
+    hero = live_hero(
+        d, eyebrow="Live &middot; updated every minute",
+        title="Hazards near you and around the world, right now.",
+        lede="Earthquakes as they happen, every active tropical cyclone and tornado warnings &mdash; beside our "
+             "forecasts of what is likely next, each traceable to its data, its model and its track record.",
+        cta=('<div class="cta-row"><a class="btn btn-primary btn-on-dark" href="/live/">Open the live map</a>'
+             '<a class="btn btn-ghost" href="/verification/">How the forecasts score</a></div>'))
+    feed = live_feed()
     cards = common.section(
-        "now", "Right now", hazard_cards(d),
-        intro=f"Updated {built}. The three windows differ &mdash; 30 days, 24 hours, 60 minutes &mdash; so the "
-              "three numbers are not comparable with each other.")
-    themap = common.section("map", "On the map", world_map(d) + EMERGENCY_LINE)
+        "next", "What is likely next", hazard_cards(d) + EMERGENCY_LINE,
+        intro=f"Our forecasts, updated {built}. The three windows differ &mdash; 30 days, 24 hours, 60 minutes &mdash; "
+              "so the three numbers are not comparable with each other.")
     proof = common.section(
         "proof", "How the forecasts have tested", _proofs(d) +
         '<p class="section-foot"><a href="/verification/">The full track record</a> &middot; '
@@ -200,19 +259,17 @@ def home(d: SiteData) -> str:
               "ranking.")
     steps = "".join(f'<li class="step"><h3>{t}</h3><p>{b}</p></li>' for t, b in STEPS)
     how = common.section("how", "How a forecast is made", f'<ol class="steps">{steps}</ol>')
-    area = ('<section class="section your-area-section" aria-labelledby="your-area-heading" aria-live="polite">'
-            "</section>")
     build = common.section(
         "build", "Build on it",
         '<div class="cards cards-3">'
         '<a class="card card-link" href="/api/"><h3>Open API</h3><p>Every live forecast, its record and its track '
-        'record as JSON. No key needed.</p><span class="card-cta">API reference</span></a>'
+        'record as JSON, and the live feed itself. No key needed.</p><span class="card-cta">API reference</span></a>'
         f'<a class="card card-link" href="{d_release()}"><h3>Open data</h3><p>The research datasets behind every '
         'model, in versioned releases with a hash for every file.</p><span class="card-cta">Data releases</span></a>'
         '<a class="card card-link" href="/registry/"><h3>Model registry</h3><p>Every model version that has published '
         'a number, why it was promoted, and why it was retired.</p><span class="card-cta">See the models</span></a>'
         "</div>")
-    return f'<main id="main" class="page page-home">{hero}{cards}{area}{themap}{proof}{how}{build}</main>'
+    return f'<main id="main" class="page page-home">{hero}{feed}{cards}{proof}{how}{build}</main>'
 
 
 def d_release() -> str:
@@ -258,13 +315,14 @@ def _to_table(d: SiteData, n: int = 10) -> str:
 
 
 def live(d: SiteData) -> str:
-    hero = common.hero(
-        "Live", "Current forecasts",
-        "Every current forecast on one page, from the latest published forecast records. Where a model does not "
-        "produce an uncertainty range, none is shown.",
-        meta=[("Updated", fmt.time_tag(d.built_at) if d.built_at else "&mdash;")])
-    body = common.section("now", "Headlines", hazard_cards(d))
-    body += common.section("map", "Map", world_map(d, "live-map"))
+    hero = live_hero(
+        d, ident="live", eyebrow="Live map &middot; updated every minute",
+        title="Live hazards, worldwide",
+        lede="Every earthquake of the last day, every active tropical cyclone and every US tornado warning, on one "
+             "globe with our 30-day earthquake forecast. Turn it, and select any marker.")
+    body = live_feed("Latest events", "latest")
+    body += common.section("now", "What is likely next", hazard_cards(d),
+                           intro="Our forecasts, from the latest published forecast records.")
     body += common.section(
         "earthquake", "Earthquake: highest chances", _eq_table(d) +
         '<p class="section-foot"><a href="/live/earthquake/">All cells and the full earthquake map</a></p>',

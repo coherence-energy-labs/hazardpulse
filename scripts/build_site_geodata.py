@@ -141,6 +141,35 @@ def rings(geojson: Path, keep=lambda props: True) -> list[list[list[float]]]:
     return out
 
 
+GLOBE_TEXTURE = ROOT / "dist" / "assets" / "maps" / "land-2048.png"
+
+
+def globe_texture(geojson: Path, out: Path = GLOBE_TEXTURE, width: int = 2048, supersample: int = 3) -> None:
+    """The globe's land mask: an equirectangular 8-bit image (land 255, sea 0) of Natural Earth's 1:50m land,
+    drawn at ``supersample`` times the size and filtered down so coastlines are anti-aliased. The globe's
+    shader samples it; nothing else does."""
+    from PIL import Image, ImageDraw
+
+    w, h = width * supersample, width * supersample // 2
+    img = Image.new("L", (w, h), 0)
+    draw = ImageDraw.Draw(img)
+
+    def xy(ring):
+        return [((lon + 180.0) / 360.0 * w, (90.0 - lat) / 180.0 * h) for lon, lat in ring]
+
+    data = json.loads(geojson.read_text(encoding="utf-8"))
+    for f in data["features"]:
+        g = f["geometry"]
+        polys = g["coordinates"] if g["type"] == "MultiPolygon" else [g["coordinates"]]
+        for poly in polys:
+            draw.polygon(xy(poly[0]), fill=255)
+            for hole in poly[1:]:
+                draw.polygon(xy(hole), fill=0)
+    img = img.resize((width, width // 2), Image.LANCZOS)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out, optimize=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--sources", type=Path, required=True)
@@ -160,6 +189,9 @@ def main(argv: list[str] | None = None) -> int:
     states = rings(args.sources / "ne_110m_admin_1_states_provinces_lakes.geojson",
                    keep=lambda p: p.get("iso_a2") == "US" and p.get("postal") not in ("AK", "HI"))
     (OUT / "us_states_110m.json").write_text(json.dumps(states, separators=(",", ":")) + "\n", encoding="utf-8")
+    if (args.sources / "ne_50m_land.geojson").exists():
+        globe_texture(args.sources / "ne_50m_land.geojson")
+        print(f"globe texture: {GLOBE_TEXTURE.relative_to(ROOT)} ({GLOBE_TEXTURE.stat().st_size:,} bytes)")
     n_us = sum(p["country"] == "United States" for p in places)
     print(f"places.csv: {len(places)} places ({n_us} from the Census table); flinn_engdahl.json: {len(fe['names'])} "
           f"regions; land_110m.json: {len(land)} rings; us_states_110m.json: {len(states)} rings")

@@ -42,8 +42,15 @@ jobs:
       - name: Run site integrity checks
         run: python -m pytest tests/test_site_integrity.py -q
 
-      - name: Validate worker syntax
-        run: node --check src/worker.js
+      - name: Validate the Worker and the page script
+        run: |
+          node --check src/worker.js
+          node --check dist/assets/app.js
+
+      # what the edge does with the agencies' feeds: unknown is never zero, a dead or hanging agency cannot
+      # stall a page, agency text is escaped, and every public route is in the published contracts
+      - name: Worker checks
+        run: node tests/worker_api_check.mjs
 
       - name: Deploy preview to Cloudflare Workers
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
@@ -87,8 +94,15 @@ jobs:
       - name: Run site integrity checks
         run: python -m pytest tests/test_site_integrity.py -q
 
-      - name: Validate worker syntax
-        run: node --check src/worker.js
+      - name: Validate the Worker and the page script
+        run: |
+          node --check src/worker.js
+          node --check dist/assets/app.js
+
+      # what the edge does with the agencies' feeds: unknown is never zero, a dead or hanging agency cannot
+      # stall a page, agency text is escaped, and every public route is in the published contracts
+      - name: Worker checks
+        run: node tests/worker_api_check.mjs
 
       - name: Deploy production to Cloudflare Workers
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
