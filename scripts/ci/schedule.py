@@ -237,7 +237,10 @@ def main(argv: list[str] | None = None) -> int:
             failed = True
             continue
         d = decide(hazard, now, last, in_flight, elevated=elevated)
-        print(f"  {hazard:12s} {'DISPATCH' if d.due else 'wait    '} {d.reason}")
+        # what the decision rested on, so a wrong one can be traced (2026-10-05 03:32Z: earthquake was
+        # dispatched as "slot not yet run" although a run had succeeded at 02:04Z; not reproducible locally)
+        seen = f"last scoring run {last:%d %H:%MZ}" if last else "no scoring run on record"
+        print(f"  {hazard:12s} {'DISPATCH' if d.due else 'wait    '} {d.reason}  [{seen}; in flight: {in_flight}]")
         if d.due and not args.dry_run:
             subprocess.run(["gh", "workflow", "run", workflow, "--ref", args.ref], check=True)
     return 1 if failed else 0
