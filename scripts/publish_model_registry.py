@@ -100,7 +100,7 @@ def _make_entry(
         "license": license_id,
         "publisher": "HazardPulse / Coherence Energy Labs",
         "publisher_url": "https://hazardpulse.com",
-        "release_utc": dt.datetime.utcnow().isoformat() + "Z",
+        "release_utc": dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat() + "Z",
         "rf_npe_compatible": rf_npe_compatible,
         "modality": "natural_hazard_prediction",
         "source": "hazardpulse_publish",
@@ -678,7 +678,7 @@ def build_registry() -> dict:
     return {
         "schema_version": 1,
         "publisher": "HazardPulse / Coherence Energy Labs",
-        "generated_at": dt.datetime.utcnow().isoformat() + "Z",
+        "generated_at": dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat() + "Z",
         "n_entries": len(entries),
         "entries": entries,
         # Alias used by the worker API contract (/api/v1/registry/models)

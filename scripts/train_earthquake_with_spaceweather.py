@@ -62,7 +62,7 @@ from hazardpulse.earthquake.space_weather_block import (  # noqa: E402
 
 
 def _epoch_to_dt(ts: float) -> dt.datetime:
-    return dt.datetime.utcfromtimestamp(ts)
+    return dt.datetime.fromtimestamp(ts, dt.timezone.utc).replace(tzinfo=None)
 
 
 def build_full_feature_matrix(
@@ -329,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
     # Step 8: Persist
     args.output.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "generated_at": dt.datetime.utcnow().isoformat() + "Z",
+        "generated_at": dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat() + "Z",
         "n_total_samples": int(len(y)),
         "block_w_features": BLOCK_W_NAMES,
         "results": [res_baseline, res_w],

@@ -48,7 +48,7 @@ from hazardpulse.earthquake.definitive_model import (  # noqa: E402
 
 
 def _epoch_to_dt(ts: float) -> dt.datetime:
-    return dt.datetime.utcfromtimestamp(ts)
+    return dt.datetime.fromtimestamp(ts, dt.timezone.utc).replace(tzinfo=None)
 
 
 def _load_eq_targets(*, max_events: int) -> list[dt.datetime]:
@@ -230,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
     # ---- Publish summary ----
     payload = {
         "schema_version": 1,
-        "generated_at": dt.datetime.utcnow().isoformat() + "Z",
+        "generated_at": dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat() + "Z",
         "n_analyses": len(analyses),
         "max_eq_events_requested": max_eq,
         "n_eq_events_used": len(eq_times),

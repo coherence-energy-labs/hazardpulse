@@ -52,7 +52,7 @@ def _on_event_factory(stream_log: Path):
         try:
             stream_log.open("a", encoding="utf-8").write(json.dumps(event) + "\n")
             print(
-                f"[{dt.datetime.utcnow().isoformat()}Z] "
+                f"[{dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat()}Z] "
                 f"M{event.get('mag')} {event.get('place', '')[:60]}"
             )
         except Exception as exc:

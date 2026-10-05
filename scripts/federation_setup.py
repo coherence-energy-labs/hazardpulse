@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
 
     toml_lines = [
         "# HazardPulse federation config (Signalbook-compatible).",
-        f"# Generated {dt.datetime.utcnow().isoformat()}Z",
+        f"# Generated {dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat()}Z",
         "",
         "[local_identity]",
         f'node_id = "{args.node_id}"',
@@ -194,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
         "key_algorithm": "Ed25519",
         "atlas_tables": [t["name"] for t in atlas_tables],
         "trust_level": args.trust_level,
-        "generated_at": dt.datetime.utcnow().isoformat() + "Z",
+        "generated_at": dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat() + "Z",
         "host_os": sys.platform,
     }
     fingerprint_path.write_text(json.dumps(fingerprint, indent=2) + "\n", encoding="utf-8")

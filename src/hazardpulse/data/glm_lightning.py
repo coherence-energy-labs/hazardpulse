@@ -251,7 +251,7 @@ def fetch_glm_flashes(
     start_epoch = end_epoch - window_h * 3600
 
     # Enumerate the (year, doy, hour) tuples the window spans.
-    start_dt = dt.datetime.utcfromtimestamp(start_epoch)
+    start_dt = dt.datetime.fromtimestamp(start_epoch, dt.timezone.utc).replace(tzinfo=None)
     cur = dt.datetime(start_dt.year, start_dt.month, start_dt.day, start_dt.hour)
     hours: list[tuple[int, int, int]] = []
     while cur.replace(tzinfo=dt.timezone.utc).timestamp() <= end_epoch:
