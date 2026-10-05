@@ -20,6 +20,13 @@ Two independent paths decide, by the same rule:
 Neither can double a run, and a dropped attempt costs minutes, not a cycle. (The first version had the
 scheduler alone: GitHub then did not fire its own new cron for its first 3 slots, 2026-10-05.)
 
+Neither may overfill the shared scoring queue either. Every scoring job is in one GitHub concurrency group,
+which holds one running job and ONE pending; a job that joins while another is pending cancels that one.
+On 2026-10-05 at 17:31Z the scheduler dispatched four scorers within 15 s: tornado ran, verification waited,
+and hurricane and earthquake were cancelled within 5 s of being queued. They stayed due, so the next tick
+would have cancelled them the same way. Now each joins only while the queue has room (``queue_room``), in
+priority order (``by_priority``); whatever waits is still due at the next tick.
+
 When each is due:
 
 * tornado: every 2 hours; every 30 minutes while tornado risk is elevated -- the latest forecast has a
@@ -71,6 +78,10 @@ WORKFLOWS = {
 # liveness check is the signal, not a reason to run it again at once -- each failure is an email)
 MONITORS = {"liveness": "liveness-check.yml"}
 LIVENESS_EVERY = dt.timedelta(hours=4)
+# who joins the shared scoring queue first when several are due: a hurricane cycle has a deadline (its catch-up
+# window closes at t + 12 h), the tornado forecast covers only the next hour, the earthquake slot is 6 hours,
+# and verification has no deadline. Elevated tornado risk goes first.
+PRIORITY = ("hurricane", "tornado", "earthquake", "verification")
 
 
 @dataclass(frozen=True)
@@ -210,6 +221,40 @@ def run_state(workflow: str, exclude_run_id: int | None = None) -> tuple[dt.date
     return summarize_runs(runs, exclude_run_id)
 
 
+def queue_room(running: int, waiting: int) -> int:
+    """How many scoring jobs may join the shared queue without cancelling one: it holds one running and one
+    pending, and a job joining while one is pending cancels it -- so none while anything waits."""
+    if waiting:
+        return 0
+    return 1 if running else 2
+
+
+def by_priority(hazards: list[str], elevated: bool) -> list[str]:
+    order = (("tornado",) if elevated else ()) + PRIORITY
+    return sorted(hazards, key=order.index)
+
+
+def _score_job_status(run_id: int) -> str | None:
+    jobs = (_gh_json(["run", "view", str(run_id), "--json", "jobs"]) or {}).get("jobs") or []
+    return next((j.get("status") for j in jobs if j.get("name") == "score"), None)
+
+
+def queue_state(exclude_run_id: int | None = None) -> tuple[int, int]:
+    """``(running, waiting)``: scoring runs of main in flight, across every scorer. Running: its scoring job
+    is in progress. Waiting: anything else in flight -- queued, its gate still deciding, or its scoring job
+    pending in the group -- because joining could cancel it."""
+    running = waiting = 0
+    for workflow in WORKFLOWS.values():
+        for r in _runs(workflow, 10):
+            if r.get("status") not in IN_FLIGHT or (exclude_run_id and int(r["databaseId"]) == exclude_run_id):
+                continue
+            if _score_job_status(int(r["databaseId"])) == "in_progress":
+                running += 1
+            else:
+                waiting += 1
+    return running, waiting
+
+
 def nws_tornado_warnings() -> int | None:
     req = urllib.request.Request(NWS_TORNADO_WARNINGS,
                                  headers={"User-Agent": USER_AGENT, "Accept": "application/geo+json"})
@@ -233,6 +278,16 @@ def gate(hazard: str, now: dt.datetime, elevated: bool) -> bool:
         print(f"  {hazard}: run history unreadable ({exc}); running")
         return True
     d = decide(hazard, now, last, in_flight, elevated=elevated)
+    if d.due:
+        try:
+            running, waiting = queue_state(exclude_run_id=int(me) if me else None)
+        except Exception as exc:
+            print(f"  {hazard}: scoring queue unreadable ({exc}); running")
+            return True
+        if queue_room(running, waiting) < 1:
+            print(f"  {hazard:12s} skip {d.reason}, but the scoring queue is full ({running} running, {waiting} "
+                  "waiting): joining would cancel the waiting run. Still due at the next tick.")
+            return False
     print(f"  {hazard:12s} {'RUN ' if d.due else 'skip'} {d.reason}")
     return d.due
 
@@ -259,6 +314,7 @@ def main(argv: list[str] | None = None) -> int:
                 fh.write(f"run={'true' if run else 'false'}\n")
         return 0
     failed = False
+    due_scorers: list[str] = []
     for hazard, workflow in {**WORKFLOWS, **MONITORS}.items():
         try:
             last, in_flight = monitor_state(workflow) if hazard in MONITORS else run_state(workflow)
@@ -270,10 +326,34 @@ def main(argv: list[str] | None = None) -> int:
         # what the decision rested on, so a wrong one can be traced (2026-10-05 03:32Z: earthquake was
         # dispatched as "slot not yet run" although a run had succeeded at 02:04Z; not reproducible locally)
         seen = f"last scoring run {last:%d %H:%MZ}" if last else "no scoring run on record"
-        print(f"  {hazard:12s} {'DISPATCH' if d.due else 'wait    '} {d.reason}  [{seen}; in flight: {in_flight}]")
-        if d.due and not args.dry_run:
-            subprocess.run(["gh", "workflow", "run", workflow, "--ref", args.ref], check=True)
+        print(f"  {hazard:12s} {'due     ' if d.due else 'wait    '} {d.reason}  [{seen}; in flight: {in_flight}]")
+        if not d.due:
+            continue
+        if hazard in MONITORS:                       # not in the scoring queue: nothing to cancel
+            _dispatch(hazard, workflow, args)
+        else:
+            due_scorers.append(hazard)
+    if due_scorers:
+        try:
+            running, waiting = queue_state()
+            room = queue_room(running, waiting)
+            state = f"{running} running, {waiting} waiting"
+        except Exception as exc:                     # one dispatch can cancel at most one waiting run
+            room, state = 1, f"unreadable ({exc})"
+            failed = True
+        print(f"  scoring queue: {state} -> room for {room}")
+        for i, hazard in enumerate(by_priority(due_scorers, elevated)):
+            if i < room:
+                _dispatch(hazard, WORKFLOWS[hazard], args)
+            else:
+                print(f"  {hazard:12s} HOLD     due, but the scoring queue is full: at the next tick")
     return 1 if failed else 0
+
+
+def _dispatch(hazard: str, workflow: str, args) -> None:
+    print(f"  {hazard:12s} DISPATCH{' (dry run)' if args.dry_run else ''}")
+    if not args.dry_run:
+        subprocess.run(["gh", "workflow", "run", workflow, "--ref", args.ref], check=True)
 
 
 if __name__ == "__main__":
