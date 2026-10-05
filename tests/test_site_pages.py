@@ -185,7 +185,13 @@ def test_an_interval_is_shown_only_when_it_informs():
     tight = {"confidence_lo": 0.08, "confidence_hi": 0.12, "uncertainty_class": "tight",
              "receipt": {"coverage_target": 0.9}}
     assert fmt.interval(wide) == "" and fmt.interval({}) == ""
-    assert fmt.interval(tight) == "90% range 8.0%&ndash;12.0%"
+    # a Venn-Abers pair, not a coverage interval: never labelled "90%", whatever the receipt's target says
+    assert fmt.interval(tight) == "Calibration range 8.0%&ndash;12.0%"
+    assert fmt.interval({**tight, "probability": 0.10}) == "Calibration range 8.0%&ndash;12.0%"
+    # a band that excludes the probability shown beside it is not shown (the 2026-10-05 02:05Z tornado
+    # headline: 0.06% beside a pair of 0.07%-0.07%)
+    assert fmt.interval({**tight, "tornado_probability": 0.13}) == ""
+    assert fmt.interval({**tight, "probability": 0.0006, "confidence_lo": 0.0007, "confidence_hi": 0.0007}) == ""
 
 
 def test_places_name_points_the_way_seismologists_and_the_weather_service_do():
