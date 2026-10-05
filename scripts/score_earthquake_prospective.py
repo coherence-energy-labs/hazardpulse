@@ -210,11 +210,20 @@ def _accumulate_calibration(calib_acc: dict, y_score: np.ndarray, y_true: np.nda
 
 
 def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "earthquake",
-                              model_version: str | None = None) -> Path:
+                              model_version: str | None = None, independent: dict | None = None) -> Path:
+    """The pooled (score -> outcome) histogram the calibrator is fitted on.
+
+    ``pos`` counts positive CELL-WINDOWS summed over overlapping windows (one earthquake is
+    positive in ~100 of them: the retired model's pool held 5,931 positives from 64
+    earthquakes), so ``independent`` (``live_record.version_counts`` of the pooled windows:
+    ``n_distinct_events``, ``n_independent_windows``) is written beside it; the earthquake
+    scorer applies a calibrator only on that independent evidence
+    (fetch_and_score_earthquake.calibration_evidence)."""
     keys = sorted(calib_acc.keys())
     total = [int(calib_acc[k][0]) for k in keys]
     pos = [int(calib_acc[k][1]) for k in keys]
     n = int(sum(total))
+    independent = independent or {}
     payload = {
         "hazard": hazard,
         # the ONE model whose forecasts were pooled; fit_calibration binds the calibrator to it
@@ -222,6 +231,8 @@ def write_calibration_dataset(output_dir: Path, calib_acc: dict, hazard: str = "
         "n": n,
         "n_groups": len(keys),
         "base_rate": (sum(pos) / n) if n else 0.0,
+        "n_distinct_events": independent.get("n_distinct_events"),
+        "n_independent_windows": independent.get("n_independent_windows"),
         "scores": [round(float(k), 6) for k in keys],
         "pos": pos,
         "total": total,
@@ -590,8 +601,10 @@ def main(argv: list[str] | None = None) -> int:
                 handle.write(json.dumps(result) + "\n")
 
         if calib_acc is not None:
+            pooled = [r for r in per_forecast_results if r.get("model_version") == calib_version]
             calib_path = write_calibration_dataset(output_dir, calib_acc, hazard="earthquake",
-                                                   model_version=calib_version)
+                                                   model_version=calib_version,
+                                                   independent=live_record.version_counts(pooled))
             summary["calibration_dataset"] = str(calib_path)
             summary["calibration_model_version"] = calib_version
             summary["calibration_n"] = int(sum(slot[0] for slot in calib_acc.values()))

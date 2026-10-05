@@ -173,6 +173,30 @@ def test_the_verifier_refuses_a_truth_catalog_with_a_hole(monkeypatch, scorer, t
     assert not (out / "prospective_summary.json").exists()
 
 
+def test_the_verifier_counts_distinct_earthquakes_end_to_end(monkeypatch, scorer, tmp_path):
+    """A complete truth pull passes the audit; two overlapping windows sharing the same M6+ earthquakes
+    are recorded as those earthquakes once, in the summary AND in the calibration pool."""
+    replay = tmp_path / "replay"
+    replay.mkdir()
+    for fid, issued in (("eq_fcst_20260201_0000", "2026-02-01T00:00:00Z"),
+                        ("eq_fcst_20260201_0600", "2026-02-01T06:00:00Z")):
+        (replay / f"{fid}.json").write_text(json.dumps({
+            "forecast_id": fid, "issued_at": issued, "forecast_horizon_days": 30, "model_version": "eq_S1-test",
+            "forecast_domain": {"n_lat": 2, "n_lon": 2, "default_probability": 0.0}, "active_cells": []}),
+            encoding="utf-8")
+    monkeypatch.setattr(prospective, "fetch_text", _fake_usgs())
+    out = tmp_path / "out"
+    assert scorer.main(["--replay-dir", str(replay), "--output-dir", str(out), "--score-as-of",
+                        "2026-04-01T00:00:00Z", "--emit-calibration"]) == 0
+    summary = json.loads((out / "prospective_summary.json").read_text(encoding="utf-8"))
+    rec = summary["by_model_version"]["eq_S1-test"]
+    assert rec["n_matured_forecasts"] == 2 and rec["n_independent_windows"] == 1
+    assert rec["n_event_windows"] == 2 * rec["n_distinct_events"] and rec["n_distinct_events"] >= 2
+    pool = json.loads((out / "calibration_dataset.json").read_text(encoding="utf-8"))
+    assert pool["n_distinct_events"] == rec["n_distinct_events"] and pool["n_independent_windows"] == 1
+    assert "audited" in summary["observed_catalog_window"]["completeness_audit"]
+
+
 # ---------------------------------------------------------------------------
 # 1. Overlapping windows are not independent evidence
 # ---------------------------------------------------------------------------
@@ -472,10 +496,19 @@ class _BoundForecaster:
         self.calibrator = _HalfCalibrator()
 
 
-def _wire(monkeypatch, fse, tmp_path, *, events, forecaster=None):
+def _wire(monkeypatch, fse, tmp_path, *, events, forecaster=None, pool=None):
+    """Point the live scorer at a synthetic served pair and catalog. ``pool`` (n_distinct_events,
+    n_independent_windows) is the calibration pool's independent evidence, written for the served
+    version."""
     import hazardpulse.trust.scoring as scoring
 
     art_path, stack_path, version = _served_pair(tmp_path)
+    pool_path = tmp_path / "calibration_dataset.json"
+    if pool is not None:
+        pool_path.write_text(json.dumps({"model_version": version, "pos": [5931], "total": [7172100],
+                                         "n_distinct_events": pool[0], "n_independent_windows": pool[1]}),
+                             encoding="utf-8")
+    monkeypatch.setattr(fse, "CALIBRATION_DATASET_PATH", pool_path, raising=False)
     monkeypatch.setattr(fse, "OPERATIONAL_ARTIFACT_PATH", art_path)
     monkeypatch.setattr(fse, "STACK_PATH", stack_path)
     monkeypatch.setattr(fse, "MODEL_VERSION", version)
@@ -568,7 +601,7 @@ def test_the_pipeline_receipts_bind_the_served_stack_and_its_base(monkeypatch, f
 
 def test_a_calibrator_applies_to_the_scored_grid_or_not_at_all(monkeypatch, fse, tmp_path):
     art_path, stack_path, version = _wire(monkeypatch, fse, tmp_path, events=_live_events(),
-                                          forecaster=_BoundForecaster)
+                                          forecaster=_BoundForecaster, pool=(40, 3))
     out = _run(fse, tmp_path)
     replay = json.loads(Path(out["replay_path"]).read_text(encoding="utf-8"))
     art = of.load_artifact(art_path)
@@ -587,6 +620,22 @@ def test_a_calibrator_applies_to_the_scored_grid_or_not_at_all(monkeypatch, fse,
         assert c["receipt"]["model_sha256"] == bound                  # served pair + calibrator fingerprint
         assert c["confidence_lo"] < c["probability"] < c["confidence_hi"]
     assert replay["operational_model"]["calibrator_model_version"] == version
+
+
+@pytest.mark.parametrize("pool", [(4, 6), (64, 1), None])
+def test_a_calibrator_on_overlapping_evidence_is_not_applied(monkeypatch, fse, tmp_path, pool):
+    """5,931 positive cell-windows from 4 earthquakes (or from one 30-day stretch, or a pool written
+    before distinct counting) are not 30 events: the grid stays as the model computed it."""
+    art_path, stack_path, _ = _wire(monkeypatch, fse, tmp_path, events=_live_events(),
+                                    forecaster=_BoundForecaster, pool=pool)
+    out = _run(fse, tmp_path)
+    replay = json.loads(Path(out["replay_path"]).read_text(encoding="utf-8"))
+    art = of.load_artifact(art_path)
+    raw = of.forecast_with_stack(art, of.load_stack(stack_path, art), _live_events(), ISSUE)["probability"]
+    grid = np.array([float(v) for v in replay["probability_grid"].split(",")])
+    np.testing.assert_array_equal(grid, [float(f"{p:.6g}") for p in raw])
+    assert not any(c.get("calibrated") for c in replay["active_cells"])
+    assert "calibrator_model_version" not in replay["operational_model"]
 
 
 def test_a_listed_cell_off_the_scored_grid_is_never_written(fse, tmp_path):

@@ -1019,6 +1019,42 @@ def trust_layer_applies(forecaster, served_model_version: str) -> bool:
     return forecaster is not None and getattr(forecaster, "model_version", None) == served_model_version
 
 
+# The pool the earthquake calibrator is fitted on (score_earthquake_prospective --emit-calibration;
+# fit_calibration fits results/calibration/earthquake_calibration.json from it in the same job).
+CALIBRATION_DATASET_PATH = (
+    Path(__file__).resolve().parents[1] / "results" / "earthquake_prospective" / "calibration_dataset.json"
+)
+
+
+def calibration_evidence(forecaster, dataset_path: Path | None = None) -> tuple[bool, str]:
+    """Whether the calibrator rests on INDEPENDENT evidence: distinct earthquakes and windows that
+    do not overlap, counted by the scorer beside the pool it was fitted on.
+
+    The shared admissibility gate (hazardpulse.trust.scoring.calibrator_admissible) counts the
+    pool's positives, which are cell-windows summed over overlapping 30-day windows: the retired
+    model's pool held 5,931 "events" from 64 earthquakes, so its 30-event floor can pass on ONE
+    earthquake seen by ~100 windows. Fails closed: a pool of another model, or one written before
+    these counts existed, is not evidence.
+    """
+    from hazardpulse.earthquake import live_record
+    from hazardpulse.trust.scoring import MIN_CALIBRATION_EVENTS
+
+    path = dataset_path or CALIBRATION_DATASET_PATH
+    try:
+        pool = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False, f"no calibration pool at {path}"
+    if pool.get("model_version") != getattr(forecaster, "model_version", None):
+        return False, f"the pool is {pool.get('model_version')!r}'s, the calibrator {forecaster.model_version!r}'s"
+    n_ev, n_ind = pool.get("n_distinct_events"), pool.get("n_independent_windows")
+    if n_ev is None or n_ind is None:
+        return False, "the pool predates distinct-earthquake counting"
+    if int(n_ev) < MIN_CALIBRATION_EVENTS or int(n_ind) < live_record.LIVE_MIN_INDEPENDENT_WINDOWS:
+        return False, (f"{int(n_ev)} distinct earthquakes in {int(n_ind)} non-overlapping windows (needs "
+                       f"{MIN_CALIBRATION_EVENTS} and {live_record.LIVE_MIN_INDEPENDENT_WINDOWS})")
+    return True, f"{int(n_ev)} distinct earthquakes, {int(n_ind)} non-overlapping windows"
+
+
 def calibrate_scored_grid(operational: dict, forecaster) -> dict:
     """Apply a calibrator to the WHOLE grid that is scored, or nothing is calibrated.
 
@@ -1161,10 +1197,15 @@ def run_pipeline(
         print(f"  Trust layer: not loaded ({exc}); the forecast stays as computed")
     calibrator = _forecaster if trust_layer_applies(_forecaster, MODEL_VERSION) else None
     if calibrator is not None:
+        evidence_ok, evidence_why = calibration_evidence(calibrator)
+        if not evidence_ok:
+            print(f"  Trust layer: calibrator {calibrator.model_version} not applied -- {evidence_why}")
+            calibrator = None
+    if calibrator is not None:
         operational = calibrate_scored_grid(operational, calibrator)
         print(f"  Trust layer: calibrator {calibrator.model_version} applied to all "
-              f"{np.asarray(operational['probability']).size} cells of the scored grid")
-    else:
+              f"{np.asarray(operational['probability']).size} cells of the scored grid ({evidence_why})")
+    elif not trust_layer_applies(_forecaster, MODEL_VERSION):
         bound = _forecaster.model_version if _forecaster is not None else "none"
         print(f"  Trust layer: calibrator bound to {bound}, not the served {MODEL_VERSION}; not applied "
               "(the operational model is calibrated by its own likelihood fit)")
