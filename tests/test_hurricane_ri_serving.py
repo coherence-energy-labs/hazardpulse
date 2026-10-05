@@ -490,9 +490,15 @@ def test_main_scores_active_storms_without_training(monkeypatch):
     monkeypatch.setattr(fas, "fetch_text", lambda url, **k: index if "aid_public" in url else "")
     monkeypatch.setattr(fas, "fetch_realtime_adeck", lambda sid: fetched.append(sid) or decks[sid])
     monkeypatch.setattr(fas, "_discover_jtwc_storms", lambda: {})
+    # no network: the IR model's satellite images (NOAA GMGSI on S3, ~7.5 MB each) are not read here --
+    # this test times the scoring path, and an un-stubbed download made it time the connection instead
+    from hazardpulse.hurricane import ir_source
+    images: list = []
+    monkeypatch.setattr(ir_source, "fetch_image", lambda hour: images.append(hour) or (None, None, None, None))
     captured: dict = {}
     monkeypatch.setattr(fas, "write_outputs",
-                        lambda scored, now, version, **_k: captured.update(scored=scored, version=version))
+                        lambda scored, now, version, **k: captured.update(scored=scored, version=version,
+                                                                          catch_up=k.get("catch_up")))
     monkeypatch.setattr(fas, "build_site_artifacts", lambda: None)
     monkeypatch.setattr(fas, "DIST", REPO / "nonexistent-dist-for-test")
 
@@ -508,6 +514,12 @@ def test_main_scores_active_storms_without_training(monkeypatch):
     assert s["model_version"] == captured["version"] == fas.SERVED_MODEL_VERSION
     assert s["calibration"] == "logistic_on_logit_newton"
     assert set(s["model_scores"]) == {"gbt_d3", "gbt_d4", "logistic", "bagged"}
+    # amendment 7 rule 2: the previous cycle (now ~9 h old, no record of it) is forecast in shadow, from the
+    # deck already read -- never a second a-deck download, never published
+    if fas._shadow_keys(fas.load_v9_model(), fas.load_v10_model(), fas.load_challengers()):
+        assert [(c["storm_id"], c["issue_time"], c["catch_up"]) for c in captured["catch_up"]] == [
+            ("EP152026", (cycle - dt.timedelta(hours=6)).isoformat(), True)]
+        assert all(c["issue_time"] != s["issue_time"] for c in captured["catch_up"])
     # The serving path is milliseconds; the training path it replaced was > 30 minutes.
     assert elapsed < 20.0, f"scoring took {elapsed:.1f}s"
 
