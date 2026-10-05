@@ -105,6 +105,45 @@ tornado deploy or merge. Cheap fix: give `earthquake-score.yml` the same deploy 
    - Candidate: MRMS rotation tracks and azimuthal shear (`s3://noaa-mrms-pds`, archive plus
      real-time), timed honestly.
    - Amendment 8's lesson applies: every input must exist at the forecast's issue time.
+2. **T2. The 2025-08 ProbSevere format change** (opened 2026-10-05, tornado audit item 3).
+   - **What changed.** On 2025-08-06 NOAA changed the ProbSevere JSON from 25 to 48 storm attributes.
+     `PS`, `VIL_DENSITY` and `MAXRC_ICECF` were removed, and `MAXRC_EMISS` and `AVG_BEAM_HGT` are no
+     longer in their documented string formats. New attributes include `MaxFED`, `DCAPE`, `VIL`,
+     `EchoTop_50` and `LCL`.
+   - **What the model gets.** The parser reads a missing `PS` or `VIL_DENSITY` as 0.0. So for every live
+     storm since the change, the served model has received `p_ps = 0` and `p_vil_density = 0`. These
+     two inputs carry 196 and 475 of the 8,826 splits in `tornado_v3_w.json`. The model was trained on
+     2020-10..2024-12, entirely before the change. The three string attributes have no splits.
+   - **Now visible, not changed.** Since 2026-10-05 every run records which inputs were absent and what
+     the model received (`input_gaps` in the forecast record and its provenance envelope;
+     `hazardpulse.tornado.input_guard`). The tornado page states the gap in plain words. Nothing the
+     model receives has changed: that would be a model change.
+   - **Witnesses.**
+     - 2026-10-05 audit, as reported (not re-measured): NOAA ProbTor AUC 0.947 -> 0.843 across the
+       change; ours 0.971 before vs 0.949 [0.928, 0.964] after.
+     - Re-measured here on every 2025 storm observation of the v3 feature store (`storm_60` label; AUC
+       with ties counted half; 200-bootstrap 95% intervals):
+       - before 2025-08-06: 929,002 observations, 1,400 positive. Served fallback (`tornado_v3.json`, no
+         NWS input) 0.970 [0.966, 0.974]; ProbTor 0.883. `p_ps == 0` on 29.6% of rows,
+         `p_vil_density == 0` on 0.6%.
+       - from 2025-08-06: 540,975 observations, 179 positive. Fallback 0.947 [0.931, 0.961]; ProbTor
+         0.843. `p_ps == 0` and `p_vil_density == 0` on **100%** of rows.
+   - **The confound.** The after-period is August-December: the quiet season, with a base rate of 0.033%
+     against 0.151% before. NOAA's own ProbTor dropped too, and it has no zero-filled inputs of ours. A
+     before/after split cannot separate the format change from the season.
+   - **Deciding experiment.** Pre-register it first: the rule, a control that reproduces the served
+     numbers bit for bit, and the season-matched comparison.
+     1. Score the FROZEN served models on 2026-01..09 (new format throughout, all seasons) three ways,
+        with every other input identical:
+        - (a) missing = 0, as served;
+        - (b) missing = NaN, the trees' missing-value branches;
+        - (c) each absent attribute rebuilt from new-format attributes, for example VIL density from
+          `VIL` and an echo-top height. Each candidate mapping is written into the pre-registration and
+          checked on files that carry both forms, if any exist, before any scoring.
+     2. Only then, a refit across both formats with the new attributes (`MaxFED`, `DCAPE`, `VIL`,
+        `EchoTop_50`, `LCL`), chosen on 2023-2024 plus 2025-08..12, and scored once on 2026.
+     - Promotion follows the program's carried-challenger rule: shadow first, then the rule written
+       before the challenger's first cycle.
 
 ## Killed (witness -> what survives)
 
