@@ -42,10 +42,9 @@ The cheap levers on the current inputs are exhausted (amendment 3): monotone con
 -0.0007 in log loss, and revisions -0.0002. **The next material gain must be new information.**
 The first one, satellite IR (H1), delivered.
 
-**Ops note (2026-10-03):** the earthquake and verification scorers commit without deploying (bot
-pushes do not trigger `deploy.yml`). Their changes reach the site only at the next hurricane or
-tornado deploy or merge. Cheap fix: give `earthquake-score.yml` the same deploy step as
-`hurricane-score.yml`.
+**Ops note (2026-10-03, resolved):** the earthquake and verification scorers used to commit without
+deploying, because bot pushes do not trigger `deploy.yml`. Both now deploy themselves with the same
+Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.yml`).
 
 1. **H1. DONE (2026-10-03): v10.3 = V5 + satellite IR, carried and in shadow** (amendments 5-6).
    - Data: NOAA GMGSI longwave, hourly, archived from 2021-07-12. Crops are made by the same
@@ -193,17 +192,41 @@ tornado deploy or merge. Cheap fix: give `earthquake-score.yml` the same deploy 
 
 ### Hurricane RI, serving
 
-1. **H7. Give WP/IO/SH v8.2 its storm history** (opened 2026-10-05, hurricane audit).
-   - **The problem.** Live WP runs from one JTWC warning, so 9 of v8.2's 17 inputs are median-imputed.
-     Re-scoring the 2022-2024 WP holdout with that input pattern: log loss 0.2589 vs climatology 0.2649
-     (0.2057 with full inputs). Live witness: Choi-Wan intensified 45, 45 and 40 kt in 24 h while v8.2
-     published 5.7%, 5.4% and 3.2%.
-   - **The source.** UCAR RAL's real-time b-decks (`hurricanes.ral.ucar.edu/repository/data/bdecks_open/2026/`)
-     hold positions, intensity and pressure history for every active storm. On 2026-10-05 all files were
-     refreshed together at 01:47Z with the 00Z fixes, inside the scorer's t + 3 h 30 min.
-   - **Deciding experiment.** Measure RAL's lag over 48 h. Re-score the WP holdout with exactly the
-     history that lag allows at t + 3 h 30 min, then serve it. This is a train/serve repair: the model
-     unchanged, its inputs restored.
+1. **H7. DONE (2026-10-05): WP/IO/SH v8.2 scored with its storm history** (opened the same day,
+   hurricane audit).
+   - **The problem.** Live WP ran from one JTWC warning, so 9 of v8.2's 17 inputs were median-imputed.
+     Live witness: Choi-Wan intensified 45, 45 and 40 kt in 24 h while v8.2 published 5.7%, 5.4% and 3.2%.
+   - **The repair** (`scripts/fetch_and_score.py`: `with_track_history`, `jtwc_live_case`,
+     `unavailable_inputs`). Each JTWC storm takes its best-track fixes up to the warning's own cycle from
+     UCAR RAL's real-time b-deck. It is never given a later fix, and never another storm's track: the
+     track must reach within 12 h of the warning's cycle, close to its position. The model is unchanged;
+     its inputs are restored. Two bugs found on the way, both fixed:
+     - SH storm ids now take the season year (July-June; RAL: `bsh012026` began 2025-07-16). The calendar
+       year would have fetched the previous season's storm of the same number. It would also have left
+       every Jul-Dec SH storm unverifiable in the prospective test.
+     - A storm warned across its season's turn keeps the year it formed in.
+   - **Measured on the 2022-2024 WP test cycles** (2,110 cycles, 157 events; `hurricane_v82_test_composition.py`,
+     each input pattern derived by running the live code on real fixtures):
+
+     | inputs | log loss |
+     |---|---|
+     | every input (the current fix on time) | 0.2057 |
+     | this cycle's fix late (pressure and its 3 changes filled) | 0.2134 |
+     | one warning, the old live path | 0.2589 |
+     | climatology | 0.2649 |
+
+   - **Descriptive only.** The served calibration saw these cycles, and the test's history is the
+     post-season track, not the working one.
+   - **RAL lag, one day only (2026-10-05):** the 00Z fixes were in the file by 01:47, and the 12Z fix by
+     15:17 (`bwp262026.dat`, Last-Modified 15:17:16Z). Both are inside the scorer's t + 3 h 30 min, but the
+     12Z fix only by 13 min.
+   - **Live at 17:00Z** (each with history vs the warning alone):
+     - Choi-Wan: 0 inputs missing, 0.10%, vs 1.31% with 9 missing.
+     - Koguma: 0.0974 vs 0.0602. At 12 h old its 24 h changes do not exist; training lacked them for
+       young storms too, so they are recorded as `inputs_before_first_fix`, not as missing.
+   - **What stays open.** Each record now says whether its history was on time (`ri_inputs.analysis_model`
+     BEST vs JTWC, `track_source`), so the live record measures RAL's lag from here on. Resurrect if
+     12Z cycles start landing late: move the hurricane slot to t + 3 h 45 min.
 
 ## Platform (2026-10-05 audit)
 

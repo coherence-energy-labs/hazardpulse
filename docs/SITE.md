@@ -65,8 +65,9 @@ What is happening now sits beside what is likely next. The Worker reads the agen
 | NWS `alerts/active?event=Tornado Warning` | US tornado warnings in effect (polygon centres) | counts, feed, globe |
 | NWS `alerts/active?point=lat,lon` | the alerts at the visitor's point, rounded to 0.1 degree; US only | "Near you", the notice |
 
-Storms outside NOAA's basins come from the HazardPulse forecast feed (JTWC positions), and only while
-their position is under 24 hours old. Tracked thunderstorms are shown only while the tornado forecast that
+Storms outside NOAA's basins come from the HazardPulse forecast feed, and only while their position is
+under 24 hours old. Each storm's position is its best-track fix for the cycle, from UCAR RAL, or the JTWC
+warning's position while that fix is not yet published (`ri_inputs.analysis_model` says which). Tracked thunderstorms are shown only while the tornado forecast that
 tracked them is under 3 hours old.
 
 The server renders everything first (`HTMLRewriter`: the counters `[data-live]`, `#live-feed`, `#near-you`,

@@ -15,10 +15,14 @@ evaluation's own data file and the served artifact, and writes
 * what the SERVED artifact is: the same recipe rolled forward (members 2000-2021), its calibration
   fitted on 2022-2024 -- the test set itself;
 * how the served model scores the West Pacific test cycles with the inputs a live West Pacific
-  forecast has. Live, a JTWC storm is scored from ONE warning; which of the model's inputs that
-  leaves missing is derived here by running the live case builder on a real warning
-  (``tests/fixtures/jtwc/wp2626web_20261002.txt``), not typed. Those inputs are median-imputed, as
-  live. Descriptive: the served calibration saw these rows, so neither number is out of sample.
+  forecast has. Until 2026-10-05 a JTWC storm was scored from ONE warning; since then it carries its
+  best-track history from RAL's real-time b-deck, and when the warning's own cycle has no fix there yet
+  the warning is the analysis. Which inputs each case leaves missing is derived here by running the
+  live code (``jtwc_live_case``, ``unavailable_inputs``) on a real warning
+  (``tests/fixtures/jtwc/wp2626web_20261002.txt``) and the real b-deck
+  (``tests/fixtures/ral/bwp262026_20261005.dat``), not typed. Those inputs are median-imputed, as
+  live. Descriptive: the served calibration saw these rows, so no number is out of sample; and the
+  test's history is the post-season best track, which revises the working one a live case reads.
 
 Nothing is trained or refitted; every number is a scoring of the frozen served artifact.
 """
@@ -43,6 +47,7 @@ OUT = ROOT / "results" / "calibration" / "hurricane_ri_v8_2_test_composition.jso
 EVALUATION = ROOT / "results" / "calibration" / "hurricane_ri_evaluation.json"
 CANDIDATE = "C_v8_2_heldout_newton"
 JTWC_FIXTURE = ROOT / "tests" / "fixtures" / "jtwc" / "wp2626web_20261002.txt"
+RAL_FIXTURE = ROOT / "tests" / "fixtures" / "ral" / "bwp262026_20261005.dat"
 EPS = 1e-12
 
 
@@ -63,6 +68,30 @@ def jtwc_missing_inputs(model: dict) -> list[str]:
     case = fas.build_live_case(sid, recs, full_history=False)
     names = list(model["feature_names"])
     return sorted(names[j] for j in model["selected_idx"] if case.get(names[j]) is None)
+
+
+def late_fix_missing_inputs(model: dict) -> list[str]:
+    """The inputs a live JTWC case leaves missing when RAL's best track reaches the fix before the warning's
+    cycle but not the warning's own (the warning is then the analysis), from the live code on the real
+    warning and the real b-deck cut just before that cycle."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("fas_v82_late", ROOT / "scripts" / "fetch_and_score.py")
+    fas = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fas)
+    sid, recs = fas._parse_jtwc_warning_to_atcf(JTWC_FIXTURE.read_text(encoding="utf-8"), product_id="wp2626",
+                                                now=dt.datetime(2026, 10, 2, 12))
+    cycle = max(r.cycle for r in recs if r.tau_hours == 0)
+    lines = RAL_FIXTURE.read_text(encoding="utf-8").splitlines(keepends=True)
+    before = "".join(ln for ln in lines if dt.datetime.strptime(ln.split(",")[2].strip(), "%Y%m%d%H") < cycle)
+    case = fas.jtwc_live_case(sid, recs, fetch=lambda url: before)
+    if case is None or case["track_source"] != "ral_bdeck" or case["analysis_model"] != "JTWC":
+        raise SystemExit(f"the late-fix case did not take RAL's history with the warning as its analysis: {case}")
+    names = list(model["feature_names"])
+    X, _, _, _ = fas.build_feature_matrix([case], feature_names=names)
+    missing, before_first_fix = fas.unavailable_inputs(case, names, X[0])
+    if before_first_fix:
+        raise SystemExit(f"the fixture storm is too young to measure the late-fix pattern: {before_first_fix}")
+    return sorted(missing)
 
 
 def main() -> int:
@@ -99,6 +128,8 @@ def main() -> int:
     p_full = ri_model.score_cases(model, wp)["calibrated"]
     stripped = [{**c, **{k: None for k in missing}} for c in wp]
     p_jtwc = ri_model.score_cases(model, stripped)["calibrated"]
+    late = late_fix_missing_inputs(model)
+    p_late = ri_model.score_cases(model, [{**c, **{k: None for k in late}} for c in wp])["calibrated"]
     rate = float(y_wp.mean())
     out = {
         "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
@@ -125,10 +156,22 @@ def main() -> int:
             "climatology": "the West Pacific test cycles' own event rate (a constant fitted in sample)",
             "note": "descriptive: the served artifact's calibration was fitted on these cycles",
         },
+        "late_best_track_fix": {
+            "fixtures": [str(JTWC_FIXTURE.relative_to(ROOT)).replace("\\", "/"),
+                         str(RAL_FIXTURE.relative_to(ROOT)).replace("\\", "/")],
+            "what": "since 2026-10-05: RAL's best track to the fix before the warning's cycle, the warning as "
+                    "the analysis (its cycle's fix not yet published)",
+            "inputs_missing_live": late,
+            "west_pacific_test_cycles": len(wp),
+            "log_loss": log_loss(y_wp, p_late),
+            "note": "descriptive, as above; the test's history is the post-season best track",
+        },
     }
     for k in ("log_loss_full_inputs", "log_loss_single_warning_inputs", "log_loss_climatology"):
         if not math.isfinite(out["single_jtwc_warning"][k]):
             raise SystemExit(f"{k} is not finite")
+    if not math.isfinite(out["late_best_track_fix"]["log_loss"]):
+        raise SystemExit("late_best_track_fix log_loss is not finite")
     OUT.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
     s = out["single_jtwc_warning"]
     print(f"v8.2 test: {out['n']} cycles, {out['events']} events, basins "
@@ -137,6 +180,9 @@ def main() -> int:
     print(f"single JTWC warning leaves {len(missing)} of {s['n_selected_inputs']} inputs missing: {missing}")
     print(f"West Pacific ({s['west_pacific_test_cycles']} cycles): LL full {s['log_loss_full_inputs']:.4f}, "
           f"single warning {s['log_loss_single_warning_inputs']:.4f}, climatology {s['log_loss_climatology']:.4f}")
+    lf = out["late_best_track_fix"]
+    print(f"late best-track fix leaves {len(lf['inputs_missing_live'])} missing {lf['inputs_missing_live']}: "
+          f"LL {lf['log_loss']:.4f}")
     return 0
 
 

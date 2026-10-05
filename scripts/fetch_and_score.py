@@ -49,7 +49,9 @@ from hazardpulse.hurricane.atcf import (  # noqa: E402
     DEFAULT_LEAD_TIMES,
     parse_atcf_deck,
 )
+from hazardpulse.site.places import haversine_km  # noqa: E402
 from hazardpulse.hurricane.operational_ri import (  # noqa: E402
+    build_feature_matrix,
     climatological_mpi_features,
     translation_speed_kmh,
 )
@@ -173,6 +175,95 @@ def classify_storm(vmax_kt: float | None) -> str:
     return "Tropical Disturbance"
 
 
+# The storm's track history for the JTWC basins. A JTWC warning holds ONE cycle, so v8.2 -- trained on the
+# best track -- had 9 of its 17 inputs (the 6/12/24-h intensity and pressure changes, the pressure, motion,
+# age) median-imputed on every West Pacific storm: scored that way its 2022-2024 West Pacific log loss was
+# 0.2589 against climatology's 0.2649 (0.2057 with every input), and Choi-Wan intensified 45, 45 and 40 kt in
+# 24 h while v8.2 published 5.7%, 5.4% and 3.2% (2026-10-05 audit). UCAR RAL publishes the working best track
+# of every active storm in real time; its fixes reached the file 1 h 47 min (00Z) and 3 h 17 min (12Z) after
+# synoptic time on 2026-10-05, inside this scorer's t + 3 h 30 min.
+RAL_BDECK_URL = "https://hurricanes.ral.ucar.edu/repository/data/bdecks_open/{year}/b{basin}{num}{year}.dat"
+# A best track is this storm's only if it reaches the warning: its last fix at most 12 h before the warning's
+# cycle (RAL's lag was 3 h 17 min at worst on 2026-10-05) and no farther from the warning's position than a storm moving
+# 60 km/h could be, plus 200 km for the two agencies' fixes of one storm to differ.
+HISTORY_MAX_GAP = dt.timedelta(hours=12)
+HISTORY_KM_AT_SAME_TIME, HISTORY_KM_PER_HOUR = 200.0, 60.0
+
+
+def atcf_season_year(basin: str, cycle: dt.datetime) -> int:
+    """The year in an ATCF storm id. The southern hemisphere's season runs July to June and takes the year
+    it ends in (RAL: bsh012026 began 2025-07-16, bsh012025 2024-10-01); every other basin's is the calendar
+    year. A storm keeps the year it formed in, so one warned across a season's turn has the year before
+    (``with_track_history`` tries it)."""
+    return cycle.year + 1 if basin.upper() == "SH" and cycle.month >= 7 else cycle.year
+
+
+def _previous_season(storm_id: str) -> str:
+    return f"{storm_id[:4]}{int(storm_id[4:8]) - 1}"
+
+
+def history_mismatch(history: list[ATCFRecord], analysis: ATCFRecord) -> str | None:
+    """Why ``history`` is not the track of the storm ``analysis`` warns on, or None when it is."""
+    last = max(history, key=lambda r: r.cycle)
+    gap = analysis.cycle - last.cycle
+    if gap > HISTORY_MAX_GAP:
+        return f"its last fix ({last.cycle:%Y-%m-%d %HZ}) is {gap.total_seconds() / 3600:.0f} h before the warning"
+    km = haversine_km(last.lat, last.lon, analysis.lat, analysis.lon)
+    limit = HISTORY_KM_AT_SAME_TIME + HISTORY_KM_PER_HOUR * gap.total_seconds() / 3600
+    if km > limit:
+        return f"its last fix is {km:.0f} km from the warning's position (at most {limit:.0f})"
+    return None
+
+
+def ral_track_history(storm_id: str, current: dt.datetime, fetch=None) -> list[ATCFRecord]:
+    """The storm's best-track analyses (``BEST``, tau 0) at or before ``current`` -- never a later fix --
+    from RAL's real-time b-deck. [] when the file cannot be read: the warning alone is then scored, and the
+    record says so."""
+    sid = storm_id.strip().lower()
+    if len(sid) != 8:
+        return []
+    url = RAL_BDECK_URL.format(year=sid[4:8], basin=sid[:2], num=sid[2:4])
+    try:
+        text = (fetch or (lambda u: fetch_text(u, namespace="ral_bdeck", use_cache=False)))(url)
+    except Exception as exc:  # noqa: BLE001 -- a missing history must never stop the forecast
+        print(f"    {storm_id}: RAL b-deck unavailable ({exc}); scoring from the warning alone")
+        return []
+    return [r for r in parse_atcf_deck(text or "") if r.model == "BEST" and r.tau_hours == 0 and r.cycle <= current]
+
+
+def with_track_history(storm_id: str, warning_records: list[ATCFRecord], fetch=None
+                       ) -> tuple[list[ATCFRecord], str, str]:
+    """``(records, track_source, storm_id)``: the warning's records plus the storm's best-track history up to
+    the warning's own cycle, and the storm's ATCF id -- the one the warning implies, or the season before's
+    when only that track reaches the warning. A track that does not reach it (``history_mismatch``) is
+    never merged: it would be another storm's. The analysis priority prefers ``BEST`` over ``JTWC`` for any
+    cycle both hold, as v8.2's training set did; the warning stays the analysis while its cycle's fix is not
+    yet published."""
+    analyses = [r for r in warning_records if r.tau_hours == 0 and r.lat is not None and r.lon is not None]
+    if not analyses or len(storm_id) != 8 or not storm_id[4:].isdigit():
+        return warning_records, "jtwc_warning", storm_id
+    analysis = max(analyses, key=lambda r: r.cycle)
+    for sid in (storm_id, _previous_season(storm_id)):
+        history = ral_track_history(sid, analysis.cycle, fetch=fetch)
+        if not history:
+            continue
+        why = history_mismatch(history, analysis)
+        if why is None:
+            return warning_records + history, "ral_bdeck", sid
+        print(f"    {sid}: RAL best track is not this storm's, {why}")
+    return warning_records, "jtwc_warning", storm_id
+
+
+def jtwc_live_case(storm_id: str, warning_records: list[ATCFRecord], fetch=None) -> dict[str, object] | None:
+    """A JTWC storm's live case: its warning plus its best-track history, with ``track_source`` saying
+    which the case was built from (the record keeps it, so a forecast from the warning alone is known)."""
+    merged, track_source, sid = with_track_history(storm_id, warning_records, fetch=fetch)
+    case = build_live_case(sid, merged, full_history=track_source == "ral_bdeck")
+    if case is not None:
+        case["track_source"] = track_source
+    return case
+
+
 def _discover_jtwc_storms() -> dict[str, list[ATCFRecord]]:
     """Discover active JTWC storms from RSS feed and parse warning text.
 
@@ -289,8 +380,6 @@ def _parse_jtwc_warning_to_atcf(
         basin = JTWC_SUFFIX_BASIN.get(storm_number[-1])
     if basin is None:
         return "", []
-    year = now.year
-    storm_id = f"{basin}{storm_number[:2]}{year}"
 
     # Parse analysis position: "DDHHMM Z --- NEAR NN.NN NS.S EEE.EE EW"
     cycle_time = None
@@ -309,6 +398,9 @@ def _parse_jtwc_warning_to_atcf(
 
     if cycle_time is None or analysis_lat is None:
         return "", []
+    # the warning's own cycle, not the clock: SH02 warned 2026-10-05 is SH022027, and a warning read just
+    # after midnight on 1 January belongs to the year before
+    storm_id = f"{basin}{storm_number[:2]}{atcf_season_year(basin, cycle_time)}"
 
     # Get analysis max wind (first MAX SUSTAINED WINDS)
     for line in lines:
@@ -1026,6 +1118,28 @@ def ri_source_label(storm: dict[str, object]) -> str:
     return f"NOAA {names.get(str(used), 'RI guidance (SHIPS-RII/DTOPS)')}"
 
 
+_CHANGE_SPAN_RE = re.compile(r"^analysis_d[vp]_(\d+)h$")
+
+
+def unavailable_inputs(case: dict[str, object], names: list[str], row: np.ndarray) -> tuple[list[str], list[str]]:
+    """``(missing, before_first_fix)``: the model's inputs this case could not provide (non-finite in the
+    matrix it is scored from). A change over a span longer than the storm has existed is missing in the
+    training set as well (build_hurricane_training_data: None when that fix is absent) and imputed alike, so
+    it is ``before_first_fix``, not a deficit; with no known age every gap is a deficit."""
+    age = case.get("storm_age_h")
+    missing: list[str] = []
+    before: list[str] = []
+    for j, name in enumerate(names):
+        if np.isfinite(row[j]):
+            continue
+        span = _CHANGE_SPAN_RE.match(name)
+        if span is not None and isinstance(age, (int, float)) and int(span.group(1)) > age:
+            before.append(name)
+        else:
+            missing.append(name)
+    return missing, before
+
+
 def score_live_cases(
     model: dict[str, object],
     live_cases: list[dict[str, object]],
@@ -1049,6 +1163,10 @@ def score_live_cases(
         return []
     p = ri_model.score_cases(model, live_cases)
     n_features = len(model["selected_idx"])
+    # which of v8.2's inputs each case could not provide (imputed at scoring), from the very matrix it scores
+    names = list(model["feature_names"])
+    X_inputs, _, _, _ = build_feature_matrix(live_cases, feature_names=names)
+    unavailable = [unavailable_inputs(case, names, X_inputs[i]) for i, case in enumerate(live_cases)]
 
     scored: list[dict[str, object]] = []
     for i, case in enumerate(live_cases):
@@ -1077,7 +1195,11 @@ def score_live_cases(
             "issue_time": case.get("issue_time"),
             **v82,
             "ri_source": RI_SOURCE_V82,
-            "ri_inputs": {"analysis_model": case.get("analysis_model")},
+            "ri_inputs": {"analysis_model": case.get("analysis_model"),
+                          "track_source": case.get("track_source"),
+                          "n_inputs": len(names),
+                          "inputs_missing": unavailable[i][0],
+                          "inputs_before_first_fix": unavailable[i][1]},
         }
         if stack is not None:
             prob, inputs = stack_forecast(case, stack, ships_fetcher)
@@ -1408,12 +1530,12 @@ def main() -> None:
             age_txt = "no analysis" if age_h is None else f"warning analysis {age_h:.0f} h old"
             print(f"    {sid} (JTWC): inactive ({age_txt}), skipping")
             continue
-        case = build_live_case(sid, records, full_history=False)
+        case = jtwc_live_case(sid, records)
         if case is not None:
             name = case.get("storm_name", sid)
             vmax = case.get("analysis_vmax_kt", "?")
             cat = classify_storm(vmax if isinstance(vmax, (int, float)) else None)
-            print(f"    {name} (JTWC): {cat} ({vmax} kt)")
+            print(f"    {name} (JTWC): {cat} ({vmax} kt); track history: {case['track_source']}")
             live_cases.append(case)
 
     if not live_cases:
