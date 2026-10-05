@@ -550,6 +550,24 @@ function warningOf(f) {
   };
 }
 
+// How long a page waits for the live data before it is sent without it. Measured on the preview
+// (2026-10-05): a warm server answers from memory in well under this; the first request on a cold one took
+// 1.0 s, nearly all of it the agencies' feeds.
+const PAGE_LIVE_BUDGET_MS = 350;
+
+// the work's result, or null once budgetMs has passed; the work itself carries on behind the response
+async function withinBudget(work, budgetMs, ctx = null) {
+  const guarded = work.catch(() => null);
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(guarded);
+  let timer = null;
+  const late = new Promise((resolve) => { timer = setTimeout(() => resolve(null), budgetMs); });
+  try {
+    return await Promise.race([guarded, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // the build's area index changes only with a deploy (which starts new isolates), so one parse a minute
 // serves every request in between
 let _indexMemo = null;
@@ -794,8 +812,11 @@ function summarizeArea(geo, data, live = null, alerts = null) {
   if (!geo.isReliable) return { reliable: false };
   const lat = geo.latitude;
   const lon = geo.longitude;
-  // without the live picture, the build's index storms, in the live shape every renderer reads
-  const storms = live && live.storms ? live.storms : (data.storms || []).map(stormOfForecast);
+  // without the live picture, the build's index storms -- only those whose position is current -- in the
+  // live shape every renderer reads
+  const storms = live && live.storms
+    ? live.storms
+    : (data.storms || []).filter((s) => freshForecastStorm(s)).map(stormOfForecast);
   const out = {
     reliable: true,
     lat,
@@ -1480,19 +1501,33 @@ export default {
 
     const geo = normalizeGeo(request.cf || {});
     const themePreference = readThemePreference(request);
-    // the live picture (shared, cached a minute) and, with a location, the visitor's own area
-    const live = await getLive(env, request, ctx);
-    const alerts = geo.isReliable ? await nwsPointAlerts(geo, ctx) : null;
-    const area = geo.isReliable ? summarizeArea(geo, areaDataOf(live._index), live, alerts) : { reliable: false };
+    // the live picture (shared, cached a minute) and, with a location, the official alerts at the visitor's
+    // point -- fetched together, and waited for only PAGE_LIVE_BUDGET_MS. A warm server answers from memory;
+    // a cold one sends the page without them (dashes, the feed's placeholder) and app.js fills them in, while
+    // the fetches finish behind the response and warm the server for the next visitor.
+    const live = await withinBudget(
+      Promise.all([getLive(env, request, ctx), geo.isReliable ? nwsPointAlerts(geo, ctx) : null]),
+      PAGE_LIVE_BUDGET_MS,
+      ctx
+    );
+    const [liveNow, alerts] = live || [null, null];
+    let area = { reliable: false };
+    if (geo.isReliable) {
+      // past the budget the notice still stands, from the build's own index (a local file, fast); only
+      // "Near you" waits for app.js
+      area = liveNow
+        ? summarizeArea(geo, areaDataOf(liveNow._index), liveNow, alerts)
+        : summarizeArea(geo, areaDataOf(await areaIndexOf(env, request)), null, null);
+    }
 
     const transformed = new HTMLRewriter()
       .on("html", new ThemeRootHandler(themePreference))
       .on(".theme-toggle", new ThemeToggleHandler(themePreference))
       .on(".user-marker", new UserMarkerHandler(geo))
       .on(".emergency-banner", new HtmlFillHandler(bannerHtml(area)))
-      .on("#near-you", new HtmlFillHandler(nearHtml(area, geo, live)))
-      .on("#live-feed", new HtmlFillHandler(feedHtml(live)))
-      .on("[data-live]", new LiveStatHandler(statsOf(live)))
+      .on("#near-you", new HtmlFillHandler(liveNow ? nearHtml(area, geo, liveNow) : ""))
+      .on("#live-feed", new HtmlFillHandler(liveNow ? feedHtml(liveNow) : ""))
+      .on("[data-live]", new LiveStatHandler(liveNow ? statsOf(liveNow) : {}))
       .on("#globe", new GlobeHandler(geo))
       .on(".forecast-age", new ForecastAgeHandler())
       .transform(response);

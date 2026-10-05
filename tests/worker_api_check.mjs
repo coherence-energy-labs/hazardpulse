@@ -11,8 +11,16 @@ const transformedSource = workerSource.replace(
   "globalThis.__worker_default ="
 );
 
+// records the handlers each page response registers, so a test can read what the page would show
+let lastRewriter = null;
 class HTMLRewriterStub {
-  on() {
+  constructor() {
+    this.handlers = [];
+    lastRewriter = this;
+  }
+
+  on(selector, handler) {
+    this.handlers.push([selector, handler]);
     return this;
   }
 
@@ -90,6 +98,7 @@ const context = vm.createContext({
 vm.runInContext(transformedSource, context, { filename: "worker.js" });
 const worker = context.globalThis.__worker_default;
 const workerTest = context.globalThis.__hazardpulse_worker_test;
+const handlerFor = (selector) => (lastRewriter.handlers.find(([s]) => s === selector) || [])[1];
 assert(worker && typeof worker.fetch === "function");
 assert(workerTest);
 
@@ -257,7 +266,8 @@ const highEq = { ...replay, probability_grid: replay.probability_grid.replace("0
 assert.equal(workerTest.summarizeArea(validGeo, { eq: highEq, eqGate: "pass", storms: [], tornadoes: [] }).banner, null);
 const stormArea = workerTest.summarizeArea(validGeo, {
   eq: replay, eqGate: "pass", tornadoes: [],
-  storms: [{ storm_id: "AL092026", storm_name: "IRENE", basin: "AL", category: "Category 1", lat: 39.0, lon: -72.0, ri_probability: 0.2 }],
+  storms: [{ storm_id: "AL092026", storm_name: "IRENE", basin: "AL", category: "Category 1", lat: 39.0, lon: -72.0, ri_probability: 0.2,
+             position_time: new Date(Date.now() - 3 * 3600_000).toISOString() }],
 });
 assert.equal(stormArea.banner.kind, "hurricane");
 const bannerHtml = workerTest.bannerHtml(stormArea);
@@ -266,7 +276,8 @@ assert.match(bannerHtml, /National Hurricane Center/);
 assert.doesNotMatch(bannerHtml, /style=|imminent|take action/i);
 const farStorm = workerTest.summarizeArea(validGeo, {
   eq: replay, eqGate: "pass", tornadoes: [],
-  storms: [{ storm_id: "EP152026", storm_name: "NOLO", basin: "EP", lat: 23.5, lon: -175.9, ri_probability: 0.9 }],
+  storms: [{ storm_id: "EP152026", storm_name: "NOLO", basin: "EP", lat: 23.5, lon: -175.9, ri_probability: 0.9,
+             position_time: new Date(Date.now() - 3 * 3600_000).toISOString() }],
 });
 assert.equal(farStorm.banner, null);
 assert.deepEqual(workerTest.officialCenter({ basin: "EP", lon: -175.9 })[0], "Central Pacific Hurricane Center");
@@ -631,6 +642,34 @@ assert.match(nearJson.data.html.banner, /Severe Thunderstorm Warning for your ar
 assert.equal("lat" in nearJson.data || "latitude" in nearJson.data, false, "the response does not echo the location");
 const nearNobody = await (await worker.fetch(new Request("https://hazardpulse.com/api/v1/near"), envFixture)).json();
 assert.deepEqual(nearNobody.data, { reliable: false, html: { near: "", banner: "" } });
+
+// a cold server does not hold the page for the agencies: past the budget the page goes without the live
+// data (app.js fills it), the notice still stands from the build's index, and the fetches carry on behind
+resetLive("hang");
+const background2 = [];
+const coldCtx = { waitUntil: (p) => background2.push(p) };
+const nearChoiWan = { latitude: "25.0", longitude: "148.0", city: "Chichijima", country: "JP" };
+const t1 = Date.now();
+const coldPage = await worker.fetch(withCf("https://hazardpulse.com/", nearChoiWan), envFixture, coldCtx);
+const coldMs = Date.now() - t1;
+assert.equal(coldPage.status, 200);
+assert.ok(coldMs < 1500, `the page waited ${coldMs} ms for the agencies`);
+assert.equal(handlerFor("#near-you").html, "", "Near you is left for app.js");
+assert.equal(handlerFor("#live-feed").html, "", "the feed keeps its placeholder");
+assert.equal(Object.keys(handlerFor("[data-live]").stats).length, 0, "the counters keep their dashes");
+assert.match(handlerFor(".emergency-banner").html, /Choi-Wan \(Super typhoon, Category 4\) is about \d+ km/,
+  "the notice still stands, from the build's index");
+assert.ok(background2.length >= 1, "the fetches carry on behind the response");
+await Promise.all(background2);
+// ...and a warm server renders all of it into the page
+resetLive("ok");
+await workerTest.getLive(envFixture, pageRequest);
+await worker.fetch(withCf("https://hazardpulse.com/",
+  { latitude: "35.4676", longitude: "-97.5164", city: "Oklahoma City", country: "US" }), envFixture, coldCtx);
+assert.match(handlerFor("#near-you").html, /Near you &middot; Oklahoma City, US/);
+assert.equal(handlerFor("[data-live]").stats.quakes_day, "3");
+assert.match(handlerFor("#live-feed").html, /^<li class="feed-item/);
+assert.match(handlerFor(".emergency-banner").html, /Severe Thunderstorm Warning for your area/);
 
 // the pages still render with every agency down
 resetLive("fail");

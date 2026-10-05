@@ -586,7 +586,12 @@
       pollLive();
       setInterval(function () { if (!document.hidden) pollLive(); }, LIVE_MS);
     }
-    if (document.getElementById("near-you")) setInterval(function () { if (!document.hidden) pollNear(); }, NEAR_MS);
+    var near = document.getElementById("near-you");
+    if (near) {
+      // a page sent before the live data arrived (a cold server) has an empty "Near you": fill it now
+      if (!near.firstElementChild) pollNear();
+      setInterval(function () { if (!document.hidden) pollNear(); }, NEAR_MS);
+    }
     refreshTimes();
     setInterval(refreshTimes, 30000);
   }

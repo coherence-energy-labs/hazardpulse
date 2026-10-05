@@ -82,6 +82,9 @@ Rules, each with a test in `tests/worker_api_check.mjs`:
 * Each feed is fetched at most once a minute per server: concurrent requests share one fetch, a failure is
   remembered for the minute, a copy past its minute is served at once and refreshed after the response,
   and a request is abandoned after 2.5 s. A last good copy is served for at most 15 minutes.
+* A page waits at most 350 ms for the live data (the first request on a cold server took 1.0 s on the
+  preview). Past that it is sent with dashes and the feed's placeholder, the notice still comes from the
+  build's index, `app.js` fills the rest, and the fetches finish behind the response.
 * Agency text is escaped after it is shortened, never before; an agency link is used only if it is https.
 * A missing number in a feed is missing, not 0 (`Number(null)` is 0 in JavaScript; `isFinite(null)` is true).
 
