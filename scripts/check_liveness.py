@@ -20,9 +20,11 @@ ROOT = Path(__file__).resolve().parents[1]
 PULSE_PATH = ROOT / "dist" / "data" / "live-pulse.json"
 REPLAY_DIR = ROOT / "dist" / "data" / "replay"
 
-# Max acceptable age per hazard (hours) -- the scheduled cadence plus slack: earthquake every 6 h -> 12,
-# hurricane every NHC cycle (6 h) -> 14 (one skipped run + 2 h of cron delay), tornado every 2 h -> 6. One
-# definition, shared with the status page (hazardpulse.site.hazards), so the two can never disagree.
+# Max acceptable age per hazard (hours): ONE missed run must show. Earthquake runs once per 6-hour slot and
+# hurricane once per 6-hour NHC cycle -> 9 (a missed slot or cycle reaches 12); tornado runs at least every
+# 2 h -> 3. (Until 2026-10-05 the limits were 12/14/6, which a single missed hurricane cycle never reached:
+# the next cycle's run landed first.) One definition, shared with the status page
+# (hazardpulse.site.hazards), so the two can never disagree.
 sys.path.insert(0, str(ROOT / "src"))
 from hazardpulse.site.hazards import MAX_AGE_HOURS  # noqa: E402
 

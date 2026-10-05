@@ -47,12 +47,14 @@ def test_all_hazards_fresh_passes(liveness):
     assert len(lines) == 3 and all(line.rstrip().endswith("OK") for line in lines)
 
 
-def test_hurricane_threshold_allows_one_skipped_cycle_run_but_not_two(liveness):
-    one_skipped = (NOW - dt.timedelta(hours=13, minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    two_skipped = (NOW - dt.timedelta(hours=19)).strftime("%Y-%m-%dT%H:%M:%SZ")
+def test_one_skipped_hurricane_cycle_is_already_stale(liveness):
+    """The old limit (14 h) let one skipped cycle pass -- the next cycle's run landed before it was reached,
+    so a missed cycle never showed. Since 2026-10-05 the limit is 9 h: on time passes, one skipped fails."""
+    on_time = (NOW - dt.timedelta(hours=6, minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    one_skipped = (NOW - dt.timedelta(hours=12, minutes=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
     fresh = dict(eq="2026-10-01T22:00:00Z", to="2026-10-02T00:17:40Z")
-    assert liveness.evaluate_freshness(_pulse(hu=one_skipped, **fresh), NOW)[1] == []
-    _, failures = liveness.evaluate_freshness(_pulse(hu=two_skipped, **fresh), NOW)
+    assert liveness.evaluate_freshness(_pulse(hu=on_time, **fresh), NOW)[1] == []
+    _, failures = liveness.evaluate_freshness(_pulse(hu=one_skipped, **fresh), NOW)
     assert len(failures) == 1 and failures[0].startswith("hu is stale")
 
 
