@@ -276,10 +276,22 @@ def lp_digest(payload: dict) -> str:
 
 
 # --------------------------------------------------------------------------- control
+#: probability agreement the control demands, in units in the last place. The stored inputs reproduce exactly,
+#: but NumPy's float64 exp is not one function across builds and CPUs: re-run on Windows 22 of 1,430 live
+#: probabilities differed, on a GitHub runner 40 (different storms), all by <= 2 ulp (amendment 10).
+MAX_PROB_ULP = 4
+
+
+def ulp_distance(a: float, b: float) -> int:
+    """Units in the last place between two positive float64 values."""
+    return abs(int(np.float64(a).view(np.int64)) - int(np.float64(b).view(np.int64)))
+
+
 def control(replay_dir: Path, first: str = "20261003", last: str = "20261005") -> int:
-    """(a) must reproduce the live records bit for bit: the file each record's storms were read from, parsed
-    by the same module, gives the stored 28 P inputs exactly; the served payload on the stored inputs gives the
-    stored probability exactly. Any mismatch stops (exit 1)."""
+    """(a) must reproduce the live records: the file each record's storms were read from, parsed by the same
+    module, gives the stored 28 P inputs EXACTLY; the served payload on the stored inputs gives the stored
+    probability to within MAX_PROB_ULP (the records keep no raw score, and exp is not reproducible across
+    builds). Any input difference, or any probability further apart, stops (exit 1)."""
     payloads = {"v3_w": json.loads((MODELS / "tornado_v3_w.json").read_text(encoding="utf-8")),
                 "v3": json.loads((MODELS / "tornado_v3.json").read_text(encoding="utf-8"))}
     files = sorted(p for p in replay_dir.glob("to_fcst_*.json") if first <= p.stem[8:16] <= last)
@@ -287,6 +299,7 @@ def control(replay_dir: Path, first: str = "20261003", last: str = "20261005") -
     steps_cache: dict[str, dict] = {}
     n = n_input_ok = n_prob_ok = 0
     bad: list[str] = []
+    ulps: list[int] = []
     for f in files:
         art = json.loads(f.read_text(encoding="utf-8"))
         for s in art.get("storms", []):
@@ -323,12 +336,15 @@ def control(replay_dir: Path, first: str = "20261003", last: str = "20261005") -
                 bad.append(f"{f.name} {s.get('storm_id')}: served model {v3.get('model')!r} unknown")
                 continue
             row = np.array([[np.nan if inp.get(k) is None else float(inp[k]) for k in payload["feature_names"]]])
-            if float(lp.predict_proba(payload, row)[0]) == float(p60):
+            u = ulp_distance(float(lp.predict_proba(payload, row)[0]), float(p60))
+            ulps.append(u)
+            if u <= MAX_PROB_ULP:
                 n_prob_ok += 1
             else:
-                bad.append(f"{f.name} {s.get('storm_id')}: probability differs")
+                bad.append(f"{f.name} {s.get('storm_id')}: probability {u} ulp from the record")
+    hist = {int(k): int(v) for k, v in zip(*np.unique(ulps, return_counts=True))} if ulps else {}
     print(f"control: {n} live storm observations in {len(files)} records; inputs identical {n_input_ok}, "
-          f"probability identical {n_prob_ok}; mismatches {len(bad)}")
+          f"probability within {MAX_PROB_ULP} ulp {n_prob_ok} (ulp distances {hist}); failures {len(bad)}")
     for b in bad[:20]:
         print("  ", b)
     return 1 if (bad or n == 0) else 0

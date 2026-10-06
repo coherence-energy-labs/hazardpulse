@@ -303,6 +303,15 @@ verified on forecasts made after it.
   scored, and `decide` checks that its predictions equal (a)'s on every row; it cannot qualify. The decision
   is (a) against (d). (The ledger's T2 entry offered (b) as "the trees' missing-value branches"; for these two
   inputs there are none.)
+- **The control, narrowed after its first run (2026-10-06, still before any decision number).** The platform
+  hypothesis above was FALSIFIED. On the runner too, every one of the 1,430 input vectors was identical, but
+  40 probabilities differed -- different storms from Windows' 22 -- all by at most 2 units in the last
+  place. Disabling NumPy's AVX2/AVX-512 paths here changed nothing. The function is the same; the
+  floating-point `exp` beneath it is not one function across builds and machines, and the records keep no raw
+  score that would pin it down. The control now demands the inputs EXACTLY and each probability within 4 ulp
+  (`MAX_PROB_ULP`; measured 0 ulp on 1,408, 1 on 16, 2 on 6); with 0 ulp it fails, as it should. The build and
+  decide jobs never ran (they wait on the control), so no candidate number existed when this was changed.
+  Root fix, recorded in the ledger: a record should carry the raw score, which is exact IEEE arithmetic.
 - **Disclosure:** a one-day smoke test of the scoring code, on 2026-04-27 (a day of the decision set),
   scored (a) and (b): identical, AUC 0.985 each on 3,810 observations (24 tornadic). No number for (d) has been
   computed on 2026 data.
