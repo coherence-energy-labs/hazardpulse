@@ -286,6 +286,27 @@ the higher AUC point is served. If neither does, (a) stays and the cost of the f
 its interval. The served candidate's predecessor stays in the live record beside it, so the switch is also
 verified on forecasts made after it.
 
+**Clarifications (2026-10-06, still before any candidate number):**
+- The rule is applied to the +W variants: they are what is served whenever the NWS feed answers. The fallback
+  variants are reported beside them.
+- The control runs where the live scorer runs (GitHub's ubuntu runner). Run on Windows first, it found all
+  1,430 live input vectors identical, but 22 of the 1,430 probabilities 1-2 units in the last place apart.
+  The model file and the scoring code are unchanged since before those forecasts; the records keep no raw
+  score, so where the difference arises is a HYPOTHESIS: NumPy's `exp`, built per platform. The control on
+  the live platform tests it; if it holds, recomputing a record exactly needs the live platform -- a
+  reproducibility gap of its own, recorded in the ledger.
+- `scripts/tornado_program/t2_decide.py` (`control`, `build`, `decide`) implements this amendment.
+- **(b) is (a), by construction** (PROVEN on the payloads): every split on the two inputs has missing type
+  None -- 196 and 475 in the +W payload, 171 and 486 in the fallback -- and under LightGBM's rule
+  (`lgbm_payload._tree_predict`) a NaN at such a split is read as 0.0. The trees learnt no missing-value
+  branch for inputs that were never missing in training, so "missing" and "zero" are the same input. (b) stays
+  scored, and `decide` checks that its predictions equal (a)'s on every row; it cannot qualify. The decision
+  is (a) against (d). (The ledger's T2 entry offered (b) as "the trees' missing-value branches"; for these two
+  inputs there are none.)
+- **Disclosure:** a one-day smoke test of the scoring code, on 2026-04-27 (a day of the decision set),
+  scored (a) and (b): identical, AUC 0.985 each on 3,810 observations (24 tornadic). No number for (d) has been
+  computed on 2026 data.
+
 **Descriptive, decides nothing: the defect on identical storms.** On 2025-01-01 .. 2025-08-04 (old format;
 out of sample for the served payloads; part of the 2025 final, already read), (a) and (b) are scored with
 the two inputs as recorded, as 0.0 and as NaN. The paired differences are the cost of the zero-fill with no

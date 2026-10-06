@@ -1,0 +1,79 @@
+name: Research -- tornado amendment 10 (T2)
+
+# Tornado program amendment 10 (docs/TORNADO_MODEL_PROGRAM.md), run where the live scorer runs and off any
+# local machine: the control against the live records first (a mismatch stops everything), then the
+# 2026-01..09 decision set in three parallel quarters, then the decision. Dispatch only; nothing is committed:
+# the result is an artifact, reviewed and committed by hand.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy scipy && pip install -e .
+      - name: (a) reproduces the live records of 2026-10-03..05 bit for bit
+        run: python scripts/tornado_program/t2_decide.py control dist/data/replay
+
+  build:
+    needs: control
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: true
+      matrix:
+        quarter:
+          - { start: "2026-01-01", end: "2026-03-31" }
+          - { start: "2026-04-01", end: "2026-06-30" }
+          - { start: "2026-07-01", end: "2026-09-30" }
+    env:
+      T2_DIR: ${{ github.workspace }}/t2
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy scipy && pip install -e .
+      - name: Build the rows (ProbSevere slots, storm_60, warning state)
+        run: python scripts/tornado_program/t2_decide.py build ${{ matrix.quarter.start }} ${{ matrix.quarter.end }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: t2-rows-${{ matrix.quarter.start }}
+          path: |
+            t2/rows/
+            t2/build_log_*.json
+          retention-days: 30
+
+  decide:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      T2_DIR: ${{ github.workspace }}/t2
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy scipy && pip install -e .
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: t2-rows-*
+          path: t2
+          merge-multiple: true
+      - name: Scores, paired comparisons, the rule
+        run: python scripts/tornado_program/t2_decide.py decide
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: t2-decision
+          path: results/tornado_program/t2_2026.json
+          retention-days: 90

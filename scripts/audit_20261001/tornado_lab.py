@@ -163,6 +163,13 @@ def cols_for(blocks: list[str], drop: list[str] | None = None) -> list[int]:
     return out
 
 
+def exp_cols(exp: dict) -> list[int]:
+    """The store columns an experiment reads: its blocks minus its ``drop`` list. Every path that fits or
+    scores an experiment uses this (amendment 10: the final pipeline and the exporter had read the blocks
+    alone, so a ``drop`` honoured on validation was silently ignored in the final refit)."""
+    return cols_for(exp["blocks"], exp.get("drop"))
+
+
 def train_sample(X, y, neg_per_pos: int, seed: int):
     """All positives + neg_per_pos negatives per positive, weighted back to the population."""
     rng = np.random.RandomState(seed)
@@ -563,7 +570,7 @@ LOYO_YEARS = (2021, 2022, 2023, 2024)
 def _loyo_scores(exp: dict, rounds: int, parts: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Leave-one-year-out raw scores for every row of 2020-10..2024 (each year scored by a model
     that never saw it), with their labels and days. Never touches 2025."""
-    cols = cols_for(exp["blocks"])
+    cols = exp_cols(exp)
     use_w = "W" in exp["blocks"]
     oof_s, oof_y, oof_day = [], [], []
     for yr in LOYO_YEARS:
@@ -595,7 +602,7 @@ def _final_core(exp: dict, rounds: int) -> dict:
     out_path = OUT / f"final_{exp['name']}.json"
     if out_path.exists():
         raise SystemExit(f"{out_path} exists: 2025 is read once")
-    cols = cols_for(exp["blocks"])
+    cols = exp_cols(exp)
     use_w = "W" in exp["blocks"]
     parts = {k: (*load(k), load_w(k)) for k in FINAL_SOURCES}
     s_oof, y_oof, d_oof = _loyo_scores(exp, rounds, parts)
