@@ -324,6 +324,36 @@ change of season.
 **Next, not part of this decision:** a refit with the new attributes (`maxfed`, `dcape`, `vil`, `echotop_50`,
 `lcl`, ...) needs new-format training data, of which 2026 is the decision set here. It is a later amendment.
 
+### Outcome of amendment 10 (2026-10-06): (a) stays served
+
+Run `research-tornado-t2.yml` 37400897999 on `ce2b3c75f`; result `results/tornado_program/t2_2026.json`.
+- **Data:** 1,262,285 storm observations, 1,500 tornadic, 273 days. No day was dropped: every SPC preliminary
+  file was read, and every day had ProbSevere.
+- **Control:** passed on the runner. All 1,430 live inputs were exact; probabilities were 0 ulp apart on 1,390,
+  1 ulp on 29 and 2 ulp on 11.
+- **(b) = (a)** on every row, as proven.
+
+| +W variant (served path) | AUC | Brier | BSS | mean forecast (base rate 1.19e-3) |
+|---|---|---|---|---|
+| (a) served | 0.9699 | 1.071e-3 | +0.098 | 9.68e-4 (0.81x) |
+| (d) without `p_ps`, `p_vil_density` | 0.9696 | 1.060e-3 | +0.107 | 1.56e-3 (1.31x) |
+
+Paired, (d) - (a), day bootstrap 2,000:
+
+| variant | dAUC [95% CI] | dBrier [95% CI] |
+|---|---|---|
+| +W | -0.0003 [-0.0012, +0.0007] | -1.13e-5 [-2.13e-5, -1.9e-6] |
+| fallback | +0.0002 [-0.0005, +0.0010] | -2.28e-5 [-3.66e-5, -9.6e-6] |
+
+**The rule is not met** (the AUC interval contains 0), so (a) stays served. What this establishes:
+- **The format change costs no ranking skill.** The served model's 2026 AUC (0.9699, new format all year)
+  equals its 2025 final (0.9702). The within-2025 drop the audit saw (0.970 before the change, 0.947 after) was
+  the August-December season, as suspected.
+- **It may cost calibration.** (d)'s Brier is better, with an interval that excludes 0, and the served model's
+  mean forecast is 19% under the base rate. But (d) is 31% over it, and no rule here was written for
+  calibration. A recalibration of the served model for the new format is a new question with its own
+  registration: 2026-01..09 has now been read, so it is judged on forecasts made after it is registered.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-

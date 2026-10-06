@@ -94,9 +94,26 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
 2. **E2.** The margin over smoothed seismicity is at the edge of zero.
    - Decide whether this is power (number of M6+ quakes) or a real limit, with a per-year
      breakdown and a power estimate before any new features.
-3. **E3. An earthquakes-only catalog** (recorded 2026-10-05 from the integrity audit; not yet
-   pre-registered). Every model in the programme (A, B, C0, S1) is fitted and scored on ComCat
-   rows of every event type and every depth.
+3. **E3. An earthquakes-only catalog** (recorded 2026-10-05 from the integrity audit).
+   - **DECIDED 2026-10-06: S1 stays served; the rule is not met.** Section 11.1 of the earthquake program.
+     - DEV (decides): IG(E3s) - IG(S1) -0.0026 [-0.0066, +0.0002]; the lower end is below the -0.005 margin.
+     - FINAL (further read): +0.0015 [-0.0005, +0.0037].
+     - The test-site cells fall 14-53x toward their neighbours. Nevada and Hawaii fall only about 2x, since
+       both have real seismicity; Hawaii's removed events are volcanic.
+     - **E3a (open, HYPOTHESIS): remove only the man-made types** (nuclear explosion, explosion, mine collapse,
+       rock burst), keeping volcanic eruptions, and judge it on forecasts made after its registration.
+   - Registered as section 11 of the earthquake program (tag `earthquake-amendment-e3`, PR #34), run in
+     `research-earthquake-e3.yml`.
+   - The registered candidate is the smallest correction: the served S1 with every input restricted to
+     earthquakes, nothing refitted. It is judged by non-inferiority on DEV (IG lower bound >= -0.005 nats per
+     target).
+   - **Corrected count:** the inputs carry far more than the M6+ explosions below. 645 of 293,699 M4.5+ events
+     are not earthquakes; 494 of them are M5+ inputs of the served map, plus 7,594 in its M2.5+ feed. No
+     M6+ non-earthquake occurs from 2018 on, so the targets are unchanged.
+   - **Found by the data, not typed:** Hawaii's cell holds 54 "volcanic eruption" events, and Hawaii also has
+     real M6+ earthquakes. The rule decides whether removing them hurts.
+   - **The original finding (2026-10-05):** every model in the programme (A, B, C0, S1) is fitted and scored
+     on ComCat rows of every event type and every depth.
    - Witness, explosions: 70 of the 7,498 M6+ rows 1973 to 2026-10-01 in the programme's own
      `comcat_m4.5_<year>.csv` files are not earthquakes (69 `nuclear explosion`, 1 `explosion`;
      41 in Kazakhstan, 12 Nevada, 8 Russia, 6 China; the last one North Korea, 2017-09-03). They
@@ -127,6 +144,28 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
      real-time), timed honestly.
    - Amendment 8's lesson applies: every input must exist at the forecast's issue time.
 2. **T2. The 2025-08 ProbSevere format change** (opened 2026-10-05, tornado audit item 3).
+   - **DECIDED 2026-10-06: the served model stays.** Tornado program amendment 10 (tag `tornado-amendment-10`,
+     PRs #32-#33) ran on 2026-01..09 in `research-tornado-t2.yml`: 1,262,285 observations, 1,500 tornadic.
+     - Served +W AUC 0.9699, equal to its 2025 final (0.9702). **The format change costs no ranking skill**; the
+       within-2025 drop below was the season.
+     - (d) against (a): dAUC -0.0003 [-0.0012, +0.0007], so the rule is not met. But dBrier is -1.13e-5
+       [-2.13e-5, -1.9e-6] (BSS +0.107 against +0.098), and the served mean forecast is 0.81x the base rate.
+     - **T2b (open): recalibrate the served model for the new format.** It needs its own registration, judged
+       on forecasts made after it, since 2026-01..09 is now read. Candidate: Platt refitted on new-format data
+       (2025-08-05..2026-09-30); control: the served calibration; decided on the live record.
+   - Registered and run as:
+     - The switch was **2025-08-05**, between 14:00Z (the last scan with `PS`) and 20:48Z; not 08-06 as below.
+       No scan carries both formats.
+     - **(b) is (a), by construction.** Every split on the two inputs has missing type None (196 + 475 in the
+       +W payload), where NaN reads as 0.0. The "missing-value branch" below does not exist.
+     - **(c) is not run.** VIL density needs the 18 dBZ echo top, which the new file lacks.
+     - **(d)**, the chosen configuration without the two inputs, is built (`results/models/candidates/`).
+       Validation 2023: AUC 0.96175 against the served configuration's 0.96215 (Brier equal).
+     - The control demands exact inputs and probabilities within 4 ulp. Every one of 1,430 live input vectors
+       reproduces exactly; NumPy's `exp` differs by <= 2 ulp across machines. The record audit's 1e-12
+       tolerance already covers that, so no record change is needed.
+     - The 30/90-min and EF2+ products read the same two inputs. (d) was not carried, so they keep their
+       payloads too. T2b's recalibration question covers them as well.
    - **What changed.** On 2025-08-06 NOAA changed the ProbSevere JSON from 25 to 48 storm attributes.
      `PS`, `VIL_DENSITY` and `MAXRC_ICECF` were removed, and `MAXRC_EMISS` and `AVG_BEAM_HGT` are no
      longer in their documented string formats. New attributes include `MaxFED`, `DCAPE`, `VIL`,
@@ -171,6 +210,9 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
      the surviving field into `PS` would feed the model a quantity it never saw. In tonight's live file the
      new `ProbSevere` property equalled `models.probsevere.PROB` on all 78 storms, all at 0 (inconclusive).
 3. **T3. A live nowcast at the edge** (opened 2026-10-05).
+   - **Decision 2026-10-06: deferred behind T2.** An edge copy of a model that is fed two zeros is not the next
+     step; the model is. The free plan's 10 ms of Worker CPU also cannot score an outbreak. Reopen once T2 is
+     decided.
    - **The fact.** The served `tornado_v3_w` reads 30 inputs (`results/models/tornado_v3_w.json`
      `feature_names`): the current scan's 28 ProbSevere attributes, whether an NWS tornado warning
      covers the storm, and minutes since it was issued. That is 339 trees and a Platt map (a 1.006,
@@ -235,8 +277,25 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
   `scheduler.yml` are in place, but both depend on GitHub's cron. The production Worker's 10-minute
   Cloudflare cron (PR #26) dispatches the scheduler once a token exists: `GH_DISPATCH_TOKEN`
   (fine-grained, this repository, Actions read/write).
+  - **Solved 2026-10-06 without a token (PR #31).** `scheduler.yml` is its own clock: each run dispatches
+    the next one ~10 minutes later. The concurrency group keeps it to one chain, and a cron run restarts a
+    broken chain. MEASURED: the run started at 00:52:01Z dispatched its successor at 01:01:26Z. The cron alone
+    had fired nothing from 18:20Z to 00:12Z. The Worker's cron stays as a dormant third clock.
+  - **The queue (PR #29).** A GitHub concurrency group holds ONE pending job, and a newcomer cancels it, so
+    scorers join only while the queue has room.
 - **Where the records live.** `docs/DATA_AND_RECORDS.md` covers growth, about 1 GB a year in git at the
   new cadence, and the options (R2 with hashes in git is recommended).
+  - **Decision 2026-10-06: they stay in git for now.** The public, append-only history is part of what is
+    being shown.
+  - MEASURED: GitHub reports the repository at 196 MB. The growth comes from evidence ledgers rewritten
+    whole on every run (`gate-decisions.json` is 4.1 MB).
+  - **Revisit when the repository passes 1 GB or any growing file passes 25 MB.** At about 1 GB a year that
+    is roughly ten months out.
+  - The largest file, `results/hurricane_operational_ri_2000_2024_al_sst.jsonl` (86 MB), is static, but it is
+    near GitHub's 100 MB limit.
+- **The 2026 tornado-warning file stopped the IEM loader (fixed, PR #32).** JKL 24 was issued twice on
+  2026-08-11, and IEM carried the first warning's expiry onto the second. An expiry earlier than a row's own
+  issuance now uses its INIT_EXP. It applies to 2 rows in 2026 and 0 in 2020-2025.
 
 ## Killed (witness -> what survives)
 
@@ -249,6 +308,10 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
 | TC-PRIMED as a live input | 2025 "preliminary" uploaded 2026-07-24; 2026 EP empty | training data only |
 | GEAR1 as a better long-term earthquake map than ours | AG - A_ch: DEV -0.21 [-0.33, -0.08], FINAL -0.31 [-0.41, -0.21] nats per target | GEAR1 as an added term (S1, served) |
 | Repair the 2025 format change by mapping the new `ProbSevere` into old `PS` | training store: `p_ps == p_ps_severe` on 25.9% of rows, corr 0.83; `p_ps` = 0 on 32% where `p_ps_severe` never is | T2's evaluation and refit |
+| Repair the format change with the trees' missing-value branch (T2 option b) | every split on `p_ps` / `p_vil_density` has missing type None (671 of them in +W): NaN reads as 0.0, so (b) returns the served probabilities on every row | (d): a model that never reads the two inputs |
+| Taking every non-earthquake out of the served earthquake map's inputs costs nothing (E3s, non-inferiority at -0.005) | DEV: IG(E3s) - IG(S1) -0.0026 [-0.0066, +0.0002] | man-made types only (E3a), keeping volcanic events; judged on forecasts after registration |
+| The served tornado model is degraded by the 2025 format change (ranking) | 2026, new format all year: AUC 0.9699, equal to the 2025 final's 0.9702; the within-2025 drop was the season | calibration: the served mean forecast is 0.81x the base rate (T2b) |
+| The 22 Windows-only probability mismatches are a platform `exp` difference | on a GitHub runner 40 mismatched -- different storms; disabling AVX2/AVX-512 here changed nothing | probabilities reproduce within 2 ulp on every machine tried, inputs exactly; the audit's 1e-12 covers it |
 | A live calibrator from the matured live record, as soon as one exists | tornado 2026-10-04: fitted on 794 storm-forecasts with 0 tornadoes, it published 567-1,822x the model's chance; held-out Brier 467x worse | a calibrator with >= 30 distinct events and a held-out win over the model (`calibrator_admissible`, PR #22) |
 
 **Blocked, not killed:** CIRA's SHIPS developmental data. `rammb-data.cira.colostate.edu` returns
