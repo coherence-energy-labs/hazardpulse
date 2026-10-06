@@ -484,6 +484,29 @@ def test_parser_refuses_a_state_far_past_its_event_expiry():
         nw.parse_iem_sbw_zip(_write_iem_zip(rows), expect_year=2024)
 
 
+def test_a_reused_event_number_does_not_lend_its_expiry_to_the_next_warning():
+    """2026-08-11, JKL 24 twice: issued 22:05 and cancelled 22:20, then issued again 22:36 (initial expiry
+    23:15). IEM carried 22:20 onto the second warning's rows, which read as 55 min past its expiry and
+    stopped the loader. An expiry earlier than the row's own issuance is another event's."""
+    first = _iem_row("NEW", "202405062205", "202405062220", "202405062205-KTST-WFUS53-TORTST",
+                     issued="202405062205", expired="202405062220", etn=24)
+    second = _iem_row("NEW", "202405062236", "202405062315", "202405062236-KTST-WFUS53-TORTST",
+                      issued="202405062236", expired="202405062220", etn=24)
+    second["INIT_EXP"] = "202405062315"
+    arrays, meta = nw.parse_iem_sbw_zip(_write_iem_zip([first, second]), expect_year=2024)
+    assert meta["expiry_before_issuance"] == 1 and meta["clip_to_event_expiry"] == 0
+    assert arrays["valid_to"].tolist() == [utc(2024, 5, 6, 22, 20), utc(2024, 5, 6, 23, 15)]
+    W = nw._assemble([arrays], [2024], {"2024": meta})
+    a, _, since = nw.tor_warning_state([35.5] * 3, [-97.5] * 3,
+                                       [utc(2024, 5, 6, 22, 30), utc(2024, 5, 6, 22, 50), utc(2024, 5, 6, 23, 15)],
+                                       warnings=W)
+    assert a.tolist() == [False, True, False]                     # the second warning is in force, then ends
+    # a COHERENT event far past its own expiry still stops the loader (the guard is narrowed, not removed)
+    with pytest.raises(nw.NwsWarningDataError, match="outlives"):
+        nw.parse_iem_sbw_zip(_write_iem_zip([_iem_row("NEW", "202405062000", "202405062130",
+                                                      "202405062000-KTST-WFUS53-TORTST")]), expect_year=2024)
+
+
 def test_parser_refuses_non_tornado_rows_and_wrong_year():
     sv = _iem_row("NEW", "202405062000", "202405062030", "202405062000-KTST-WFUS53-SVRTST")
     sv["PHENOM"] = "SV"
