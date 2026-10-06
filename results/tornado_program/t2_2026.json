@@ -1,0 +1,125 @@
+{
+ "amendment": 10,
+ "program": "docs/TORNADO_MODEL_PROGRAM.md",
+ "period": [
+  "20260101",
+  "20260930"
+ ],
+ "n": 1262285,
+ "pos": 1500,
+ "n_days": 273,
+ "days_dropped_unlabelable": [],
+ "spc_failed_convective_days": [],
+ "days_without_probsevere": [],
+ "labels": "SPC preliminary filtered reports",
+ "candidates": {
+  "a_served/plus_W": {
+   "payload": "tornado_v3_w.json",
+   "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+   "auc": 0.9699005096031441,
+   "brier": 0.0010712250707388658,
+   "bss": 0.0974666081769312,
+   "mean_forecast": 0.0009684627274548775
+  },
+  "a_served/fallback": {
+   "payload": "tornado_v3.json",
+   "model_sha256": "9005905f08b71b640a8e9dfe143be93e9ecee2606740c9a361f6c1999f75ac79",
+   "auc": 0.9684158160722619,
+   "brier": 0.0011125597244395768,
+   "bss": 0.06264114878154625,
+   "mean_forecast": 0.0007980116791161867
+  },
+  "b_nan/plus_W": {
+   "payload": "tornado_v3_w.json",
+   "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+   "auc": 0.9699005096031441,
+   "brier": 0.0010712250707388658,
+   "bss": 0.0974666081769312,
+   "mean_forecast": 0.0009684627274548775
+  },
+  "b_nan/fallback": {
+   "payload": "tornado_v3.json",
+   "model_sha256": "9005905f08b71b640a8e9dfe143be93e9ecee2606740c9a361f6c1999f75ac79",
+   "auc": 0.9684158160722619,
+   "brier": 0.0011125597244395768,
+   "bss": 0.06264114878154625,
+   "mean_forecast": 0.0007980116791161867
+  },
+  "d_drop2/plus_W": {
+   "payload": "candidates/tornado_v3_drop2_w.json",
+   "model_sha256": "07ea45bd785021634eb38bae45aa1937eb1f363164995b8e1af4f808d9382c45",
+   "auc": 0.9696322227818382,
+   "brier": 0.001059925321585071,
+   "bss": 0.1069869239435236,
+   "mean_forecast": 0.0015592816312327052
+  },
+  "d_drop2/fallback": {
+   "payload": "candidates/tornado_v3_drop2.json",
+   "model_sha256": "43d811ba399d0c3352cb8c8aec963d1390323650dcf44de82c77aeb5a4b0fb8c",
+   "auc": 0.9686093568689348,
+   "brier": 0.0010897643836297129,
+   "bss": 0.08184678242555632,
+   "mean_forecast": 0.0015789016545565513
+  }
+ },
+ "paired_vs_a": {
+  "b_nan/plus_W": {
+   "delta_auc": 0.0,
+   "delta_auc_ci": [
+    0.0,
+    0.0
+   ],
+   "delta_brier": 0.0,
+   "delta_brier_ci": [
+    0.0,
+    0.0
+   ],
+   "n_days": 273
+  },
+  "b_nan/fallback": {
+   "delta_auc": 0.0,
+   "delta_auc_ci": [
+    0.0,
+    0.0
+   ],
+   "delta_brier": 0.0,
+   "delta_brier_ci": [
+    0.0,
+    0.0
+   ],
+   "n_days": 273
+  },
+  "d_drop2/plus_W": {
+   "delta_auc": -0.0002682868213058631,
+   "delta_auc_ci": [
+    -0.0011624149566699011,
+    0.000740039693906175
+   ],
+   "delta_brier": -1.129974915379476e-05,
+   "delta_brier_ci": [
+    -2.1302000611143264e-05,
+    -1.9325076785006704e-06
+   ],
+   "n_days": 273
+  },
+  "d_drop2/fallback": {
+   "delta_auc": 0.00019354079667288637,
+   "delta_auc_ci": [
+    -0.0005062841631488187,
+    0.0009662699845767437
+   ],
+   "delta_brier": -2.2795340809863987e-05,
+   "delta_brier_ci": [
+    -3.660760549278929e-05,
+    -9.571135963624178e-06
+   ],
+   "n_days": 273
+  }
+ },
+ "b_equals_a_on_every_row": true,
+ "decision": {
+  "served": "a_served",
+  "qualified": [],
+  "rule": "AUC(X)-AUC(a) 95% day-bootstrap interval above 0 and Brier point <= 0 (+W)"
+ }
+}

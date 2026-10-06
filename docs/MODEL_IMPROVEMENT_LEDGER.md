@@ -136,8 +136,16 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
      real-time), timed honestly.
    - Amendment 8's lesson applies: every input must exist at the forecast's issue time.
 2. **T2. The 2025-08 ProbSevere format change** (opened 2026-10-05, tornado audit item 3).
-   - **Status 2026-10-06: registered and running.** Tornado program amendment 10 (tag `tornado-amendment-10`,
-     PRs #32-#33) decides it on 2026-01..09 in `research-tornado-t2.yml`.
+   - **DECIDED 2026-10-06: the served model stays.** Tornado program amendment 10 (tag `tornado-amendment-10`,
+     PRs #32-#33) ran on 2026-01..09 in `research-tornado-t2.yml`: 1,262,285 observations, 1,500 tornadic.
+     - Served +W AUC 0.9699, equal to its 2025 final (0.9702). **The format change costs no ranking skill**; the
+       within-2025 drop below was the season.
+     - (d) against (a): dAUC -0.0003 [-0.0012, +0.0007], so the rule is not met. But dBrier is -1.13e-5
+       [-2.13e-5, -1.9e-6] (BSS +0.107 against +0.098), and the served mean forecast is 0.81x the base rate.
+     - **T2b (open): recalibrate the served model for the new format.** It needs its own registration, judged
+       on forecasts made after it, since 2026-01..09 is now read. Candidate: Platt refitted on new-format data
+       (2025-08-05..2026-09-30); control: the served calibration; decided on the live record.
+   - Registered and run as:
      - The switch was **2025-08-05**, between 14:00Z (the last scan with `PS`) and 20:48Z; not 08-06 as below.
        No scan carries both formats.
      - **(b) is (a), by construction.** Every split on the two inputs has missing type None (196 + 475 in the
@@ -148,8 +156,8 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
      - The control demands exact inputs and probabilities within 4 ulp. Every one of 1,430 live input vectors
        reproduces exactly; NumPy's `exp` differs by <= 2 ulp across machines. The record audit's 1e-12
        tolerance already covers that, so no record change is needed.
-     - Next: the 30/90-min and EF2+ products read the same two inputs. If (d) is carried, they need the same
-       treatment.
+     - The 30/90-min and EF2+ products read the same two inputs. (d) was not carried, so they keep their
+       payloads too. T2b's recalibration question covers them as well.
    - **What changed.** On 2025-08-06 NOAA changed the ProbSevere JSON from 25 to 48 storm attributes.
      `PS`, `VIL_DENSITY` and `MAXRC_ICECF` were removed, and `MAXRC_EMISS` and `AVG_BEAM_HGT` are no
      longer in their documented string formats. New attributes include `MaxFED`, `DCAPE`, `VIL`,
