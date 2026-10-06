@@ -149,6 +149,9 @@ def main(argv: list[str] | None = None) -> int:
             "cells_with_most_removed_events": site,
             "cells_changed": int(np.sum(np.any(P_e3 != P_ctl, axis=0)))}
         m = report["splits"][split]
+        m["seconds"] = round(time.time() - t0, 1)
+        C.write_json(f"e3_types_{split}.json", {**{k: v for k, v in report.items() if k != "splits"},
+                                                 "splits": {split: m}})      # saved as soon as it is done
         print(f"{split}: control max |S1 - evaluated| {worst:.1e}; IG S1 {m['models']['S1']['ig_per_target']['value']:.4f} "
               f"E3s {m['models']['E3s']['ig_per_target']['value']:.4f}; dIG "
               f"{m['paired_E3s_minus_S1']['ig_per_target']['diff']:+.5f} "
