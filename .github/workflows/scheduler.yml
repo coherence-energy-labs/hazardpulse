@@ -5,6 +5,15 @@ name: Scheduler
 # run with three storms active), so the scorers have no cron of their own: this job runs at four off-peak
 # minutes an hour, works out from the run history which scorer is due, and dispatches it.
 # The rules are in scripts/ci/schedule.py; tests/test_scheduler.py pins them.
+#
+# The clock itself does not depend on GitHub's cron either. On 2026-10-05 the cron fired NO run of any
+# workflow here from 12:34Z to past 17:00Z, while a dispatched run started within seconds. So every run
+# ends by dispatching the next one ~10 minutes later: a chain of runs that needs nothing but dispatch. The
+# concurrency group keeps it to ONE chain -- it holds one running and one pending run, and a newer pending
+# run cancels an older one -- so a cron run that slips in merges into the chain instead of starting a second,
+# and if the chain ever breaks (a runner lost mid-sleep), the next cron run that fires restarts it. No
+# credential is needed (GITHUB_TOKEN may dispatch workflows) and nothing runs on anyone's computer. The
+# production Worker's Cloudflare cron (src/worker.js) is a third clock, dormant until GH_DISPATCH_TOKEN is set.
 
 on:
   schedule:
@@ -22,7 +31,7 @@ concurrency:
 jobs:
   dispatch:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       # only the script and the latest pulse: the full repository is ~200 MB and checking it out took
       # 83 s of every tornado run
@@ -41,3 +50,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: python scripts/ci/schedule.py
+
+      # the next tick: even when this one failed, or the chain stops (if: always())
+      - name: Dispatch the next tick in ~10 minutes
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          sleep 540
+          for attempt in 1 2 3; do
+            gh workflow run scheduler.yml --ref main && exit 0
+            sleep 20
+          done
+          echo "::error::could not dispatch the next tick; the next cron run restarts the chain"
+          exit 1

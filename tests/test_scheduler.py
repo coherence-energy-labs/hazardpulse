@@ -166,6 +166,23 @@ def test_every_scorer_gates_its_own_cron_and_keeps_the_queue_for_scoring_jobs():
     assert "scripts/ci/schedule.py" in sched and "actions: write" in sched
 
 
+def test_the_scheduler_is_its_own_clock_one_chain_that_survives_a_failed_tick():
+    """GitHub's cron fired nothing from 12:34Z to past 17:00Z on 2026-10-05 while dispatches ran at once:
+    every scheduler run dispatches the next. Plain text, not a YAML parser (CI installs no PyYAML)."""
+    import re
+    text = (ROOT / ".github" / "workflows" / "scheduler.yml").read_text(encoding="utf-8")
+    top, jobs = text.split("\njobs:\n", 1)
+    # one chain: the group allows one running and one pending, a newer pending cancels an older one
+    assert re.search(r"concurrency:\s*\n\s*group: scheduler\s*\n\s*cancel-in-progress: false", top)
+    assert "workflow_dispatch" in top and "cron:" in top          # the cron restarts a broken chain
+    nxt = jobs.split("Dispatch the next tick", 1)[1]
+    assert "if: always()" in nxt.split("run:", 1)[0], "a failed tick must still dispatch the next"
+    assert "gh workflow run scheduler.yml --ref main" in nxt
+    sleep = int(re.search(r"sleep (\d+)", nxt).group(1))
+    timeout = int(re.search(r"timeout-minutes: (\d+)", jobs).group(1))
+    assert 300 <= sleep <= 900 and timeout * 60 > sleep + 180, (sleep, timeout)
+
+
 def test_a_gate_does_not_see_itself_and_a_gate_that_skipped_is_not_a_scoring_run():
     def run(i, status, conclusion=None, at="2026-10-05T10:00:00Z", scored=True):
         return {"databaseId": i, "status": status, "conclusion": conclusion, "createdAt": at, "startedAt": at,
