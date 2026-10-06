@@ -111,8 +111,9 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
      are not earthquakes; 494 of them are M5+ inputs of the served map, plus 7,594 in its M2.5+ feed. No
      M6+ non-earthquake occurs from 2018 on, so the targets are unchanged.
    - **Found by the data, not typed:** Hawaii's cell holds 54 "volcanic eruption" events, and Hawaii also has
-     real M6+ earthquakes. The rule decides whether removing them hurts. Every model in the programme (A, B, C0, S1) is fitted and scored on ComCat
-   rows of every event type and every depth.
+     real M6+ earthquakes. The rule decides whether removing them hurts.
+   - **The original finding (2026-10-05):** every model in the programme (A, B, C0, S1) is fitted and scored
+     on ComCat rows of every event type and every depth.
    - Witness, explosions: 70 of the 7,498 M6+ rows 1973 to 2026-10-01 in the programme's own
      `comcat_m4.5_<year>.csv` files are not earthquakes (69 `nuclear explosion`, 1 `explosion`;
      41 in Kazakhstan, 12 Nevada, 8 Russia, 6 China; the last one North Korea, 2017-09-03). They
