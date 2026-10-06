@@ -95,8 +95,15 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
    - Decide whether this is power (number of M6+ quakes) or a real limit, with a per-year
      breakdown and a power estimate before any new features.
 3. **E3. An earthquakes-only catalog** (recorded 2026-10-05 from the integrity audit).
-   - **Status 2026-10-06: registered and running.** It is section 11 of the earthquake program (tag
-     `earthquake-amendment-e3`, PR #34), run in `research-earthquake-e3.yml`.
+   - **DECIDED 2026-10-06: S1 stays served; the rule is not met.** Section 11.1 of the earthquake program.
+     - DEV (decides): IG(E3s) - IG(S1) -0.0026 [-0.0066, +0.0002]; the lower end is below the -0.005 margin.
+     - FINAL (further read): +0.0015 [-0.0005, +0.0037].
+     - The test-site cells fall 14-53x toward their neighbours. Nevada and Hawaii fall only about 2x, since
+       both have real seismicity; Hawaii's removed events are volcanic.
+     - **E3a (open, HYPOTHESIS): remove only the man-made types** (nuclear explosion, explosion, mine collapse,
+       rock burst), keeping volcanic eruptions, and judge it on forecasts made after its registration.
+   - Registered as section 11 of the earthquake program (tag `earthquake-amendment-e3`, PR #34), run in
+     `research-earthquake-e3.yml`.
    - The registered candidate is the smallest correction: the served S1 with every input restricted to
      earthquakes, nothing refitted. It is judged by non-inferiority on DEV (IG lower bound >= -0.005 nats per
      target).
@@ -301,6 +308,8 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
 | GEAR1 as a better long-term earthquake map than ours | AG - A_ch: DEV -0.21 [-0.33, -0.08], FINAL -0.31 [-0.41, -0.21] nats per target | GEAR1 as an added term (S1, served) |
 | Repair the 2025 format change by mapping the new `ProbSevere` into old `PS` | training store: `p_ps == p_ps_severe` on 25.9% of rows, corr 0.83; `p_ps` = 0 on 32% where `p_ps_severe` never is | T2's evaluation and refit |
 | Repair the format change with the trees' missing-value branch (T2 option b) | every split on `p_ps` / `p_vil_density` has missing type None (671 of them in +W): NaN reads as 0.0, so (b) returns the served probabilities on every row | (d): a model that never reads the two inputs |
+| Taking every non-earthquake out of the served earthquake map's inputs costs nothing (E3s, non-inferiority at -0.005) | DEV: IG(E3s) - IG(S1) -0.0026 [-0.0066, +0.0002] | man-made types only (E3a), keeping volcanic events; judged on forecasts after registration |
+| The served tornado model is degraded by the 2025 format change (ranking) | 2026, new format all year: AUC 0.9699, equal to the 2025 final's 0.9702; the within-2025 drop was the season | calibration: the served mean forecast is 0.81x the base rate (T2b) |
 | The 22 Windows-only probability mismatches are a platform `exp` difference | on a GitHub runner 40 mismatched -- different storms; disabling AVX2/AVX-512 here changed nothing | probabilities reproduce within 2 ulp on every machine tried, inputs exactly; the audit's 1e-12 covers it |
 | A live calibrator from the matured live record, as soon as one exists | tornado 2026-10-04: fitted on 794 storm-forecasts with 0 tornadoes, it published 567-1,822x the model's chance; held-out Brier 467x worse | a calibrator with >= 30 distinct events and a held-out win over the model (`calibrator_admissible`, PR #22) |
 

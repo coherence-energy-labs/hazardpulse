@@ -572,3 +572,37 @@ arm's mean probability there.
 **Run.** `python scripts/earthquake_program/e3_types.py`, on the published program data
 (`hazardpulse-data-earthquake_program.tar.gz`, verified by `scripts/data_manifest.py --verify`).
 
+### 11.1 Outcome (2026-10-06) -- the rule is not met; S1 stays served
+
+Run `research-earthquake-e3.yml` 37401954282 on `e237d381d`; result
+`results/earthquake_program/e3_types.json`.
+- The program data restored and verified file by file against the manifest.
+- The control reproduced the evaluated S1 to 1.1e-16 at every one of the 253 DEV and FINAL issue times.
+- 494 frozen events and the M2.5+ non-earthquakes were removed.
+
+| | IG S1 | IG E3s | E3s - S1 [95% month-block] | dAUC [95%] |
+|---|---|---|---|---|
+| DEV (decides) | 2.7363 | 2.7337 | -0.0026 [-0.0066, +0.0002] | -0.00007 [-0.00020, +0.00003] |
+| FINAL (further read) | 2.6047 | 2.6063 | +0.0015 [-0.0005, +0.0037] | +0.00008 [+0.00004, +0.00013] |
+
+The DEV interval's lower end, -0.0066, is below the registered -0.005, so **E3s is not adopted**. Mean
+probability in the cells holding the most removed events, DEV, S1 -> E3s:
+
+| cell | removed M5+ events | S1 | E3s |
+|---|---|---|---|
+| r54c129 (Semipalatinsk) | 126 | 6.92e-4 | 1.30e-5 (0.019x) |
+| r48c31 (Nevada) | 117 | 6.09e-3 | 2.97e-3 (0.49x) |
+| r39c12 (Hawaii, "volcanic eruption") | 54 | 9.21e-3 | 5.02e-3 (0.54x) |
+| r19c20 (Mururoa) | 49 | 2.33e-4 | 1.11e-5 (0.048x) |
+| r64c117 (edge row: Novaya Zemlya) | 23 | 3.00e-4 | 2.19e-5 (0.073x) |
+
+What this establishes:
+- Removing every non-earthquake costs a little information on DEV and gains a little on FINAL. Neither
+  interval excludes 0; non-inferiority at -0.005 is not shown.
+- The test-site cells fall 14-53x, toward their neighbours. Nevada and Hawaii fall only about 2x: both have
+  real seismicity, and Hawaii's 54 removed events are volcanic, not man-made.
+- **Survives narrower, as a HYPOTHESIS:** remove only the man-made types (nuclear explosion, explosion, mine
+  collapse, rock burst), keep volcanic eruptions and landslides, and judge it on forecasts made after its
+  registration. DEV has now been read for this question, so it cannot decide a variant chosen after seeing it.
+  Ledger E3.
+
