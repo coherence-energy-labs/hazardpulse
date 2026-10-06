@@ -1,0 +1,42 @@
+name: Research -- earthquake amendment E3
+
+# Earthquake program amendment E3 (docs/EARTHQUAKE_FORECAST_PROGRAM.md section 11): the served S1 with every
+# non-earthquake removed from its inputs, against S1 as served, on DEV (decides) and FINAL (further read).
+# Restores the published program data (release data-2026-10-03) and verifies it file by file against the
+# committed manifest before anything runs. Dispatch only; the result is an artifact, reviewed and committed by
+# hand.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy scipy && pip install -e .
+      - name: Restore the published program data and verify it against the manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          gh release download data-2026-10-03 --repo "${{ github.repository }}" \
+            --pattern 'hazardpulse-data-earthquake_program.tar.gz' --dir /tmp/data
+          echo "80a2be9a0225e9d7cbbb3c54972c8e79f52207260f3504f29d4ca8ef9b2c3f38  /tmp/data/hazardpulse-data-earthquake_program.tar.gz" | sha256sum -c -
+          mkdir -p .cache
+          tar -xzf /tmp/data/hazardpulse-data-earthquake_program.tar.gz -C .cache
+          python scripts/data_manifest.py --verify --only earthquake_program
+      - name: E3s against S1 (control first, then the paired comparison)
+        run: python scripts/earthquake_program/e3_types.py --workers 4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e3-types
+          path: results/earthquake_program/e3_types.json
+          retention-days: 90
