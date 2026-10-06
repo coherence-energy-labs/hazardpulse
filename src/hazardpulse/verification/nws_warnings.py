@@ -569,6 +569,18 @@ def parse_iem_sbw_zip(data: bytes, *, expect_year: int | None = None) -> tuple[d
     # the previous state's POLY_END to the statement's instant, so that state
     # appears to outlive the warning by 1-11 min (370 states in 2020-2025,
     # MEASURED).  The warning legally ends at its VTEC end (EXPIRED): clip.
+    # An event cannot expire before it is issued. Where a row's EXPIRED precedes its own ISSUED, the expiry
+    # belongs to ANOTHER event of a reused (WFO, ETN, year) key -- 2026: JKL 24 was issued at 22:05 and
+    # cancelled at 22:20, then a second JKL 24 was issued at 22:36 (initial expiry 23:15, EXP at 23:15), and
+    # IEM carried the first event's 22:20 onto the second's rows, which read as a polygon outliving its
+    # event by 55 min. Such a row is clipped to its own event's initial expiry (INIT_EXP) instead.
+    expiry = expired.copy()
+    foreign = (expired != _NO_TIME) & (issued != _NO_TIME) & (expired < issued) & (init_exp != _NO_TIME)
+    expiry[foreign] = init_exp[foreign]
+    meta["expiry_before_issuance"] = int(foreign.sum())
+    meta["expiry_before_issuance_rows"] = [f"{wfo[j]} {etn[j]} {vtec_year[j]} {product_id[j]}"
+                                           for j in np.flatnonzero(foreign)]
+    expired = expiry
     clip = (expired != _NO_TIME) & (valid_to > expired) & (valid_to > valid_from)
     clip_s = (valid_to - expired)[clip]
     if clip_s.size and clip_s.max() > _MAX_EXPIRY_CLIP_S:

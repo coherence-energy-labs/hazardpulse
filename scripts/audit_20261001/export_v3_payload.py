@@ -42,13 +42,25 @@ EVENT_BY_LABEL = {
 }
 
 
+# amendment 10's candidate (d): the chosen configuration without p_ps and p_vil_density -- NOT served; written
+# beside the served payloads, under candidates/, for the decision on 2026 (scripts/tornado_program/t2_decide.py)
+CANDIDATES = {
+    "v3_drop2_plus_W": ("candidates/tornado_v3_drop2_w.json",
+                        "candidate (amendment 10 d): P(a tornado from THIS storm within 60 min); NWS warning state; "
+                        "no p_ps or p_vil_density"),
+    "v3_drop2_primary": ("candidates/tornado_v3_drop2.json",
+                         "candidate (amendment 10 d): P(a tornado from THIS storm within 60 min); no NWS input; "
+                         "no p_ps or p_vil_density"),
+}
+
+
 def export(name: str) -> str:
-    out_name, meaning = SERVED[name]
+    out_name, meaning = {**SERVED, **CANDIDATES}[name]
     final = json.loads((lab.OUT / f"final_{name}.json").read_text(encoding="utf-8"))
     import lightgbm as lgb
     bst = lgb.Booster(model_file=final["model_file"])
     exp = final["exp"]
-    cols = lab.cols_for(exp["blocks"])
+    cols = lab.exp_cols(exp)
     names = [lab.NAMES[i] for i in cols] + (list(lab.W_NAMES) if "W" in exp["blocks"] else [])
     cal = {"method": "platt", "a": float(final["calibration"]["a"]), "b": float(final["calibration"]["b"]),
            "fitted_on": "leave-one-year-out scores 2021-2024 (2020-10..12 with 2021)"}

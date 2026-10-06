@@ -248,6 +248,73 @@ it was built for; the HRRR environment and the coherence field add nothing measu
 honestly. All of the above is one test year read once; live verification of the served model
 starts with its first matured forecasts.
 
+## Amendment 10 (2026-10-06, before any candidate number): NOAA's 2025 ProbSevere format change (ledger T2)
+
+**The defect.** NOAA changed the ProbSevere file between 2025-08-05 14:00Z (the last scan carrying `PS` and
+`VIL_DENSITY`) and 20:48Z (the first scan with the new attributes); no scan carries both (MEASURED on the
+store's cache: 2025-08-05 has 36 of 48 slots, 2,255 storms with a nonzero `ps` before, 1,430 new-format storms
+after, 0 with both). The parser reads the two absent attributes as 0.0, so since then every served v3
+forecast has received `p_ps = 0` and `p_vil_density = 0`. The served payloads were fitted on 2020-10..2024,
+where `p_vil_density` was 0 on 0.6% of rows; those two inputs carry 196 and 475 of the +W model's 8,826 splits.
+
+**Candidates** (the +W model with the no-warnings fallback, as served; every other input identical):
+- **(a) SERVED**, the control: `tornado_v3_w.json` / `tornado_v3.json`, the two inputs 0.0, as served.
+- **(b) NAN**: the same payloads, the two inputs missing (NaN): each node's own missing-value rule.
+- **(d) DROP2**: the chosen configuration (`chosen_on_validation.json`, primary and +W) without `p_ps` and
+  `p_vil_density`. Its round count is chosen as the original's was, by early stopping on validation 2023
+  (`tornado_lab.py run`); then the unchanged final pipeline (leave-one-year-out Platt, refit on
+  2020-10..2024). The only code change: `_final_core` and `_loyo_scores` honour the experiment's `drop` list
+  (as `run` already does).
+- **(c) REBUILT is not run.** Witness: no scan carries both forms, so no mapping can be checked before scoring;
+  and `VIL_DENSITY` is VIL over the 18 dBZ echo top, while the new file has only the 50 dBZ one.
+
+**The decision set: 2026-01-01 .. 2026-09-30**, every ProbSevere storm observation at the program's 30-minute
+slots, the new format throughout. No choice has ever been made on it.
+- Labels: the program's `storm_60` labeller (`storm_features.labels`, the storm's own track) on SPC's
+  preliminary filtered tornado reports (`YYMMDD_rpts_filtered_torn.csv`, the prospective verifier's source). The
+  final 2026 database does not exist yet. Preliminary reports carry location and time errors that the final
+  database corrects; that affects every candidate alike (the comparison is paired), but these absolute numbers
+  are not comparable with the 2025 final's.
+- Warning state: the IEM storm-based warning archive (`verification.nws_warnings`), as for block W.
+- **Control, before any comparison:** on the live records of 2026-10-03 .. 2026-10-05, the pipeline's (a) inputs
+  and probabilities must reproduce the records' stored `inputs` and `probability_60min` bit for bit for every
+  storm observation matched by id and scan time. Any mismatch stops the run.
+
+**Rule** (paired day bootstrap, 2,000 draws, as section Metrics): a candidate X replaces (a) iff the 95% interval
+of AUC(X) - AUC(a) lies entirely above 0 AND the Brier point difference is <= 0. If both (b) and (d) qualify,
+the higher AUC point is served. If neither does, (a) stays and the cost of the format change is recorded with
+its interval. The served candidate's predecessor stays in the live record beside it, so the switch is also
+verified on forecasts made after it.
+
+**Clarifications (2026-10-06, still before any candidate number):**
+- The rule is applied to the +W variants: they are what is served whenever the NWS feed answers. The fallback
+  variants are reported beside them.
+- The control runs where the live scorer runs (GitHub's ubuntu runner). Run on Windows first, it found all
+  1,430 live input vectors identical, but 22 of the 1,430 probabilities 1-2 units in the last place apart.
+  The model file and the scoring code are unchanged since before those forecasts; the records keep no raw
+  score, so where the difference arises is a HYPOTHESIS: NumPy's `exp`, built per platform. The control on
+  the live platform tests it; if it holds, recomputing a record exactly needs the live platform -- a
+  reproducibility gap of its own, recorded in the ledger.
+- `scripts/tornado_program/t2_decide.py` (`control`, `build`, `decide`) implements this amendment.
+- **(b) is (a), by construction** (PROVEN on the payloads): every split on the two inputs has missing type
+  None -- 196 and 475 in the +W payload, 171 and 486 in the fallback -- and under LightGBM's rule
+  (`lgbm_payload._tree_predict`) a NaN at such a split is read as 0.0. The trees learnt no missing-value
+  branch for inputs that were never missing in training, so "missing" and "zero" are the same input. (b) stays
+  scored, and `decide` checks that its predictions equal (a)'s on every row; it cannot qualify. The decision
+  is (a) against (d). (The ledger's T2 entry offered (b) as "the trees' missing-value branches"; for these two
+  inputs there are none.)
+- **Disclosure:** a one-day smoke test of the scoring code, on 2026-04-27 (a day of the decision set),
+  scored (a) and (b): identical, AUC 0.985 each on 3,810 observations (24 tornadic). No number for (d) has been
+  computed on 2026 data.
+
+**Descriptive, decides nothing: the defect on identical storms.** On 2025-01-01 .. 2025-08-04 (old format;
+out of sample for the served payloads; part of the 2025 final, already read), (a) and (b) are scored with
+the two inputs as recorded, as 0.0 and as NaN. The paired differences are the cost of the zero-fill with no
+change of season.
+
+**Next, not part of this decision:** a refit with the new attributes (`maxfed`, `dcape`, `vil`, `echotop_50`,
+`lcl`, ...) needs new-format training data, of which 2026 is the decision set here. It is a later amendment.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-
