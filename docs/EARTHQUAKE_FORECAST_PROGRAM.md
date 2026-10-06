@@ -518,3 +518,57 @@ python scripts/earthquake_program/gear1_stack.py    # S0, S1, AG, A_ch; the carr
 python scripts/earthquake_program/build_stack.py    # the served stack + parity
 ```
 
+## 11. Amendment E3 -- only earthquakes in, as served (registered 2026-10-06, before any E3 number)
+
+**Why.** The program's catalog is every ComCat event type. MEASURED on `program_catalog.npz` (M4.5+,
+1973-01-01 .. 2026-10-01): 645 of 293,699 events are not earthquakes:
+
+| type | events | of which M5+ | of which M6+ |
+|---|---|---|---|
+| nuclear explosion | 546 | 425 | 69 |
+| volcanic eruption | 71 | 55 | 0 |
+| explosion | 16 | 10 | 1 |
+| mine collapse, rock burst, landslide | 12 | 4 | 0 |
+
+They enter the long-term map and the clustering terms as M5+ seismicity, and the count features as M4.5+
+and M2.5+ events. In the served forecast `eq_fcst_20261004_2100`, the Semipalatinsk test-site cell (row 54,
+col 129) has P = 5.90e-4: 51x the central-Kazakhstan cell (row 54, col 125) and 44x the grid median. The
+catalog's last M6+ explosion there is 1989-10-19.
+
+**The targets do not change.** No non-earthquake has M >= 6 from 2018 on (MEASURED, same file), so every
+CHOOSE, DEV and FINAL target is the same for both arms. The contract (section 1, any event type) stands.
+
+**Candidate E3s: the served S1, every input restricted to `type == "earthquake"`, nothing refitted.**
+- Its frozen M5+ catalog is filtered. Each frozen event takes its type from `program_catalog.npz`, put through
+  the same canonical rounding and order as `EventSet.from_arrays`; the arrays must equal the artifact's frozen
+  catalog element by element, or the run stops.
+- The simulated live M2.5+ fetch (`build_artifact._simulated_live`) is filtered by its own `type` column.
+- A, B, C0's trees and the stack are unchanged. This is the smallest correction of the served map. A refit
+  on an earthquakes-only catalog is a separate, later question.
+
+**Control.** S1 as served, through the same live code path (`forecast_with_stack`, frozen catalog plus the
+simulated live fetch). At every DEV and FINAL issue time it must reproduce the evaluated S1 (the stack on C0's
+stored forecasts) to the program's live-parity tolerance, 1e-9, or the run stops.
+
+**Rule (non-inferiority, on DEV).** The change removes events that are not earthquakes. So it is adopted
+unless it measurably hurts, not only if it measurably helps. E3s replaces S1 iff the 95% month-block interval
+of IG(E3s) - IG(S1) on DEV (as section 4, the same resamples for both) has its lower end >= -0.005 nats per
+target. The margin is about a third of the smallest gain this program has carried (E1, S1 - S0 +0.016).
+FINAL is a further read, reported and never used to decide.
+
+**Reported.** IG, AUC, BSS and `sum p / sum y` for both arms on DEV and FINAL, and the paired intervals.
+Also the 8 cells holding the most removed M5+ events, found from the catalog (not named by hand), with each
+arm's mean probability there.
+
+**Disclosure (before registering).** A smoke test of the script ran both arms at the first DEV issue time.
+- The control reproduced the evaluated S1 to 5.6e-17.
+- 89,861 frozen events matched exactly, 494 were removed (the table's M5+ counts sum to 494), and 7,594
+  non-earthquakes left the M2.5+ feed.
+- 344 cells changed.
+- No score was computed.
+- The cells with the most removed events include Hawaii (r39c12: 54 "volcanic eruption" events), which also
+  has real M6+ earthquakes. The rule, not a judgement, decides whether removing those hurts.
+
+**Run.** `python scripts/earthquake_program/e3_types.py`, on the published program data
+(`hazardpulse-data-earthquake_program.tar.gz`, verified by `scripts/data_manifest.py --verify`).
+

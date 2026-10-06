@@ -70,10 +70,16 @@ def aggregate(rows: list[list]) -> str:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--verify", action="store_true")
+    ap.add_argument("--only", help="one dataset (e.g. earthquake_program): a machine that restored only it")
     args = ap.parse_args(argv)
     OUT.mkdir(parents=True, exist_ok=True)
     bad = 0
-    for name, spec in datasets().items():
+    sets = datasets()
+    if args.only and args.only not in sets:
+        raise SystemExit(f"--only {args.only}: not one of {sorted(sets)}")
+    for name, spec in sets.items():
+        if args.only and name != args.only:
+            continue
         path = OUT / f"{name}.json"
         rows = scan(spec["roots"])
         if args.verify:
