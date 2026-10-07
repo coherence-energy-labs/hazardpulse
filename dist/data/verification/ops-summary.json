@@ -1,16 +1,16 @@
 {
-  "generated_at": "2026-10-07T21:36:22Z",
+  "generated_at": "2026-10-07T21:50:21Z",
   "score_as_of": "2026-10-07T21:35:19Z",
   "system": {
     "frozen_forecasts": 2602,
     "matured_forecasts": 2471,
-    "scored_forecasts": 2462,
-    "matured_unscored_backlog": 9,
+    "scored_forecasts": 2466,
+    "matured_unscored_backlog": 5,
     "raw_chain_rows": 2602,
     "hash_chain_mismatches": 0,
     "exact_model_benchmarks": 3,
     "alerts": [
-      "9 matured forecast windows are waiting for scoring."
+      "5 matured forecast windows are waiting for scoring."
     ],
     "rollup_violations": [],
     "ledger_violations": []
@@ -22,7 +22,7 @@
       "model_version": "eq_operational_S1_gear1_v1-d409c534bb4c",
       "verification_status": "logging_waiting_maturity",
       "status_badge": "Waiting",
-      "verification_status_label": "The published model version's forecasts are being recorded; none of its 30-day windows has closed yet (scored windows of earlier versions: 623, each version's record is kept under its own name).",
+      "verification_status_label": "The published model version's forecasts are being recorded; none of its 30-day windows has closed yet (scored windows of earlier versions: 624, each version's record is kept under its own name).",
       "metric_source": "retrospective_holdout_exact_model",
       "metric_source_label": "Pre-registered programme (docs/EARTHQUAKE_FORECAST_PROGRAM.md): a declared second read (reported, never used to decide) of 2023-2025 (153 issue times, 1384 M6+ cell-windows); +2.60 nats of information per M6+ cell-window over a uniform map. This version's live record starts when its first 30-day windows mature.",
       "auc": 0.9687,
@@ -32,8 +32,8 @@
       "forecast_storage": {
         "n_replay_artifacts": 739,
         "n_matured_forecasts": 624,
-        "n_scored_forecasts": 623,
-        "n_backlog": 1,
+        "n_scored_forecasts": 624,
+        "n_backlog": 0,
         "first_issued_at": "2026-03-13T03:00:00Z",
         "last_issued_at": "2026-10-07T18:00:00Z",
         "last_forecast_id": "eq_fcst_20261007_1800",
@@ -50,7 +50,7 @@
       "prospective": {
         "summary_path": "results/earthquake_prospective/prospective_summary.json",
         "status": "ok",
-        "scored_as_of": "2026-10-07T17:40:43Z",
+        "scored_as_of": "2026-10-07T21:44:34Z",
         "message": null,
         "top_5_hit_rate": null,
         "this_model_version": null
@@ -90,7 +90,7 @@
       "model_version": "hurricane_ri_stack_v1-35938d6c09b7",
       "verification_status": "prospective_scored",
       "status_badge": "Scored",
-      "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 29 storm forecasts scored against NHC best track; 4 rapid-intensification events observed.",
+      "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 33 storm forecasts scored against NHC best track; 4 rapid-intensification events observed.",
       "metric_source": "retrospective_holdout_exact_model",
       "metric_source_label": "Exact-model retrospective benchmark is available.",
       "auc": 0.9284,
@@ -100,8 +100,8 @@
       "forecast_storage": {
         "n_replay_artifacts": 77,
         "n_matured_forecasts": 73,
-        "n_scored_forecasts": 67,
-        "n_backlog": 6,
+        "n_scored_forecasts": 68,
+        "n_backlog": 5,
         "first_issued_at": "2026-03-13T03:00:00Z",
         "last_issued_at": "2026-10-07T21:35:19Z",
         "last_forecast_id": "hu_fcst_20261007_2135",
@@ -119,39 +119,39 @@
       "prospective": {
         "summary_path": "results/hurricane_prospective/prospective_summary.json",
         "status": "ok",
-        "scored_as_of": "2026-10-07T17:42:40Z",
-        "n_scored_forecasts": 67,
+        "scored_as_of": "2026-10-07T21:46:39Z",
+        "n_scored_forecasts": 68,
         "stale": false,
         "message": null,
         "unit": "storm-cycle: one scored record per storm and synoptic time t, the first made at or after t + 3 h 30 min (docs/HURRICANE_RI_V9_PROGRAM.md amendment 7, rule 1)",
         "pooled": {
-          "n_storm_cycles": 29,
+          "n_storm_cycles": 33,
           "n_events": 4,
-          "n_storms": 5,
-          "brier": 0.113507,
-          "mean_forecast": 0.05821,
-          "observed_rate": 0.137931,
-          "auc": 0.805,
+          "n_storms": 6,
+          "brier": 0.100403,
+          "mean_forecast": 0.05747,
+          "observed_rate": 0.121212,
+          "auc": 0.780172,
           "auc_withheld": null
         },
         "by_model_version": {
           "hurricane_ri_stack_v1-35938d6c09b7": {
-            "n_storm_cycles": 13,
+            "n_storm_cycles": 15,
             "n_events": 1,
-            "n_storms": 2,
-            "brier": 0.042938,
-            "mean_forecast": 0.1,
-            "observed_rate": 0.076923,
+            "n_storms": 3,
+            "brier": 0.03802,
+            "mean_forecast": 0.094,
+            "observed_rate": 0.066667,
             "auc": null,
-            "auc_withheld": "the cycles span 2 storms (< 5)"
+            "auc_withheld": "the cycles span 3 storms (< 5)"
           },
           "hurricane_ri_v8_2": {
-            "n_storm_cycles": 11,
+            "n_storm_cycles": 13,
             "n_events": 3,
             "n_storms": 2,
-            "brier": 0.2485,
-            "mean_forecast": 0.035282,
-            "observed_rate": 0.272727,
+            "brier": 0.210999,
+            "mean_forecast": 0.037423,
+            "observed_rate": 0.230769,
             "auc": null,
             "auc_withheld": "the cycles span 2 storms (< 5)"
           },
@@ -166,7 +166,7 @@
             "auc_withheld": "only one outcome occurred: a ranking score is undefined"
           }
         },
-        "total_storms_scored": 29,
+        "total_storms_scored": 33,
         "total_ri_events": 4
       },
       "exact_model_benchmark": {
@@ -195,7 +195,7 @@
       "status_badge": "Scored",
       "verification_status_label": "Prospective live scoring is active for matured tornado forecasts.",
       "metric_source": "retrospective_holdout_exact_model",
-      "metric_source_label": "Pre-registered programme (docs/TORNADO_MODEL_PROGRAM.md): every choice made on 2023, development test 2024, scored once on every 2025 storm observation (1,469,977; 1,579 tornadic). Live record of this version: 2,274 storm forecasts closed, 0 followed by a tornado; too few tornadoes to score yet (a live score is quoted from 10).",
+      "metric_source_label": "Pre-registered programme (docs/TORNADO_MODEL_PROGRAM.md): every choice made on 2023, development test 2024, scored once on every 2025 storm observation (1,469,977; 1,579 tornadic). Live record of this version: 2,439 storm forecasts closed, 0 followed by a tornado; too few tornadoes to score yet (a live score is quoted from 10).",
       "auc": 0.9702,
       "brier": null,
       "brier_skill_score": 0.1067,
@@ -204,15 +204,15 @@
         "auc": null,
         "brier": null,
         "brier_skill_score": null,
-        "n_storm_forecasts": 2274,
+        "n_storm_forecasts": 2439,
         "n_events": 0
       },
       "homepage_line": "AUC 0.970 pre-registered 2025 test",
       "forecast_storage": {
         "n_replay_artifacts": 1786,
         "n_matured_forecasts": 1774,
-        "n_scored_forecasts": 1772,
-        "n_backlog": 2,
+        "n_scored_forecasts": 1774,
+        "n_backlog": 0,
         "first_issued_at": "2026-03-13T03:00:00Z",
         "last_issued_at": "2026-10-07T20:48:29Z",
         "last_forecast_id": "to_fcst_20261007_2048",
@@ -234,36 +234,36 @@
       "prospective": {
         "summary_path": "results/tornado_prospective/prospective_summary.json",
         "status": "ok",
-        "scored_as_of": "2026-10-07T17:41:22Z",
-        "n_scored_forecasts": 1772,
+        "scored_as_of": "2026-10-07T21:45:08Z",
+        "n_scored_forecasts": 1774,
         "stale": false,
         "message": null,
         "outcome_time_convention": "SPC daily files are convective days (12 UTC to 12 UTC); HHMM is UTC; rows before 1200 are placed on the next UTC date",
         "pooled": {
-          "n_storm_forecasts": 2274,
+          "n_storm_forecasts": 2439,
           "n_positive": 0,
           "base_rate": 0.0,
-          "mean_forecast_probability": 5.306e-05,
-          "brier": 9e-08,
+          "mean_forecast_probability": 6.09e-05,
+          "brier": 1.2e-07,
           "auc": null,
-          "ece": 5.3e-05,
+          "ece": 6.1e-05,
           "brier_sample_climatology": 0.0,
           "bss_vs_sample_climatology": null,
-          "n_with_causal_reference": 1335,
+          "n_with_causal_reference": 1500,
           "brier_causal_climatology": 0.0,
           "bss_vs_causal_climatology": null,
           "skill_undefined": "no event observed",
           "label_after_issue_only": {
-            "n_storm_forecasts": 2274,
+            "n_storm_forecasts": 2439,
             "n_positive": 0,
             "base_rate": 0.0,
-            "brier": 9e-08,
+            "brier": 1.2e-07,
             "auc": null
           },
           "n_repeat_storm_forecasts_dropped": 0,
-          "n_forecasts": 24,
+          "n_forecasts": 26,
           "first_issued_at": "2026-10-03T03:39:53Z",
-          "last_issued_at": "2026-10-06T16:33:05Z"
+          "last_issued_at": "2026-10-06T20:37:31Z"
         },
         "pooled_by_served_mode": null,
         "skill_reference": "bss_vs_causal_climatology: reference = base rate of the SAME model version's storm-forecasts whose 24 h window matured before the forecast was issued (no outcome leak; versions differ in event definition). bss_vs_sample_climatology: reference = pooled base rate of the scored set itself (in-sample, shown for comparison). Both are null when no event was observed. Scored on the model's full-precision probability.",
