@@ -138,3 +138,67 @@ verifier scores OFCL, and the result is compared with NHC's own published error 
 - **Disclosed:** before this registration, the only errors computed were OFCL's, in the control. They
   reproduce NHC's published numbers. The engine was timed on the 2020 warm-up season, where no error was
   computed. The aid inventory (which aids exist in which season) reads inputs only.
+
+## Outcome (2026-10-08)
+
+**Selection (CHOOSE 2021-2022, `selection.json`).** Errors are the mean over 24-120 h.
+- **Track:** config 17 (half-life 180 d, shrinkage 0.5, no debias, no storm weight), 84.72 n mi. Equal
+  weights give 87.21; the worst config 96.20. Every debiasing config was worse than equal weights: an aid's
+  recent mean error does not carry forward.
+- **Intensity:** config 18 (half-life 180 d, shrinkage 0.5, no debias, this storm 5x), 11.52 kt. Equal
+  weights give 11.57. On intensity the weighting barely matters.
+
+**DEV 2023-2025, AL and EP pooled (`dev.json`)** -- mean error over the five leads (n mi; kt):
+
+| | TC1 | TC1+O | OFCL | HCCA | TVCN / IVCN | equal weights |
+|---|---|---|---|---|---|---|
+| track | **90.74** | **90.47** | 92.08 | 97.61 | 97.56 | 94.49 |
+| intensity | 12.83 | **12.60** | 12.63 | 13.22 | 12.78 | 12.75 |
+
+The table pools each product's own verified cases. The comparisons below are paired, on shared cases only.
+
+**Primary claims: none met.**
+
+| claim (98.75%) | mean over leads | interval |
+|---|---|---|
+| TC1 track vs OFCL | **-2.76 n mi** | [-8.18, +1.95] |
+| TC1+O track vs OFCL | **-3.05 n mi** | [-8.22, +1.40] |
+| TC1 intensity vs OFCL | +0.25 kt | [-0.63, +1.11] |
+| TC1+O intensity vs OFCL | -0.00 kt | [-0.69, +0.70] |
+
+**Reported (95%, descriptive):**
+- **TC1 track vs HCCA: -6.24 [-11.14, -1.36]**, better at 72 h (-5.8), 96 h (-9.5) and 120 h (-15.6). HCCA is
+  NHC's corrected consensus; TC1 beats it from 72 h on.
+- TC1 track vs TVCN: -6.82 [-12.79, -1.88].
+- TC1 track vs OFCL at 72 h alone: -4.1 [-7.5, -0.8].
+- TC1 vs GDMI on 2025, GDMI's one season: -0.56 [-11.39, +8.10], a tie with the strongest single aid.
+- The weighting is worth about 3.7 n mi over equal weights of the same members: EQ - OFCL +0.98, against
+  TC1's -2.76.
+- Intensity: ties throughout. Against HCCA, TC1+O is -0.52 [-1.09, +0.09], led by 120 h (-2.3 [-3.8, -0.8]).
+
+**2026 so far** (31 storms fetched 2026-10-08 18:53Z, operational best tracks; `season_2026.json`; no claim,
+and the numbers move as the season's decks update):
+- **Track:**
+  - TC1 vs OFCL: -0.90 [-3.95, +2.22];
+  - TC1+O vs OFCL: -1.73 [-3.98, +0.57];
+  - TC1 vs HCCA: -1.34 [-8.92, +7.92];
+  - TC1 vs GDMI: +0.14 [-10.40, +14.04].
+
+  Equal weights would have been far worse this season: EQ - OFCL +15.25 [+3.73, +30.97]. The weighting is
+  doing the work.
+- **Intensity:**
+  - TC1 vs OFCL: +1.04 [-0.64, +2.22];
+  - TC1 vs HCCA: +1.68 [-0.22, +3.77].
+
+  HCCA's 2026 intensity is unusually good: 10.41 kt, against OFCL's 11.26.
+
+**What it means.**
+- **TC1's track forecast is at the level of NHC's official forecast**, and on 2023-2025 it is better than
+  NHC's best objective aid (HCCA) beyond 48 h. It is automatic and issued 30 minutes after the advisory.
+- It is not shown to beat OFCL: every interval against OFCL includes 0.
+- Its intensity forecast ties the official forecast. It adds nothing on intensity that NHC's consensus does
+  not already have.
+- **Next:**
+  1. TC1 goes live and on the site (its own amendment). Its track is worth showing beside NHC's.
+  2. TC2: intensity conditioned on our RI probability. Intensity is where TC1 adds nothing, and RI is where
+     every consensus fails.

@@ -380,8 +380,9 @@ def chosen(kind: str, official: bool = False) -> cs.Config:
     return cs.Config(**{**c, "include_official": official})
 
 
-def evaluate(decks, truth_of, seasons, level: float) -> dict:
-    """TC1, TC1+O and the equal-weight reference against OFCL, HCCA, NHC's simple consensus and GDMI."""
+def evaluate(decks, truth_of, seasons, level: float, claims: bool = True) -> dict:
+    """TC1, TC1+O and the equal-weight reference against OFCL, HCCA, NHC's simple consensus and GDMI. With
+    ``claims`` the OFCL comparisons are the registered claims (DEV); without, they are reported only (2026)."""
     case_list = cases(decks, truth_of, seasons)
     out = {}
     for kind in ("track", "intensity"):
@@ -396,9 +397,13 @@ def evaluate(decks, truth_of, seasons, level: float) -> dict:
                             for p in ("TC1", "TC1+O") for q in ("HCCA", SECOND[kind], "GDMI")}}
         res["reported"]["EQ-OFCL"] = paired(errs["EQ"], errs["OFCL"], SCORED_LEADS, REPORT_LEVEL)
         for name, c in res["claims"].items():
-            c["claim"] = bool(c.get("n_storms") and c["mean_over_leads"]["ci"][1] < 0)
+            if claims:
+                c["claim"] = bool(c.get("n_storms") and c["mean_over_leads"]["ci"][1] < 0)
             log(f"{kind} {name}: mean over leads {c['mean_over_leads']['d']:+.2f} "
-                f"[{c['mean_over_leads']['ci'][0]:+.2f}, {c['mean_over_leads']['ci'][1]:+.2f}] -> claim {c['claim']}")
+                f"[{c['mean_over_leads']['ci'][0]:+.2f}, {c['mean_over_leads']['ci'][1]:+.2f}]"
+                + (f" -> claim {c['claim']}" if claims else " (reported, no claim)"))
+        if not claims:
+            res["reported"].update(res.pop("claims"))
         out[kind] = res
     return out
 
@@ -473,7 +478,7 @@ def read2026() -> int:
     seasons = WARMUP + CHOOSE + DEV + (2026,)
     decks = load_decks(ALL_TECHS, seasons)
     t26 = {s: btk_truth(s) for s in storms}
-    res = evaluate(decks, lambda d: t26.get(d.storm, {}), (2026,), REPORT_LEVEL)
+    res = evaluate(decks, lambda d: t26.get(d.storm, {}), (2026,), REPORT_LEVEL, claims=False)
     READ_2026.write_text(json.dumps({
         "phase": "TC1 2026 further read", "program": "docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md",
         "prereg_tag": "prereg-tc1", "declared": "the season in progress; operational best tracks; no claim",
