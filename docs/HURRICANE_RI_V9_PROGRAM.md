@@ -588,6 +588,41 @@ four-threshold Brier are both below V8's.
 - **The grid edge.** It sits at 400 km, where `ell` far out is about 1,000 km. The core features
   are governed by the core's `ell` (about 15-60 km). The edge is a declared choice, not a tuned one.
 
+### Amendment 8 outcome (2026-10-08)
+
+**Run** (`scripts/hurricane_ri_h8.py`, `results/calibration/hurricane_ri_h8.json`).
+- H8 is present on 3,501 of the 4,692 development cycles: every cycle with IR and an RMW. It is
+  present on 2,828 of the 2,871 scored cycles, and on all 586 cycles of 2026.
+- A first run was stopped before it produced any feature. The harness held every storm's whole
+  a-deck in memory and passed 2.4 GB. It now keeps only each deck's CARQ lines; the RMW is
+  identical on all 5,278 cycles (commit f0789f700). The feature code is unchanged since the tag.
+
+**Control:** V8 reproduced 0.1417825586152726.
+
+| | dev 30/24 LL | dev Brier4 | AUC | POD at HCCA's FAR (HCCA 0.236) | 2026 LL (further read) | 2026 Brier4 | 2026 AUC |
+|---|---|---|---|---|---|---|---|
+| V8 (v10.3) | 0.1418 | 0.1527 | 0.9334 | **0.209** | 0.1178 | 0.1185 | **0.9410** |
+| **H8 = V8 + balanced response** | **0.1416** | **0.1526** | **0.9340** | 0.194 | **0.1172** | **0.1172** | 0.9388 |
+
+**H8 - V8:**
+- dev: dLL -0.00016 [-0.00089, +0.00054], dBrier4 -0.00013 [-0.00083, +0.00060];
+- 2026: dLL -0.0006 [-0.0028, +0.0020], dBrier4 -0.0013 [-0.0029, +0.0001].
+
+**Descriptive.** The four H8 features take 2.4% of the split gain in the model fitted on every
+development season. Drift is not flagged; the largest shift is 0.31 SD.
+
+**Carried: H8 -> v10.4**, by the registered rule. What the numbers say:
+- The balanced response adds information the model uses, and the gain points the same way on 2026,
+  the season with the most IR history.
+- It is about a tenth of IR's gain. Every interval covers 0.
+- It lowers the top end on dev (POD at HCCA's false-alarm rate 0.209 -> 0.194) and the 2026 AUC
+  (0.9410 -> 0.9388). It improves calibration more than ranking.
+- The ledger records why it is small: the core heating overlaps the IR rings, and CARQ's RMW is
+  coarse.
+
+As registered, v10.4 enters the prospective test only through an amendment written before it scores
+any cycle (amendment 9).
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
