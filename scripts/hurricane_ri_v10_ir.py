@@ -68,9 +68,9 @@ def compare(rows, P: dict, base: str, other: str) -> dict:
     return out
 
 
-def drift(rows) -> dict:
+def drift(rows, names=ir.IR_NAMES) -> dict:
     out = {}
-    for n in ir.IR_NAMES:
+    for n in names:
         old = np.array([r["f"][n] for r in rows if 2022 <= r["season"] <= 2024])
         new = np.array([r["f"][n] for r in rows if r["season"] == 2025])
         old, new = old[np.isfinite(old)], new[np.isfinite(new)]

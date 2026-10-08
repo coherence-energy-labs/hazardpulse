@@ -147,9 +147,10 @@ def test_each_entrant_spends_half_the_previous_error_budget():
     p = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(p)
     alphas = [1 - e["level"] for e in p.ENTRANTS.values()]
-    assert alphas == pytest.approx([0.025, 0.0125, 0.00625, 0.003125])
+    assert alphas == pytest.approx([0.025, 0.0125, 0.00625, 0.003125, 0.0015625])
     assert all(b == pytest.approx(a / 2) for a, b in zip(alphas, alphas[1:])) and sum(alphas) < 0.05
-    assert p.ENTRANTS["v10_2"]["key"] == "ri_v10_2_shadow"
+    assert p.ENTRANTS["v10_2"]["key"] == "ri_v10_2_shadow" and p.ENTRANTS["v10_4"]["key"] == "ri_v10_4_shadow"
+    assert ("v10_4", "v10_3") in p.CHALLENGES                  # against the model it was selected against
     # challenger minus champion on shared cycles, by hand: one cycle, dV 32 kt
     champ = [{"storm_id": "EP01", "cycle": "c1", "dv": 32.0, "p_k": {"25": 0.5, "30": 0.5, "35": 0.5, "40": 0.5}}]
     chall = [{"storm_id": "EP01", "cycle": "c1", "dv": 32.0, "p_k": {"25": 0.9, "30": 0.8, "35": 0.2, "40": 0.1}},
@@ -389,5 +390,151 @@ def test_the_ir_challenger_is_bound_to_the_model_it_was_selected_against(tmp_pat
     art = json.loads(ri_v10.V10_3_PATH.read_text(encoding="utf-8"))
     art["provenance"]["dev_2022_2025"]["champion_log_loss"] = chs[0]["dev"]["champion_log_loss"]   # v10.1's, not v10.2's
     (root / "results/models" / ri_v10.V10_3_PATH.name).write_bytes(ri_v10.canonical_bytes(art))
+    with pytest.raises(se.EvidenceError):
+        se.ours_hurricane(root)
+
+
+# v10.4 (amendments 8-9): V8 + the coherence equation's balanced response to the IR heating
+# ---------------------------------------------------------------------------
+
+v10_4_present = pytest.mark.skipif(not ri_v10.V10_4_PATH.exists(), reason="v10.4 artifact not built")
+
+
+@pytest.fixture(scope="module")
+def v10_4():
+    art, version = ri_v10.load(ri_v10.V10_4_PATH)
+    return {"artifact": art, "model_version": version}
+
+
+def _fixture_crop(sid, cyc, tag):
+    p = FIX / "ir" / f"{sid}_{cyc:%Y%m%d%H}_{tag}.npz"
+    if not p.exists():
+        return None
+    z = np.load(p)
+    return {"counts": z["counts"], "lat": z["lat"], "lon": z["lon"], "centre": tuple(z["centre"])}
+
+
+def _fixture_h8(fs):
+    """H8 from the fixture storm's real crops (the ones training used), by the live path's own vortex read."""
+    from hazardpulse.hurricane import balanced_response as br
+    from hazardpulse.hurricane import ri_v9_features as v9fx
+
+    def read(sid, cyc, records):
+        f = v9fx.adeck_features(v9fx.cycle_table(records, cyc), sid[:2])
+        feats = br.features(_fixture_crop(sid, cyc, "p2"), _fixture_crop(sid, cyc, "m4"), float(f["v0"]),
+                            fs.carq_rmw_from_records(records, cyc), float(f["abs_lat"]))
+        return feats, "ok"
+    return read
+
+
+@v10_4_present
+def test_the_balanced_response_challenger_reproduces_the_labs_curve_and_inputs(fs, v10, v10_3, v10_4):
+    exp = json.loads((FIX / "expected.json").read_text(encoding="utf-8"))
+    assert ri_v10.needs_h8(v10_4["artifact"]) and ri_v10.needs_ir(v10_4["artifact"])
+    assert not ri_v10.needs_h8(v10_3["artifact"])
+    for c in exp["cases"]:
+        out = fs.shadow_forecasts(_case(c["dtg"]), None, v10, ships_raw_fetcher=_ships(c["ships_text"]),
+                                  adeck_fetcher=lambda sid: _records(),
+                                  challengers={"ri_v10_3_shadow": v10_3, "ri_v10_4_shadow": v10_4},
+                                  ir_fetcher=_fixture_ir, h8_fetcher=_fixture_h8(fs))
+        ch = out["ri_v10_4_shadow"]
+        assert ch["source"] == "v10.4" and ch["ir"] == "ok" and ch["h8"] == "ok"
+        for n, want in c["h8"].items():                     # the live vortex read gives training's H8 exactly
+            assert ch["h8_inputs"][n] == pytest.approx(want, rel=1e-12, abs=1e-12)
+        for k, want in c["v10_4"].items():
+            assert ch["probabilities"][k] == pytest.approx(want, abs=5e-5)           # live == lab
+        assert "h8" not in out["ri_v10_3_shadow"] and "h8_inputs" not in out["ri_v10_3_shadow"]
+        for k, want in c["v10_3"].items():                                              # v10.3 untouched by H8
+            assert out["ri_v10_3_shadow"]["probabilities"][k] == pytest.approx(want, abs=5e-5)
+
+
+@v10_4_present
+def test_an_h8_failure_touches_only_the_h8_model(fs, v10, v10_3, v10_4):
+    c = json.loads((FIX / "expected.json").read_text(encoding="utf-8"))["cases"][0]
+
+    def broken(*a):
+        raise ValueError("solver refused")
+    out = fs.shadow_forecasts(_case(c["dtg"]), None, v10, ships_raw_fetcher=_ships(c["ships_text"]),
+                              adeck_fetcher=lambda sid: _records(),
+                              challengers={"ri_v10_3_shadow": v10_3, "ri_v10_4_shadow": v10_4},
+                              ir_fetcher=_fixture_ir, h8_fetcher=broken)
+    ch = out["ri_v10_4_shadow"]
+    assert ch["status"] == "ok" and ch["h8"].startswith("error: ValueError")
+    assert all(v is None for v in ch["h8_inputs"].values())                            # NaN inputs, as in training
+    assert ch["ir"] == "ok" and ch["probability"] is not None
+    for k, want in c["v10_3"].items():
+        assert out["ri_v10_3_shadow"]["probabilities"][k] == pytest.approx(want, abs=5e-5)
+
+
+def test_the_live_rmw_is_the_one_training_read(fs):
+    """Training read the RMW from the deck's text (``carq_rmw_nm``), the live path from its parsed records:
+    the same number on every cycle of the fixture deck, NaN where ATCF writes 0."""
+    from hazardpulse.hurricane import balanced_response as br
+    text = gzip.decompress((FIX / "aal012026.dat.gz").read_bytes()).decode("utf-8", "replace")
+    recs = atcf.parse_atcf_deck(text)
+    cycles = sorted({r.cycle for r in recs if r.model == "CARQ" and r.tau_hours == 0})
+    assert len(cycles) >= 3
+    for cyc in cycles:
+        a, b = br.carq_rmw_nm(text, cyc.strftime("%Y%m%d%H")), fs.carq_rmw_from_records(recs, cyc)
+        assert (math.isnan(a) and math.isnan(b)) or a == b, cyc
+    assert any(math.isfinite(fs.carq_rmw_from_records(recs, cyc)) for cyc in cycles)
+    line = "AL, 09, 2026100712, 01, CARQ,   0, 222N,  939W,  40, 1002, TS,  34, NEQ, 60, 50, 0, 40, 1008, 150, {},"
+    zero, twenty = (atcf.parse_atcf_deck(line.format(v))[0] for v in ("  0", " 20"))
+    assert zero.rmw_nm is None and twenty.rmw_nm == 20.0
+    cyc = dt.datetime(2026, 10, 7, 12)
+    assert math.isnan(fs.carq_rmw_from_records([zero], cyc)) and fs.carq_rmw_from_records([zero, twenty], cyc) == 20.0
+
+
+def test_live_h8_crops_like_training_from_the_runs_cached_images(fs, monkeypatch):
+    """live_h8_read cuts the same two crops live_ir_read does, from the same cached downloads, and feeds the
+    balanced response the training vortex (v0, abs_lat, the CARQ RMW)."""
+    from hazardpulse.hurricane import balanced_response as br, ir_source
+    from hazardpulse.hurricane import ri_v9_features as v9fx
+    lat = np.linspace(72.7, -72.7, 2001)
+    lon = np.linspace(-180.0, 179.9, 5000)
+    rng = np.random.default_rng(2)
+    counts = rng.integers(60, 230, size=(lat.size, lon.size)).astype(np.uint8)
+    calls = []
+
+    def fake_fetch(hour):
+        calls.append(hour)
+        return "key", counts, lat, lon
+    monkeypatch.setattr(ir_source, "fetch_image", fake_fetch)
+    fs._IR_IMAGES.clear()
+    recs = _records()
+    cyc = dt.datetime(2026, 6, 16, 12)
+    fs.live_ir_read("AL012026", cyc, recs)
+    got, status = fs.live_h8_read("AL012026", cyc, recs)
+    assert len(calls) == 2                                            # H8 reused the IR read's two images
+    cen = ir_source.centres(recs, cyc)
+    f = v9fx.adeck_features(v9fx.cycle_table(recs, cyc), "AL")
+    want = br.features(ir_source.crop(counts, lat, lon, cen["p2"][1]), ir_source.crop(counts, lat, lon, cen["m4"][1]),
+                       float(f["v0"]), fs.carq_rmw_from_records(recs, cyc), float(f["abs_lat"]))
+    assert status == "ok" and got == want and all(math.isfinite(v) for v in got.values())
+    no_rmw = [atcf.ATCFRecord(**{**r.__dict__, "rmw_nm": None}) for r in recs]
+    got, status = fs.live_h8_read("AL012026", cyc, no_rmw)
+    assert all(math.isnan(v) for v in got.values()) and status.startswith("missing: 0 of 4") and "no CARQ RMW" in status
+    fs._IR_IMAGES.clear()
+
+
+@v10_4_present
+def test_the_h8_model_is_not_scored_without_its_ir_reader(fs, monkeypatch):
+    assert "ri_v10_4_shadow" in fs.load_challengers()
+    monkeypatch.setattr(fs, "ir_reader_available", lambda: False)
+    assert "ri_v10_4_shadow" not in fs.load_challengers()
+
+
+@v10_4_present
+def test_the_h8_challenger_is_bound_to_v10_3(tmp_path):
+    from hazardpulse.verification import served_evidence as se
+    root = _root_copy(tmp_path)
+    for p in (ri_v10.V10_2_PATH, ri_v10.V10_3_PATH, ri_v10.V10_4_PATH):
+        (root / "results/models" / p.name).write_bytes(p.read_bytes())
+    chs = se.ours_hurricane(root)["challengers"]
+    assert [c["label"] for c in chs] == ["v10.2", "v10.3", "v10.4"] and chs[2]["against"] == "v10.3"
+    assert chs[2]["season_2026"]["log_loss"] is not None
+    art = json.loads(ri_v10.V10_4_PATH.read_text(encoding="utf-8"))
+    art["provenance"]["dev_2022_2025"]["champion_log_loss"] = chs[0]["dev"]["log_loss"]      # v10.2's, not v10.3's
+    (root / "results/models" / ri_v10.V10_4_PATH.name).write_bytes(ri_v10.canonical_bytes(art))
     with pytest.raises(se.EvidenceError):
         se.ours_hurricane(root)

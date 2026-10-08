@@ -816,7 +816,8 @@ def load_challengers() -> dict[str, dict[str, object]]:
     """``{shadow key: loaded model}`` for every challenger whose artifact is present."""
     out = {}
     for key, path, label in (("ri_v10_2_shadow", ri_v10.V10_2_PATH, "v10.2"),
-                             ("ri_v10_3_shadow", ri_v10.V10_3_PATH, "v10.3")):
+                             ("ri_v10_3_shadow", ri_v10.V10_3_PATH, "v10.3"),
+                             ("ri_v10_4_shadow", ri_v10.V10_4_PATH, "v10.4")):
         m = load_v10_model(path, label)
         if m is None:
             continue
@@ -865,6 +866,43 @@ def live_ir_read(sid: str, cycle: dt.datetime, records) -> tuple[dict[str, float
 def live_ir_features(sid: str, cycle: dt.datetime, records) -> dict[str, float]:
     """The amendment-5 IR features for a cycle (``live_ir_read`` without its account of the reads)."""
     return live_ir_read(sid, cycle, records)[0]
+
+
+def carq_rmw_from_records(records, cycle: dt.datetime) -> float:
+    """``balanced_response.carq_rmw_nm`` on a parsed deck: the first CARQ tau-0 line of ``cycle`` that gives a
+    radius of maximum wind, NaN when none does."""
+    for r in records:
+        if r.model == "CARQ" and r.tau_hours == 0 and r.cycle == cycle and r.rmw_nm is not None:
+            return float(r.rmw_nm)
+    return math.nan
+
+
+def live_h8_read(sid: str, cycle: dt.datetime, records) -> tuple[dict[str, float], str]:
+    """``(H8 features, what they were)`` for a cycle (amendment 8): the balanced response of the vortex at t
+    (``v0``, ``abs_lat`` from the training feature builder; the CARQ RMW) to the IR heating in the same two crops
+    ``live_ir_read`` makes, from this run's cached images. NaN where training had NaN."""
+    from hazardpulse.hurricane import balanced_response as br, ir_source
+    f = v9fx.adeck_features(v9fx.cycle_table(records, cycle), sid[:2])
+    v0, lat, rmw = float(f["v0"]), float(f["abs_lat"]), carq_rmw_from_records(records, cycle)
+    cen = ir_source.centres(records, cycle)
+    crops = {"p2": None, "m4": None}
+    if cen is not None:
+        for tag, (hour, centre) in cen.items():
+            if hour not in _IR_IMAGES:
+                _IR_IMAGES[hour] = ir_source.fetch_image(hour)
+            key, counts, la, lo = _IR_IMAGES[hour]
+            crops[tag] = None if key is None else ir_source.crop(counts, la, lo, centre)
+    feats = br.features(crops["p2"], crops["m4"], v0, rmw, lat)
+    n = sum(math.isfinite(v) for v in feats.values())
+    if n == len(br.H8_NAMES):
+        return feats, "ok"
+    why = [w for w, bad in (("no CARQ RMW", not math.isfinite(rmw)), ("no intensity", not math.isfinite(v0)),
+                            ("no CARQ position at t", cen is None),
+                            ("no image at t + 2 h", cen is not None and crops["p2"] is None),
+                            ("no image at t - 4 h", cen is not None and crops["m4"] is None)) if bad]
+    detail = ("; " + "; ".join(why)) if why else "; too few valid pixels within 300 km"
+    return feats, (f"missing: 0 of {len(br.H8_NAMES)} H8 features" if n == 0
+                   else f"partial: {n} of {len(br.H8_NAMES)} H8 features") + detail
 
 
 def ir_status(features: dict[str, float], read: dict[str, object] | None = None) -> str:
@@ -934,13 +972,15 @@ def _shadow_keys(v9, v10, challengers) -> list[str]:
 def shadow_forecasts(case: dict[str, object], v9: dict[str, object] | None, v10: dict[str, object] | None,
                      ships_raw_fetcher=None, adeck_fetcher=None,
                      challengers: dict[str, dict[str, object]] | None = None,
-                     ir_fetcher=None) -> dict[str, dict[str, object]]:
+                     ir_fetcher=None, h8_fetcher=None) -> dict[str, dict[str, object]]:
     """Every shadow (v9.1, v10.1 and each challenger) from ONE read of the cycle's SHIPS text and
-    the storm's a-deck; an IR model also gets the cycle's IR features, read once.
+    the storm's a-deck; an IR model also gets the cycle's IR features, read once, and an H8 model the
+    balanced response (amendment 8), computed once.
 
     ``ir_fetcher(sid, cycle, records)`` returns the IR features, or ``(features, what was read)`` as
     ``live_ir_read`` does; the shadow's ``ir`` says what the inputs were (``ir_status``), never "ok"
-    for a forecast made without an image."""
+    for a forecast made without an image. ``h8_fetcher`` returns ``(features, status)`` as
+    ``live_h8_read`` does; the shadow's ``h8`` is that status."""
     got = _shadow_inputs(case, ships_raw_fetcher, adeck_fetcher)
     if got is None:
         return {k: {"status": "not an NHC a-deck case"} for k in _shadow_keys(v9, v10, challengers)}
@@ -950,6 +990,7 @@ def shadow_forecasts(case: dict[str, object], v9: dict[str, object] | None, v10:
         out["ri_v9_shadow"] = {"status": "ok", "ships_text": note,
                                **ri_v9.predict(v9["payload"], str(v9["model_version"]), records, cycle, sid[:2], pcts)}
     ir, ir_note, ir_read = None, None, None
+    h8, h8_note = None, None
     for key, m in (("ri_v10_shadow", v10), *(challengers or {}).items()):
         if m is None:
             continue
@@ -963,9 +1004,18 @@ def shadow_forecasts(case: dict[str, object], v9: dict[str, object] | None, v10:
                 except Exception as exc:  # noqa: BLE001 -- no IR: NaN inputs, as a missing image was in training
                     ir, ir_note = {}, f"error: {type(exc).__name__}: {exc}"
             extra = ir
+        with_h8 = ri_v10.needs_h8(m["artifact"])
+        if with_h8:
+            if h8 is None:
+                try:
+                    h8, h8_note = (h8_fetcher or live_h8_read)(sid, cycle, records)
+                except Exception as exc:  # noqa: BLE001 -- no H8: NaN inputs, as in training without IR or RMW
+                    h8, h8_note = {}, f"error: {type(exc).__name__}: {exc}"
+            extra = {**(extra or {}), **h8}
         out[key] = {"status": "ok", "ships_text": note,
                     **({"ir": ir_note} if extra is not None else {}),
                     **({"ir_images": ir_read} if extra is not None and ir_read else {}),
+                    **({"h8": h8_note} if with_h8 else {}),
                     **ri_v10.predict(m["artifact"], str(m["model_version"]), records, cycle, sid[:2], pcts, extra)}
     return out
 

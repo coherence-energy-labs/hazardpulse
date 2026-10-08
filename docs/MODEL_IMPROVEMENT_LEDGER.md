@@ -80,6 +80,34 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
 6. **H6. The top-end tie with yes/no calls** (HCCA, IVCN, hurricane-model mean at their own
    false-alarm rates). M did not close it (0.215 vs HCCA's 0.236).
    - Re-test after H1 and H2. If it persists, it is a property of these inputs, not of the model.
+   - H8 widened it on dev (0.209 -> 0.194): the balanced response improves calibration, not the top end.
+7. **H8. DONE (2026-10-08): the coherence equation as the vortex's balanced response, carried small;
+   v10.4 in shadow** (amendments 8-9, PR #36, `hurricane_ri_h8.json`).
+   - **What it is.** The coherence operator in its Rossby-adjustment form, with `ell(r) = c / I(r)`
+     (Schubert and Hack 1982). This is the first use of the operator here that is the physics itself.
+     The earlier uses were analogies:
+     - tornado: the coherence field "adds nothing measurable once timed honestly"
+       (`TORNADO_MODEL_PROGRAM.md`);
+     - earthquake: the CFT block's ablation lift was 0.742 -> 0.749 AUC
+       (`earthquake_nowcast_validation.md`), and the served map does not use it.
+   - **Result.** dev dLL -0.00016 [-0.00089, +0.00054], dBrier4 -0.00013 [-0.00083, +0.00060]; 2026 (further
+     read) dLL -0.0006 [-0.0028, +0.0020]; 2.4% of the split gain. About a tenth of IR's gain; every interval
+     covers 0.
+   - **Why small.** First-principles account; HYPOTHESIS until a test separates the two parts.
+     1. The heating inside the RMW is mostly the IR model's 0-50 km ring again, since a typical RMW is
+        20-40 nm (37-74 km).
+     2. What is new is RMW-relative placement plus inertial stability, and both ride on CARQ's RMW. That
+        RMW is in 5-nm steps, often carried forward between fixes, and poorly known for weak systems,
+        which are where RI begins.
+   - **Next from it, ranked.**
+     1. **An RMW the image measures:** the radius of the eyewall's coldest ring, or of the strongest
+        radial gradient. It would replace CARQ's in `ell(r)`. This separates "the physics adds nothing"
+        from "the input is too coarse".
+     2. **The same operator on 2 km GOES ABI band 13** (H1's next step). At 8 km a 15-nm RMW is three
+        pixels.
+     3. **The tangential-wind tendency itself** (the Sawyer-Eliassen secondary circulation), not the
+        balanced heating. It is one more elliptic solve on the same grid.
+     - Each needs its own registration; amendment 8's dev data is read.
 
 ### Earthquake
 

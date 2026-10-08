@@ -133,6 +133,11 @@ HU_SHADOWS = (
      "entrant": "v10_3", "amendment": "amendments 5-6", "prereg_tag": "prereg-hurricane-ri-amend5",
      "results": ["results/calibration/hurricane_ri_v10_ir.json"],
      "what": "v10.2 plus 14 cloud-top structure features from NOAA GMGSI infrared (t+2 h and t-4 h)"},
+    {"file": "hurricane_ri_v10_4.json", "label": "v10.4", "kind": "v10", "shadow_key": "ri_v10_4_shadow",
+     "entrant": "v10_4", "amendment": "amendments 8-9", "prereg_tag": "prereg-hurricane-ri-amend8",
+     "results": ["results/calibration/hurricane_ri_h8.json"],
+     "what": "v10.3 plus 4 balanced-response features: the coherence equation solved for the heating the vortex "
+             "holds inside its local Rossby radius"},
 )
 HU_PROGRAM = "docs/HURRICANE_RI_V9_PROGRAM.md"
 

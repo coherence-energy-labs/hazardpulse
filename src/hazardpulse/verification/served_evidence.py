@@ -606,13 +606,16 @@ HURRICANE_CHALLENGERS = (
     ("hurricane_ri_v10_3.json", "v10_3", "v10.2 plus the storm&rsquo;s cloud-top structure from satellite "
                                          "infrared (NOAA GMGSI, two hours after the cycle and six hours earlier)",
      "v10.2"),
+    ("hurricane_ri_v10_4.json", "v10_4", "v10.3 plus how much of that convective heating the vortex can hold: "
+                                         "the coherence equation solved as the balanced response inside the local "
+                                         "Rossby radius", "v10.3"),
 )
 
 
 def _ours_challengers(root: Path, champion_dev: dict, pros: dict) -> list[dict]:
-    """Every challenger running in shadow (amendments 3-6), each from its own artifact's provenance --
+    """Every challenger running in shadow (amendments 3-9), each from its own artifact's provenance --
     refused when the numbers of the model it was selected against are not that model's own, bit for
-    bit (v10.2 against the served v10.1, v10.3 against v10.2)."""
+    bit (v10.2 against the served v10.1, v10.3 against v10.2, v10.4 against v10.3)."""
     from hazardpulse.hurricane import ri_v10
 
     out, against = [], {"v10.1": champion_dev}
@@ -630,7 +633,8 @@ def _ours_challengers(root: Path, champion_dev: dict, pros: dict) -> list[dict]:
         against[str(art.get("label"))] = dev
         entrant = (pros.get("entrants") or {}).get(entrant_key) or {}
         versus = (pros.get("challenger_vs_champion") or {}).get(f"{entrant_key}_vs_v10_1")
-        s26 = prov.get("season_2026_fourth_read") or prov.get("season_2026_third_read") or {}
+        s26 = (prov.get("season_2026_further_read") or prov.get("season_2026_fourth_read")
+               or prov.get("season_2026_third_read") or {})
         out.append({"model_version": version, "label": art.get("label"), "what": what, "against": base_label,
                     "dev": {"log_loss": _finite(dev.get("log_loss")), "brier4": _finite(dev.get("brier4")),
                             "champion_log_loss": _finite(dev.get("champion_log_loss")),

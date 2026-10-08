@@ -47,6 +47,7 @@ class ATCFRecord:
     vmax_kt: float | None
     mslp_hpa: float | None
     storm_name: str | None = None
+    rmw_nm: float | None = None      # radius of maximum wind (field 20); ATCF's 0 = unknown -> None
 
 
 def _safe_float(val: str) -> float | None:
@@ -146,6 +147,10 @@ def parse_atcf_deck(text: str) -> list[ATCFRecord]:
                 if name_candidate and name_candidate not in ("", " "):
                     storm_name = name_candidate
 
+            rmw_nm = _safe_float(parts[19]) if len(parts) > 19 else None
+            if rmw_nm is not None and rmw_nm <= 0:
+                rmw_nm = None
+
             records.append(ATCFRecord(
                 basin=basin,
                 storm_number=storm_number,
@@ -157,6 +162,7 @@ def parse_atcf_deck(text: str) -> list[ATCFRecord]:
                 vmax_kt=vmax_kt,
                 mslp_hpa=mslp_hpa,
                 storm_name=storm_name,
+                rmw_nm=rmw_nm,
             ))
         except (ValueError, IndexError):
             continue
