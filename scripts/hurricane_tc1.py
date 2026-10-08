@@ -488,12 +488,48 @@ def read2026() -> int:
     return 0
 
 
+def snapshot() -> int:
+    """The live forecast's starting point (amendment 1): every TC1 model after the 2020-2025 seasons, saved
+    exactly. Refused unless replaying the fetched 2026 decks from it gives what one pass over 2020-2026 gives, bit
+    for bit, for every 2026 forecast."""
+    from hazardpulse.hurricane import tc1_live
+    if not SELECTION.exists() or not DEV_OUT.exists():
+        raise SystemExit("select and dev first")
+    log("loading decks 2020-2026")
+    hist = load_decks(ALL_TECHS, range(2020, 2026))
+    d26 = load_decks(ALL_TECHS, (2026,))
+    models = {}
+    for kind in ("track", "intensity"):
+        for product, official in (("TC1", False), ("TC1+O", True)):
+            m = cs.OnlineConsensus(chosen(kind, official), kind)
+            cs.replay(m, hist, keep_weights=False)
+            m.state = {k: v for k, v in m.state.items() if len(k) == 2}     # past storms never return
+            saved = json.loads(json.dumps(m.to_dict()))
+            late = cs.replay(cs.OnlineConsensus.from_dict(saved), d26, keep_weights=False)
+            whole = cs.run(hist + d26, chosen(kind, official), kind, keep_weights=False)
+            want = {k: v for k, v in whole.items() if k[0].endswith("2026")}
+            if late != want:
+                bad = sum(1 for k in want if late.get(k) != want[k])
+                raise SystemExit(f"{kind} {product}: the saved state does not continue the pass ({bad} of {len(want)})")
+            models[f"{product}/{kind}"] = saved
+            log(f"{kind} {product}: {len(want)} 2026 forecasts continue bit for bit")
+    doc = {"what": "TC1's online models after the 2020-2025 seasons: the live forecast replays the current season "
+                   "from here (docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md, amendment 1)",
+           "season_end": 2025, "prereg_tag": "prereg-tc1",
+           "selection_sha256": tc1_live.sha256(SELECTION), "dev_sha256": tc1_live.sha256(DEV_OUT),
+           "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+           "decks": len(hist), "models": models}
+    tc1_live.STATE.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
+    log(f"wrote {tc1_live.STATE} ({tc1_live.STATE.stat().st_size / 1e6:.2f} MB)")
+    return 0
+
+
 def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=("control", "select", "dev", "read2026"))
+    ap.add_argument("phase", choices=("control", "select", "dev", "read2026", "snapshot"))
     phase = ap.parse_args(argv).phase
-    return {"control": control, "select": select, "dev": dev, "read2026": read2026}[phase]()
+    return {"control": control, "select": select, "dev": dev, "read2026": read2026, "snapshot": snapshot}[phase]()
 
 
 if __name__ == "__main__":

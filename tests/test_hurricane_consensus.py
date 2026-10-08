@@ -137,6 +137,48 @@ def test_the_deck_parser_keeps_the_first_line_of_each_lead_and_carq_at_tau_0():
     assert "XTRP" not in d.techs and d.get(t, "XTRP", 24) is None
 
 
+def test_a_saved_state_continues_bit_for_bit():
+    """Live replays the season from the state saved at its start: that must be what one pass gives."""
+    import json
+    ds = [d for d, _ in _world(n_storms=5)]
+    cut = T0 + dt.timedelta(days=9, hours=6)
+    for kind, cfg in (("track", cs.Config(half_life_days=30.0, shrink=0.5, debias=True, storm_boost=4.0)),
+                      ("intensity", cs.Config(half_life_days=180.0, shrink=0.5, storm_boost=4.0))):
+        whole = cs.run(ds, cfg, kind)
+        first = cs.OnlineConsensus(cfg, kind)
+        early = cs.replay(first, ds, until=cut)
+        saved = json.loads(json.dumps(first.to_dict()))                 # through JSON, as the file is
+        late = cs.replay(cs.OnlineConsensus.from_dict(saved), ds, after=cut)
+        assert set(early) | set(late) == set(whole) and not set(early) & set(late)
+        assert all(late[k] == whole[k] for k in late) and all(early[k] == whole[k] for k in early)
+        assert any(k[1] > cut for k in late)
+    # and the check can fail: a state that forgot one storm's verifications gives different forecasts
+    first = cs.OnlineConsensus(cs.Config(half_life_days=30.0, shrink=0.5), "track")
+    cs.replay(first, ds, until=cut)
+    blind = cs.OnlineConsensus(cs.Config(half_life_days=30.0, shrink=0.5), "track")
+    cs.replay(blind, ds[1:], until=cut)
+    a = cs.replay(first, ds, after=cut)
+    b = cs.replay(blind, ds, after=cut)
+    assert any(a[k] != b[k] for k in a)
+
+
+def test_the_live_read_of_a_deck_is_the_backtests():
+    """The scorer parses a deck into ATCF records; the backtest parses its text. Same forecasts, same analyses."""
+    from hazardpulse.hurricane import atcf
+    text = "\n".join([
+        "AL, 09, 2026100712, 01, CARQ,   0, 222N,  939W,  40, 1002, TS,  34, NEQ,",
+        "AL, 09, 2026100712, 01, CARQ,   0, 222N,  939W,  45, 1002, TS,  50, NEQ,",
+        "AL, 09, 2026100712, 03, GDMI,  24, 240N,  950W,  55,    0, TS,  34, NEQ,",
+        "AL, 09, 2026100712, 03, GDMI,  24, 241N,  951W,  56,    0, TS,  50, NEQ,",
+        "AL, 09, 2026100712, 03, AVNI,  48, 259N,  969W,   0,    0, XX,   0, NEQ,",
+        "AL, 09, 2026100718, 03, HCCA,  12, 230N,  945W,  50,    0, XX,   0, NEQ,",
+    ])
+    a = cs.parse_deck("al092026", text, cs.TRACK_MEMBERS)
+    b = cs.StormDeck.from_records("al092026", atcf.parse_atcf_deck(text), cs.TRACK_MEMBERS)
+    assert a.techs == b.techs and a.cycles == b.cycles
+    assert np.array_equal(a.fc, b.fc, equal_nan=True) and np.array_equal(a.carq, b.carq, equal_nan=True)
+
+
 def test_geometry_round_trips():
     la, lo = cs.shift_km(25.0, -80.0, 100.0, -50.0)
     e = cs.error_vector_km(la, lo, 25.0, -80.0)

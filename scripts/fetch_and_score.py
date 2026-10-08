@@ -1020,6 +1020,55 @@ def shadow_forecasts(case: dict[str, object], v9: dict[str, object] | None, v10:
     return out
 
 
+def season_decks_for_tc1(adeck_index: dict, adeck_by_storm: dict[str, list[ATCFRecord]], now: dt.datetime,
+                         fetch=None) -> list:
+    """Every numbered NHC storm deck of the current season, for TC1 (program TC1 amendment 1): the decks this run
+    already read, the rest fetched now. Strict: a deck the index lists but this run cannot read raises -- the
+    season replay without one storm's verifications would be a different forecast under TC1's name."""
+    from hazardpulse.hurricane import consensus as cs, tc1_live
+
+    def read(sid: str) -> list[ATCFRecord]:
+        data = fetch_bytes(f"{REALTIME_ADECK_INDEX}a{sid.lower()}.dat.gz", namespace="atcf_realtime", use_cache=False)
+        return parse_atcf_deck(gzip.decompress(data).decode("utf-8", errors="replace"))
+    season = str(now.year)
+    decks = []
+    for sid in sorted(adeck_index):
+        sid = str(sid).upper()
+        if not (sid[:2] in ("AL", "EP", "CP") and sid.endswith(season) and sid[2:4].isdigit() and int(sid[2:4]) < 80):
+            continue
+        records = adeck_by_storm.get(sid) or (fetch or read)(sid)
+        if not records:
+            raise RuntimeError(f"the {sid} a-deck could not be read")
+        decks.append(cs.StormDeck.from_records(sid.lower(), records, tc1_live.TECHS))
+    return decks
+
+
+def attach_tc1(scored: list[dict[str, object]], adeck_index: dict, adeck_by_storm: dict[str, list[ATCFRecord]],
+               now: dt.datetime, fetch=None) -> int:
+    """Our track and intensity forecast (TC1) on every NHC storm scored this run, as ``tc1``. It never touches the
+    published RI number; when it cannot be made, the storms go without it and the log says why."""
+    from hazardpulse.hurricane import tc1_live
+    nhc = [s for s in scored if str(s.get("storm_id", "")).upper()[:2] in ("AL", "EP", "CP")
+           and (s.get("ri_inputs") or {}).get("analysis_model") != "JTWC"]
+    if not nhc:
+        return 0
+    try:
+        state = tc1_live.load_state()
+        decks = season_decks_for_tc1(adeck_index, adeck_by_storm, now, fetch)
+        got = tc1_live.forecast(state, decks, [str(s["storm_id"]).lower() for s in nhc], now)
+    except Exception as exc:  # noqa: BLE001 -- TC1 is recorded beside the published forecast, never in its way
+        print(f"  TC1: not issued ({type(exc).__name__}: {exc})")
+        return 0
+    n = 0
+    for s in nhc:
+        rec = got.get(str(s["storm_id"]).lower())
+        if rec:
+            s["tc1"] = rec
+            n += 1
+    print(f"  TC1: track and intensity for {n} of {len(nhc)} NHC storms, from {len(decks)} season decks")
+    return n
+
+
 def analysis_cycles(records: list[ATCFRecord]) -> list[dt.datetime]:
     """Every cycle of a deck that build_live_case can build (an analysis with a wind)."""
     groups: dict[dt.datetime, dict[tuple[str, int], ATCFRecord]] = {}
@@ -1625,6 +1674,10 @@ def main() -> None:
             print(f"  Catch-up: skipped ({type(exc).__name__}: {exc})")
         for c in catch_up:
             print(f"  Catch-up (shadow only): {c['storm_id']} {c['issue_time']}, {c['lag_hours']:.1f} h after t")
+
+    # TC1 (docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md amendment 1): our track and intensity forecast, replayed
+    # over the whole season's decks from the models saved after the last season
+    attach_tc1(scored, adeck_index, adeck_by_storm, now)
 
     # Trust layer: recalibrate RI probabilities on live outcomes + attach honest
     # [conf_lo, conf_hi] bands + Ed25519-signed receipts. Fail-safe: the model's

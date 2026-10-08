@@ -5,9 +5,11 @@ from hazardpulse.site import fmt, maps
 from hazardpulse.site.data import SiteData, basin_of, official_center, ri_source_label, storm_name
 from hazardpulse.site.hazards import HURRICANE
 from hazardpulse.site.pages import common
-from hazardpulse.site.places import coords, describe_far
+from hazardpulse.site.places import coords, describe_far, haversine_km
 
 esc = fmt.esc
+TC1_LEADS = ("12", "24", "36", "48", "72", "96", "120")
+KM_PER_NM = 1.852
 
 USED = {"DTOP": "DTOPS, as issued", "RII": "SHIPS-RII (DTOPS was missing for this cycle)"}
 
@@ -93,6 +95,76 @@ def _late_fix_note(composition: dict | None, s: dict) -> str | None:
             f"{fmt.num(jt.get('log_loss_climatology'), 3)} for always forecasting the average).")
 
 
+def _tc1_table(s: dict) -> str:
+    """Our track and intensity forecast (TC1) beside NHC's official one, lead by lead, for one storm."""
+    tc = s.get("tc1") or {}
+    ours, ofcl = tc.get("TC1") or {}, tc.get("OFCL") or {}
+    if not ours:
+        return ""
+
+    def pos(p):
+        return coords(p["lat"], p["lon"], 1) if p and p.get("lat") is not None and p.get("lon") is not None else "&mdash;"
+
+    def kt(p):
+        return f"{fmt.num(p['vmax_kt'])} kt" if p and p.get("vmax_kt") is not None else "&mdash;"
+
+    def apart(a, b):
+        if not (a and b) or None in (a.get("lat"), a.get("lon"), b.get("lat"), b.get("lon")):
+            return "&mdash;"
+        return f"{fmt.num(haversine_km(a['lat'], a['lon'], b['lat'], b['lon']) / KM_PER_NM)} n mi"
+
+    rows = [[f"{lead} h", pos(ours.get(lead)), kt(ours.get(lead)), pos(ofcl.get(lead)), kt(ofcl.get(lead)),
+             apart(ours.get(lead), ofcl.get(lead))]
+            for lead in TC1_LEADS if ours.get(lead) or ofcl.get(lead)]
+    caption = (f"Forecast from the {fmt.utc(tc.get('cycle'))} cycle: HazardPulse TC1 beside the National Hurricane "
+               "Center&rsquo;s official forecast. Positions are the storm&rsquo;s centre; winds are maximum sustained "
+               "(1-minute) winds.")
+    body = common.table(["Hours ahead", "HazardPulse position", "HazardPulse winds", "NHC position", "NHC winds",
+                         "Apart"], rows, cls="tc1-table", caption=caption, num_cols=(2, 4, 5))
+    body += '<p class="muted"><a href="#track">How this forecast is made and how it has scored</a></p>'
+    return common.disclosure("Where it is going: our track and intensity forecast", body, cls="tc1")
+
+
+def _tc1_section(d: SiteData) -> str:
+    """How TC1 is made and how it scored -- every number from the results bound to the served models."""
+    tc = (d.evidence.get("hurricane") or {}).get("tc1")
+    if not tc:
+        return ""
+    tr, iv = tc["track"], tc["intensity"]
+    seasons = tc.get("seasons") or []
+    span = f"{seasons[0]}&ndash;{seasons[-1]}" if seasons else "the test seasons"
+
+    def ci(x):
+        return f"[{fmt.num(x['ci'][0], 1)}, {fmt.num(x['ci'][1], 1)}]" if x and x.get("ci") else ""
+
+    track_claim = tr["vs_ofcl"]["claim"]
+    body = (
+        "<p>For every storm the National Hurricane Center follows, HazardPulse issues its own track and intensity "
+        "forecast, TC1, out to five days. It combines the computer models NHC publishes in real time. Each model is "
+        "weighted by how it has actually performed: its errors are re-measured every six hours against where the "
+        "storm turned out to be, so a model that is doing well this season counts for more, and a new one earns its "
+        "weight as it proves itself.</p>"
+        f"<p><strong>Track.</strong> Tested in advance on the {span} seasons, our track forecasts were off by "
+        f"{fmt.num(tr['errors']['TC1'], 1)} nautical miles on average over one to five days. NHC&rsquo;s official "
+        f"forecast was off by {fmt.num(tr['errors']['OFCL'], 1)}, and its best automatic guidance (HCCA) by "
+        f"{fmt.num(tr['errors']['HCCA'], 1)}. "
+        + ("That beats the official forecast at the confidence the test required."
+           if track_claim else
+           "Against the official forecast that is a tie at the confidence the test required: the difference, "
+           f"{fmt.num(tr['vs_ofcl']['d'], 1)} n mi {ci(tr['vs_ofcl'])}, could be chance. ")
+        + ("Against HCCA it is a gain beyond chance"
+           if tr["vs_hcca"].get("ci") and tr["vs_hcca"]["ci"][1] < 0 else "Against HCCA it is a tie")
+        + f": {fmt.num(tr['vs_hcca']['d'], 1)} n mi {ci(tr['vs_hcca'])}.</p>"
+        f"<p><strong>Intensity.</strong> Our intensity forecasts were off by {fmt.num(iv['errors']['TC1'], 1)} knots "
+        f"on average, NHC&rsquo;s official ones by {fmt.num(iv['errors']['OFCL'], 1)}: "
+        + ("better than the official forecast at the confidence the test required."
+           if iv["vs_ofcl"]["claim"] else f"a tie ({fmt.num(iv['vs_ofcl']['d'], 1)} kt {ci(iv['vs_ofcl'])}).")
+        + " Intensity is where every forecast struggles most.</p>"
+        "<p>Follow the National Hurricane Center for decisions. Ours is shown beside theirs so the two can be "
+        'compared as the season goes on. <a href="/methods/#hurricane">The full test</a></p>')
+    return common.section("track", "Our track and intensity forecast", body)
+
+
 def _storm_card(s: dict, composition: dict | None = None) -> str:
     sid = esc(s.get("storm_id"))
     name = esc(storm_name(s))
@@ -120,7 +192,7 @@ def _storm_card(s: dict, composition: dict | None = None) -> str:
             f'<div class="storm-card-head"><div><h3>{name}</h3><p class="muted">{esc(basin_of(s))} &middot; '
             f'{sid}</p></div><div class="storm-card-figure">{fmt.chance(s.get("ri_probability"), big=True)}'
             f'<span>chance of rapid intensification, next 24 hours &middot; source: {esc(ri_source_label(s))}</span>'
-            f"</div></div>{common.facts(rows)}</article>")
+            f"</div></div>{common.facts(rows)}{_tc1_table(s)}</article>")
 
 
 def _sources(d: SiteData) -> str:
@@ -240,6 +312,7 @@ def page(d: SiteData) -> str:
                                                                   "active anywhere right now. This page updates "
                                                                   "after every forecast cycle.</p>")
     body += common.section("sources", "Where each number comes from", _sources(d))
+    body += _tc1_section(d)
     body += _ours_section(d)
     body += common.section("check", "Check this forecast", common.check_this(
         hu.get("forecast_id"), scored_note="How the published numbers scored on past seasons, and how live forecasts "

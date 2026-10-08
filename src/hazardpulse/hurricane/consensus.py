@@ -98,6 +98,21 @@ class StormDeck:
             C[row[c]] = [math.nan if x is None else x for x in val]
         return cls(storm, basin, techs, cycles, F, C)
 
+    @classmethod
+    def from_records(cls, storm: str, records: Iterable, techs: Iterable[str]) -> "StormDeck":
+        """From a parsed deck (``atcf.parse_atcf_deck``, the live scorer's read), keeping the first record of each
+        (cycle, tech, tau) as ``parse_deck`` keeps the first line."""
+        want = frozenset(techs)
+        fc: dict = {}
+        carq: dict = {}
+        for r in records:
+            if r.model == "CARQ":
+                if r.tau_hours == 0:
+                    carq.setdefault(r.cycle, (r.lat, r.lon, r.vmax_kt))
+            elif r.model in want and r.tau_hours in _LEAD_IX:
+                fc.setdefault((r.cycle, r.model), {}).setdefault(r.tau_hours, (r.lat, r.lon, r.vmax_kt))
+        return cls.from_dicts(storm, storm[:2].upper(), fc, carq)
+
     def get(self, t: dt.datetime, tech: str, lead: int) -> tuple[float, float, float] | None:
         i, j = self._row.get(t), self._tech.get(tech)
         if i is None or j is None:
@@ -214,6 +229,21 @@ class _Errors:
                 self.S[(m, n)] = self.S.get((m, n), 0.0) + v
                 self.W[(m, n)] = self.W.get((m, n), 0.0) + 1.0
 
+    def to_dict(self) -> dict:
+        """JSON-safe and exact: a float's JSON text is its repr, which reads back to the same double."""
+        return {"t": None if self.t is None else self.t.isoformat(),
+                "S": [[m, n, v] for (m, n), v in self.S.items()], "W": [[m, n, v] for (m, n), v in self.W.items()],
+                "B": {m: [float(x) for x in v] for m, v in self.B.items()}}
+
+    @classmethod
+    def from_dict(cls, d: Mapping, dim: int) -> "_Errors":
+        e = cls(dim)
+        e.t = None if d["t"] is None else dt.datetime.fromisoformat(d["t"])
+        e.S = {(m, n): float(v) for m, n, v in d["S"]}
+        e.W = {(m, n): float(v) for m, n, v in d["W"]}
+        e.B = {m: np.array(v, dtype=np.float64) for m, v in d["B"].items()}
+        return e
+
 
 def _nonneg_min_variance(C: np.ndarray) -> np.ndarray:
     """argmin w'Cw subject to sum(w) = 1, w >= 0: the unconstrained solution on an active set, dropping the most
@@ -248,6 +278,20 @@ class OnlineConsensus:
         if key not in self.state:
             self.state[key] = _Errors(self.dim)
         return self.state[key]
+
+    def to_dict(self) -> dict:
+        """Everything the model has learned, with its config: ``from_dict`` continues it bit for bit."""
+        c = self.cfg
+        return {"kind": self.kind,
+                "config": {"half_life_days": c.half_life_days, "shrink": c.shrink, "debias": c.debias,
+                           "storm_boost": c.storm_boost, "prior_n": c.prior_n, "include_official": c.include_official},
+                "state": [[list(k), v.to_dict()] for k, v in self.state.items()]}
+
+    @classmethod
+    def from_dict(cls, d: Mapping) -> "OnlineConsensus":
+        m = cls(Config(**d["config"]), d["kind"])
+        m.state = {tuple(k): _Errors.from_dict(v, m.dim) for k, v in d["state"]}
+        return m
 
     def usable(self, fc) -> bool:
         """Does a (lat, lon, vmax) carry what this kind needs (None and NaN are absent)?"""
@@ -345,12 +389,20 @@ def run(decks: Iterable[StormDeck], config: Config, kind: str, cycles: Iterable[
     for the requested ``cycles`` (every analysis cycle when None; weights None unless ``keep_weights``). At each
     time t, everything that verifies at t is learned before anything is issued at t: CARQ at t is in the deck
     when the forecast is made (t + 3 h 30)."""
-    model = OnlineConsensus(config, kind)
+    return replay(OnlineConsensus(config, kind), decks, cycles, keep_weights)
+
+
+def replay(model: OnlineConsensus, decks: Iterable[StormDeck], cycles: Iterable[tuple[str, dt.datetime]] | None = None,
+           keep_weights: bool = True, after: dt.datetime | None = None, until: dt.datetime | None = None):
+    """``run`` on a model that may already have learned (``OnlineConsensus.from_dict``), over the analysis times
+    in ``(after, until]``. Replaying a season from the state at its start gives what one pass over every season
+    gives, bit for bit (tests/test_hurricane_consensus.py)."""
     decks = {d.storm: d for d in decks}
     times: dict[dt.datetime, list[str]] = {}
     for d in decks.values():
         for t in d.analysis_times:
-            times.setdefault(t, []).append(d.storm)
+            if (after is None or t > after) and (until is None or t <= until):
+                times.setdefault(t, []).append(d.storm)
     wanted = None if cycles is None else set(cycles)
     out = {}
     for t in sorted(times):
