@@ -66,14 +66,17 @@ def _one(job: tuple) -> dict:
 def add_h8(rows: list[dict], adeck) -> dict:
     """Write H8 into each row's features: the vortex (``v0``, the CARQ RMW, ``abs_lat``) at t and amendment 5's
     two images. Returns coverage counts."""
-    texts: dict[str, str] = {}
+    # only each deck's CARQ lines are kept -- the only lines carq_rmw_nm reads. Holding every whole deck took the
+    # first run past 2.4 GB, and rescanning one per row was most of its CPU.
+    carq: dict[str, str] = {}
     jobs = []
     for r in rows:
         aid = r["atcf_id"]
-        if aid not in texts:
+        if aid not in carq:
             p = adeck(aid)
-            texts[aid] = gzip.decompress(p.read_bytes()).decode("utf-8", "replace") if p.exists() else ""
-        rmw = br.carq_rmw_nm(texts[aid], r["dtg"])
+            text = gzip.decompress(p.read_bytes()).decode("utf-8", "replace") if p.exists() else ""
+            carq[aid] = "\n".join(line for line in text.splitlines() if "CARQ" in line)
+        rmw = br.carq_rmw_nm(carq[aid], r["dtg"])
         jobs.append((aid, r["dtg"], float(r["f"]["v0"]), rmw, float(r["f"]["abs_lat"])))
     path = v9.WORK / f"h8_features_{code_digest()[:16]}.json"
     cache = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
