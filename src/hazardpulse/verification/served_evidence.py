@@ -518,6 +518,7 @@ def hurricane_evidence(root: Path = ROOT) -> dict | None:
         "adversary": {"verdict": adv.get("verdict"), "statement": adv.get("surviving_statement")} if adv else None,
         "other_basins": other_basins,
         "ours": ours_hurricane(root),
+        "tc1": tc1_hurricane(root),
     }
 
 
@@ -646,6 +647,41 @@ def _ours_challengers(root: Path, champion_dev: dict, pros: dict) -> list[dict]:
                     "level": _finite((entrant.get("claim_rule") or {}).get("level")),
                     "matured_and_scored": entrant.get("matured_and_scored", 0),
                     "versus_champion": versus if isinstance(versus, dict) else None})
+    return out
+
+
+TC1_DIR = "results/hurricane_tc1"
+
+
+def tc1_hurricane(root: Path = ROOT) -> dict | None:
+    """Our track and intensity forecast (docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md): its registered DEV numbers,
+    bound to the saved models the scorer serves -- refused when the state was not made from this selection and
+    these DEV results (content digests recorded in the state)."""
+    from hazardpulse.hurricane import tc1_live
+
+    d = root / TC1_DIR
+    state_p, sel_p, dev_p = d / "state.json", d / "selection.json", d / "dev.json"
+    if not (state_p.exists() and sel_p.exists() and dev_p.exists()):
+        return None
+    state = json.loads(state_p.read_text(encoding="utf-8"))
+    if state.get("selection_sha256") != tc1_live.sha256(sel_p) or state.get("dev_sha256") != tc1_live.sha256(dev_p):
+        raise EvidenceError("results/hurricane_tc1/state.json was not made from the selection and DEV results on disk")
+    dev = json.loads(dev_p.read_text(encoding="utf-8"))
+    s26 = _read(root, f"{TC1_DIR}/season_2026.json") or {}
+    out = {"seasons": dev.get("seasons"), "claim_level": _finite(dev.get("claim_level")),
+           "leads": dev.get("scored_leads"), "season_2026_at": s26.get("generated_at")}
+    for kind, second in (("track", "TVCN"), ("intensity", "IVCN")):
+        k = dev[kind]
+        err = {p: _finite((k["errors"].get(p) or {}).get("mean_over_leads")) for p in ("TC1", "TC1+O", "OFCL", "HCCA", second)}
+        claim = k["claims"]["TC1-OFCL"]
+        hcca = k["reported"]["TC1-HCCA"]
+        r26 = ((s26.get(kind) or {}).get("reported") or {}).get("TC1-OFCL") or {}
+        out[kind] = {"errors": err, "second": second,
+                     "vs_ofcl": {"d": _finite(claim["mean_over_leads"]["d"]), "ci": _ci(claim["mean_over_leads"]["ci"]),
+                                 "claim": bool(claim.get("claim"))},
+                     "vs_hcca": {"d": _finite(hcca["mean_over_leads"]["d"]), "ci": _ci(hcca["mean_over_leads"]["ci"])},
+                     "season_2026_vs_ofcl": ({"d": _finite(r26["mean_over_leads"]["d"]),
+                                              "ci": _ci(r26["mean_over_leads"]["ci"])} if r26.get("mean_over_leads") else None)}
     return out
 
 

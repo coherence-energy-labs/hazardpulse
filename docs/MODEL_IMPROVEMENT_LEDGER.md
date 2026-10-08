@@ -128,6 +128,21 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
      that on the live record.
 3. **TC2. Intensity conditioned on our RI probability.** Intensity is where TC1 adds nothing, and RI is where
    every consensus fails.
+4. **TC3. Coherence steering (screened-Poisson PV inversion of the GFS analysis) -- ranked LOW, with the
+   reason.** The inversion is exact physics for the steering flow, but the information is already in TC1's
+   members: each global model integrates its own analysis's steering, and TC1 weights them by how they verify.
+   - What could still help: steering *strength* as a regime signal. With weak steering the members spread and
+     the right weights differ.
+   - **The cheap test that decides it.** Do TC1's DEV track errors grow with weak analysis steering (850-200 hPa
+     layer mean from GFS at t), beyond what the members' spread already shows? If not, TC3 is dead without
+     building the inversion.
+5. **G1. Genesis probability for invests, against NHC's outlook (TWO).** Feasibility checked 2026-10-08.
+   - NHC's ATCF archive keeps no invest decks: `atcf/archive/2024/` has 57 AL files, none numbered 90-99.
+   - Invest decks exist only in the season's real-time `aid_public` and `btk`.
+   - History must come from UCAR RAL's real-time archive (to be confirmed for 2020+).
+   - NHC's 2-day and 7-day probabilities are in its graphical TWO shapefile archive (`nhc.noaa.gov/gis`), as
+     outlook areas. Matching an area to an invest and to the storm it became is the core of the work.
+   - Comparator: NHC's own probability, Brier and reliability, on invests that did and did not form.
 
 ### Earthquake
 

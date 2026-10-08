@@ -139,6 +139,40 @@ verifier scores OFCL, and the result is compared with NHC's own published error 
   reproduce NHC's published numbers. The engine was timed on the 2020 warm-up season, where no error was
   computed. The aid inventory (which aids exist in which season) reads inputs only.
 
+## Amendment 1 -- TC1 live (2026-10-08, before the first live forecast)
+
+- **What runs.** The hurricane scorer issues TC1 and TC1+O, track and intensity, for every NHC-area storm it
+  scores (`src/hazardpulse/hurricane/tc1_live.py`; `scripts/fetch_and_score.py` `attach_tc1`).
+  - Each run replays the current season's decks from the models saved after 2025
+    (`results/hurricane_tc1/state.json`, made by `hurricane_tc1.py snapshot`).
+  - That is the backtest's own pass. The snapshot is refused unless replaying the fetched 2026 decks from it
+    gives what one pass over 2020-2026 gives, bit for bit. It passed on 6,618 track and 6,895 intensity
+    forecasts per product.
+  - The state carries content digests of `selection.json` and `dev.json`. The scorer refuses a state made from
+    another selection; the site refuses DEV numbers the state was not made from.
+- **When.** A storm's forecast is for its latest synoptic time t with t + 3 h 30 passed, from the decks as
+  they stand at the run.
+- **Strict inputs.** Every numbered storm deck of the season that NHC's index lists must be read. If one cannot
+  be, TC1 is not issued that run and the log says why. A replay without one storm's verifications would be a
+  different forecast under TC1's name.
+- **Fail-safe.** TC1 never touches the published RI number. Each storm record carries:
+  - `tc1`, with the cycle;
+  - TC1 and TC1+O positions and winds at each lead, with each lead's top weights;
+  - NHC's official forecast from the same deck.
+
+  The record is kept in the run's forecast file.
+- **On the site.** Each NHC storm card shows TC1 beside NHC's official forecast, lead by lead. The hurricane
+  page states TC1's DEV numbers, read from `dev.json` bound to the state. "Beats the official forecast" is said
+  only if a primary claim was met. None was: the track result is stated as a tie with OFCL, and a gain over HCCA.
+- **The live record (prospective, descriptive).** At each look (2026-12-01 and 2027-12-01), the live TC1 and
+  OFCL records are scored with this program's verifier against NHC's best tracks. Same rules, homogeneous
+  cases, storm-block intervals.
+  - **This measures the open risk.** The backtest read final decks, so an aid that arrived after t + 3 h 30
+    counted there; the live record has only what existed at the run.
+  - The live record makes no claim. A claim needs its own registration.
+- **Each season.** In January, `snapshot` is re-run with the finished season added (`season_end` + 1). The
+  scorer refuses a state that does not end with the previous season.
+
 ## Outcome (2026-10-08)
 
 **Selection (CHOOSE 2021-2022, `selection.json`).** Errors are the mean over 24-120 h.
