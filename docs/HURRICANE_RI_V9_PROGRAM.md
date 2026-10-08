@@ -515,6 +515,79 @@ None of these choices depends on outcomes, but all of them change which records 
   fix for the 06Z record. The rebuild has no choice an outcome could steer: the procedure is fixed
   and its control is exact. The disclosure is here so a reader can judge.
 
+## Amendment 8 -- H8: the coherence equation as the vortex's balanced response (2026-10-08 ~17:40Z, before any H8 feature is compared with an outcome)
+
+**Why.** IR (amendment 5) says where the cold cloud is. It does not say whether the vortex can use
+it. A balanced vortex spins up efficiently only from heating held by its own inertial stability:
+heating inside the local Rossby radius `ell = c / I` (Schubert and Hack 1982; Vigh and Schubert
+2009). Heating outside that radius radiates away as gravity waves.
+- That balance is the coherence equation of `hazardpulse.coherence.tau_c_solver` in its
+  Rossby-adjustment form, with a coherence length that varies in space.
+- The earlier uses of the operator here were analogies, and both were killed in scope: the tornado
+  environment field at 9 km and the earthquake CFT signatures (`docs/MODEL_IMPROVEMENT_LEDGER.md`,
+  Killed). In H8 the operator is the physics itself.
+
+**Features (4):** `src/hazardpulse/hurricane/balanced_response.py`, the same code for training and
+live. Every constant is declared in that file and none is fitted to an outcome.
+- **Heating.** `S = max(count - COLD, 0)` (ir_features' COLD), on a storm-centred isotropic 8 km
+  grid of +-400 km. Each cell is the mean of its valid pixels; count 255 is missing.
+- **Coherence length.** `ell(r) = c / I(r)`, with `c` = 50 m/s, from a modified Rankine vortex
+  (decay 0.5) with `I^2 = (f + 2v/r)(f + zeta)`, floored at `f^2`. Its inputs are all at analysis time t:
+  - Vmax = `v0`;
+  - the RMW, read from the cycle's CARQ line (ATCF field 20, nm; 0 means unknown);
+  - `f` at `abs_lat`.
+- **Balanced state.** Solve `lap(tau) - tau / ell^2 + S / ell^2 = 0`, zero at the grid edge, to a
+  relative residual of 1e-8. The solver raises rather than return an uncertified field.
+- **The four features:**
+  - `h8_core_balanced`: the mean of `tau` within the RMW;
+  - `h8_core_heating`: the mean of `S` within the RMW;
+  - `h8_core_retention`: balanced / (heating + 1);
+  - `h8_core_balanced_d6`: core balanced at t + 2 h minus at t - 4 h, with the same vortex.
+  Images and centres are amendment 5's.
+- **NaN** when:
+  - the image is missing;
+  - Vmax or the RMW is missing;
+  - fewer than 50% of the grid cells within 300 km hold a valid pixel.
+- **Inputs measured before this registration** (no outcome read):
+  - CARQ RMW is present on 4,662 of the 4,692 development cycles (missing: 9 in 2020, 20 in 2022, 1 in
+    2024) and on all 586 cycles of 2026.
+  - One solve takes about 0.2 s.
+- `tests/test_balanced_response.py` pins the physics before any outcome:
+  - `ell` is short in the core and tends to `c / f` far away;
+  - heating inside the RMW is retained more than 10x better than the same heating 150 km out;
+  - a stronger, tighter vortex retains more;
+  - missing data give NaN, never a number.
+
+**Candidate:** **H8 = V8 + the 4 H8 features**, with V8's settings and monotone set (the H8 features
+are unconstrained). Rows without IR carry NaN H8.
+
+**Control:** V8, recomputed by the same script, must reproduce amendment 5's development log loss
+(0.1417825586152726, from `hurricane_ri_v10_ir.json`) to 1e-12, or the run stops.
+
+**Carried rule (amendment 5's):** H8 is carried iff its pooled 30/24 log loss AND its pooled
+four-threshold Brier are both below V8's.
+- Reported: paired 95% intervals vs V8, and POD at the HCCA call's false-alarm rate.
+- Reported: amendment 5's drift check for the H8 features.
+- Reported: the share of split gain the H8 features take in the model fitted on all development
+  seasons.
+- All three are descriptive and cannot change the rule.
+
+**2026:** a declared further read (no claim).
+
+**A carried H8 (v10.4).** Before it scores any cycle, an amendment like amendment 6 registers it:
+- live inputs: the IR images and the CARQ RMW;
+- its claim at half of v10.3's error budget (99.84375%), under amendment 4's display rule.
+
+**Known before the result:**
+- **H8 overlaps IR.** For a typical RMW, core heating is close to `ir_mean_0_50`. What is new is
+  where the heating sits relative to the RMW, and the vortex's inertial stability. The expected
+  gain is small; noise the size of amendment 5's dev interval (about +-0.0035 in LL) can decide
+  the point-estimate rule either way.
+- **The constants are textbook values** (c, the Rankine decay), not tuned.
+- **The RMW is an operational estimate.** It is in 5-nm steps and poorly known for weak systems.
+- **The grid edge.** It sits at 400 km, where `ell` far out is about 1,000 km. The core features
+  are governed by the core's `ell` (about 15-60 km). The edge is a declared choice, not a tuned one.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
