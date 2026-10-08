@@ -27,18 +27,26 @@ MODEL_PATH = ri_model.RESULTS / "models" / "hurricane_ri_v10.json"
 V10_2_PATH = ri_model.RESULTS / "models" / "hurricane_ri_v10_2.json"
 # amendment 5's carried challenger (V8: V5 + the 14 IR structure features from GMGSI)
 V10_3_PATH = ri_model.RESULTS / "models" / "hurricane_ri_v10_3.json"
+# amendment 8's carried challenger (H8: V8 + the coherence equation's balanced response to the IR heating)
+V10_4_PATH = ri_model.RESULTS / "models" / "hurricane_ri_v10_4.json"
 GATE_AIDS = ("DSHP", "IVCN", "NNIC")
 
 
 def allowed_feature_sets() -> dict[str, list[str]]:
     """The input sets a v10-schema artifact may declare (the order is the model's)."""
-    from hazardpulse.hurricane import ir_features
+    from hazardpulse.hurricane import balanced_response, ir_features
     base = list(fx.names_for("ONH"))
-    return {"ONH": base, "ONH+IR": base + list(ir_features.IR_NAMES)}
+    ir = base + list(ir_features.IR_NAMES)
+    return {"ONH": base, "ONH+IR": ir, "ONH+IR+H8": ir + list(balanced_response.H8_NAMES)}
 
 
 def needs_ir(art: Mapping) -> bool:
-    return art["feature_names"] == allowed_feature_sets()["ONH+IR"]
+    sets = allowed_feature_sets()
+    return art["feature_names"] in (sets["ONH+IR"], sets["ONH+IR+H8"])
+
+
+def needs_h8(art: Mapping) -> bool:
+    return art["feature_names"] == allowed_feature_sets()["ONH+IR+H8"]
 NOAA_24H = (25, 30, 35, 40)          # the 24-h thresholds NOAA's aids publish
 
 
@@ -52,7 +60,7 @@ def load(path: str | Path = MODEL_PATH) -> tuple[dict, str]:
         raise ValueError(f"{path}: schema {art.get('schema')!r}, expected {SCHEMA!r}")
     names = list(art["feature_names"])
     if names not in allowed_feature_sets().values():
-        raise ValueError(f"{path}: inputs are not a v10 feature set (ONH, or ONH + IR)")
+        raise ValueError(f"{path}: inputs are not a v10 feature set (ONH, ONH + IR, or ONH + IR + H8)")
     for m in art["members"]:
         if m["feature_names"] != names + ["threshold_kt"]:
             raise ValueError(f"{path}: a member's inputs are not the feature set + threshold")
@@ -106,4 +114,7 @@ def predict(art: Mapping, version: str, records: Iterable, cycle, basin: str,
             "inputs": fx.record_inputs(f, art["feature_names"]),
             **({"ir_inputs": {n: (round(float(f[n]), 4) if math.isfinite(float(f.get(n, math.nan))) else None)
                               for n in art["feature_names"] if n.startswith(("ir_", "d_ir_"))}}
-               if needs_ir(art) else {})}
+               if needs_ir(art) else {}),
+            **({"h8_inputs": {n: (float(f[n]) if math.isfinite(float(f.get(n, math.nan))) else None)
+                              for n in art["feature_names"] if n.startswith("h8_")}}
+               if needs_h8(art) else {})}

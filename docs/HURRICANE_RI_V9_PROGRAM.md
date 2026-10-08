@@ -623,6 +623,26 @@ development season. Drift is not flagged; the largest shift is 0.31 SD.
 As registered, v10.4 enters the prospective test only through an amendment written before it scores
 any cycle (amendment 9).
 
+## Amendment 9 -- v10.4 in the prospective test (2026-10-08, before v10.4 scores any cycle)
+
+- **v10.4** = H8 with v10.1's gate. Artifact `results/models/hurricane_ri_v10_4.json`, label "v10.4",
+  inputs ONH + IR + H8. It is refit on every development season by `scripts/hurricane_ri_h8.py export`,
+  which refuses unless:
+  - the refit reproduces amendment 8's 2026 log loss to 1e-12;
+  - V8 there is the served v10.3;
+  - the artifact reproduces the boosters to 1e-9.
+- **Live H8.** The scorer computes H8 once per cycle with the training code (`balanced_response`):
+  - from the same two crops as v10.3's IR, cut from the run's cached GMGSI images;
+  - with `v0` and `abs_lat` from the training feature builder;
+  - with the RMW from the cycle's first CARQ tau-0 line that gives one.
+  The shadow records `h8`: "ok", or which inputs were missing and why. A missing input gives NaN, as in
+  training. Without the IR reader (h5py), v10.4 is not scored at all, as for v10.3.
+- **Its claim** is v10.1's rule at **99.84375%**, half of v10.3's error budget, at the same looks.
+  Its first scored cycle is the first after it is deployed.
+- **Descriptive comparisons:** v10.4 vs v10.1, and v10.4 vs v10.3 (the model it was selected
+  against), on shared cycles.
+- Amendment 4's display rule applies unchanged: the newest carried challenger is v10.4.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;

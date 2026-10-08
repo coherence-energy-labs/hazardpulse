@@ -167,5 +167,88 @@ def select() -> int:
     return 0
 
 
+FIXTURE = ROOT / "tests" / "fixtures" / "hurricane_v9"
+
+
+def export() -> int:
+    """Freeze H8 as results/models/hurricane_ri_v10_4.json (label "v10.4", inputs ONH + IR + H8). Refused unless
+    the refit reproduces the further read's 2026 log loss, V8 here is the served v10.3, and the payloads
+    reproduce the boosters. The fixture storm gains the lab's v10.4 curve and H8 inputs, so the live path is
+    tested without the network (its IR crops are already there, from v10.3's export)."""
+    from hazardpulse.hurricane import ri_v10
+    from hazardpulse.tornado import lgbm_payload as lp
+    rep = json.loads(OUT.read_text(encoding="utf-8"))
+    if rep["carried"] != "H8":
+        raise SystemExit("amendment 8 did not carry H8: nothing to export")
+    rows = v10.load(v10.DEV10)
+    v10ir.add_ir(rows)
+    add_h8(rows, adeck_dev)
+    models, rounds = ch.fit("H8", rows)
+    c26 = v10.cases_2026()
+    v10ir.add_ir(c26)
+    add_h8(c26, adeck_2026)
+    p = ch.predict("H8", models, c26)
+    y = np.array([r["y"] for r in c26])
+    ll = v9.summary(y, p[30], False)["log_loss"]
+    further = rep["further_read_2026"]["results"]
+    want = further["H8"]["summary_30"]["log_loss"]
+    if abs(ll - want) > 1e-12:
+        raise SystemExit(f"refit 2026 LL {ll!r} != the further read's {want!r}")
+    names = list(ch.CANDS["H8"]["names"])
+    if names != ri_v10.allowed_feature_sets()["ONH+IR+H8"]:
+        raise SystemExit("H8's inputs are not the serving module's ONH+IR+H8 set")
+    dev = rep["development"]
+    v10_3 = json.loads(ri_v10.V10_3_PATH.read_text(encoding="utf-8"))
+    if v10_3["provenance"]["dev_2022_2025"]["log_loss"] != dev["V8"]["summary_30"]["log_loss"]:
+        raise SystemExit("V8 here is not the served v10.3")
+    members = [lp.export_booster(m, names + ["threshold_kt"], calibration={"method": "identity", "a": 1.0, "b": 0.0},
+                                 provenance={}) for m in models]
+    art = {"schema": ri_v10.SCHEMA, "model_name": "hurricane_ri_v10_4", "label": "v10.4",
+           "thresholds_kt": list(v10.K), "feature_names": names, "members": members,
+           "provenance": {"program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendment 8)", "candidate": "H8",
+                          "prereg_tag": rep["prereg_tag"], "h8_code_sha256": rep["h8_code_sha256"],
+                          "trained": "NHC cycles 2020-2025 (IR from 2021-07-12)",
+                          "event": "V(t+24 h) - V(t) >= k kt", "rounds": rounds, "seeds": list(v10.SEEDS),
+                          "gate_aids": list(ri_v10.GATE_AIDS), "ir_source": "NOAA GMGSI longwave, hour t+2h and t-4h",
+                          "h8_source": "balanced response lap(tau) - tau/ell^2 + S/ell^2 = 0, ell = c/I(r); "
+                                       "vortex from CARQ v0, RMW and latitude at t",
+                          "monotone_up": [n for n in names if n in ch.M_UP],
+                          "dev_2022_2025": {"log_loss": dev["H8"]["summary_30"]["log_loss"],
+                                            "auc": dev["H8"]["summary_30"]["auc"], "brier4": dev["H8"]["brier4"],
+                                            "champion_label": "v10.3",
+                                            "champion_log_loss": dev["V8"]["summary_30"]["log_loss"],
+                                            "champion_brier4": dev["V8"]["brier4"],
+                                            "d_log_loss_vs_champion_ci": dev["paired"]["d_ll_ci"]},
+                          "season_2026_further_read": {"log_loss": ll,
+                                                       "champion_log_loss": further["V8"]["summary_30"]["log_loss"],
+                                                       "d_log_loss_ci": further["paired"]["d_ll_ci"],
+                                                       "declared": "2026 informed v10's design and amendment 5's "
+                                                                   "read; no claim"}}}
+    ri_v10.V10_4_PATH.write_bytes(ri_v10.canonical_bytes(art))
+    loaded, version = ri_v10.load(ri_v10.V10_4_PATH)
+    X = v9.design(c26, names)
+    worst = max(float(np.max(np.abs(ri_v10.predict_matrix(loaded, X, k) - p[k]))) for k in v10.MULTI)
+    if worst > 1e-9:
+        ri_v10.V10_4_PATH.unlink()
+        raise SystemExit(f"artifact disagrees with the boosters by {worst:.2e}")
+    fix = json.loads((FIXTURE / "expected.json").read_text(encoding="utf-8"))
+    at = {r["dtg"]: i for i, r in enumerate(c26) if r["atcf_id"] == fix["storm"]}
+    for case in fix["cases"]:
+        i = at[case["dtg"]]
+        case["v10_4"] = {str(k): float(p[k][i]) for k in v10.MULTI}
+        case["h8"] = {n: float(c26[i]["f"][n]) for n in br.H8_NAMES}
+    (FIXTURE / "expected.json").write_text(json.dumps(fix, indent=1) + "\n", encoding="utf-8")
+    v9.log(f"{ri_v10.V10_4_PATH.name}: {version}; rounds {rounds}; 2026 LL {ll:.4f} reproduced; artifact = boosters "
+           f"to {worst:.1e}; fixture gained the lab's v10.4 curve and H8 inputs")
+    return 0
+
+
+def main(argv=None) -> int:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("phase", nargs="?", default="select", choices=("select", "export"))
+    return export() if ap.parse_args(argv).phase == "export" else select()
+
+
 if __name__ == "__main__":
-    raise SystemExit(select())
+    raise SystemExit(main())
