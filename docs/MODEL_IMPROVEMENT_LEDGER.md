@@ -109,6 +109,26 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
         balanced heating. It is one more elliptic solve on the same grid.
      - Each needs its own registration; amendment 8's dev data is read.
 
+### Hurricane track and intensity (program TC1, `docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md`)
+
+1. **TC1. DONE (2026-10-08): our own track and intensity forecast** (tag `prereg-tc1`).
+   - **The verifier comes first.** Our verifier reproduces NHC's published OFCL errors: 28/28 pooled cells,
+     and 115/168 single cells with NHC's exact case count. It caught two of our own rule bugs (area by deck id;
+     renamed crossing storms) before any skill number existed.
+   - **Result (DEV 2023-2025):** track 90.74 n mi vs OFCL 92.08 and HCCA 97.61. No claim against OFCL
+     (-2.76 [-8.18, +1.95] at 98.75%). Ahead of HCCA from 72 h (-6.24 [-11.14, -1.36], reported). Intensity
+     ties.
+   - **2026 so far:** track ties OFCL (-0.90). Equal weights would be +15.25 worse, so the online weighting
+     does the work.
+2. **TC1-live. Live, on the site, beside NHC's forecast.** An amendment before the first live forecast:
+   - a persisted online state, updated each run;
+   - the live state equal to the backtest's on the same decks;
+   - each test record made at t + 3 h 30, as the RI program's are.
+   - Open risk: the backtest used final decks, so an aid that arrived after t + 3 h 30 was counted. Measure
+     that on the live record.
+3. **TC2. Intensity conditioned on our RI probability.** Intensity is where TC1 adds nothing, and RI is where
+   every consensus fails.
+
 ### Earthquake
 
 1. **E1. DONE (2026-10-03): S1 = C0 + GEAR1 is served** (`docs/EARTHQUAKE_FORECAST_PROGRAM.md`
