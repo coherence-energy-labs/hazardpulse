@@ -130,3 +130,15 @@ def test_regions_split_the_southern_hemisphere_at_135e_and_the_scope_is_the_regi
     assert ri_j1.scope() == ("WP", "SI")
     assert ri_j1.in_scope("SH", 100.0) and not ri_j1.in_scope("SH", 160.0) and not ri_j1.in_scope("IO", 88.0)
     assert ri_j1.scope(tmp_path / "absent.json") == () and not ri_j1.in_scope("WP", 140.0, tmp_path / "absent.json")
+
+
+def test_the_v82_dependency_hash_is_the_stored_bytes_on_every_checkout(tmp_path):
+    """The first export hashed a Windows CRLF working copy (8a75...), not the bytes git stores (b9b6...)."""
+    art, _ = ri_j1.load()
+    v82 = ROOT / "results" / "models" / "hurricane_ri_v8_2.json"
+    assert art["v82_dependency"]["artifact_sha256"] == ri_j1.lf_sha256(v82)
+    lf, crlf = tmp_path / "lf.json", tmp_path / "crlf.json"
+    body = v82.read_bytes().replace(bytes([13, 10]), bytes([10]))
+    lf.write_bytes(body)
+    crlf.write_bytes(body.replace(bytes([10]), bytes([13, 10])))
+    assert ri_j1.lf_sha256(lf) == ri_j1.lf_sha256(crlf) == art["v82_dependency"]["artifact_sha256"]

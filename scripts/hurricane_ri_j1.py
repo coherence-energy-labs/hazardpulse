@@ -492,7 +492,8 @@ def export(shard_dir: str) -> int:
     dev = rep["development"]
     art = {"schema": ri_j1.SCHEMA, "model_name": "hurricane_ri_j1", "label": ri_j1.LABEL, "feature_names": names,
            "members": members, "live_basins": list(ri_j1.LIVE_JTWC_BASINS), "fix_models": list(ri_j1.FIX_MODELS),
-           "v82_dependency": {"model_version": SERVED, "artifact_sha256": hashlib.sha256(v82_art.read_bytes()).hexdigest()},
+           # the bytes git stores (LF): a Windows checkout's CRLF copy hashed differently (8a75... vs b9b6...)
+           "v82_dependency": {"model_version": SERVED, "artifact_sha256": ri_j1.lf_sha256(v82_art)},
            "provenance": {
                "program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendments 13, 13a, 13b)", "prereg_tag": rep["prereg_tag"],
                "trained": "storms of 2022-2025, all six basins (v8.2 is out of sample on every one)",

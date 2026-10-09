@@ -1205,7 +1205,10 @@ model change and needs its own registration. It is recorded in the ledger as an 
 
 ## Amendment 13b -- J1 in the live record, and the rule that would publish it (2026-10-09, before J1 scores any live cycle)
 
-**Artifact.** `results/models/hurricane_ri_j1.json` (`hurricane_ri_j1-e697b5f52ae2`, label "J1"). It is the
+**Artifact.** `results/models/hurricane_ri_j1.json`, label "J1". Its version is `hurricane_ri_j1-6ffdec7356c1`. It was
+first exported as `-e697b5f52ae2`, whose `v82_dependency.artifact_sha256` was the hash of a Windows CRLF working copy
+of v8.2's artifact, not the bytes git stores. It was re-exported before any live cycle with the stored-bytes hash
+(`ri_j1.lf_sha256`); the members, rounds and 2026 log loss are identical. It is the
 registered candidate refit on storms of 2022-2025 in all six basins, which is exactly the model the 2026 further
 read scored. `scripts/hurricane_ri_j1.py export` refuses to write it unless:
 - the refit reproduces that read's log loss (0.19530223835248706) to 1e-12;

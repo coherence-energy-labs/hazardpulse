@@ -81,6 +81,11 @@ def logit(p: float) -> float:
     return math.log(q / (1 - q))
 
 
+def lf_sha256(path: str | Path) -> str:
+    """sha256 of a text file's bytes with CRLF read as LF -- the bytes git stores, the same on every checkout."""
+    return hashlib.sha256(Path(path).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
 def canonical_bytes(art: Mapping) -> bytes:
     return json.dumps(art, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
 
