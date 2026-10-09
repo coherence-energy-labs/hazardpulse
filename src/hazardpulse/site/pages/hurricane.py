@@ -14,11 +14,21 @@ KM_PER_NM = 1.852
 USED = {"DTOP": "DTOPS, as issued", "RII": "SHIPS-RII (DTOPS was missing for this cycle)"}
 
 
-def _ours(storm: dict) -> dict | None:
-    v = storm.get("ri_v10_shadow") or {}
+def _ours(storm: dict, shown: dict | None) -> dict | None:
+    """The shown model's shadow forecast in this storm's record: its key and label come from the one pointer
+    (``served_evidence.shown_model``), never from this page."""
+    if not shown or not shown.get("shadow_key"):
+        return None
+    v = storm.get(shown["shadow_key"]) or {}
     if v.get("status") != "ok" or v.get("probability") is None:
         return None
     return v
+
+
+def _span(ob: dict | None) -> str:
+    """The years of the other-basins model's test, read from its evaluation."""
+    when = ((ob or {}).get("test") or {}).get("when")
+    return fmt.years(when) if when else "test"
 
 
 def _basis(storm: dict) -> str:
@@ -32,9 +42,10 @@ def _basis(storm: dict) -> str:
             text += f', read from <a href="{esc(url)}" rel="noopener">NHC&rsquo;s SHIPS text for this cycle</a>'
         return text
     status = str((((storm.get("ri_inputs") or {}).get("noaa_aid_stack")) or {}).get("status") or "")
+    who = esc(ri_source_label(storm))            # the record's own label for the model that made the number
     if status.startswith("jtwc_basin") or str(storm.get("basin") or "").upper() not in ("AL", "EP", "CP"):
-        return "HazardPulse v8.2: NOAA publishes no rapid-intensification guidance for this basin"
-    return "HazardPulse v8.2: NOAA&rsquo;s guidance was not usable for this cycle"
+        return f"{who}: NOAA publishes no rapid-intensification guidance for this basin"
+    return f"{who}: NOAA&rsquo;s guidance was not usable for this cycle"
 
 
 def _single_warning(s: dict) -> bool:
@@ -49,10 +60,11 @@ def _single_warning(s: dict) -> bool:
     return str(inputs.get("analysis_model") or "") == "JTWC"
 
 
-def _single_warning_caveat(composition: dict | None, s: dict | None = None) -> str:
+def _single_warning_caveat(ob: dict | None, s: dict | None = None) -> str:
     """A plain warning for a number scored without some of its inputs, with the measured cost when the record's
-    missing inputs are the pattern that was measured (served_evidence: the served model on 2022-2024 West
+    missing inputs are the pattern that was measured (served_evidence: the served model on its test years' West
     Pacific cycles scored from a single warning)."""
+    composition = (ob or {}).get("composition")
     jt = (composition or {}).get("single_jtwc_warning") or {}
     inputs = (s or {}).get("ri_inputs") or {}
     missing = inputs.get("inputs_missing")
@@ -64,7 +76,7 @@ def _single_warning_caveat(composition: dict | None, s: dict | None = None) -> s
     if jt.get("n_missing") and jt.get("log_loss") is not None and jt.get("log_loss_climatology") is not None:
         return (f"Scored from a single JTWC warning, which does not carry the storm&rsquo;s recent track: "
                 f"{jt['n_missing']} of the model&rsquo;s {jt['n_inputs']} inputs are unknown and filled with "
-                "typical values. Scored the same way, the 2022&ndash;2024 West Pacific cycles were barely better "
+                f"typical values. Scored the same way, the {_span(ob)} West Pacific cycles were barely better "
                 "than always forecasting the average (log loss "
                 f"{fmt.num(jt['log_loss'], 3)} against {fmt.num(jt['log_loss_climatology'], 3)}; "
                 f"{fmt.num(jt.get('log_loss_full_inputs'), 3)} with every input). Treat this number as rough.")
@@ -78,9 +90,10 @@ def _which_inputs(names: list[str]) -> str:
     return f"{len(names)} of the model&rsquo;s inputs"
 
 
-def _late_fix_note(composition: dict | None, s: dict) -> str | None:
+def _late_fix_note(ob: dict | None, s: dict) -> str | None:
     """The measured note for a record scored with RAL's history but the warning as its analysis (this cycle's
     fix not yet published) -- only when its missing inputs are exactly the measured pattern."""
+    composition = (ob or {}).get("composition")
     lf = (composition or {}).get("late_best_track_fix") or {}
     jt = (composition or {}).get("single_jtwc_warning") or {}
     inputs = s.get("ri_inputs") or {}
@@ -89,13 +102,23 @@ def _late_fix_note(composition: dict | None, s: dict) -> str | None:
             or missing != list(lf.get("inputs") or [])):
         return None
     return (f"This cycle&rsquo;s best-track fix was not yet published, so {_which_inputs(missing)} are filled with "
-            "typical values; the storm&rsquo;s track and winds are known. Scored the same way, the 2022&ndash;2024 "
+            f"typical values; the storm&rsquo;s track and winds are known. Scored the same way, the {_span(ob)} "
             f"West Pacific cycles had a log loss of {fmt.num(lf['log_loss'], 3)} "
             f"({fmt.num(jt.get('log_loss_full_inputs'), 3)} with every input, "
             f"{fmt.num(jt.get('log_loss_climatology'), 3)} for always forecasting the average).")
 
 
-def _tc1_table(s: dict) -> str:
+def _tc1_version(s: dict, tc1_ev: dict | None) -> str | None:
+    """The TC1 version that made this storm's forecast: the saved models' version, named only when the record says
+    it was made from them (the same selection, replayed from the same season's end)."""
+    tc = s.get("tc1") or {}
+    if (tc1_ev and tc1_ev.get("model_version") and tc.get("selection_sha256") == tc1_ev.get("selection_sha256")
+            and str(tc.get("season_state_end")) == str(tc1_ev.get("season_end"))):
+        return tc1_ev["model_version"]
+    return None
+
+
+def _tc1_table(s: dict, tc1_ev: dict | None = None) -> str:
     """Our track and intensity forecast (TC1) beside NHC's official one, lead by lead, for one storm."""
     tc = s.get("tc1") or {}
     ours, ofcl = tc.get("TC1") or {}, tc.get("OFCL") or {}
@@ -121,12 +144,21 @@ def _tc1_table(s: dict) -> str:
                "(1-minute) winds.")
     body = common.table(["Hours ahead", "HazardPulse position", "HazardPulse winds", "NHC position", "NHC winds",
                          "Apart"], rows, cls="tc1-table", caption=caption, num_cols=(2, 4, 5))
-    body += '<p class="muted"><a href="#track">How this forecast is made and how it has scored</a></p>'
+    version = _tc1_version(s, tc1_ev)
+    body += ('<p class="muted">' + (f"Model <code>{esc(version)}</code> &middot; " if version else "")
+             + '<a href="#track">How this forecast is made and how it has scored</a></p>')
     return common.disclosure("Where it is going: our track and intensity forecast", body, cls="tc1")
 
 
+def _level(x) -> str:
+    """A confidence level read from a results file: 0.9875 -> 98.75%."""
+    return "&mdash;" if x is None else f"{100 * float(x):.4f}".rstrip("0").rstrip(".") + "%"
+
+
 def _tc1_section(d: SiteData) -> str:
-    """How TC1 is made and how it scored -- every number from the results bound to the served models."""
+    """How TC1 is made and how it scored -- every number, and every confidence level, from the results bound to the
+    served models. The claim against NHC's official forecast is the test's; the comparison with HCCA is descriptive
+    and says so (until 2026-10-09 it read "a gain beyond chance" beside the claim's tie)."""
     tc = (d.evidence.get("hurricane") or {}).get("tc1")
     if not tc:
         return ""
@@ -138,39 +170,66 @@ def _tc1_section(d: SiteData) -> str:
         return f"[{fmt.num(x['ci'][0], 1)}, {fmt.num(x['ci'][1], 1)}]" if x and x.get("ci") else ""
 
     track_claim = tr["vs_ofcl"]["claim"]
+    hcca = tr.get("vs_hcca") or {}
+    per = hcca.get("per_lead") or {}
+    leads = sorted(per, key=int)
+    ahead_from = next((lead for i, lead in enumerate(leads)
+                       if all((per[x].get("ci") or [0, 0])[1] < 0 for x in leads[i:])), None)
+    hcca_ahead = bool(hcca.get("ci") and hcca["ci"][1] < 0)
+    s26, i26 = tr.get("season_2026_vs_ofcl"), iv.get("season_2026_vs_ofcl")
+    o = tr.get("tc1o_vs_ofcl")
     body = (
         "<p>For every storm the National Hurricane Center follows, HazardPulse issues its own track and intensity "
         "forecast, TC1, out to five days. It combines the computer models NHC publishes in real time. Each model is "
         "weighted by how it has actually performed: its errors are re-measured every six hours against where the "
         "storm turned out to be, so a model that is doing well this season counts for more, and a new one earns its "
-        "weight as it proves itself.</p>"
+        "weight as it proves itself."
+        + (f" Model <code>{esc(tc['model_version'])}</code>." if tc.get("model_version") else "") + "</p>"
         f"<p><strong>Track.</strong> Tested in advance on the {span} seasons, our track forecasts were off by "
         f"{fmt.num(tr['errors']['TC1'], 1)} nautical miles on average over one to five days. NHC&rsquo;s official "
         f"forecast was off by {fmt.num(tr['errors']['OFCL'], 1)}, and its best automatic guidance (HCCA) by "
         f"{fmt.num(tr['errors']['HCCA'], 1)}. "
-        + ("That beats the official forecast at the confidence the test required."
+        + ("That beats the official forecast at the confidence the test required "
+           f"({_level(tr['vs_ofcl'].get('level'))}). "
            if track_claim else
-           "Against the official forecast that is a tie at the confidence the test required: the difference, "
-           f"{fmt.num(tr['vs_ofcl']['d'], 1)} n mi {ci(tr['vs_ofcl'])}, could be chance. ")
-        + ("Against HCCA it is a gain beyond chance"
-           if tr["vs_hcca"].get("ci") and tr["vs_hcca"]["ci"][1] < 0 else "Against HCCA it is a tie")
-        + f": {fmt.num(tr['vs_hcca']['d'], 1)} n mi {ci(tr['vs_hcca'])}.</p>"
+           "Against the official forecast that is a tie at the confidence the test required "
+           f"({_level(tr['vs_ofcl'].get('level'))}): the difference, {fmt.num(tr['vs_ofcl']['d'], 1)} n mi "
+           f"{ci(tr['vs_ofcl'])}, could be chance. ")
+        + (f"Against HCCA, in a comparison the test reported but did not make a claim of ({_level(hcca.get('level'))} "
+           "interval), it is ahead" + (f" at every lead from {ahead_from} hours" if ahead_from else "")
+           if hcca_ahead else
+           f"Against HCCA, in a comparison the test reported but did not make a claim of ({_level(hcca.get('level'))} "
+           "interval), it is a tie")
+        + f": {fmt.num(hcca.get('d'), 1)} n mi {ci(hcca)}.</p>"
         f"<p><strong>Intensity.</strong> Our intensity forecasts were off by {fmt.num(iv['errors']['TC1'], 1)} knots "
         f"on average, NHC&rsquo;s official ones by {fmt.num(iv['errors']['OFCL'], 1)}: "
         + ("better than the official forecast at the confidence the test required."
            if iv["vs_ofcl"]["claim"] else f"a tie ({fmt.num(iv['vs_ofcl']['d'], 1)} kt {ci(iv['vs_ofcl'])}).")
         + " Intensity is where every forecast struggles most.</p>"
-        "<p>Follow the National Hurricane Center for decisions. Ours is shown beside theirs so the two can be "
-        'compared as the season goes on. <a href="/methods/#hurricane">The full test</a></p>')
+        + (f"<p><strong>2026 so far.</strong> Against NHC&rsquo;s official forecast on this season&rsquo;s storms, "
+           f"scored against NHC&rsquo;s operational best tracks: track {fmt.num(s26['d'], 1)} n mi {ci(s26)}"
+           + (f", intensity {fmt.num(i26['d'], 1)} kt {ci(i26)}" if i26 else "")
+           + f" ({_level(s26.get('level'))} intervals). A season still in progress, so no claim is made from it.</p>"
+           if s26 else "")
+        + ("<p><strong>TC1+O</strong>, the same weighting with NHC&rsquo;s official forecast as one more member, "
+           f"is recorded too: its track was off by {fmt.num(tr['errors']['TC1+O'], 1)} n mi on {span}, "
+           f"{fmt.num(o['d'], 1)} n mi {ci(o)} against the official forecast, "
+           + ("better at the confidence the test required" if o.get("claim") else
+              f"a tie at the confidence the test required ({_level(o.get('level'))})")
+           + ". It is not shown on the storm cards.</p>" if o else "")
+        + "<p>Follow the National Hurricane Center for decisions. Ours is shown beside theirs so the two can be "
+        'compared as the season goes on. <a href="/methods/#hurricane-track">The full test</a></p>')
     return common.section("track", "Our track and intensity forecast", body)
 
 
-def _storm_card(s: dict, composition: dict | None = None) -> str:
+def _storm_card(s: dict, ob: dict | None = None, shown: dict | None = None, tc1_ev: dict | None = None) -> str:
+    """One storm. ``ob`` is the other-basins model's evidence (its measured caveats), ``shown`` our shown RI
+    model's (its label and the key of its shadow forecast), ``tc1_ev`` TC1's (its version)."""
     sid = esc(s.get("storm_id"))
     name = esc(storm_name(s))
     lat, lon = float(s["lat"]), float(s["lon"])
     center, center_url = official_center(s)
-    ours = _ours(s)
+    ours = _ours(s, shown)
     rows = [
         ("Strength", f"{esc(s.get('category') or '&mdash;')}: {fmt.num(s.get('vmax_kt'))} kt maximum sustained "
                      "winds" + (f", {fmt.num(s.get('mslp_hpa'))} hPa" if s.get("mslp_hpa") else "")),
@@ -179,12 +238,12 @@ def _storm_card(s: dict, composition: dict | None = None) -> str:
         ("Where the number comes from", _basis(s)),
     ]
     if _single_warning(s):
-        late = _late_fix_note(composition, s)
-        rows.append(("Inputs", late) if late else ("Caution", _single_warning_caveat(composition, s)))
+        late = _late_fix_note(ob, s)
+        rows.append(("Inputs", late) if late else ("Caution", _single_warning_caveat(ob, s)))
     if ours:
         fallback = ("" if ours.get("gate_ok", True) else
                     " (the early intensity guidance was missing for this cycle, so it equals NOAA&rsquo;s DTOPS)")
-        rows.append(("Our experimental model (v10.1)",
+        rows.append((f"Our experimental model ({esc(shown['label'])})",
                      f"{fmt.pct(ours['probability'])}{fallback} &mdash; shown for comparison while it is tested on "
                      'new forecasts; <a href="#ours">what this is</a>'))
     rows.append(("Official forecast", f'<a href="{center_url}" rel="noopener">{center}</a>'))
@@ -192,14 +251,14 @@ def _storm_card(s: dict, composition: dict | None = None) -> str:
             f'<div class="storm-card-head"><div><h3>{name}</h3><p class="muted">{esc(basin_of(s))} &middot; '
             f'{sid}</p></div><div class="storm-card-figure">{fmt.chance(s.get("ri_probability"), big=True)}'
             f'<span>chance of rapid intensification, next 24 hours &middot; source: {esc(ri_source_label(s))}</span>'
-            f"</div></div>{common.facts(rows)}{_tc1_table(s)}</article>")
+            f"</div></div>{common.facts(rows)}{_tc1_table(s, tc1_ev)}</article>")
 
 
 def _sources(d: SiteData) -> str:
     hu = d.evidence.get("hurricane")
     if not hu:
         return ("<p>For storms the National Hurricane Center covers we publish NOAA&rsquo;s own guidance; elsewhere "
-                "our v8.2 model. No final test is bound to the served choice in this build.</p>")
+                "our own model. No final test is bound to the served choice in this build.</p>")
     t = hu["test"]
     beaten = [c["against"] for c in hu.get("claims", []) if c.get("better")]
     seasons = hu.get("chosen_on_seasons") or []
@@ -211,10 +270,30 @@ def _sources(d: SiteData) -> str:
            f"above one that did not {fmt.pct(t.get('auc'), 1)} of the time over {t.get('n', 0):,} forecast cycles "
            f"and {t.get('storms', 0):,} storms"
            + (f", and beat {_join([esc(b) for b in beaten])} on the same cycles" if beaten else "") + ".</p>")
+    label = esc((hu.get("other_basins") or {}).get("label") or "")
     other = ("<p><strong>West Pacific, Indian Ocean and Southern Hemisphere</strong>, where no public "
-             "rapid-intensification guidance exists, and any NHC cycle without usable SHIPS text: our v8.2 model."
+             "rapid-intensification guidance exists, and any NHC cycle without usable SHIPS text: "
+             + (f"our {label} model." if label else "our model.")
              + v82_test_text(hu.get("other_basins")) + "</p>")
     return nhc + other + '<p><a href="/methods/#hurricane">Read the full test</a></p>'
+
+
+def v82_short(other_basins: dict | None) -> str:
+    """One clause on what the other-basins model's test is, for the home page's proof strip: its held-out cycles
+    from every basin (it said by hand, until 2026-10-09, that the model had no test in those basins)."""
+    ob = (other_basins or {}).get("test") or {}
+    label = esc((other_basins or {}).get("label") or "")
+    if not label:
+        return ""
+    comp = (other_basins or {}).get("composition") or {}
+    wp = next((b for b in comp.get("by_basin") or [] if b.get("basin") == "WP"), None)
+    if ob.get("auc") is None or not comp.get("by_basin"):
+        return f"Elsewhere we publish our {label} model"
+    return (f"Elsewhere we publish our {label} model; its method was tested on {int(ob.get('n') or 0):,} held-out "
+            f"{fmt.years(ob.get('when', ''))} cycles from every basin"
+            + (f", {int(wp['n']):,} of them West Pacific" if wp else "")
+            + (", with the published calibration fitted on those same cycles"
+               if comp.get("served_calibration_fitted_on_test_cases") else ""))
 
 
 def v82_test_text(other_basins: dict | None) -> str:
@@ -265,11 +344,18 @@ def _ours_section(d: SiteData) -> str:
     dev = ours.get("dev") or {}
     pr = ours.get("prospective") or {}
     looks = pr.get("look_dates") or []
+    span = fmt.years(ours["dev_period"]) if ours.get("dev_period") else None
+    beat = (dev.get("log_loss") is not None and dev.get("dtops_log_loss") is not None
+            and dev["log_loss"] < dev["dtops_log_loss"])
     body = (
-        "<p>HazardPulse v10.1 is our own rapid-intensification model, built from NOAA&rsquo;s intensity guidance, "
-        "its rapid-intensification probabilities and the official forecast. Over the 2022&ndash;2025 seasons, each "
-        "forecast only from earlier seasons, it scored better than DTOPS: log loss "
-        f"{fmt.num(dev.get('log_loss'), 3)} against {fmt.num(dev.get('dtops_log_loss'), 3)} (lower is better).</p>"
+        f"<p>HazardPulse {esc(ours['label'])} is our own rapid-intensification model, built from NOAA&rsquo;s "
+        "intensity guidance, its rapid-intensification probabilities and the official forecast"
+        + (f", {ours['adds']}" if ours.get("adds") else "") + "."
+        + (f" Over the {span} seasons, each forecast only from earlier seasons, it scored "
+           + ("better than" if beat else "against") + " DTOPS: log loss "
+           f"{fmt.num(dev.get('log_loss'), 3)} against {fmt.num(dev.get('dtops_log_loss'), 3)} (lower is better)."
+           if span and dev.get("dtops_log_loss") is not None else "")
+        + "</p>"
         "<p>That is not yet proof. It is shown beside NOAA&rsquo;s number, never instead of it, while a test written "
         "down in advance scores it on new forecasts"
         + (f"; the verdicts are due on {_join([fmt.date(x) for x in looks])}" if looks else "")
@@ -304,8 +390,10 @@ def page(d: SiteData) -> str:
                              desc="Each ringed marker is an active tropical cyclone, labelled with its name and "
                                   "coloured by its chance of rapid intensification. The cards below give each storm.",
                              legend=fmt.legend("Chance of rapid intensification, next 24 hours"))
-        comp = ((d.evidence.get("hurricane") or {}).get("other_basins") or {}).get("composition")
-        cards = f'<div class="storm-cards">{"".join(_storm_card(s, comp) for s in storms)}</div>'
+        ev = d.evidence.get("hurricane") or {}
+        cards = ('<div class="storm-cards">'
+                 + "".join(_storm_card(s, ev.get("other_basins"), ev.get("ours"), ev.get("tc1")) for s in storms)
+                 + "</div>")
         body = (common.section("storms", "Active storms", notices + themap + cards))
     else:
         body = common.section("storms", "Active storms", notices + '<p class="empty">No tropical cyclones are '

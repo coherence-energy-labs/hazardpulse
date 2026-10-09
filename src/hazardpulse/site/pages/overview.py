@@ -149,10 +149,12 @@ def _proofs(d: SiteData) -> str:
         t = hu["test"]
         beaten = [c["against"] for c in hu.get("claims", []) if c.get("better")]
         name = esc(hu["candidate_name"].split(" (")[0])
+        from hazardpulse.site.pages.hurricane import v82_short
+        elsewhere = v82_short(hu.get("other_basins"))
         cards.append(("hu", fmt.pct(t.get("auc"), 0) if t.get("auc") is not None else "&mdash;",
                       f"ranking accuracy of {name}, the probability we publish for the Atlantic, East and Central "
                       "Pacific" + (f"; in the same test it beat {fmt.join([esc(b) for b in beaten])}" if beaten else "")
-                      + ". Elsewhere we publish our v8.2 model, which has no test in those basins",
+                      + (f". {elsewhere}" if elsewhere else ""),
                       f"The {esc(t.get('when'))} season, scored once, {t.get('n', 0):,} forecast cycles"))
     to = ev.get("tornado")
     if to:

@@ -114,13 +114,14 @@ def test_the_live_record_counts_only_the_versions_published_now(tmp_path, hu_ev)
 
 
 def test_a_number_scored_from_one_jtwc_warning_carries_a_plain_caution(hu_ev):
-    comp = hu_ev["other_basins"]["composition"]
+    ob = hu_ev["other_basins"]
+    comp = ob["composition"]
     wp = {"storm_id": "WP262026", "storm_name": "Choi-Wan", "basin": "WP", "lat": 22.9, "lon": 147.0,
           "vmax_kt": 125, "category": "Category 4", "ri_probability": 0.0177, "ri_source": "v8.2",
           "ri_source_label": "HazardPulse v8.2", "issue_time": "2026-10-04T06:00:00",
           "ri_inputs": {"analysis_model": "JTWC", "noaa_aid_stack": {"status": "jtwc_basin: no guidance"}}}
     assert "Treat this number as rough" in hurricane._storm_card(wp)       # even without the evidence bound
-    card = hurricane._storm_card(wp, comp)
+    card = hurricane._storm_card(wp, ob)
     jt = comp["single_jtwc_warning"]
     assert "Caution" in card and "single JTWC warning" in card and "Treat this number as rough" in card
     assert f"{jt['n_missing']} of the model&rsquo;s {jt['n_inputs']} inputs" in card
@@ -128,4 +129,5 @@ def test_a_number_scored_from_one_jtwc_warning_carries_a_plain_caution(hu_ev):
     assert "1.8%" in card                                                   # the number itself is unchanged
     nhc = dict(wp, storm_id="EP152026", basin="EP", lon=-175.9, ri_source="noaa_aid_stack",
                ri_inputs={"used": "DTOP"})
-    assert "Caution" not in hurricane._storm_card(nhc, comp)
+    assert "Caution" not in hurricane._storm_card(nhc, ob)
+    assert f"the {ob['test']['when'].replace('-', '&ndash;')} West Pacific cycles" in card     # from the evidence

@@ -296,15 +296,20 @@ def check_site(dist: Path | None = None, root: Path | None = None) -> list[str]:
     css = shell.DIST / "assets" / shell.STYLESHEET
     if css.exists() and shell.versioned_stylesheet(css.read_text(encoding="utf-8")) != css.read_text(encoding="utf-8"):
         stale.append(f"/assets/{shell.STYLESHEET}")
+    from hazardpulse.verification import evidence_pages
     for path, html in render(d).items():
         f = page_file(dist, path)
         if not f.exists() or f.read_text(encoding="utf-8") != html:
             stale.append(path)
+        # what the page code writes, not only what is on disk: prose typed in a page module is checked here
+        stale += [f"{path} (contradicted: {c})" for c in evidence_pages.contradictions(html)]
     for p in shell.PAGES.values():
         if p.static and page_file(dist, p.path).exists():
             if shell.rewrapped(p.path, dist) != page_file(dist, p.path).read_text(encoding="utf-8"):
                 stale.append(p.path)
-    from hazardpulse.verification import evidence_pages
+            if page_file(dist, p.path).relative_to(dist).as_posix() not in evidence_pages.BLOCKS:
+                stale += [f"{p.path} (contradicted: {c})"
+                          for c in evidence_pages.contradictions(page_file(dist, p.path).read_text(encoding="utf-8"))]
     ev = {k: v for k, v in d.evidence.items() if not k.startswith("_")}
     stale += [f"/{rel}" for rel in evidence_pages.check_pages(dist, root, ev=ev)]
     for rel, text in ((AREA_INDEX, area_index(d)), (STATUS_INDEX, status_index(d)), (GLOBE_INDEX, globe_index(d))):

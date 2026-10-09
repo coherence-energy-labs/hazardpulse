@@ -128,7 +128,7 @@ def _hurricane_served_versions(d: SiteData) -> dict[str, str]:
     if ev.get("model_version"):
         out[str(ev["model_version"])] = "NOAA DTOPS (SHIPS-RII as fallback), Atlantic, East and Central Pacific"
     if (ev.get("other_basins") or {}).get("model"):
-        out[str(ev["other_basins"]["model"])] = "HazardPulse v8.2, elsewhere"
+        out[str(ev["other_basins"]["model"])] = f"HazardPulse {ev['other_basins'].get('label') or ''}, elsewhere"
     if not out:
         version = (d.verification_by_key.get("hu") or {}).get("model_version")
         if version:
@@ -144,10 +144,11 @@ def _hazard_record_card(d: SiteData, key: str) -> str:
     rows = [("Published model", f"<code>{esc(version)}</code>")]
     if key == "hu":
         comp = ((ev or {}).get("other_basins") or {}).get("composition") or {}
-        v82 = ("HazardPulse v8.2 elsewhere, its method tested on held-out cycles from every basin with best-track "
+        label = esc(((ev or {}).get("other_basins") or {}).get("label") or "")
+        v82 = (f"HazardPulse {label} elsewhere, its method tested on held-out cycles from every basin with best-track "
                "inputs" + ("; the published model&rsquo;s calibration was fitted on those same cycles"
                            if comp.get("served_calibration_fitted_on_test_cases") else "")
-               if comp else "HazardPulse v8.2 elsewhere")
+               if comp and label else "our own model elsewhere")
         rows[0] = ("Published numbers", "NOAA DTOPS (SHIPS-RII as fallback) for the Atlantic, East and Central "
                                         f"Pacific; {v82}")
     rows.append(("Window", h.window))
