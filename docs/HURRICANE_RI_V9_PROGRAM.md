@@ -1142,6 +1142,63 @@ Both controls still pass. The v8.2 control reproduces the artifact's own calibra
 **The served v8.2.** It was trained with basin-crossing storms counted twice. Fixing that is a retrain, so it is a
 model change and needs its own registration. It is recorded in the ledger as an open item, not changed here.
 
+### Amendment 13 outcome (2026-10-09): J1 CARRIED -- satellite IR improves the JTWC-basin model
+
+**Collection** (run 37970155253, commit 376d1a201).
+- 24,606 IR tasks, each exactly once. 24,390 were read; the 216 others are hours with no image in NOAA's GMGSI
+  archive (88 in 2024-09, 49 in 2025-03), and they enter as NaN.
+- 99.1% of rows have the t + 2 h image.
+- Rows sha256 0834ab93..., tasks sha256 385f8819... (in the results file).
+
+**Controls:**
+- v8.2 reproduced its calibration log loss to 1e-12 on its 8,317 cases;
+- the builder reproduced 99.75% of the frozen rows.
+
+**The registered test** (`results/calibration/hurricane_ri_j1.json`): JTWC basins, folds 2024 + 2025, 3,546 cycles,
+158 RI events.
+
+| | log loss | Brier | AUC |
+|---|---|---|---|
+| A: v8.2 as served (the bar) | 0.14121 | 0.03768 | 0.867 |
+| B: J1 without IR (mechanism) | 0.14253 | 0.03794 | 0.870 |
+| **J1** | **0.13360** | **0.03686** | **0.898** |
+
+- **J1 - A:** dLL **-0.00761 [-0.01472, -0.00034]**, dBrier -0.00083 [-0.00304, +0.00133]. Both are below zero, so
+  **J1 is carried.**
+- **J1 - B (what IR adds):** dLL **-0.00892 [-0.01380, -0.00390]**.
+- **Noise control:** IR shuffled within season, minus B, gives dLL +0.00067, -0.00026 and -0.00012 for seeds 1-3.
+  Real IR is more than ten times what shuffled columns give: this is information, not capacity.
+- **Re-learning alone does not help:** B is +0.0013 worse than v8.2. The whole gain comes from the satellite.
+- **Per fold:**
+  - 2024: 0.14766 -> 0.14278 (AUC 0.890 -> 0.906);
+  - 2025: 0.13521 -> 0.12506 (AUC 0.839 -> 0.889).
+- **Per basin:**
+
+  | basin | dLL vs A | events |
+  |---|---|---|
+  | WP | -0.0096 [-0.0247, +0.0045] | 76 |
+  | SH | -0.0082 [-0.0169, +0.0001] | 82 |
+  | NI | +0.0041 | 0 (dBrier +0.0023 [+0.0001, +0.0059]) |
+
+  The North Indian Ocean had no RI event in either test season, so J1's skill there is untested. It forecasts
+  slightly higher where nothing happened.
+- **2026 further read** (no claim; 1,130 JTWC cycles, 90 events, J1 trained on 2022-2025):
+  - log loss 0.2150 -> **0.1953**, dLL **-0.0197 [-0.0355, -0.0034]**;
+  - Brier 0.0622 -> 0.0582, dBrier -0.0040 [-0.0095, +0.0012];
+  - AUC 0.858 -> 0.894.
+
+**Reading.**
+- **Where the information is.** The descriptive probe predicted it, and the registered test confirms it in a new
+  region: without NOAA's aids, the satellite's convective structure is where the remaining RI information lies.
+- **The size.** This is the largest registered improvement in the RI program after amendment 5's, in the region
+  where we publish our own model.
+
+**Next (registered in amendment 13b before any live J1 cycle):**
+- J1 in the live record beside v8.2;
+- its live IR path;
+- what the site shows;
+- the rule that would make it the published number.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
