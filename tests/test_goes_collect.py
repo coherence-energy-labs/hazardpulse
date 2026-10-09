@@ -54,7 +54,7 @@ def _fake_io(monkeypatch, fail_on=None):
 
 def _run(gc, tmp_path, tasks, hours):
     gc.TASKS = tasks
-    shard = int(hours[0].timestamp() // 3600) % 20
+    shard = gc.shard_of(hours[0].strftime("%Y%m%d%H"), 20)
     rc = gc.main(["--shard", str(shard), "--of", "20", "--out", str(tmp_path / "out")])
     return rc, np.load(tmp_path / "out" / f"goes_shard_{shard:02d}_of_20.npz")
 
@@ -79,3 +79,25 @@ def test_a_run_that_reads_nothing_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(g, "polar_recentred", lambda disk, lat, lon: (_ for _ in ()).throw(TypeError("0-d")))
     rc, z = _run(gc, tmp_path, tasks, hours)
     assert rc == 1 and not any(str(s) == "ok" for s in z["status"])
+
+
+def test_shards_are_fixed_by_utc_not_by_the_machines_time_zone():
+    """Run 2's shards 8 and 16, re-run on this machine (EDT), collected other shards' hours. Fails on the naive
+    .timestamp() wherever the local zone is not UTC (here; and on Linux, where TZ is switched below)."""
+    import os
+    import time as _time
+    gc = _collector()
+    want = int(dt.datetime(2024, 9, 1, 5, tzinfo=dt.timezone.utc).timestamp() // 3600) % 20
+    old = os.environ.get("TZ")
+    os.environ["TZ"] = "America/New_York"
+    if hasattr(_time, "tzset"):
+        _time.tzset()
+    try:
+        assert gc.shard_of("2024090105", 20) == want
+    finally:
+        if old is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old
+        if hasattr(_time, "tzset"):
+            _time.tzset()

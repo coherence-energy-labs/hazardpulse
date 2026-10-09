@@ -75,6 +75,13 @@ class _deadline:
         return False
 
 
+def shard_of(hour: str, n: int) -> int:
+    """The shard an hour belongs to: its UTC hour index mod ``n``. A naive datetime's .timestamp() applies the
+    machine's local zone, so a shard re-run here (EDT) collected other shards' hours than the runner's (UTC)."""
+    t = dt.datetime.strptime(hour, "%Y%m%d%H").replace(tzinfo=dt.timezone.utc)
+    return int(t.timestamp() // 3600) % n
+
+
 def task_key(t: dict) -> str:
     return f"{t['storm']}_{t['hour']}_{t['kind']}{('_' + t['cycle']) if t['cycle'] else ''}"
 
@@ -92,7 +99,7 @@ def main(argv=None) -> int:
         tasks = [json.loads(line) for line in fh]
     by_hour: dict[str, list[dict]] = {}
     for t in tasks:
-        if int(dt.datetime.strptime(t["hour"], "%Y%m%d%H").timestamp() // 3600) % a.of == a.shard:
+        if shard_of(t["hour"], a.of) == a.shard:
             by_hour.setdefault(t["hour"], []).append(t)
     hours = sorted(by_hour)
     if a.max_hours:
