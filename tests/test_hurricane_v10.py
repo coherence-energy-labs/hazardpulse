@@ -167,11 +167,16 @@ def test_the_site_shows_our_model_beside_the_published_number_with_its_bound_evi
     from hazardpulse.verification import served_evidence as se
     storm = {"storm_id": "EP012026", "storm_name": "TEST", "basin": "EP", "lat": 15.0, "lon": -110.0,
              "vmax_kt": 80.0, "ri_probability": 0.2, "ri_source": "noaa_aid_stack", "ri_source_label": "NOAA DTOPS"}
-    card = page._storm_card({**storm, "ri_v10_shadow": {"status": "ok", "probability": 0.6123, "gate_ok": True}})
+    shown = se.hurricane_evidence()["ours"]                              # label and live key from the pointer
+    assert (shown["label"], shown["shadow_key"]) == ("v10.1", "ri_v10_shadow")
+    card = page._storm_card({**storm, "ri_v10_shadow": {"status": "ok", "probability": 0.6123, "gate_ok": True}},
+                            shown=shown)
     assert "61.2%" in card and "Our experimental model (v10.1)" in card and "equals NOAA" not in card
-    fallback = page._storm_card({**storm, "ri_v10_shadow": {"status": "ok", "probability": 0.45, "gate_ok": False}})
+    fallback = page._storm_card({**storm, "ri_v10_shadow": {"status": "ok", "probability": 0.45, "gate_ok": False}},
+                                shown=shown)
     assert "45.0%" in fallback and "guidance was missing" in fallback
-    assert "experimental" not in page._storm_card(storm)                # no model output, no row
+    assert "experimental" not in page._storm_card(storm, shown=shown)   # no model output, no row
+    assert "experimental" not in page._storm_card({**storm, "ri_v10_shadow": {"status": "ok", "probability": 0.6}})
     ours = se.hurricane_evidence()["ours"]
     art, version = ri_v10.load()
     assert ours["model_version"] == version
@@ -202,7 +207,9 @@ def test_a_probability_meets_a_yes_no_call_at_the_calls_own_false_alarm_rate():
 
 
 def _root_copy(tmp_path, mutate=None):
-    for rel in ("results/models/hurricane_ri_v10.json", "results/calibration/hurricane_ri_v10_vs_all.json"):
+    # the shown model is named only by the pointer; its live key is the prospective scorer's record of it
+    for rel in ("results/models/hurricane_ri_v10.json", "results/calibration/hurricane_ri_v10_vs_all.json",
+                "results/hurricane_prospective/shown_model.json", "results/hurricane_prospective/v9_shadow.json"):
         dst = tmp_path / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_bytes((ROOT / rel).read_bytes())

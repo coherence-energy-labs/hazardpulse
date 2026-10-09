@@ -1,6 +1,6 @@
 """The ProbSevere input-format guard: which of the served model's inputs the live feed no longer carries.
 
-NOAA changed the ProbSevere JSON on 2025-08-06 (25 -> 48 storm attributes; PS, VIL_DENSITY and MAXRC_ICECF
+NOAA changed the ProbSevere JSON on 2025-08-05 (25 -> 48 storm attributes; PS, VIL_DENSITY and MAXRC_ICECF
 removed; MAXRC_EMISS and AVG_BEAM_HGT no longer in their documented string formats). The parser
 (``hazardpulse.data.probsevere._parse_storms``) never reports a missing attribute: the core ones are read as
 0.0, the others are left missing. So since that day the served model has received ``p_ps = 0`` and
@@ -18,7 +18,10 @@ from __future__ import annotations
 
 from hazardpulse.tornado.v3_serving import plain_name
 
-FORMAT_CHANGE = "2025-08-06"
+# The day of the switch, as measured by tornado program amendment 10 on the store's cache: the last scan carrying
+# PS and VIL_DENSITY is 2025-08-05 14:00Z, the first in the new format 20:48Z the same day, and no scan carries
+# both. (It read 2025-08-06 until 2026-10-09; nothing scores with it, the tornado page states it.)
+FORMAT_CHANGE = "2025-08-05"
 
 # model input -> (where the parser reads it, in order of preference; what the parser feeds when all are absent)
 # sources: ("properties", KEY) or ("models", NAME) -- the latter is feature["models"][NAME]["PROB"]

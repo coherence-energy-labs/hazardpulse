@@ -875,10 +875,16 @@ assert.doesNotMatch(homeCsp, /https?:\/\//);
 assert.doesNotMatch(homeCsp, /unsafe-inline/);
 
 // the published contracts list IS the Worker's routes: every public route is listed and every listed path
-// answers (four routes had gone unlisted before 2026-10-05)
+// answers (four routes had gone unlisted before 2026-10-05). The federation atlas was excused here as answering
+// "only where a federation node is configured" -- but dist/data/federation-fingerprint.json ships, so it answered
+// 200 in production, unlisted, until 2026-10-09. An exception now needs the route to really not answer.
 const contracts = JSON.parse(readFileSync(path.join(root, "dist", "data", "api-contracts.json"), "utf8"));
 const listed = new Set(contracts.endpoints.map((e) => e.path));
-const NOT_PUBLIC = { "/api/v1/federation/atlas": "operator endpoint: answers only where a federation node is configured" };
+const NOT_PUBLIC = {};
+for (const r of Object.keys(NOT_PUBLIC)) {
+  const res = await worker.fetch(new Request(`https://hazardpulse.com${r}`, { headers: { "CF-Connecting-IP": "198.51.100.8" } }), env);
+  assert.notEqual(res.status, 200, `${r} is excused from the contracts as not public, but it answers 200`);
+}
 const exactRoutes = [...workerSource.matchAll(/path === "(\/(?:api\/v1|stream)\/[^"]+)"/g)].map((m) => m[1]);
 assert.ok(exactRoutes.length >= 12, `found only ${exactRoutes.length} routes: the route pattern no longer matches the Worker`);
 for (const r of exactRoutes) {

@@ -214,14 +214,16 @@ def test_the_page_cautions_exactly_when_the_model_lacked_inputs():
     # the measured cost of a single warning is quoted only for a record that WAS one warning
     comp = {"single_jtwc_warning": {"n_missing": 9, "n_inputs": 17, "log_loss": 0.2589,
                                     "log_loss_climatology": 0.2649, "log_loss_full_inputs": 0.2057}}
+    ob = {"composition": comp, "test": {"when": "2019-2021"}}       # the years come from the evidence, not the page
     nine = ["x"] * 9
     alone = dict(base, ri_inputs={"analysis_model": "JTWC", "track_source": "jtwc_warning", "n_inputs": 17,
                                   "inputs_missing": nine})
-    assert "Scored from a single JTWC warning" in hurricane._storm_card(alone, comp)
-    assert "0.259" in hurricane._storm_card(alone, comp)
+    assert "Scored from a single JTWC warning" in hurricane._storm_card(alone, ob)
+    assert "0.259" in hurricane._storm_card(alone, ob)
+    assert "the 2019&ndash;2021 West Pacific cycles" in hurricane._storm_card(alone, ob)
     not_one_warning = dict(alone, ri_inputs=dict(alone["ri_inputs"], track_source="ral_bdeck"))
-    assert "single JTWC warning" not in hurricane._storm_card(not_one_warning, comp)
-    assert "Scored from a single JTWC warning" in hurricane._storm_card(legacy, comp)
+    assert "single JTWC warning" not in hurricane._storm_card(not_one_warning, ob)
+    assert "Scored from a single JTWC warning" in hurricane._storm_card(legacy, ob)
 
 
 LATE = ["analysis_dp_12h", "analysis_dp_24h", "analysis_dp_6h", "analysis_mslp_hpa"]
@@ -239,16 +241,18 @@ def test_a_late_fix_gets_its_measured_note_not_a_caution():
          "ri_source_label": "HazardPulse v8.2", "issue_time": "2026-10-05T12:00:00",
          "ri_inputs": {"analysis_model": "JTWC", "track_source": "ral_bdeck", "n_inputs": 17,
                        "inputs_missing": list(reversed(LATE))}}                       # order is not the pattern
-    card = hurricane._storm_card(s, comp)
+    ob = {"composition": comp, "test": {"when": "2022-2024"}}
+    card = hurricane._storm_card(s, ob)
     assert "Caution" not in card and "rough" not in card
     assert "not yet published" in card and "central pressure and its changes" in card
     assert "0.213" in card and "0.206" in card and "0.265" in card
     # one input more or less is not the measured pattern: the plain caution again
     for other in (LATE[:-1], LATE + ["storm_age_h"]):
-        card = hurricane._storm_card(dict(s, ri_inputs=dict(s["ri_inputs"], inputs_missing=other)), comp)
+        card = hurricane._storm_card(dict(s, ri_inputs=dict(s["ri_inputs"], inputs_missing=other)), ob)
         assert "Caution" in card and "0.213" not in card
     # without the measurement bound, no number is quoted
-    assert "Caution" in hurricane._storm_card(s, {"single_jtwc_warning": comp["single_jtwc_warning"]})
+    assert "Caution" in hurricane._storm_card(
+        s, {"composition": {"single_jtwc_warning": comp["single_jtwc_warning"]}, "test": {"when": "2022-2024"}})
 
 
 def test_the_late_fix_measurement_is_the_live_codes_pattern_and_reaches_the_site():
