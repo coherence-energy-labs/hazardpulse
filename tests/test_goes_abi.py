@@ -66,6 +66,32 @@ def _synthetic_disk(clat=20.0, clon=-60.0, ring_km=30.0, lon0=-75.0):
     return d
 
 
+class _Var:
+    """An h5py dataset stand-in: data plus attributes stored as 1-element arrays, as in the GOES files."""
+
+    def __init__(self, data, **attrs):
+        self.data = np.asarray(data)
+        self.attrs = {k: np.array([v]) for k, v in attrs.items()}
+
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+
+def test_the_reader_opens_a_file_whose_attributes_are_one_element_arrays_with_warnings_as_errors():
+    """The first runner collection failed every crop: float() of a 1-element attribute array raises in newer NumPy
+    (it only warns in 2.3, where the local smoke passed). Every attribute read must survive warnings-as-errors."""
+    import warnings
+    n = 8
+    f = {"x": _Var(np.arange(n), scale_factor=56e-6, add_offset=-0.0002),
+         "y": _Var(np.arange(n)[::-1], scale_factor=56e-6, add_offset=-0.0002),
+         "goes_imager_projection": _Var([0], longitude_of_projection_origin=-75.0),
+         "CMI": _Var(np.full((n, n), 2000, np.int16), scale_factor=0.1, add_offset=0.0, _FillValue=-1)}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        d = g.FullDisk(f)
+    assert d.lon0 == -75.0 and d.scale == pytest.approx(0.1) and d.fill == -1 and d.dx > 0 > d.dy
+
+
 def test_an_enclosed_eye_recentres_and_an_exposed_centre_does_not():
     ring = _synthetic_disk(ring_km=30.0)                         # a full cold ring: a real eye
     img, la, lo, eye = g.polar_recentred(ring, 20.03, -60.02)     # analysed centre ~4 km off the eye

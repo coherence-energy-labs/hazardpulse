@@ -139,19 +139,25 @@ def first_scan_at_or_after(keys: Iterable[str], hour: dt.datetime) -> str | None
     return None
 
 
+def _attr(obj, name: str) -> float:
+    return float(np.ravel(obj.attrs[name])[0])
+
+
 class FullDisk:
     """An open ABI full-disk band-13 file (HTTP byte ranges): its fixed grid, and polar samples around centres."""
 
     def __init__(self, h5file):
         f = h5file
-        self.x = f["x"][:] * float(f["x"].attrs["scale_factor"]) + float(f["x"].attrs["add_offset"])
-        self.y = f["y"][:] * float(f["y"].attrs["scale_factor"]) + float(f["y"].attrs["add_offset"])
-        self.lon0 = float(np.ravel(f["goes_imager_projection"].attrs["longitude_of_projection_origin"])[0])
+        # every attribute is a 1-element array: float() of one only warns in NumPy 2.3 but raised on the runners
+        # (newer NumPy) -- the first collection failed all 43,429 attempted crops while the local smoke passed
+        self.x = f["x"][:] * _attr(f["x"], "scale_factor") + _attr(f["x"], "add_offset")
+        self.y = f["y"][:] * _attr(f["y"], "scale_factor") + _attr(f["y"], "add_offset")
+        self.lon0 = _attr(f["goes_imager_projection"], "longitude_of_projection_origin")
         cmi = f["CMI"]
         self.cmi = cmi
-        self.scale = float(np.ravel(cmi.attrs["scale_factor"])[0])
-        self.offset = float(np.ravel(cmi.attrs["add_offset"])[0])
-        self.fill = int(np.ravel(cmi.attrs["_FillValue"])[0])
+        self.scale = _attr(cmi, "scale_factor")
+        self.offset = _attr(cmi, "add_offset")
+        self.fill = int(_attr(cmi, "_FillValue"))
         self.dx = float(self.x[1] - self.x[0])
         self.dy = float(self.y[1] - self.y[0])          # negative: y decreases with row
 

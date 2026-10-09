@@ -30,6 +30,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from hazardpulse.hurricane import goes_abi as g  # noqa: E402
 
 TASKS = ROOT / "results" / "goes" / "tasks.jsonl.gz"
+EARLY_HOURS = 10           # no successful crop in the first this-many hours: abort the shard
+MIN_OK_FRACTION = 0.5      # fewer successful crops than this fraction of those attempted: the shard fails
 
 
 def fetch_text(url: str, tries: int = 4) -> str:
@@ -112,6 +114,12 @@ def main(argv=None) -> int:
                 if fh5 is not None:
                     fh5.close()
         done_hours += 1
+        if done_hours == EARLY_HOURS and not any(s == "ok" for s in status):
+            # the first collection "succeeded" with 0 of 43,429 crops: a run that reads nothing must fail, loudly
+            print(f"ABORT: no crop succeeded in the first {EARLY_HOURS} hours; first failure: "
+                  f"{next((s for s in status if s.startswith('missing: ') and s != 'missing: no scan'), status[:1])}",
+                  flush=True)
+            return 1
         if done_hours % 50 == 0:
             el = time.time() - t_start
             print(f"{done_hours}/{len(hours)} hours, {len(keys)} tasks, {el / 60:.1f} min "
@@ -123,8 +131,12 @@ def main(argv=None) -> int:
                         lat=np.array(lats), lon=np.array(lons), eye=np.array(eyes), scan=np.array(scans),
                         status=np.array(status))
     n_ok = sum(s == "ok" for s in status)
-    print(f"shard {a.shard}/{a.of}: {len(keys)} tasks, {n_ok} ok, {len(keys) - n_ok} not ok; "
-          f"{(time.time() - t_start) / 60:.1f} min; wrote {path}", flush=True)
+    attempted = sum(1 for s in status if s not in ("missing: no scan", "not_attempted"))
+    print(f"shard {a.shard}/{a.of}: {len(keys)} tasks, {n_ok} ok, {len(keys) - n_ok} not ok "
+          f"({attempted} attempted); {(time.time() - t_start) / 60:.1f} min; wrote {path}", flush=True)
+    if attempted and n_ok < MIN_OK_FRACTION * attempted:
+        print(f"FAIL: only {n_ok} of {attempted} attempted crops succeeded", flush=True)
+        return 1
     return 0
 
 

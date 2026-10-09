@@ -3,7 +3,8 @@ name: Research -- G1 GOES 2 km inner-core crops
 # Program G1 (docs/HURRICANE_RI_V9_PROGRAM.md): GOES ABI band-13 storm-centred polar crops, every hour from 12 h
 # before each RI cycle to 2 h after, for every 2020-2026 cycle (results/goes/tasks.jsonl.gz). Read by HTTP byte
 # ranges from NOAA's public buckets. Twenty shards in parallel; each saves what it finished inside its time budget
-# and lists the rest, so a rerun can complete it.
+# and lists the rest, so a rerun can complete it. Run 1 (37869128599) read 0 of 43,429 attempted crops -- a
+# NumPy-version TypeError in the reader -- and still reported success; the collector now fails such a shard.
 
 on:
   workflow_dispatch:
