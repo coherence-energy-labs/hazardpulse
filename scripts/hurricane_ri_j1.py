@@ -351,7 +351,95 @@ def paired(y, pa, pb, storms, n_boot=N_BOOT, seed=0) -> dict:
 def _basin_flags(r: dict) -> dict:
     b = r["basin"]
     return {"is_wp": float(b == "WP"), "is_ni": float(b == "NI"), "is_sh": float(b in ("SI", "SP")),
-            "is_nhc": float(b in ("NA", "EP"))}
+            "is_si": float(b == "SI"), "is_sp": float(b == "SP"), "is_nhc": float(b in ("NA", "EP"))}
+
+
+J2_FLAGS = ["is_wp", "is_ni", "is_si", "is_sp", "is_nhc"]     # amendment 14: SI and SP apart (J1 had one is_sh)
+OUT_J2 = ROOT / "results" / "calibration" / "hurricane_ri_j2.json"
+REGIONS = ("WP", "NI", "SI", "SP")
+
+
+def per_region(y, pa, pb, storms, regions) -> dict:
+    out = {}
+    for b in REGIONS:
+        m = regions == b
+        if m.any():
+            out[b] = {"n": int(m.sum()), "events": int(y[m].sum()), "a": metrics(y[m], pa[m]), "b": metrics(y[m], pb[m]),
+                      "b_minus_a": paired(y[m], pa[m], pb[m], storms[m])}
+    return out
+
+
+def j2_phase(shard_dir: str) -> int:
+    """Amendment 14's registered test: J2 (J1 with separate SI/SP flags) against J1 on the 2026 JTWC rows, both
+    trained on storms of 2022-2025. J1's arm must reproduce the 2026 further read to 1e-12 (the control)."""
+    rows, cands, counts = prepare(shard_dir)
+    j1_names = cands["J1"]
+    j2_names = [n for n in j1_names if n != "is_sh"]
+    j2_names = j2_names[:j2_names.index("is_nhc")] + [f for f in J2_FLAGS if f != "is_nhc"] + j2_names[j2_names.index("is_nhc"):]
+    if set(j2_names) - set(j1_names) != {"is_si", "is_sp"} or set(j1_names) - set(j2_names) != {"is_sh"}:
+        raise SystemExit("J2 must be J1 with is_sh replaced by is_si and is_sp, nothing else")
+    rep = json.loads(OUT.read_text(encoding="utf-8"))
+    tr = [r for r in rows if FIRST <= r["j1_season"] <= LAST_DEV]
+    t26 = [r for r in rows if r["j1_season"] == FURTHER and r["basin"] in JTWC]
+    p1, p2 = fit_predict(tr, t26, j1_names), fit_predict(tr, t26, j2_names)
+    a = np.array([r["v82_calibrated"] for r in t26])
+    y = np.array([r["ri_label_30kt"] for r in t26], float)
+    storms = np.array([r["storm_id"] for r in t26])
+    regions = np.array([r["basin"] for r in t26])
+    ll1 = metrics(y, p1)["log_loss"]
+    want = rep["further_read_2026"]["J1"]["log_loss"]
+    if abs(ll1 - want) > 1e-12:
+        raise SystemExit(f"control failed: J1's 2026 log loss {ll1!r} != the registered further read's {want!r}")
+    m = {"v8.2": metrics(y, a), "J1": metrics(y, p1), "J2": metrics(y, p2)}
+    sp = regions == "SP"
+    sp_ok = bool(sp.any() and metrics(y[sp], p2[sp])["log_loss"] <= metrics(y[sp], a[sp])["log_loss"])
+    carried = bool(m["J2"]["log_loss"] < m["J1"]["log_loss"] and m["J2"]["brier"] < m["J1"]["brier"] and sp_ok)
+    res26 = {"metrics": m, "J2_minus_J1": paired(y, p1, p2, storms), "J2_minus_v82": paired(y, a, p2, storms),
+             "by_region_J2_vs_v82": per_region(y, a, p2, storms, regions),
+             "by_region_J2_vs_J1": per_region(y, p1, p2, storms, regions), "sp_not_worse_than_v82": sp_ok}
+    # development folds, descriptive (those rows are read): J1 and J2 per region, SI and SP apart, and each scope
+    dev = {"A": [], "J1": [], "J2": []}
+    dev_rows = []
+    for fold in FOLDS:
+        train = [r for r in rows if FIRST <= r["j1_season"] < fold]
+        test = [r for r in rows if r["j1_season"] == fold and r["basin"] in JTWC]
+        dev["A"].append(np.array([r["v82_calibrated"] for r in test]))
+        dev["J1"].append(fit_predict(train, test, j1_names))
+        dev["J2"].append(fit_predict(train, test, j2_names))
+        dev_rows.extend(test)
+    dev = {k: np.concatenate(v) for k, v in dev.items()}
+    yd = np.array([r["ri_label_30kt"] for r in dev_rows], float)
+    sd = np.array([r["storm_id"] for r in dev_rows])
+    rd = np.array([r["basin"] for r in dev_rows])
+    if abs(metrics(yd, dev["J1"])["log_loss"] - rep["development"]["J1"]["log_loss"]) > 1e-12:
+        raise SystemExit("control failed: J1's development folds do not reproduce the amendment 13 outcome")
+    dev_out = {"J1_vs_v82": per_region(yd, dev["A"], dev["J1"], sd, rd),
+               "J2_vs_v82": per_region(yd, dev["A"], dev["J2"], sd, rd),
+               "J2_pooled": metrics(yd, dev["J2"]), "J2_minus_v82_pooled": paired(yd, dev["A"], dev["J2"], sd)}
+    entrant = "J2" if carried else "J1"
+    scope = [b for b, v in dev_out[f"{entrant}_vs_v82"].items() if v["b_minus_a"]["d_ll"] <= 0]
+    OUT_J2.write_text(json.dumps({
+        "phase": "amendment 14 J2 test", "program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendment 14)",
+        "prereg_tag": "prereg-hurricane-ri-amend14",
+        "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "rows_sha256": hashlib.sha256((_work() / ROWS_NAME).read_bytes()).hexdigest(), "ir_collection_status": counts,
+        "names": {"J1": j1_names, "J2": j2_names}, "control_j1_2026_log_loss": ll1,
+        "season_2026": res26, "carried": entrant, "development_descriptive": dev_out,
+        "live_entrant": entrant, "scope_basins": scope}, indent=1, default=float), encoding="utf-8")
+    print(f"control: J1 reproduces its 2026 log loss {ll1!r} and its development folds")
+    for k, v in m.items():
+        print(f"2026 {k}: LL {v['log_loss']:.5f} Brier {v['brier']:.5f} AUC {v['auc']:.4f} (n {v['n']}, events {v['events']})")
+    d = res26["J2_minus_J1"]
+    print(f"J2 - J1 (2026): dLL {d['d_ll']:+.5f} [{d['d_ll_ci'][0]:+.5f}, {d['d_ll_ci'][1]:+.5f}]  dBrier {d['d_brier']:+.5f}; "
+          f"SP not worse than v8.2: {sp_ok}; CARRIED J2: {carried}")
+    for b, v in res26["by_region_J2_vs_v82"].items():
+        print(f"  2026 {b}: v8.2 {v['a']['log_loss']:.4f} J2 {v['b']['log_loss']:.4f} dLL {v['b_minus_a']['d_ll']:+.4f} "
+              f"[{v['b_minus_a']['d_ll_ci'][0]:+.4f}, {v['b_minus_a']['d_ll_ci'][1]:+.4f}] (events {v['events']})")
+    for who in ("J1", "J2"):
+        print(f"  dev {who} vs v8.2 by region: " + ", ".join(
+            f"{b} {v['b_minus_a']['d_ll']:+.4f}" for b, v in dev_out[f"{who}_vs_v82"].items()))
+    print(f"live entrant {entrant}; scope {scope}; wrote {OUT_J2}")
+    return 0
 
 
 def prepare(shard_dir: str) -> tuple[list[dict], dict[str, list[str]], dict[str, int]]:
@@ -524,7 +612,7 @@ def select(shard_dir: str) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=("rows", "collect", "verify", "select", "export"))
+    ap.add_argument("phase", choices=("rows", "collect", "verify", "select", "export", "j2"))
     ap.add_argument("shard_dir", nargs="?")
     ap.add_argument("--shard", type=int)
     ap.add_argument("--of", type=int)
@@ -541,6 +629,8 @@ def main(argv=None) -> int:
         return 0
     if a.phase == "export":
         return export(a.shard_dir)
+    if a.phase == "j2":
+        return j2_phase(a.shard_dir)
     return select(a.shard_dir)
 
 

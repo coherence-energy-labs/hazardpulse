@@ -71,7 +71,9 @@ def collect(replay_dir: Path | None = None, selection: cr.Selection | None = Non
         a = sh.get("v8_2_model_probability")
         if a is None or round(float(a), 4) != round(float(s["ri_probability"]), 4):
             continue
-        out.append({"storm_id": sid, "cycle": t.strftime("%Y-%m-%dT%H:00:00Z"),
+        region = ri_j1.storm_region(str(s.get("basin", "")), s.get("lon"))
+        out.append({"storm_id": sid, "cycle": t.strftime("%Y-%m-%dT%H:00:00Z"), "region": region,
+                    "in_scope": region in ri_j1.scope(),
                     "p": float(sh["model_probability"]), "a": float(a),
                     "model_version": sh.get("model_version"), "ir_features_read": sh.get("ir_features_read"),
                     "forecast_id": fid, "record_made_at": cr.format_utc(c.made_at),
@@ -132,15 +134,19 @@ def main(argv=None) -> int:
     scored = score(recs, now)
     prev = json.loads(OUT.read_text(encoding="utf-8")) if OUT.exists() else {}
     looks = dict(prev.get("looks") or {})
+    claim_set = [r for r in scored if r["in_scope"]]     # amendment 14: the claim counts only the entrant's scope
     for day in LOOKS:
         if now >= dt.datetime.fromisoformat(day) and day not in looks:
-            looks[day] = {"frozen_at": now.strftime("%Y-%m-%dT%H:%MZ"),
-                          **evaluate([r for r in scored if r["cycle"] < f"{day}T00:00:00Z"])}
-    res = {"program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendment 13b)", "entrant": "J1",
+            looks[day] = {"frozen_at": now.strftime("%Y-%m-%dT%H:%MZ"), "scope": list(ri_j1.scope()),
+                          **evaluate([r for r in claim_set if r["cycle"] < f"{day}T00:00:00Z"])}
+    by_region = {g: evaluate([r for r in scored if r["region"] == g]) for g in ("WP", "NI", "SI", "SP")}
+    res = {"program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendments 13b, 14)", "entrant": "J1",
            "comparator": "v8.2 as published", "rule": "v9.1's rule at 97.5 % (the JTWC family's first budget, 2.5 %)",
-           "scored_as_of": now.strftime("%Y-%m-%dT%H:%MZ"), "look_dates": list(LOOKS),
-           "records_with_j1": len(recs), "running": evaluate(scored), "looks": looks,
-           "note": "before a look this is a running record; no claim is read from it"}
+           "scope": list(ri_j1.scope()), "scored_as_of": now.strftime("%Y-%m-%dT%H:%MZ"), "look_dates": list(LOOKS),
+           "records_with_j1": len(recs), "running": evaluate(claim_set), "running_all_jtwc": evaluate(scored),
+           "by_region": by_region, "looks": looks,
+           "note": "before a look this is a running record; no claim is read from it. The claim counts only the "
+                   "entrant's scope; every JTWC region is reported beside it"}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(res, indent=1, default=float) + "\n", encoding="utf-8")
     run = res["running"]

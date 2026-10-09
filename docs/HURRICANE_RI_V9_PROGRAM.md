@@ -1338,6 +1338,50 @@ Per fold:
    positions. That was already the case in amendment 13b, and this amendment restates it: the hindcast interval
    is not evidence for promotion.
 
+### Amendment 14 outcome (2026-10-09): J2 NOT carried; the shared-flag diagnosis is falsified; J1 goes live with scope WP + SI
+
+`results/calibration/hurricane_ri_j2.json`.
+
+**Control.** J1's arm reproduced the registered 2026 further read (0.19530223835248706) and its development folds,
+both to 1e-12.
+
+**2026 JTWC season (1,130 cycles, 90 events):**
+
+| | log loss | Brier | AUC |
+|---|---|---|---|
+| v8.2 | 0.21500 | 0.06219 | 0.858 |
+| J1 | 0.19530 | 0.05818 | 0.894 |
+| J2 | 0.19568 | 0.05817 | 0.892 |
+
+**J2 - J1:** dLL +0.00038 [-0.00112, +0.00172]. J2's log loss is not below J1's, so **J2 is not carried**.
+
+**The diagnosis was wrong.**
+- Separate SI and SP flags change the development SP result by only 0.0005 (+0.0164 -> +0.0159). The shared flag
+  was not the cause.
+- The 2024-2025 SP result rests on **1 RI event in 391 cycles**, in two unusually quiet South Pacific seasons.
+- In 2026, with **20 SP events**, the J family beats v8.2 in the South Pacific: J2 - v8.2 is -0.048 [-0.095,
+  +0.001].
+- In the South Indian Ocean (27 events) it is -0.029 [-0.044, -0.008].
+- In the West Pacific (43 events) it is -0.002 [-0.020, +0.014].
+- The North Indian Ocean had no event in either season, and the J family's log loss there is worse (+0.021 in
+  2026).
+
+**What survives of the independent pass:**
+- the per-region facts it found;
+- the fragility of the pooled hindcast interval;
+- the rule that promotion needs the live record.
+
+The witness itself stands as measured. Only its cause is falsified.
+
+**The live entrant is J1.** Its registered scope (development point estimate <= 0) is **WP and SI**
+(`ri_j1.scope()`).
+- SP is out by the rule written before this result, although 2026 points the other way.
+- NI is out on both seasons.
+
+Bringing SP into scope would need a new registration, judged on data after it. The site shows J1 only for WP and
+SI storms, and the claim counts only those cycles. `score_hurricane_j1_prospective.py` reports every JTWC region
+beside the claim set.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;

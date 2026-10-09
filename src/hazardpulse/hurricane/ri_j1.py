@@ -33,6 +33,41 @@ LIVE_JTWC_BASINS = ("WP", "IO", "SH")  # the live ATCF basin codes J1 scores
 BASIN_FLAGS = ("is_wp", "is_ni", "is_sh", "is_nhc")
 
 
+SCOPE_PATH = ROOT / "results" / "calibration" / "hurricane_ri_j2.json"
+
+
+def scope(path: str | Path = SCOPE_PATH) -> tuple[str, ...]:
+    """The live entrant's scope (amendment 14): the regions (WP, NI, SI, SP) where its development dLL against
+    v8.2 has a point estimate <= 0, as the registered J2 test wrote it. The site shows the entrant only there and
+    its prospective claim counts only those cycles. Empty -- nothing shown, nothing claimed -- when the file is
+    absent."""
+    p = Path(path)
+    if not p.exists():
+        return ()
+    return tuple(json.loads(p.read_text(encoding="utf-8")).get("scope_basins") or ())
+
+
+def storm_region(basin: str, lon: float | None) -> str | None:
+    """A storm's region in IBTrACS's terms. Training rows carry it (WP NI SI SP). A live JTWC storm carries its
+    ATCF basin: IO is NI, and SH splits at 135 E, IBTrACS's SI/SP boundary (SP east of it, across the dateline).
+    None for an NHC-basin storm or an SH storm without a longitude."""
+    b = str(basin).upper()
+    if b in ("WP", "NI", "SI", "SP"):
+        return b
+    if b == "IO":
+        return "NI"
+    if b == "SH":
+        if lon is None or not math.isfinite(float(lon)):
+            return None
+        x = float(lon)
+        return "SI" if 0.0 <= x < 135.0 else "SP"
+    return None
+
+
+def in_scope(basin: str, lon: float | None, path: str | Path = SCOPE_PATH) -> bool:
+    return storm_region(basin, lon) in scope(path)
+
+
 def basin_flags(basin: str) -> dict[str, float]:
     """The basin indicators, from either the training (IBTrACS: WP NI SI SP NA EP) or the live (ATCF: WP IO SH
     AL EP CP) basin code."""

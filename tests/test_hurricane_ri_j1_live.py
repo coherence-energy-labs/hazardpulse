@@ -119,3 +119,14 @@ def test_the_audit_now_covers_v10_4():
     for _version, (kind, art) in audit.known_models().items():
         kinds.setdefault(kind, []).append(art.get("label") or art.get("model_name"))
     assert "v10.4" in kinds["v10"] and kinds["j1"] == ["J1"]
+
+
+def test_regions_split_the_southern_hemisphere_at_135e_and_the_scope_is_the_registered_one(tmp_path):
+    assert ri_j1.storm_region("SH", 120.0) == "SI" and ri_j1.storm_region("SH", 135.0) == "SP"
+    assert ri_j1.storm_region("SH", -170.0) == "SP" and ri_j1.storm_region("SH", None) is None
+    assert ri_j1.storm_region("IO", 88.0) == "NI" and ri_j1.storm_region("WP", 140.0) == "WP"
+    assert ri_j1.storm_region("AL", -60.0) is None
+    # amendment 14's registered scope: development point estimate <= 0 against v8.2 -> WP and SI
+    assert ri_j1.scope() == ("WP", "SI")
+    assert ri_j1.in_scope("SH", 100.0) and not ri_j1.in_scope("SH", 160.0) and not ri_j1.in_scope("IO", 88.0)
+    assert ri_j1.scope(tmp_path / "absent.json") == () and not ri_j1.in_scope("WP", 140.0, tmp_path / "absent.json")
