@@ -643,6 +643,182 @@ any cycle (amendment 9).
   against), on shared cycles.
 - Amendment 4's display rule applies unchanged: the newest carried challenger is v10.4.
 
+## Amendment 10 -- H9: the storm's coherence state (2026-10-08, before any coherence feature is compared with an outcome)
+
+**Why.** Every model in this program sees a storm at one cycle plus its 6-hour change. The coherence framework's
+concept, fitted to this need, is that organization is created by a source, decays unless fed, and persists only
+while it is paid for. Two storms that look the same now can differ: one has held deep, symmetric, retained
+convection over its core for a day, while the other has a fresh burst. That memory is information the models
+do not have. H8 tested the concept's static, spatial form; H9 tests its time form.
+
+**Features (8):** `src/hazardpulse/hurricane/coherence_state.py`, the same code for training and live. Every
+constant is fixed in that file. They are computed from the same storm's rows at or before t, within 36 h, and
+never from a later cycle (tested).
+- **Sources at each past cycle:**
+  - core deep convection (`ir_vcold_0_100`);
+  - ring symmetry (`-ir_asym_50_200`);
+  - heating retention (`h8_core_retention`);
+  - intensity tendency per 6 h (from `v0` at consecutive cycles).
+- **The state is each source's exponentially forgotten mean:**
+  - `coh_conv_12` and `coh_conv_36` (core convection, half-day and day-and-a-half memory);
+  - `coh_sym_36` (symmetry);
+  - `coh_hold_36` (retention);
+  - `coh_spin_36` (intensity tendency).
+- **Plus:**
+  - `coh_conv_rise` (convection now minus its 36-h memory: the source above what the storm has held);
+  - `coh_persist` (the fraction of the past 36 h's cycles with deep convection over at least half the core);
+  - `coh_n` (the memory's support).
+- **Inputs measured before this registration** (no outcome read): the state exists on 3,522 of the 4,692
+  development cycles (every cycle with IR); `coh_spin_36` on 4,431.
+
+**Candidate:** **H9 = H8 + the 8 coherence features**, with H8's settings. The coherence features are
+unconstrained.
+
+**Control:** H8, recomputed by the same script (`scripts/hurricane_ri_h9.py`), must reproduce amendment 8's
+development log loss (0.14161766094567663) to 1e-12, or the run stops.
+
+**Carried rule (amendment 8's):** H9 is carried iff its pooled 30/24 log loss AND its pooled four-threshold
+Brier are both below H8's.
+- Reported, all descriptive: paired 95% intervals, POD at HCCA's false-alarm rate, the drift check, and the
+  coherence features' share of split gain.
+
+**2026:** a declared further read.
+
+**A carried H9 (v10.5).** Before it scores any cycle, an amendment like amendment 9 registers it:
+- live inputs: the storm's earlier cycles' IR images and decks;
+- its claim at half of v10.4's error budget.
+
+**Known before the result.**
+- **The live record holds more cycles.** Training's memory covers the storm's cycles that are in the case
+  table, which are 94% of 6-hour steps. A live memory would read every earlier cycle.
+- **Partial overlap.** `dv_past12` and `dv_past24` already carry some of the intensity tendency.
+
+### Amendment 10 outcome (2026-10-08): H9 NOT carried -- the memory made it worse
+
+**Control:** H8 reproduced 0.14161766094567663 (`results/calibration/hurricane_ri_h9.json`).
+
+| | dev 30/24 LL | dev Brier4 | AUC | POD at HCCA's FAR | 2026 LL (further read) |
+|---|---|---|---|---|---|
+| H8 (v10.4) | **0.14162** | **0.15261** | **0.9340** | **0.194** | **0.1172** |
+| H9 = H8 + coherence state | 0.14436 | 0.15495 | 0.9318 | 0.178 | 0.1193 |
+
+**H9 - H8:**
+- dev: dLL **+0.00275 [+0.00111, +0.00455]**, dBrier4 +0.00235 [+0.00025, +0.00465];
+- 2026: dLL +0.0021 [-0.0028, +0.0063].
+
+This is a loss beyond the interval on dev, and the same sign on 2026. The coherence features take 2.6% of
+the split gain.
+
+**Root cause.** Diagnostics after the decision; they cannot change it. Scripts are in the session record, and
+the numbers are below.
+1. **It is not "any added columns hurt".** The same eight features, shuffled within each season (meaning
+   destroyed, marginals kept), cost -0.00003, +0.00049 and +0.00076 over three seeds. The real features cost
+   about 6x more. They carry a pattern that holds in the training seasons and fails in later ones.
+2. **One feature carries most of it.** Each feature was added to H8 alone:
+   - the retention memory `coh_hold_36`: +0.00155 [-0.00001, +0.00330];
+   - every other feature: within +-0.0005.
+
+   The full set is worse than the sum of its parts. Retention depends on CARQ's RMW, an operational estimate,
+   and a 36-h memory of it compounds whatever the estimate's season-to-season practice does. The persistence of
+   deep core convection (`coh_persist`, -0.00049 [-0.00108, +0.00006]) is the only feature pointing the other
+   way.
+
+**Status.** The time form of the concept, as storm memory, is killed for this program's inputs. A narrower
+version survives: core-convection persistence without the RMW-derived memory. It would need its own
+registration, judged on data not yet read.
+- The tornado program found the same thing independently on 2023: ProbSevere storm-history summaries (block E)
+  added nothing (dAUC +0.0005 [-0.0008, +0.0019]).
+- On both hazards, storm memory is already absorbed by the operational inputs, which are built on trends.
+
+## Amendment 11 -- coherence fusion of every RI source (2026-10-08, before any fused forecast is scored)
+
+**Why.** The concept that helped TC1 beat NHC's HCCA on track was "each source's standing is a coherence state:
+created by verified skill, decaying unless renewed". Here it is fitted to the RI probability.
+- **The sources.** Several of ours (V2, V5, V8, H8) and NOAA's five aids (DTOPS, SHIPS-RII as RIOD, RIOC,
+  RIOB, RIOL).
+- **Why they need it.** Their skill drifts from season to season: on 2026, V5 had 0.1262 and V8 0.1178.
+- **What the fusion does.** It weights each source by the coherence it has earned, and lets standing decay.
+
+**The law** (`src/hazardpulse/verification/coherence_fusion.py`):
+- **Coherence energy.** A source's energy is the log loss it has cost on verified cases. Each log loss is a KL
+  information cost, the framework's E_coh = kT·D_KL with kT = 1/eta.
+- **Create and decay.** Each verification adds to the energy, and the energy decays with forgetting time tau.
+- **Boltzmann weights.** Sources are weighted w ~ exp(-eta·E).
+- **Alignment.** The fused log-odds are multiplied by a >= 1, so agreement among sources is amplified.
+- **Sleeping experts.** A source silent on a case pays the fused forecast's own loss.
+
+`tests/test_coherence_fusion.py` pins four things: the coherent source earns the weight, the weights are Boltzmann
+in the energy gap, forgetting lets a source recover, and nothing reads an outcome before it verifies (tested by
+flipping later outcomes).
+
+**Sources** (`scripts/hurricane_ri_fusion.py table`, cached as `fusion_sources.json`), at 25/30/35/40 kt in 24 h:
+- **Our models.** They are out of fold for 2022-2025: a season is forecast only by models fitted on earlier
+  seasons, as live. For 2026 they are fitted on 2020-2025.
+- **NOAA's aids.** As issued, in whole percent, read in [0.005, 0.995].
+
+**The run.**
+- **Order.** The fusion runs causally over 2020-2026 in time order, each threshold separately. A cycle verifies
+  24 h after its issue.
+- **Seasons.** 2020-2022 are warm-up, CHOOSE is 2023, and DEV is 2024-2025. Our models first speak in 2022.
+- **Grid (36 configs).**
+  - eta in {0.05, 0.2, 1};
+  - tau in {30, 120, 365} days;
+  - linear or log pool;
+  - alignment a in {1.0, 1.3}.
+
+  The config with the lowest 30/24 log loss on CHOOSE is chosen. Ties go to the earlier config in grid order.
+- **Best single source.** The best single source is the one with the lowest 30/24 log loss on CHOOSE among
+  sources covering at least 90% of CHOOSE's cycles. It is fixed before DEV is read.
+
+**The claim (one):** on DEV, the fusion's 30/24 log loss minus the best single source's, on the cases both cover,
+has a storm-bootstrap 95% interval wholly below 0. This is stricter than amendments 5, 8 and 10, which used point
+estimates.
+- Reported, descriptive:
+  - the fusion against every source;
+  - the equal-weight pools (linear and log);
+  - the four-threshold Brier;
+  - 2026 as a further read.
+
+**If the claim is met:** the fused probability enters the prospective test as its own entrant. An amendment
+written before it scores any cycle sets its error budget at half of v10.4's.
+
+**Known before the result.**
+- **Correlated sources.** Our models are trained on NOAA's aids as inputs, so the sources' errors are correlated.
+  A pool gains most from independent errors.
+- **The bound.** Exponential weights guarantee a fusion close to the best source in hindsight, plus a regret
+  term. They do not guarantee beating it. The realistic win is robustness to drift.
+- **A thin CHOOSE.** CHOOSE is one season.
+
+### Amendment 11 outcome (2026-10-08): claim NOT met
+
+**Control.** The source table reproduces V5, V8 and H8's registered development log losses exactly.
+
+**Selection.** CHOOSE (2023) picked eta 0.05, tau 365 days, a linear pool and no alignment, with CHOOSE log loss
+0.1407. The best single source on CHOOSE was H8 (0.1412).
+
+| 30/24 log loss | fusion | H8 | V8 | V5 | V2 | DTOPS | SHIPS-RII | RIOC | RIOL | RIOB | equal-weight pool |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| DEV 2024-2025 | 0.1527 | 0.1490 | **0.1482** | 0.1501 | 0.1510 | 0.169 | 0.227 | 0.204 | 0.206 | 0.264 | 0.166 (linear) / 0.164 (log) |
+| 2026 (further read) | 0.1245 | **0.1179** | 0.1190 | 0.1265 | 0.1296 | 0.150 | 0.189 | 0.171 | 0.219 | 0.227 | 0.134 / 0.139 |
+
+**The claim:** fusion minus H8 on DEV is **+0.0036 [-0.0014, +0.0082]**, so it is not met. On 2026 it is +0.0066
+[-0.0003, +0.0124].
+
+**Why.**
+- **The weighting law works.** It beats the equal-weight pools by about 0.013 on DEV.
+- **But it cannot beat a source that has already absorbed the others.** Our models take NOAA's aids as inputs
+  and are 0.02-0.11 better than each of them.
+- **Soft weights let the weak aids dilute the pool.** CHOOSE's single season picked the soft temperature
+  (eta 0.05), and from there the weak aids pull the fused forecast down.
+- **Where the concept does win.** TC1 combines independent dynamical models of comparable skill. Here every
+  strong source is one family, already fed with the rest.
+
+**Status.**
+- **Killed for RI, as specified:** coherence fusion of our models with NOAA's aids. A pool cannot add what the
+  best source already holds.
+- **What survives:** the law as a weighting rule (it beats equal weights). It keeps its place where the sources
+  are independent and comparable, as in TC1.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
