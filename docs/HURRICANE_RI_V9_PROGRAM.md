@@ -1115,6 +1115,33 @@ below A's.
 - **SH seasons.** IBTrACS `season_year` for the Southern Hemisphere is the July-June season. Folds use storm first
   season, as v8.2's own year selection does.
 
+### Amendment 13a (2026-10-09, before any J1 number): duplicate rows, found by the collection's own gate
+
+**What the gate caught.** The first IR collection (run 37967225477) read every task, but its verify job refused it:
+task `2022008S13148|2022-01-08 18:00:00|p2` was listed twice.
+
+**The root cause.** The v8.2 builder concatenates IBTrACS's per-basin files, and each file carries the whole track
+of every storm that enters its basin. A basin-crossing storm therefore appears once per basin it touches.
+
+**Measured.**
+- The frozen 2000-2024 v8.2 file holds **5,950 byte-identical duplicate rows** (8.5% of 69,722) from 178 storms,
+  814 of them RI-positive.
+- v8.2's training years (2000-2021) hold 5,255 of these.
+- J1's rows held 1,200 (39 storms, 162 RI-positive).
+
+**Change to J1.** Rows are de-duplicated by (storm, issue time) before anything else (`hurricane_ri_j1.dedupe`).
+Only byte-identical copies are removed; two different rows with one key stop the run.
+- J1 now has 12,303 rows.
+- JTWC test folds: 2024 has 1,709 rows and 90 events; 2025 has 1,837 rows and 68 events.
+- 2026 (further read): 1,130 rows and 90 events.
+- IR tasks: 24,606, each once.
+
+Both controls still pass. The v8.2 control reproduces the artifact's own calibration number, on the artifact's own
+8,317 cases including their duplicates. Nothing else in amendment 13 changes.
+
+**The served v8.2.** It was trained with basin-crossing storms counted twice. Fixing that is a retrain, so it is a
+model change and needs its own registration. It is recorded in the ledger as an open item, not changed here.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;

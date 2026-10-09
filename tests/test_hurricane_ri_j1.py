@@ -110,3 +110,15 @@ def test_the_paired_interval_covers_zero_for_identical_arms_and_excludes_it_for_
     better = np.where(y == 1, 0.5, 0.05)
     res = j1.paired(y, pa, better, storms, n_boot=300)
     assert res["d_ll"] < 0 and res["d_ll_ci"][1] < 0 and res["d_brier_ci"][1] < 0
+
+
+def test_dedupe_removes_identical_basin_file_copies_and_refuses_conflicting_ones():
+    """IBTrACS lists a basin-crossing storm in every basin file it enters; the v8.2 builder concatenates the files
+    (5,950 identical copies in the frozen 2000-2024 file). Identical copies go; two different rows for one key stop."""
+    j1 = _j1()
+    a = {"storm_id": "S1", "issue_time": "2024-09-01 00:00:00", "basin": "WP", "ri_label_30kt": 1, "v": 1.0}
+    b = {"storm_id": "S1", "issue_time": "2024-09-01 06:00:00", "basin": "WP", "ri_label_30kt": 0, "v": 2.0}
+    rows, removed = j1.dedupe([a, b, dict(a), dict(b)])
+    assert removed == 2 and rows == [a, b]
+    with pytest.raises(SystemExit, match="two different rows"):
+        j1.dedupe([a, dict(a, v=9.0)])

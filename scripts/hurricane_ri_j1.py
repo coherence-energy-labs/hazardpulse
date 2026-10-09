@@ -88,6 +88,25 @@ def _fresh_cases() -> list[dict]:
     return out
 
 
+def dedupe(rows: list[dict]) -> tuple[list[dict], int]:
+    """One row per (storm, issue time). The v8.2 builder concatenates IBTrACS's per-basin files, and each file
+    carries the WHOLE track of every storm that enters its basin, so a basin-crossing storm appears once per basin
+    (5,950 such rows in the frozen 2000-2024 file; found by the J1 collection's verify gate, amendment 13a). Only
+    byte-identical copies are removed; two different rows with one key stop the run."""
+    seen: dict[str, dict] = {}
+    out, removed = [], 0
+    for r in rows:
+        k = row_key(r)
+        if k in seen:
+            if seen[k] != r:
+                raise SystemExit(f"two different rows share {k}: refusing to choose one")
+            removed += 1
+            continue
+        seen[k] = r
+        out.append(r)
+    return out, removed
+
+
 def rows_phase() -> int:
     from hazardpulse.hurricane import ri_model as rm
     model = rm.load_model(rm.ARTIFACTS[SERVED])
@@ -128,6 +147,9 @@ def rows_phase() -> int:
 
     rows = [dict(r, j1_season=first_f[r["storm_id"]]) for r in frozen if FIRST <= first_f[r["storm_id"]] <= 2024]
     rows += [dict(r, j1_season=first_n[r["storm_id"]]) for r in fresh if 2025 <= first_n[r["storm_id"]] <= FURTHER]
+    rows, removed = dedupe(rows)
+    print(f"duplicates: {removed} exact duplicate rows removed (amendment 13a: IBTrACS lists a storm that crosses "
+          f"basins in every basin's file, and the builder concatenates the files)", flush=True)
     sc = rm.score_cases(model, rows)
     for r, e, c in zip(rows, sc["ensemble"], sc["calibrated"]):
         r["v82_ensemble"], r["v82_calibrated"] = float(e), float(c)
