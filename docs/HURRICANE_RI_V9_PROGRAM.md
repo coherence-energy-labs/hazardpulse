@@ -730,6 +730,65 @@ registration, judged on data not yet read.
   added nothing (dAUC +0.0005 [-0.0008, +0.0019]).
 - On both hazards, storm memory is already absorbed by the operational inputs, which are built on trends.
 
+## Amendment 11 -- coherence fusion of every RI source (2026-10-08, before any fused forecast is scored)
+
+**Why.** The concept that helped TC1 beat NHC's HCCA on track was "each source's standing is a coherence state:
+created by verified skill, decaying unless renewed". Here it is fitted to the RI probability.
+- **The sources.** Several of ours (V2, V5, V8, H8) and NOAA's five aids (DTOPS, SHIPS-RII as RIOD, RIOC,
+  RIOB, RIOL).
+- **Why they need it.** Their skill drifts from season to season: on 2026, V5 had 0.1262 and V8 0.1178.
+- **What the fusion does.** It weights each source by the coherence it has earned, and lets standing decay.
+
+**The law** (`src/hazardpulse/verification/coherence_fusion.py`):
+- **Coherence energy.** A source's energy is the log loss it has cost on verified cases. Each log loss is a KL
+  information cost, the framework's E_coh = kT·D_KL with kT = 1/eta.
+- **Create and decay.** Each verification adds to the energy, and the energy decays with forgetting time tau.
+- **Boltzmann weights.** Sources are weighted w ~ exp(-eta·E).
+- **Alignment.** The fused log-odds are multiplied by a >= 1, so agreement among sources is amplified.
+- **Sleeping experts.** A source silent on a case pays the fused forecast's own loss.
+
+`tests/test_coherence_fusion.py` pins four things: the coherent source earns the weight, the weights are Boltzmann
+in the energy gap, forgetting lets a source recover, and nothing reads an outcome before it verifies (tested by
+flipping later outcomes).
+
+**Sources** (`scripts/hurricane_ri_fusion.py table`, cached as `fusion_sources.json`), at 25/30/35/40 kt in 24 h:
+- **Our models.** They are out of fold for 2022-2025: a season is forecast only by models fitted on earlier
+  seasons, as live. For 2026 they are fitted on 2020-2025.
+- **NOAA's aids.** As issued, in whole percent, read in [0.005, 0.995].
+
+**The run.**
+- **Order.** The fusion runs causally over 2020-2026 in time order, each threshold separately. A cycle verifies
+  24 h after its issue.
+- **Seasons.** 2020-2022 are warm-up, CHOOSE is 2023, and DEV is 2024-2025. Our models first speak in 2022.
+- **Grid (36 configs).**
+  - eta in {0.05, 0.2, 1};
+  - tau in {30, 120, 365} days;
+  - linear or log pool;
+  - alignment a in {1.0, 1.3}.
+
+  The config with the lowest 30/24 log loss on CHOOSE is chosen. Ties go to the earlier config in grid order.
+- **Best single source.** The best single source is the one with the lowest 30/24 log loss on CHOOSE among
+  sources covering at least 90% of CHOOSE's cycles. It is fixed before DEV is read.
+
+**The claim (one):** on DEV, the fusion's 30/24 log loss minus the best single source's, on the cases both cover,
+has a storm-bootstrap 95% interval wholly below 0. This is stricter than amendments 5, 8 and 10, which used point
+estimates.
+- Reported, descriptive:
+  - the fusion against every source;
+  - the equal-weight pools (linear and log);
+  - the four-threshold Brier;
+  - 2026 as a further read.
+
+**If the claim is met:** the fused probability enters the prospective test as its own entrant. An amendment
+written before it scores any cycle sets its error budget at half of v10.4's.
+
+**Known before the result.**
+- **Correlated sources.** Our models are trained on NOAA's aids as inputs, so the sources' errors are correlated.
+  A pool gains most from independent errors.
+- **The bound.** Exponential weights guarantee a fusion close to the best source in hindsight, plus a regret
+  term. They do not guarantee beating it. The realistic win is robustness to drift.
+- **A thin CHOOSE.** CHOOSE is one season.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
