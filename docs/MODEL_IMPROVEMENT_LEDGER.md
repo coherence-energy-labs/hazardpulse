@@ -31,7 +31,7 @@ Read it before starting model work, and update it when a branch is decided.
 | hazard | published | ours, shown or in shadow | evidence |
 |---|---|---|---|
 | Hurricane RI, NHC basins | NOAA DTOPS | **v10.1 shown** beside it (named only in `results/hurricane_prospective/shown_model.json`; amendment 4 decides it at each look). In shadow: **v9.1**, the one entrant whose claim would switch what is *published* (amendment 1, 97.5%); challengers **v10.2** (monotone), **v10.3** (+ satellite IR) and **v10.4** (+ the balanced response, H8) | `docs/HURRICANE_RI_V9_PROGRAM.md` amendments 1-9; live record `results/hurricane_prospective/v9_shadow.json` |
-| Hurricane RI, other basins | HazardPulse v8.2 | -- | `results/calibration/hurricane_ri_evaluation.json`, `hurricane_ri_v8_2_test_composition.json` |
+| Hurricane RI, other basins (JTWC: WP, IO, SH) | HazardPulse v8.2 | **J1 in test** beside it (amendments 13b and 14): recorded on every JTWC storm (`ri_j1_shadow`), shown only on storm cards in its scope, WP and SI (`ri_j1.scope()`). Never the published number unless its prospective claim is met at a look (v9.1's rule at 97.5%, the JTWC family's first budget; 2026-12-01, 2027-12-01; live in-scope cycles only) | `results/calibration/hurricane_ri_evaluation.json`, `hurricane_ri_v8_2_test_composition.json`; J1: `hurricane_ri_j1.json`, `hurricane_ri_j2.json` (scope); live record `results/hurricane_prospective/j1_shadow.json` |
 | Hurricane track and intensity, NHC basins | -- (NHC's official forecast is the authority) | **TC1 shown beside OFCL** on every NHC storm card since 2026-10-08 (`hurricane_tc1-<state digest>`); **TC1+O** recorded, not shown | `docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md` amendment 1; `results/hurricane_tc1/` |
 | Tornado | v3 (+NWS warning state) | -- | `docs/TORNADO_MODEL_PROGRAM.md` (amendment 10: stays served after the format change) |
 | Earthquake M6+ | **S1 = C0 + GEAR1** (since 2026-10-03) | -- | `docs/EARTHQUAKE_FORECAST_PROGRAM.md` sections 10-11 |
@@ -133,6 +133,26 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
     - **Reading.** The third null over H8 in a row (H9, fusion, G1). With 193 development events, H8 sits at the
       floor the data can certify (a dLL of about +-0.0009). The next real gain needs more independent RI events
       (earlier seasons, more basins) or a different contract, not another input family on the same 193.
+11. **J1. DONE (2026-10-09): satellite IR for the JTWC basins, CARRIED on the pooled hindcast; in test beside v8.2
+    in its scope, WP + SI** (amendments 13, 13a, 13b, 14; tags `prereg-hurricane-ri-amend13`, `-amend14`;
+    `hurricane_ri_j1.json`, `hurricane_ri_j2.json`).
+    - **What it is.** LightGBM on v8.2's score, v8.2's 17 inputs, amendment 5's 14 GMGSI IR features and basin
+      flags, for the basins where we publish our own v8.2 because no NOAA RI guidance exists.
+    - **Result (2024 + 2025 JTWC, 3,546 cycles, 158 events).** J1 - v8.2 dLL -0.00761 [-0.01472, -0.00034],
+      dBrier -0.00083 [-0.00304, +0.00133]: carried. IR's own contribution J1 - B -0.00892 [-0.01380, -0.00390];
+      the shuffled-IR noise control gave -0.00026 to +0.00067. 2026 further read (no claim): 0.2150 -> 0.1953.
+    - **The independent pass (amendment 14)** refuted the claim as first worded ("J1 beats v8.2 in the JTWC
+      basins"): South Pacific +0.0164 [+0.0051, +0.0362] on 1 RI event in 391 cycles, North Indian worse on Brier
+      with 0 events, and a pooled interval that excludes 0 by only 0.0003 (crops moved 15 km, or one storm dropped,
+      and it includes 0). The claim now stands as measured: pooled, hindcast, crops on best-track positions.
+    - **J2** (separate SI/SP flags) **NOT carried** on 2026 (dLL vs J1 +0.00038 [-0.00112, +0.00172]); the
+      shared-flag diagnosis is falsified (2026 SP, 20 events: the J family -0.048 vs v8.2).
+    - **Live (13b + 14).** J1 is recorded on every WP/IO/SH storm and shown, on the site, only for storms in its
+      registered scope (development point estimate <= 0: WP and SI). Its claim counts only in-scope live cycles;
+      the hindcast interval is not evidence for promotion. The site shows it from the artifacts (storm cards,
+      methods `#hurricane-j1`, research record, registry).
+    - **Next from it.** Bringing SP into scope needs a new registration judged on data after it (2026 points that
+      way). NI stays untested on RI events. A v8.2 retrain on de-duplicated rows is its own item (serving, below).
 
 ### Hurricane track and intensity (program TC1, `docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md`)
 
@@ -361,6 +381,14 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
    - **What stays open.** Each record now says whether its history was on time (`ri_inputs.analysis_model`
      BEST vs JTWC, `track_source`), so the live record measures RAL's lag from here on. Resurrect if
      12Z cycles start landing late: move the hurricane slot to t + 3 h 45 min.
+2. **OPEN (found 2026-10-09, amendment 13a): v8.2's training data holds 5,950 duplicate basin-crossing rows.**
+   - The v8.2 builder concatenates IBTrACS's per-basin files, each carrying the whole track of every storm that
+     enters its basin, so a basin-crossing storm appears once per basin it touches: 5,950 byte-identical rows
+     (8.5% of 69,722) from 178 storms, 814 RI-positive; 5,255 of them in v8.2's training years (2000-2021).
+   - The served v8.2 was trained with those storms counted twice. J1 de-duplicates its own rows
+     (`hurricane_ri_j1.dedupe`); v8.2 is unchanged.
+   - **A v8.2 retrain on de-duplicated data needs its own registration** (it is a model change): the decision rule,
+     the control that reproduces the served v8.2 first, and how J1, which takes v8.2's score as an input, follows.
 
 ## Platform (2026-10-05 audit)
 
@@ -408,6 +436,8 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
 | Coherence fusion of every RI source (Boltzmann weights on forgotten verified log loss, amendment 11) beats the best single source | dev 30/24 LL fusion 0.1527 vs H8 0.1490, d +0.0036 [-0.0014, +0.0082]; NOAA's aids 0.02-0.11 worse than our models, which already take them as inputs | the law as a weighting rule: it beats equal-weight pools by ~0.013. It wins where sources are independent and comparable (TC1 track vs HCCA), not where the best one already holds the rest |
 | An adaptive coherence reach (each M5+ kernel width = distance to its k-th nearest earlier event, l ~ rho^-1/2) beats A's fixed 20 km kernel (earthquake, FIT-stage probe 2026-10-08) | FIT IG 2.4391-2.5029 vs fixed 2.5166 (control reproduced 2.517); every variant worse, narrower always better | nothing at 2-degree cells: sub-50 km reach is sub-cell in active regions, and widening in sparse ones spreads mass off the faults where M6+ recur |
 | Hourly 2 km inner-core structure from GOES (core and ring convection, eye, eyewall edge, symmetry, persistence, trends) adds RI information beyond H8 (amendment 12b, G1) | dev G1 - H8: dLL +0.00061 [-0.00027, +0.00155], dBrier4 +0.00116 [+0.00008, +0.00233]; the shuffled-column noise control gave dLL -0.00005 to +0.00052. The input passed ADT's gates first (held-out HSS 0.834) | nothing at 24 h on 2020-2025's 193 events: the operational aids already ingest GOES IR. More independent events (earlier seasons, more basins) or another contract |
+| J1 beats v8.2 in the JTWC basins (amendment 13's claim as first worded) | South Pacific, 2024-2025: J1 - v8.2 dLL +0.0164 [+0.0051, +0.0362] on 1 RI event in 391 cycles; the outcome's per-basin table had merged SI and SP into "SH" (amendment 14, independent pass) | the pooled hindcast claim as measured (crops on best-track positions), and J1 live only in its scope, WP + SI; promotion only from the live record |
+| J1's SP loss comes from its one shared `is_sh` flag (fix: J2, separate SI/SP flags) | separate flags moved development SP by 0.0005 (+0.0164 -> +0.0159); J2 - J1 on 2026 +0.00038 [-0.00112, +0.00172], not carried; 2026 SP (20 events): the J family -0.048 vs v8.2 | the witness itself (2024-2025 SP worse, on 1 event); SP into scope only by a new registration judged on later data |
 | A live calibrator from the matured live record, as soon as one exists | tornado 2026-10-04: fitted on 794 storm-forecasts with 0 tornadoes, it published 567-1,822x the model's chance; held-out Brier 467x worse | a calibrator with >= 30 distinct events and a held-out win over the model (`calibrator_admissible`, PR #22) |
 
 **Blocked, not killed:** CIRA's SHIPS developmental data. `rammb-data.cira.colostate.edu` returns

@@ -1043,6 +1043,348 @@ control and the 2026 read.
   family on the same 193.
 - **Not a defect:** this is the registered answer, recorded as found.
 
+## Amendment 13 -- J1: satellite IR for the JTWC basins (2026-10-09, before any J1 number exists)
+
+**Why.** In the West Pacific, North Indian and Southern Hemisphere basins, we publish v8.2. That model has 17
+track, intensity, MPI and season inputs, and no satellite and no NOAA aids. On the 2022-2024 West Pacific cycles it
+scores log loss 0.2057 (ledger H7).
+
+A descriptive probe on the already-read NHC development rows (`aidfree_probe`, no claim) put a model in that same
+aid-free situation. Track and intensity alone scored log loss 0.2058. Amendment 5's 8 km IR features cut that to
+0.1934: dLL **-0.0124 [-0.0183, -0.0071]**, AUC 0.805 -> 0.843. On top of the aids, IR is worth only -0.0018: the aids
+already compress what the satellite sees, which is also why G1 was null.
+
+GMGSI is a global mosaic, so the same IR can reach every JTWC basin. No J1 row, crop or feature exists yet, and no
+JTWC-basin cycle has met an IR feature.
+
+**Rows.**
+- **Source:** the v8.2 dataset (IBTrACS best track, the `results/hurricane_operational_ri_v8_2_2000_2024.jsonl` v8.2
+  was built from). 2025 is added by the same builder functions on the IBTrACS release of 2026-10-08.
+- **Equivalence control:** that builder must reproduce the frozen file's 2022-2024 rows (features and labels) on at
+  least 99% of cases, and the mismatches are reported. Rows through 2024 are always taken from the frozen file.
+- **Seasons:** storms whose first season is 2022-2025. v8.2 was trained on storms of 2000-2021, so its score is out
+  of sample on every J1 row. 2021 is excluded, because v8.2's in-sample scores there would teach J1 to over-trust
+  it.
+- **Label:** `ri_label_30kt`, v8.2's own (at least 30 kt in 24 h, best track).
+- **Basins:** all six for training (WP, NI, SI, SP, NA, EP). Scoring is on the JTWC basins only (WP, NI, SI, SP).
+
+**IR.** Amendment 5's features (`hazardpulse.hurricane.ir_features`, 14 of them), from GMGSI longwave
+(`hazardpulse.hurricane.ir_source`):
+- images at t + 2 h and t - 4 h;
+- each crop is +-4 degrees around the best-track position at t, extrapolated along the t - 6 h -> t motion with
+  `ir_source.extrapolate`, the live path's own function;
+- a missing image gives NaN, never a dropped row;
+- crops are collected on runners; every task is recorded once, with its status.
+
+**Models.** The learner is the program's: LightGBM with `v9.GBT_PARAMS`, seeds 0-4 averaged, early stopping (100
+rounds) on the last training season, then a refit on all training rows at the found rounds.
+- **J1 (candidate):** logit of v8.2's ensemble, v8.2's 17 inputs, the 14 IR features, and basin indicators (WP,
+  NI, SH, NHC).
+- **B (mechanism control):** J1 without the 14 IR features. It isolates IR from re-learning and recalibration.
+- **A (the bar):** v8.2 exactly as served, i.e. its published calibrated probability. Its calibration was fitted
+  on 2022-2024, so on 2024 the bar is in-sample calibrated. That favours A, and it is stated here.
+
+**Folds:** test 2024 (train 2022-2023) and test 2025 (train 2022-2024), by storm first season. Each fold is scored
+on its JTWC-basin rows only.
+
+**Control:** v8.2 recomputed by `ri_model.score_cases` must reproduce the published v8.2 probability of every
+frozen 2024 row to 1e-12, or the run stops.
+
+**Carried rule.** J1 is carried iff its pooled (2024 + 2025, JTWC basins) 30/24 log loss AND Brier score are both
+below A's.
+
+**Reported (descriptive, pre-registered):**
+- paired 95% storm-bootstrap intervals for J1 - A and J1 - B;
+- AUC;
+- per basin (WP, NI, SH) and per fold;
+- a **noise control:** J1 with the 14 IR columns shuffled within each season, seeds 1-3, against B. IR counts as
+  information only if J1 - B clearly exceeds what the shuffled columns give;
+- IR coverage.
+
+**2026 (JTWC basins, to date):** a declared further read, no claim.
+
+**A carried J1.**
+- **Before it scores any live cycle:** an amendment registers it in the live record beside v8.2, with its live
+  path. The IR is taken from GMGSI at the warning's own position, with JTWC's t - 6 h fix, both from the b-deck
+  history the H7 repair already reads.
+- **On the site:** it is shown beside the published v8.2 as experimental, as v10.1 is in the NHC basins.
+- **Promotion to the published number:** only by a rule registered before its first live cycle.
+
+**Known before the result.**
+- **Position source.** Training crops are centred on best-track positions, which are smoothed after the fact.
+  Live crops are centred on the warning, which v8.2's live inputs already use; the H7 composition table measures
+  what that costs v8.2.
+- **The IR source changes.** GMGSI's geostationary sources change over these years (Himawari-8 -> 9 in 2022,
+  GOES-17 -> 18 in 2023, Meteosat changes), and the features are in counts. The per-fold numbers show any break.
+- **SH seasons.** IBTrACS `season_year` for the Southern Hemisphere is the July-June season. Folds use storm first
+  season, as v8.2's own year selection does.
+
+### Amendment 13a (2026-10-09, before any J1 number): duplicate rows, found by the collection's own gate
+
+**What the gate caught.** The first IR collection (run 37967225477) read every task, but its verify job refused it:
+task `2022008S13148|2022-01-08 18:00:00|p2` was listed twice.
+
+**The root cause.** The v8.2 builder concatenates IBTrACS's per-basin files, and each file carries the whole track
+of every storm that enters its basin. A basin-crossing storm therefore appears once per basin it touches.
+
+**Measured.**
+- The frozen 2000-2024 v8.2 file holds **5,950 byte-identical duplicate rows** (8.5% of 69,722) from 178 storms,
+  814 of them RI-positive.
+- v8.2's training years (2000-2021) hold 5,255 of these.
+- J1's rows held 1,200 (39 storms, 162 RI-positive).
+
+**Change to J1.** Rows are de-duplicated by (storm, issue time) before anything else (`hurricane_ri_j1.dedupe`).
+Only byte-identical copies are removed; two different rows with one key stop the run.
+- J1 now has 12,303 rows.
+- JTWC test folds: 2024 has 1,709 rows and 90 events; 2025 has 1,837 rows and 68 events.
+- 2026 (further read): 1,130 rows and 90 events.
+- IR tasks: 24,606, each once.
+
+Both controls still pass. The v8.2 control reproduces the artifact's own calibration number, on the artifact's own
+8,317 cases including their duplicates. Nothing else in amendment 13 changes.
+
+**The served v8.2.** It was trained with basin-crossing storms counted twice. Fixing that is a retrain, so it is a
+model change and needs its own registration. It is recorded in the ledger as an open item, not changed here.
+
+### Amendment 13 outcome (2026-10-09): J1 CARRIED -- satellite IR improves the JTWC-basin model
+
+**Collection** (run 37970155253, commit 376d1a201).
+- 24,606 IR tasks, each exactly once. 24,390 were read; the 216 others are hours with no image in NOAA's GMGSI
+  archive (88 in 2024-09, 49 in 2025-03), and they enter as NaN.
+- 99.1% of rows have the t + 2 h image.
+- Rows sha256 0834ab93..., tasks sha256 385f8819... (in the results file).
+
+**Controls:**
+- v8.2 reproduced its calibration log loss to 1e-12 on its 8,317 cases;
+- the builder reproduced 99.75% of the frozen rows.
+
+**The registered test** (`results/calibration/hurricane_ri_j1.json`): JTWC basins, folds 2024 + 2025, 3,546 cycles,
+158 RI events.
+
+| | log loss | Brier | AUC |
+|---|---|---|---|
+| A: v8.2 as served (the bar) | 0.14121 | 0.03768 | 0.867 |
+| B: J1 without IR (mechanism) | 0.14253 | 0.03794 | 0.870 |
+| **J1** | **0.13360** | **0.03686** | **0.898** |
+
+- **J1 - A:** dLL **-0.00761 [-0.01472, -0.00034]**, dBrier -0.00083 [-0.00304, +0.00133]. Both are below zero, so
+  **J1 is carried.**
+- **J1 - B (what IR adds):** dLL **-0.00892 [-0.01380, -0.00390]**.
+- **Noise control:** IR shuffled within season, minus B, gives dLL +0.00067, -0.00026 and -0.00012 for seeds 1-3.
+  Real IR is more than ten times what shuffled columns give: this is information, not capacity.
+- **Re-learning alone does not help:** B is +0.0013 worse than v8.2. The whole gain comes from the satellite.
+- **Per fold:**
+  - 2024: 0.14766 -> 0.14278 (AUC 0.890 -> 0.906);
+  - 2025: 0.13521 -> 0.12506 (AUC 0.839 -> 0.889).
+- **Per basin:**
+
+  | basin | dLL vs A | events |
+  |---|---|---|
+  | WP | -0.0096 [-0.0247, +0.0045] | 76 |
+  | SH | -0.0082 [-0.0169, +0.0001] | 82 |
+  | NI | +0.0041 | 0 (dBrier +0.0023 [+0.0001, +0.0059]) |
+
+  The North Indian Ocean had no RI event in either test season, so J1's skill there is untested. It forecasts
+  slightly higher where nothing happened.
+- **2026 further read** (no claim; 1,130 JTWC cycles, 90 events, J1 trained on 2022-2025):
+  - log loss 0.2150 -> **0.1953**, dLL **-0.0197 [-0.0355, -0.0034]**;
+  - Brier 0.0622 -> 0.0582, dBrier -0.0040 [-0.0095, +0.0012];
+  - AUC 0.858 -> 0.894.
+
+**Reading.**
+- **Where the information is.** The descriptive probe predicted it, and the registered test confirms it in a new
+  region: without NOAA's aids, the satellite's convective structure is where the remaining RI information lies.
+- **The size.** This is the largest registered improvement in the RI program after amendment 5's, in the region
+  where we publish our own model.
+
+**Next (registered in amendment 13b before any live J1 cycle):**
+- J1 in the live record beside v8.2;
+- its live IR path;
+- what the site shows;
+- the rule that would make it the published number.
+
+## Amendment 13b -- J1 in the live record, and the rule that would publish it (2026-10-09, before J1 scores any live cycle)
+
+**Artifact.** `results/models/hurricane_ri_j1.json`, label "J1". Its version is `hurricane_ri_j1-6ffdec7356c1`. It was
+first exported as `-e697b5f52ae2`, whose `v82_dependency.artifact_sha256` was the hash of a Windows CRLF working copy
+of v8.2's artifact, not the bytes git stores. It was re-exported before any live cycle with the stored-bytes hash
+(`ri_j1.lf_sha256`); the members, rounds and 2026 log loss are identical. It is the
+registered candidate refit on storms of 2022-2025 in all six basins, which is exactly the model the 2026 further
+read scored. `scripts/hurricane_ri_j1.py export` refuses to write it unless:
+- the refit reproduces that read's log loss (0.19530223835248706) to 1e-12;
+- its names are the registered candidate's;
+- its pure-numpy members reproduce the LightGBM boosters (worst difference 0.0).
+
+`tests/fixtures/hurricane_ri_j1_live_row.json` pins one 2026 row (2026074S13160, p 0.6084).
+
+**Live path** (`hazardpulse.hurricane.ri_j1`, `scripts/fetch_and_score.py`). Every West Pacific (WP), North Indian
+(IO) and Southern Hemisphere (SH) storm the scorer scores gets `ri_j1_shadow`. Its inputs:
+- **v8.2's ensemble**, from the same run, as a logit;
+- **v8.2's 17 inputs**, from the live case;
+- **the 14 IR features**, from GMGSI at t + 2 h and t - 4 h. Each crop is centred on the storm's best-track fix (UCAR
+  RAL's b-deck) at t and t - 6 h, else the JTWC warning's fix, extrapolated by `ir_source.extrapolate`;
+- **the basin flags**: live IO and SH are training's NI and SI/SP.
+
+A missing input stays missing, as in training. The shadow records:
+- the probability, full precision and rounded;
+- the input row;
+- the images read and the positions;
+- **v8.2's own number at full precision**.
+
+J1 is never the published number. A J1 failure is written into the record and leaves the published v8.2 untouched.
+
+**Checks:**
+- `tests/test_hurricane_ri_j1_live.py`: the live scorer builds exactly the training row; v8.2's live ensemble
+  equals the row's `v82_logit` to 1e-9; the scorer records J1 without changing the published number.
+- The record audit recomputes every J1 shadow from its stored inputs. The audit now also covers **v10.4**, whose
+  live shadows it had counted as "artifact not in repo" since amendment 9. After the fix: 323 of 323 shadows
+  recompute.
+
+**The prospective test** (`scripts/score_hurricane_j1_prospective.py`, run by `verification-score.yml`):
+- **Unit, test record and outcome:** amendment 7's, through `hazardpulse.hurricane.cycle_records`, with RAL's b-deck
+  as the operational best track.
+- **Comparator:** v8.2 as published, at full precision. The value must round to the published number, or the
+  cycle is not scored. A published 0.0000 on an RI event would otherwise cost v8.2 about 28 nats on rounding alone.
+- **The claim.** J1 is the first entrant of the **JTWC family**, so it carries that family's first budget of 2.5%
+  under **v9.1's rule**. At each look (2026-12-01 and 2027-12-01), applied once on the full test set and frozen,
+  the claim is met iff J1 - v8.2 has a 97.5% storm-bootstrap interval wholly below 0 on the 30/24 log loss OR on
+  the Brier score, AND both point estimates are <= 0.
+- **Why a separate family is honest.** The NHC family's budget covers claims against NOAA's DTOPS in the NHC
+  basins. J1's claim is against a different comparator, in different basins, on disjoint storms. Later JTWC
+  entrants each get half the previous budget, so this family also stays below 5%.
+- **A met claim:** J1 becomes the published JTWC-basin number, by a commit at the look citing the frozen output.
+- **Before a look:** the output is a running record, and no claim is read from it.
+
+**What the site shows:**
+- **Storm cards:** from J1's first live cycle, every WP, IO and SH storm card shows J1's probability beside the
+  published v8.2, labelled as a model in test (as v10.1 is shown in the NHC basins).
+- **The methods page:** a J1 card with this program's registered result, bound to `hurricane_ri_j1.json`.
+- **The registry:** a J1 row.
+
+**Stated before its first cycle.**
+- **North Indian Ocean.** NI had no RI event in either development test season, so J1 is untested on NI events.
+  There it forecast slightly higher than v8.2 where nothing happened (dBrier +0.0023). The live record reports NI
+  separately.
+- **Image timing.** A run before t + 2 h 40 min may find no t + 2 h image, and that run's record carries NaN IR.
+  The test record is the first made at or after t + 3 h 30 min. Each record names the images it read, so GMGSI's
+  latency is measured from the record itself.
+- **Position source.** Training crops were centred on post-season best-track positions, live crops on the working
+  best track or the warning. The live record is the test of whether that costs J1 anything.
+
+## Amendment 14 -- the independent pass on J1, and J2 (2026-10-09, before any live J1 cycle and before any J2 number)
+
+**The independent pass** (an adversary agent that did not build J1; its scripts are in the session scratchpad,
+`j1_adv/`). It first reproduced every published J1 number exactly from a frozen copy of the outcome commit. It also
+re-cut the crops from the GMGSI images: 49,644 of 49,644 feature values were identical. Its verdict on the claim
+as worded, "J1 beats v8.2 in the JTWC basins", was **refuted**.
+
+**The witness: SP.**
+- In the South Pacific (19 storms, 391 cycles, 1 RI event), J1 - v8.2 dLL is **+0.0164 [+0.0051, +0.0362]** and
+  dBrier is +0.0062 [+0.0023, +0.0129], both worse beyond their intervals.
+- In the South Indian Ocean alone it is **-0.0139 [-0.0237, -0.0047]**.
+- The outcome's per-basin table merged SI and SP into "SH" and hid this.
+- **The root is J1's own design:** one `is_sh` flag for both basins. J1 takes its level from SI, which has many
+  events, and over-forecasts quiet SP: a mean forecast of 0.0545 against v8.2's 0.0412 and a realized rate of
+  0.0026. B is already worse there (+0.0099).
+- North Indian Ocean (0 events): dBrier +0.0023 [+0.0001, +0.0059], worse.
+
+**The fragility of the pooled interval.** It excludes 0 by 0.0003. Each of these keeps about 77-85% of the point
+gain, but every interval then includes 0:
+- moving the test crops 15 km: -0.0064 [-0.0133, +0.0005];
+- moving them 30-60 km at random: -0.0059 to -0.0061;
+- dropping one storm (Neoguri 2025): -0.0064 [-0.0127, +0.0001].
+
+Per fold:
+- 2024 alone is not significant: -0.0049 [-0.0146, +0.0046];
+- 2025 is: -0.0102 [-0.0206, -0.0001].
+
+**What survived the attacks:**
+- **IR is information:** J1 - B is -0.0150 [-0.0259, -0.0051] in WP and -0.0101 [-0.0170, -0.0038] in SI.
+- **One IR feature does not explain it:** J1 beats a recalibrated v8.2 + `ir_mean_0_50` by -0.0050 [-0.0090,
+  -0.0010].
+- **Image latency:** the median is 34 min and the maximum 49 min (file-name stamps, n 1,040), well inside
+  t + 3 h 30.
+- **No leakage across folds.**
+- **The AUC gain has no ties.**
+- **The bootstrap seed:** across seeds 0-19 the upper bound stays between -0.0011 and -0.0003.
+
+**What this changes, before J1 scores any live cycle.**
+
+1. **J1's carried claim is stated as measured:** pooled over the JTWC basins in the 2024-2025 hindcast, with crops on
+   best-track positions. It is not stated per basin, and not as a live gain.
+
+2. **Scope.** The live entrant (J2 if carried below, else J1) has a scope. The scope is the basins where its
+   2024-2025 development dLL against v8.2 has a point estimate <= 0, read from the outcome file's per-basin table,
+   with SI and SP reported apart from now on.
+   - The site shows the entrant's row only for storms in its scope.
+   - Its prospective claim is judged only on cycles in its scope.
+   - The shadow is still recorded on every JTWC storm, so the record stays complete.
+   - For J1 the scope is WP and SI: SP and NI are out.
+   - Live SH storms are SI west of 135 E and SP east of it, IBTrACS's boundary, read from the storm's longitude at
+     t.
+
+3. **J2 = J1 with separate basin flags.** It has `is_wp`, `is_ni`, `is_si`, `is_sp` and `is_nhc` in place of
+   `is_sh`; everything else is identical: inputs, rows, learner, seeds, folds and IR.
+   - **Its registered test is the 2026 season** (JTWC rows to date, 90 events). Nothing in J2's design was read
+     from 2026, since the design change comes from the 2024-2025 per-basin witness.
+   - **Arms:** J2 and J1, each trained on storms of 2022-2025, all basins. v8.2 as served is reported beside them.
+   - **J2 is carried iff:**
+     - on the 2026 JTWC rows, its pooled 30/24 log loss AND Brier are both below J1's; and
+     - its SP log loss on 2026 is not above v8.2's (point estimate), since that is the defect J2 exists to fix.
+   - **Reported:** per basin (WP, NI, SI, SP) against both J1 and v8.2; the 2024-2025 development folds for J2,
+     descriptive only, since those rows are read; J2's scope.
+   - **If carried,** J2 replaces J1 as the live entrant before the first live cycle. Its export carries the same
+     reproduction checks as J1's, and the claim rule (v9.1's, 97.5%, JTWC family's first budget) passes to it
+     unchanged. The budget is not spent twice: only one entrant goes live.
+
+4. **Promotion needs the live record.** A claim at a look is judged on live cycles only, that is on working
+   positions. That was already the case in amendment 13b, and this amendment restates it: the hindcast interval
+   is not evidence for promotion.
+
+### Amendment 14 outcome (2026-10-09): J2 NOT carried; the shared-flag diagnosis is falsified; J1 goes live with scope WP + SI
+
+`results/calibration/hurricane_ri_j2.json`.
+
+**Control.** J1's arm reproduced the registered 2026 further read (0.19530223835248706) and its development folds,
+both to 1e-12.
+
+**2026 JTWC season (1,130 cycles, 90 events):**
+
+| | log loss | Brier | AUC |
+|---|---|---|---|
+| v8.2 | 0.21500 | 0.06219 | 0.858 |
+| J1 | 0.19530 | 0.05818 | 0.894 |
+| J2 | 0.19568 | 0.05817 | 0.892 |
+
+**J2 - J1:** dLL +0.00038 [-0.00112, +0.00172]. J2's log loss is not below J1's, so **J2 is not carried**.
+
+**The diagnosis was wrong.**
+- Separate SI and SP flags change the development SP result by only 0.0005 (+0.0164 -> +0.0159). The shared flag
+  was not the cause.
+- The 2024-2025 SP result rests on **1 RI event in 391 cycles**, in two unusually quiet South Pacific seasons.
+- In 2026, with **20 SP events**, the J family beats v8.2 in the South Pacific: J2 - v8.2 is -0.048 [-0.095,
+  +0.001].
+- In the South Indian Ocean (27 events) it is -0.029 [-0.044, -0.008].
+- In the West Pacific (43 events) it is -0.002 [-0.020, +0.014].
+- The North Indian Ocean had no event in either season, and the J family's log loss there is worse (+0.021 in
+  2026).
+
+**What survives of the independent pass:**
+- the per-region facts it found;
+- the fragility of the pooled hindcast interval;
+- the rule that promotion needs the live record.
+
+The witness itself stands as measured. Only its cause is falsified.
+
+**The live entrant is J1.** Its registered scope (development point estimate <= 0) is **WP and SI**
+(`ri_j1.scope()`).
+- SP is out by the rule written before this result, although 2026 points the other way.
+- NI is out on both seasons.
+
+Bringing SP into scope would need a new registration, judged on data after it. The site shows J1 only for WP and
+SI storms, and the claim counts only those cycles. `score_hurricane_j1_prospective.py` reports every JTWC region
+beside the claim set.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;

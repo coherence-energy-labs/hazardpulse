@@ -106,7 +106,8 @@ def _card(cls: str, title: str, body: str, ident: str = "") -> str:
 def _table(head: list[str], rows: list[str], caption: str = "") -> str:
     ths = "".join(f'<th scope="col">{h}</th>' for h in head)
     cap = f"<caption>{caption}</caption>" if caption else ""
-    return (f'<div class="table-wrap" tabindex="0" role="region" aria-label="{_e(re.sub("<[^>]+>", "", caption or head[0]))}">'
+    label = html.unescape(re.sub("<[^>]+>", "", caption or head[0]))     # an entity is spelled once, not twice
+    return (f'<div class="table-wrap" tabindex="0" role="region" aria-label="{_e(label)}">'
             f"<table>{cap}<thead><tr>{ths}</tr></thead><tbody>\n" + "\n".join(rows) + "\n</tbody></table></div>")
 
 
@@ -407,6 +408,8 @@ def methods_hurricane(ev: dict) -> str:
                 *([_kv("Limits of that test", "; ".join(limits)[:1].upper() + "; ".join(limits)[1:] + ".")]
                   if limits else []),
             ])))
+    if hu.get("j1"):
+        out.append(_j1_card(hu["j1"]))
     if hu.get("tc1"):
         out.append(_tc1_card(hu["tc1"]))
     return "\n\n".join(out)
@@ -630,6 +633,193 @@ def _ours_hurricane_card(ours: dict) -> str:
                           f'<code>{_e(ours["model_version"])}</code>', _facts(rows), ident="hurricane-ours")
 
 
+def _md(text: str) -> str:
+    """A passage quoted from a program document: escaped, with its `code` and **bold** kept as markup."""
+    out = _e(text)
+    out = re.sub(r"`([^`]+)`", r"<code>\1</code>", out)
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
+
+
+def _d(p: dict, d: int = 4, what: str = "log loss") -> str:
+    """A paired difference and its interval: ``log loss -0.0076 [-0.0147, -0.0003]``. An interval of zero width
+    (one storm: every resample is the same) informs nothing and is left out."""
+    key = "d_ll" if what == "log loss" else "d_brier"
+    ci = p.get(key + "_ci")
+    return f"{what} {_signed(p.get(key), d)}{_ci(ci, d, signed=True) if ci and ci[0] != ci[1] else ''}"
+
+
+def _events(n: Any, cycles: Any = None) -> str:
+    """``1 RI event in 391 cycles``, ``0 RI events``."""
+    word = "RI event" if _n(n) == "1" else "RI events"
+    return f"{_n(n)} {word}" + (f" in {_n(cycles)} cycles" if cycles is not None else "")
+
+
+def _worse_than(r: dict, who: str, v82: str, period: str) -> str:
+    """How a region's log loss compared, said as strongly as its interval allows."""
+    ci = r.get("d_ll_ci")
+    if r.get("d_ll") is None:
+        return f"{who} was not scored against {v82}"
+    if r["d_ll"] > 0:
+        return (f"{who} tested worse than {v82} on {period}, beyond its interval" if ci and ci[0] > 0 else
+                f"{who}&rsquo;s log loss was above {v82}&rsquo;s on {period}, with an interval that includes zero")
+    return f"{who} was not worse than {v82} on {period}"
+
+
+def j1_lines(j1: dict) -> list[tuple[str, str]]:
+    """(label, value) lines describing our satellite model for the JTWC basins, every number read from its bound
+    results (served_evidence.j1_hurricane): the registered test, what the satellite adds, how narrow the pooled
+    interval is (quoted from the program), each region apart, the further read, where it is shown and why, and the
+    rule that would make it the published number."""
+    lab, v82 = _e(j1["label"]), _e(j1.get("against") or "")
+    inp, dev, period = j1["inputs"], j1["dev"], _years(j1.get("dev_period"))
+    level = _level(j1.get("level"))
+    model, bar, control = dev["model"], dev["bar"], dev["control"]
+    regions = j1.get("regions") or []
+    names = {r["region"]: _e(r["name"]) for r in regions}
+    in_scope = [names[g] for g in j1.get("scope") or [] if g in names]
+    out_scope = [r for r in regions if not r["in_scope"]]
+    lines = [
+        ("What it is",
+         f"Our own rapid-intensification model for the {_join([_e(x) for x in j1['live_basin_names']])} basins, where "
+         f"NOAA publishes no such guidance: gradient-boosted trees ({_n(j1.get('seeds'))} seeds, averaged) on {v82}&rsquo;s "
+         f"own probability, its {_n(inp['against'])} inputs, {_n(inp['ir'])} measures of the storm&rsquo;s cloud tops "
+         f"from NOAA&rsquo;s GMGSI satellite infrared ({_join([_n(h) for h in inp['ir_hours_after']])} hours after the "
+         f"cycle and {_join([_n(h) for h in inp['ir_hours_before']])} hours before) and the basin; trained on "
+         f"{_years(j1.get('trained'))}. It is recorded beside {v82}, never instead of it"),
+    ]
+    rows = [f'<tr><td>{name}</td><td class="num">{_n(m["n"])}</td><td class="num">{_n(m["events"])}</td>'
+            f'<td class="num">{_f(m["log_loss"], 5)}</td><td class="num">{_f(m["brier"], 5)}</td>'
+            f'<td class="num">{_f(m["auc"])}</td></tr>'
+            for name, m in ((f"{v82} as published (the bar)", bar),
+                            (f"{lab} without the satellite inputs (a control)", control),
+                            (f"<strong>{lab}</strong>", model))]
+    vb = j1["vs_bar"]
+    both = vb.get("d_ll") is not None and vb["d_ll"] < 0 and vb.get("d_brier") is not None and vb["d_brier"] < 0
+    lines.append((
+        f"Registered test, {period} (a hindcast)",
+        f"Every cycle of the {_join([names[r['region']] for r in regions]) or 'JTWC'} basins, pooled, each season "
+        "forecast from earlier ones only, with the satellite crops centred on post-season best-track positions."
+        + _table(["", "Cycles", "RI events", "Log loss", "Brier", "AUC"], rows,
+                 caption=f"{lab} against {v82}, {period} (lower log loss and Brier are better)")
+        + f"{lab} minus {v82}: {_d(vb, 5)}, {_d(vb, 5, 'Brier')} ({level} intervals by storm; below zero is better)"
+        + (f". Both point estimates are below {v82}&rsquo;s, the rule written before the result, so {lab} was "
+           "carried on this pooled hindcast; the claim is not made basin by basin, nor for live forecasts"
+           if both else "")))
+    vc, noise = j1["vs_control"], [x["d_ll"] for x in j1.get("noise") or [] if x.get("d_ll") is not None]
+    relearn = (control["log_loss"] is not None and bar["log_loss"] is not None)
+    lines.append((
+        "What the satellite adds",
+        f"{lab} minus the same model without the satellite inputs: {_d(vc, 5)}"
+        + (f". The control alone scored {_f(control['log_loss'], 5)} against {v82}&rsquo;s {_f(bar['log_loss'], 5)}: "
+           + (f"re-learning {v82}&rsquo;s inputs does not help, the gain is the satellite&rsquo;s"
+              if control["log_loss"] >= bar["log_loss"] else "re-learning its inputs helps too")
+           if relearn else "")
+        + (f". With the {_n(inp['ir'])} satellite columns shuffled within each season (a noise control, "
+           f"{_n(len(noise))} seeds), the same comparison gave {_signed(min(noise), 5)} to {_signed(max(noise), 5)}"
+           if noise else "")))
+    fr = j1.get("fragility") or {}
+    if fr.get("text") or fr.get("bullets"):
+        lines.append((
+            "How narrow the pooled interval is",
+            f"From the program{(' (amendment ' + _e(fr['amendment']) + ')') if fr.get('amendment') else ''}, after "
+            f"an independent pass that did not build {lab}: &ldquo;{_md(fr.get('text') or '')}&rdquo;"
+            + ("<ul>" + "".join(f"<li>{_md(b)}</li>" for b in fr.get("bullets") or []) + "</ul>"
+               if fr.get("bullets") else "")
+            + f" ({_doc(fr['doc'])})"))
+    if regions:
+        def diff(r: dict, key: str) -> str:
+            ci = r.get(key + "_ci")
+            return f"{_signed(r.get(key), 4)}{_ci(ci, 4, signed=True) if ci and ci[0] != ci[1] else ''}"
+        codes = {r["region"] for r in regions}
+        outcome = list(j1.get("outcome_basins") or [])
+        merged = [b for b in outcome if b not in codes]
+        split = [_e(r["name"]) for r in regions if r["region"] not in outcome]
+        lines.append((
+            f"Each region, {period}",
+            (f"The registered outcome&rsquo;s table merged the {_join(split)} into one "
+             f"{_join([_e(se.HURRICANE_BASIN_NAMES.get(b, b)) for b in merged])} row; here each region is apart."
+             if merged and split else "")
+            + _table(["Region", "Cycles", "RI events", "Log loss", "Brier", "Shown"],
+                     [f'<tr><td>{_e(r["name"])}</td><td class="num">{_n(r["n"])}</td>'
+                      f'<td class="num">{_n(r["events"])}</td><td class="num">{diff(r, "d_ll")}</td>'
+                      f'<td class="num">{diff(r, "d_brier")}</td><td>{"yes" if r["in_scope"] else "no"}</td></tr>'
+                      for r in regions],
+                     caption=f"{lab} minus {v82} by region, {period} ({level} intervals by storm; below zero is "
+                             "better)")))
+    fu = j1.get("further")
+    if fu:
+        fm, fb = fu["model"], fu["bar"]
+        lines.append((
+            f"{_e(fu['season'])} so far (a further read, no claim)",
+            f"{_n(fm['n'])} cycles, {_n(fm['events'])} RI events, every JTWC region pooled: log loss "
+            f"{_f(fm['log_loss'], 4)} against {v82}&rsquo;s {_f(fb['log_loss'], 4)} (difference "
+            f"{_signed(fu.get('d_ll'), 4)}{_ci(fu.get('d_ll_ci'), 4, signed=True)}), "
+            f"Brier {_f(fm['brier'], 4)} against {_f(fb['brier'], 4)}, AUC {_f(fm['auc'])} against {_f(fb['auc'])}"))
+    var = j1.get("variant") or {}
+    scope_why = []
+    variant_name = (f"{_e(var['label'])} (a variant of {lab} registered in amendment "
+                    f"{_e(_amendment_of(var.get('program')))}, {'carried' if var.get('carried') else 'not carried'})"
+                    if var else "")
+    for r in out_scope:
+        v26 = next((x for x in var.get("season_2026") or [] if x["region"] == r["region"]), None)
+        text = (f"<strong>{_e(r['name'])}</strong>: {_worse_than(r, lab, v82, period)} "
+                f"({_events(r['events'], r['n'])}), so it is not shown there")
+        if v26 and v26.get("d_ll") is not None:
+            text += (f"; on {_e(var.get('season'))}, {variant_name} scored {_d(v26)} against {v82} there "
+                     f"({_events(v26['events'], v26['n'])})"
+                     + (": the rule excludes it although that season points the other way" if v26["d_ll"] <= 0
+                        else ", the same direction"))
+        scope_why.append(text + ".")
+    lines.append((
+        "Where it is shown",
+        (f"{_join(in_scope)} storms only" if in_scope else "No storm")
+        + f", by the rule written before the result (amendment {_e(j1.get('scope_amendment') or '')}): the regions "
+        f"where its {period} log loss against {v82} is at or below zero."
+        + "".join(f" {t}" for t in scope_why)
+        + f" {lab} is still recorded on every {_join([_e(x) for x in j1['live_basin_names']])} storm, so the record "
+        f"stays complete, but it is shown, and its claim is judged, only in its scope ({_doc(j1['scope_file'])})"
+        if j1.get("scope_file") else "No storm: its scope file is not in this build"))
+    for r in regions:
+        if r["events"] == 0:
+            higher = (r.get("mean_forecast") is not None and r.get("bar_mean_forecast") is not None
+                      and r["mean_forecast"] > r["bar_mean_forecast"])
+            lines.append((
+                f"Untested: {_e(r['name'])}",
+                f"The {_e(r['name'])} basin had no RI event in the test seasons ({_n(r['n'])} cycles), so {lab} is untested "
+                "there on RI events" + (f"; where nothing happened it forecast higher than {v82} ({_d(r, 4, 'Brier')})"
+                                        if higher else "")))
+    pr, rule = j1["prospective"], j1.get("rule") or {}
+    run = pr.get("running")
+    lines.append((
+        "Status",
+        ("Claim met at a look" if pr.get("claimed") else f"In test beside {v82}")
+        + f": never the published number. Its test against {v82} as published was written before its first live "
+        f"cycle ({_doc(rule.get('scorer') or '')}): at each look ("
+        + " and ".join(_e(x) for x in rule.get("looks") or []) + "), on live cycles in its scope only, the claim is "
+        f"met if {lab} minus {v82} has a {_level(rule.get('level'))} storm-bootstrap interval wholly below zero on log "
+        "loss or on Brier, with both point estimates at or below zero; a met claim makes "
+        f"{lab} the published number. The hindcast above is not evidence for that. "
+        + (f"Live so far, in its scope (descriptive, no claim before a look): {_n(run['n'])} cycles from "
+           f"{_n(run.get('storms'))} storms ({_n(run.get('events'))} RI events), log loss {_f(run['log_loss'], 3)} "
+           f"against {_f(run['bar_log_loss'], 3)}, difference {_signed(run.get('d_ll'), 3)}"
+           f"{_ci(run.get('d_ll_ci'), 3, signed=True)} at {_level(run.get('level'))}"
+           if run else
+           (f"{_n(pr.get('records'))} live records carry it; none in its scope has matured yet"
+            if pr.get("exists") else "The live record starts with its first matured cycle"))))
+    return lines
+
+
+def _amendment_of(program: Any) -> str:
+    m = re.search(r"amendments? ([\w, ]+)\)", str(program or ""))
+    return m.group(1) if m else "--"
+
+
+def _j1_card(j1: dict) -> str:
+    return _card("hz-hu", f'Hurricane, other basins, our satellite model (in test): {_e(j1["label"])} '
+                          f'<code>{_e(j1["model_version"])}</code>',
+                 _facts([_kv(k, v) for k, v in j1_lines(j1)]), ident="hurricane-j1")
+
+
 def _tornado_inputs_text(to: dict) -> str:
     return _families(to.get("input_families") or {})
 
@@ -752,8 +942,12 @@ def methods_data_hurricane(ev: dict) -> str:
     own inputs (it said "the v10.3 variant" by hand while v10.4 read the same images)."""
     hu = ev.get("hurricane") or {}
     ir = [_e(x) for x in hu.get("ir_models") or []]
+    j1 = hu.get("j1") or {}
+    v82 = _e(j1.get("against") or "")
     return ("<div><dt>Our models</dt><dd>The early intensity guidance in NHC&rsquo;s forecast files"
             + (f"; for {_join(ir)}, also NOAA&rsquo;s GMGSI satellite infrared" if ir else "")
+            + (f"; for {_e(j1['label'])}, in the other basins, {v82}&rsquo;s own probability and inputs with the same "
+               "GMGSI infrared" if j1 and (j1.get("inputs") or {}).get("ir") and v82 else "")
             + ("; for TC1, the track and intensity guidance in NHC&rsquo;s real-time forecast files" if hu.get("tc1")
                else "") + "</dd></div>")
 
@@ -810,6 +1004,10 @@ _RESEARCH_WHAT = {
               "forgotten",
     "g1": "The inner core seen hourly at 2 km by GOES: core and ring convection, the eye, the eyewall&rsquo;s edge, "
           "symmetry, persistence and their trends",
+    "j1": "Satellite infrared (the storm&rsquo;s cloud tops from NOAA GMGSI) for the West Pacific, North Indian and "
+          "Southern Hemisphere, where NOAA publishes no RI guidance and we publish our own model",
+    "j2": "Separate South Indian and South Pacific basins in that satellite model, after an independent pass found it "
+          "worse than the published model in the South Pacific",
 }
 
 
@@ -860,6 +1058,36 @@ def _research_rows(ev: dict) -> list[str]:
                    if r.get("passed") else "Failed a gate")
             rows.append(f"<tr><td>Input check for the 2 km GOES test: is the eye where ADT says it is?</td>"
                         f"<td>{res}</td><td>{dec}</td><td>{src}</td></tr>")
+        elif r["kind"] == "vs_published":
+            ctl = _e(r.get("control_label") or "the published model")
+            nf = f"{_n(r['n_features'])} features: " if r.get("n_features") else ""
+            res = (f"{nf}against {ctl} as published on {_years(r.get('dev_period'))}, every JTWC cycle pooled "
+                   f"({_n(r.get('n'))} cycles, {_n(r.get('events'))} RI events; satellite crops on best-track "
+                   f"positions): {_d(r, 5)}, {_d(r, 5, 'Brier')} (below zero is better); what the "
+                   f"satellite adds, against the same model without it: {_d(r.get('ir') or {}, 5)}")
+            if r.get("noise"):
+                res += (f"; the satellite columns shuffled within each season (a noise control) gave log loss "
+                        f"{_signed(min(r['noise']), 5)} to {_signed(max(r['noise']), 5)}")
+            if r["carried"]:
+                dec = ("Carried on the pooled hindcast" + (f": it is {_e(r['became'])}, in test beside {ctl}"
+                                                           if r.get("became") else "")
+                       + (f", shown only for {_join([_e(x) for x in r['scope']])} storms" if r.get("scope") else "")
+                       + " (both point estimates below the model it was tested against)")
+            else:
+                dec = "Not carried: not better on both measures"
+            rows.append(f"<tr><td>{_RESEARCH_WHAT['j1']}{amend}</td><td>{res}</td><td>{dec}</td><td>{src}</td></tr>")
+        elif r["kind"] == "variant":
+            inc = _e(r.get("incumbent") or "")
+            res = (f"{_e(r.get('candidate'))} minus {inc} on {_e(r.get('season'))} ({_n(r.get('n'))} cycles, "
+                   f"{_n(r.get('events'))} RI events): {_d(r, 5)}, {_d(r, 5, 'Brier')} (below zero is better)")
+            why = (f"its log loss is not below {inc}&rsquo;s" if r.get("d_ll") is not None and r["d_ll"] >= 0 else
+                   f"its Brier score is not below {inc}&rsquo;s" if r.get("d_brier") is not None and r["d_brier"] >= 0
+                   else f"it did not meet its rule against {inc}")
+            dec = (f"Carried: it replaces {inc}" if r["carried"] else
+                   f"Not carried: {why}"
+                   + (f"; {_e(r['live_entrant'])} stays the live entrant" if r.get("live_entrant") else "")
+                   + (f", in its scope ({_join([_e(x) for x in r['scope']])})" if r.get("scope") else ""))
+            rows.append(f"<tr><td>{_RESEARCH_WHAT['j2']}{amend}</td><td>{res}</td><td>{dec}</td><td>{src}</td></tr>")
     to_fc = (ev.get("tornado") or {}).get("format_change") or {}
     if to_fc.get("without_inputs_d_auc") is not None:
         period = to_fc.get("period") or []
@@ -918,6 +1146,11 @@ def registry_simple(ev: dict) -> str:
                       + "ranking a forecast cycle that went on to intensify rapidly above one that did not "
                       f"{_pct(t['auc'], 0)} of the time."
                       + (f" Elsewhere we publish our {v82} model." if v82 else "")
+                      + (f" Beside it, our satellite model {_e(hu['j1']['label'])} is recorded and, for "
+                         + _join([_e(r["name"]) for r in hu["j1"].get("regions") or [] if r.get("in_scope")])
+                         + " storms, shown while it is tested on new forecasts."
+                         if v82 and hu.get("j1") and any(r.get("in_scope") for r in hu["j1"].get("regions") or [])
+                         else "")
                       + (f" Our {_e(ours['label'])} model is shown beside DTOPS, labelled experimental, while it is "
                          "tested on new forecasts." if ours else "")
                       + (" Our track and intensity forecast, TC1, is shown beside NHC&rsquo;s official forecast."
@@ -981,6 +1214,19 @@ def registry_active(ev: dict) -> str:
                                       f"{_when(o)} (its method; every basin, best-track inputs)",
                                       f"{_f(o['auc'])}{_ci(o['auc_ci'])}",
                                       f"BSS {_signed(o['bss'])}", "GBT + logistic ensemble, Newton-calibrated"))
+        j1 = hu.get("j1")
+        if j1:
+            m, a, v82 = j1["dev"]["model"], j1["dev"]["bar"], _e(j1.get("against") or "")
+            scope = [_e(r["name"]) for r in j1.get("regions") or [] if r.get("in_scope")]
+            rows.append(_registry_row(j1["model_version"],
+                                      f"Hurricane RI (other basins, our satellite model {_e(j1['label'])})", "shadow",
+                                      f"{_years(j1.get('dev_period'))} (registered hindcast, every JTWC cycle pooled)",
+                                      f"{_f(m['auc'])}", f"LL {_f(m['log_loss'], 4)} vs {v82} {_f(a['log_loss'], 4)}",
+                                      f"LightGBM on {v82}&rsquo;s probability and inputs plus GMGSI satellite infrared; "
+                                      f"recorded beside {v82}"
+                                      + (f", shown for {_join(scope)} storms" if scope else ", shown nowhere")
+                                      + f". Its prospective test decides whether it replaces {v82} as the published "
+                                        "number"))
         tc = hu.get("tc1")
         if tc:
             tr = tc["track"]
@@ -1007,7 +1253,7 @@ def registry_active(ev: dict) -> str:
                                       f"{_f(pt['auc'])}{_ci(pt['auc_ci'])}", f"BSS {_signed(pt['bss'])}",
                                       f"LightGBM, {_n(p['n_trees'])} trees"))
     return _table(["Model version", "Forecasts", "Status", "Test", "AUC [95% CI]", "Skill", "What it is"], rows,
-                  caption="Every model version on the site now, and the entrant whose test could change what is "
+                  caption="Every model version on the site now, and the entrants whose tests could change what is "
                           "published")
 
 

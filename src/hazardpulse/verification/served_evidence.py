@@ -20,6 +20,7 @@ five places, and each copy had drifted to a different superseded model (0.894, 0
 
 from __future__ import annotations
 
+import ast
 import json
 import math
 import re
@@ -630,11 +631,14 @@ def hurricane_evidence(root: Path = ROOT) -> dict | None:
         "v9": v9_hurricane(root),
         "tc1": tc1_hurricane(root),
         "ir_models": ir_models(root),
+        "j1": j1_hurricane(root),
     }
 
 
 HURRICANE_BASIN_NAMES = {"WP": "West Pacific", "SI": "South Indian", "NA": "Atlantic", "EP": "East Pacific",
-                         "SP": "South Pacific", "NI": "North Indian", "SA": "South Atlantic"}
+                         "SP": "South Pacific", "NI": "North Indian", "SA": "South Atlantic",
+                         # live (ATCF) codes of the JTWC basins, and a results file's merged southern basin
+                         "IO": "North Indian", "SH": "Southern Hemisphere"}
 
 
 def _v82_composition(root: Path, evaluation: dict, heldout: dict) -> dict | None:
@@ -999,6 +1003,284 @@ def v9_hurricane(root: Path = ROOT) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# J1: our RI model for the JTWC basins, in test beside the published v8.2 (amendments 13, 13a, 13b, 14)
+# ---------------------------------------------------------------------------
+
+HURRICANE_J1_RESULTS = "results/calibration/hurricane_ri_j1.json"
+HURRICANE_J1_PROSPECTIVE = "results/hurricane_prospective/j1_shadow.json"
+HURRICANE_J1_SCORER = "scripts/score_hurricane_j1_prospective.py"
+HURRICANE_J1_RUN = "scripts/hurricane_ri_j1.py"
+# Amendment 13's arms in its results file: the bar (v8.2 exactly as served) and the mechanism control (the
+# candidate without the satellite columns). The candidate's own key is its label, read from the artifact.
+J1_BAR, J1_CONTROL = "A", "B"
+# Amendment 13 registers paired 95% storm-bootstrap intervals for every J1 comparison, and the run's ``paired``
+# takes the 2.5th and 97.5th percentiles (HURRICANE_J1_RUN). The results file does not carry the level, so it is
+# named here once; tests/test_site_j1.py fails if the run's percentiles stop being this level's.
+J1_INTERVAL_LEVEL = 0.95
+# Amendment 14's account of how fragile the pooled interval is: the independent pass's numbers are recorded only
+# in the program, so the page quotes that passage (the paragraph opening with this lead, and its bullets).
+J1_FRAGILITY_LEAD = "**The fragility of the pooled interval.**"
+
+
+def _script_constants(root: Path, rel: str, names: tuple[str, ...]) -> dict[str, Any]:
+    """Module-level literal constants of a script, read from its source without running it."""
+    path = root / rel
+    if not path.exists():
+        return {}
+    out: dict[str, Any] = {}
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id in names):
+            try:
+                out[node.targets[0].id] = ast.literal_eval(node.value)
+            except ValueError:
+                continue
+    return out
+
+
+def program_passage(root: Path, doc: str, lead: str) -> dict | None:
+    """The paragraph of a program document that opens with ``lead`` and the bullets that follow it, verbatim
+    (markdown kept); None when the document or the passage is not there."""
+    path = root / doc
+    if not path.exists():
+        return None
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for i, line in enumerate(lines):
+        if not line.startswith(lead):
+            continue
+        heading = next((h.lstrip("#").strip() for h in reversed(lines[:i]) if h.startswith("#")), "")
+        amendment = re.search(r"\bAmendment (\d+\w*)\b", heading)
+        text, j = [line[len(lead):].strip()], i + 1
+        while j < len(lines) and lines[j].strip() and not lines[j].startswith("- "):
+            text.append(lines[j].strip())
+            j += 1
+        bullets: list[str] = []
+        while j < len(lines) and lines[j].strip() and (lines[j].startswith("- ") or (bullets and lines[j].startswith("  "))):
+            if lines[j].startswith("- "):
+                bullets.append(lines[j][2:].strip())
+            else:
+                bullets[-1] += " " + lines[j].strip()
+            j += 1
+        return {"doc": doc, "text": " ".join(t for t in text if t), "bullets": bullets,
+                "amendment": amendment.group(1) if amendment else None}
+    return None
+
+
+def _brier_paired(p: dict | None) -> dict:
+    p = p or {}
+    return {"d_ll": _finite(p.get("d_ll")), "d_ll_ci": _ci(p.get("d_ll_ci")),
+            "d_brier": _finite(p.get("d_brier")), "d_brier_ci": _ci(p.get("d_brier_ci"))}
+
+
+def _scores(d: dict | None) -> dict:
+    d = d or {}
+    return {"n": int(d.get("n") or 0), "events": int(d.get("events") or 0), "log_loss": _finite(d.get("log_loss")),
+            "brier": _finite(d.get("brier")), "auc": _finite(d.get("auc")),
+            "mean_forecast": _finite(d.get("mean_forecast"))}
+
+
+def _dev_block(prov: dict) -> tuple[str | None, dict]:
+    """``dev_2024_2025_jtwc`` -> ``("2024-2025", {...})``: the development block an artifact's provenance names,
+    with or without a suffix naming its basins."""
+    for key, val in prov.items():
+        m = re.fullmatch(r"dev_(\d{4})_(\d{4})(?:_[a-z]+)?", key)
+        if m and isinstance(val, dict):
+            return f"{m.group(1)}-{m.group(2)}", val
+    return None, {}
+
+
+def _span_of(keys: Any) -> str | None:
+    years = sorted(str(k) for k in keys or [] if re.fullmatch(r"\d{4}", str(k)))
+    return f"{years[0]}-{years[-1]}" if years else None
+
+
+def j1_hurricane(root: Path = ROOT) -> dict | None:
+    """J1 (docs/HURRICANE_RI_V9_PROGRAM.md, amendments 13, 13a, 13b and 14): our RI model for the West Pacific,
+    North Indian and Southern Hemisphere, recorded live beside the published v8.2 and never instead of it.
+
+    * identity, label and live basins: the artifact (``hazardpulse.hurricane.ri_j1.load``), whose label must be the
+      one its live records are written under, and the key of those records from the same library;
+    * the registered result: ``HURRICANE_J1_RESULTS``, which must be the result the artifact's provenance records
+      (log loss, Brier, AUC, cycles, events, the bar's numbers and the interval, bit for bit), must have carried
+      this label, and must have been measured against the v8.2 that is published;
+    * where it is shown (amendment 14): the library's scope and its per-region development numbers;
+    * the rule that would publish it: the prospective scorer's own constants (looks, level), and its running
+      record when the scorer has written one.
+
+    None without the artifact or its result; refused (EvidenceError) when they disagree."""
+    from hazardpulse.hurricane import ir_features, ir_source, ri_j1
+
+    rel = ri_j1.MODEL_PATH.relative_to(ri_j1.ROOT).as_posix()
+    res = _read(root, HURRICANE_J1_RESULTS)
+    if not (root / rel).exists() or res is None:
+        return None
+    art, version = ri_j1.load(root / rel)
+    label = str(art.get("label") or "")
+    if label != ri_j1.LABEL:
+        raise EvidenceError(f"{rel} is labelled {art.get('label')!r}; its live records are written as {ri_j1.LABEL!r}")
+    if list(art.get("live_basins") or []) != list(ri_j1.LIVE_JTWC_BASINS):
+        raise EvidenceError(f"{rel} is live in {art.get('live_basins')}; the scorer scores {list(ri_j1.LIVE_JTWC_BASINS)}")
+    if res.get("carried") != label:
+        raise EvidenceError(f"{HURRICANE_J1_RESULTS} carried {res.get('carried')!r}, not {label!r}")
+    v82 = _read(root, HURRICANE_V82_SERVED) or {}
+    against = (art.get("v82_dependency") or {}).get("model_version")
+    if against != v82.get("model_version"):
+        raise EvidenceError(f"{rel} is built on {against!r}; the published other-basins model is "
+                            f"{v82.get('model_version')!r}")
+    against_label = version_label(against)
+    prov = art.get("provenance") or {}
+    period, pdev = _dev_block(prov)
+    dev = res.get("development") or {}
+    model, bar, control = _scores(dev.get(label)), _scores(dev.get(J1_BAR)), _scores(dev.get(J1_CONTROL))
+    vs_bar = _brier_paired(res.get(f"{label}_minus_{J1_BAR}"))
+    folds = _span_of(res.get("by_fold"))
+    mine = {"log_loss": model["log_loss"], "brier": model["brier"], "auc": model["auc"], "n": model["n"],
+            "events": model["events"], "champion_log_loss": bar["log_loss"], "champion_brier": bar["brier"],
+            "champion_label": against_label, "d_log_loss_vs_champion_ci": vs_bar["d_ll_ci"], "period": folds}
+    recorded = {k: (pdev.get(k) if k != "period" else period) for k in mine}
+    for k in ("n", "events"):
+        recorded[k] = int(recorded[k]) if isinstance(recorded[k], (int, float)) else recorded[k]
+    for k in ("log_loss", "brier", "auc", "champion_log_loss", "champion_brier"):
+        recorded[k] = _finite(recorded[k])
+    recorded["d_log_loss_vs_champion_ci"] = _ci(recorded["d_log_loss_vs_champion_ci"])
+    differ = sorted(k for k in mine if mine[k] is None or mine[k] != recorded[k])
+    if differ:
+        raise EvidenceError(f"{rel}'s provenance does not record the result in {HURRICANE_J1_RESULTS}: {differ}")
+    further_key = next((k for k in res if re.fullmatch(r"further_read_\d{4}", k)), None)
+    fr = res.get(further_key) or {}
+    s26 = _season_2026_read(prov)
+    further = None
+    if fr:
+        f_model, f_bar = _scores(fr.get(label)), _scores(fr.get(J1_BAR))
+        if s26 and (_finite(s26.get("log_loss")) != f_model["log_loss"]
+                    or _finite(s26.get("champion_log_loss")) != f_bar["log_loss"]):
+            raise EvidenceError(f"{rel}'s further read is not the one in {HURRICANE_J1_RESULTS}")
+        further = {"season": further_key.rsplit("_", 1)[-1], "model": f_model, "bar": f_bar,
+                   "declared": fr.get("declared"), **_brier_paired(fr.get(f"{label}_minus_{J1_BAR}"))}
+    names = list(art.get("feature_names") or [])
+    v82_inputs = set(v82.get("selected_features") or [])
+    hours = sorted(int(h) for h in ir_source.OFFSETS.values())
+    rule = _script_constants(root, HURRICANE_J1_SCORER, ("LOOKS", "LEVEL"))
+    looks, level = [str(x) for x in rule.get("LOOKS") or ()], _finite(rule.get("LEVEL"))
+    pros = _read(root, HURRICANE_J1_PROSPECTIVE)
+    running, claimed = None, False
+    if pros is not None:
+        if list(pros.get("look_dates") or []) != looks or pros.get("entrant") != label:
+            raise EvidenceError(f"{HURRICANE_J1_PROSPECTIVE} records entrant {pros.get('entrant')!r} with looks "
+                                f"{pros.get('look_dates')}; the scorer's are {label!r} and {looks}")
+        claimed = any(bool(x.get("claim")) for x in (pros.get("looks") or {}).values())
+        run = pros.get("running") or {}
+        mk, bk = label.lower(), (against_label or "").replace(".", "_")
+        if (run.get(mk) or {}).get("n"):
+            d = run.get(f"{mk}_minus_{bk}") or {}
+            running = {"n": int(run[mk]["n"]), "events": int(run[mk].get("events") or 0), "storms": run.get("storms"),
+                       "log_loss": _finite(run[mk].get("log_loss")),
+                       "bar_log_loss": _finite((run.get(bk) or {}).get("log_loss")),
+                       "d_ll": _finite(d.get("d_log_loss")), "d_ll_ci": _ci(d.get("d_log_loss_ci")),
+                       "level": _finite(run.get("level"))}
+    return {
+        "label": label, "model_version": version, "file": rel, "shadow_key": ri_j1.SHADOW_KEY,
+        "live_basins": list(art["live_basins"]),
+        "live_basin_names": [HURRICANE_BASIN_NAMES.get(b, b) for b in art["live_basins"]],
+        "program": HURRICANE_V9_PROGRAM, "results": HURRICANE_J1_RESULTS, "prereg_tag": res.get("prereg_tag"),
+        "amendment": (m.group(1) if (m := re.search(r"amendments? ([\w, ]+)\)", str(res.get("program") or "")))
+                      else None),
+        "against": against_label, "against_version": against,
+        "trained": prov.get("trained"), "seeds": len(prov.get("seeds") or []),
+        "inputs": {"total": len(names), "against": sum(n in v82_inputs for n in names),
+                   "ir": sum(n in ir_features.IR_NAMES for n in names),
+                   "basin": sum(n in ri_j1.BASIN_FLAGS for n in names),
+                   "ir_hours_after": [h for h in hours if h > 0], "ir_hours_before": [-h for h in hours if h < 0]},
+        "dev_period": folds, "level": J1_INTERVAL_LEVEL,
+        "dev": {"model": model, "bar": bar, "control": control},
+        "vs_bar": vs_bar, "vs_control": _brier_paired(res.get(f"{label}_minus_{J1_CONTROL}")),
+        "noise": [{"seed": s.get("seed"), "d_ll": _finite(s.get("d_ll"))} for s in res.get("noise_control") or []],
+        "outcome_basins": list(res.get("by_basin") or {}),
+        "folds": {str(k): {"model": _scores(v.get(label)), "bar": _scores(v.get(J1_BAR))}
+                  for k, v in sorted((res.get("by_fold") or {}).items())},
+        "further": further,
+        "fragility": program_passage(root, HURRICANE_V9_PROGRAM, J1_FRAGILITY_LEAD),
+        "rule": {"looks": looks, "level": level, "scorer": HURRICANE_J1_SCORER},
+        "prospective": {"file": HURRICANE_J1_PROSPECTIVE, "exists": pros is not None,
+                        "records": (pros or {}).get("records_with_j1"), "scored_as_of": (pros or {}).get("scored_as_of"),
+                        "running": running, "claimed": claimed},
+        **_j1_scope(root, res, label, against_label, pros),
+    }
+
+
+def j1_shown_shadow(storm: dict, j1: dict | None) -> dict | None:
+    """The J1 forecast a storm card shows beside the published v8.2, or None. Only from bound evidence (``j1``);
+    only for a storm whose region (``ri_j1.storm_region``: live IO is NI, SH is SI west of 135 E and SP east of
+    it) is in the scope -- J1 is recorded on every JTWC storm but shown only there (amendment 14); only a record
+    the scorer marked "ok", with a probability, and made by the bound artifact (its version)."""
+    from hazardpulse.hurricane import ri_j1
+
+    if not j1 or not j1.get("scope"):
+        return None
+    if ri_j1.storm_region(str(storm.get("basin") or ""), _finite(storm.get("lon"))) not in j1["scope"]:
+        return None
+    v = storm.get(j1["shadow_key"]) or {}
+    if (v.get("status") != "ok" or _finite(v.get("probability")) is None
+            or v.get("model_version") != j1.get("model_version")):
+        return None
+    return v
+
+
+def _j1_scope(root: Path, res: dict, label: str, against_label: str | None, pros: dict | None) -> dict:
+    """Where the live entrant is shown and judged (amendment 14): ``ri_j1.scope()``, the regions (WP, NI, SI, SP)
+    whose 2024-2025 development log loss against v8.2 has a point estimate <= 0, as the registered J2 test wrote
+    them. Checked here: the file's live entrant is this artifact's label; the scope is that rule applied to the
+    same file's per-region table (South Indian and South Pacific apart); every region the J1 outcome also reports
+    carries the outcome's own numbers; the prospective record, when there is one, is judged on the same scope.
+    Also, as the file has them: the variant with the two southern regions apart (J2) and its 2026 test, per region
+    -- J1's own 2026 read is pooled only. No file: an empty scope, so J1 is shown nowhere."""
+    from hazardpulse.hurricane import ri_j1
+
+    rel = ri_j1.SCOPE_PATH.relative_to(ri_j1.ROOT).as_posix()
+    scope = [str(g) for g in ri_j1.scope(root / rel)]
+    d = _read(root, rel)
+    if d is None:
+        return {"scope": scope, "scope_file": None, "scope_amendment": None, "regions": [], "variant": None}
+    if d.get("live_entrant") != label:
+        raise EvidenceError(f"{rel} names the live entrant {d.get('live_entrant')!r}; the artifact is {label!r}")
+    bar_key = (against_label or "").replace(".", "")
+    table = (d.get("development_descriptive") or {}).get(f"{label}_vs_{bar_key}") or {}
+    outcome = res.get("by_basin") or {}
+    regions = []
+    for g, v in table.items():
+        a, b, p = _scores(v.get("a")), _scores(v.get("b")), _brier_paired(v.get("b_minus_a"))
+        mine = outcome.get(g)
+        if mine is not None and (_brier_paired(mine.get(f"{label}_minus_{J1_BAR}")) != p
+                                 or _scores(mine.get(label)) != b or _scores(mine.get(J1_BAR)) != a):
+            raise EvidenceError(f"{rel} reports {g} otherwise than {HURRICANE_J1_RESULTS}")
+        regions.append({"region": g, "name": HURRICANE_BASIN_NAMES.get(g, g), "n": b["n"], "events": b["events"],
+                        "mean_forecast": b["mean_forecast"], "bar_mean_forecast": a["mean_forecast"],
+                        "in_scope": g in scope, **p})
+    rule = sorted(r["region"] for r in regions if r["d_ll"] is not None and r["d_ll"] <= 0)
+    if sorted(scope) != rule:
+        raise EvidenceError(f"{rel} scopes {label} to {scope}; amendment 14's rule on its per-region table gives {rule}")
+    if pros is not None and pros.get("scope") is not None and sorted(pros["scope"]) != sorted(scope):
+        raise EvidenceError(f"{HURRICANE_J1_PROSPECTIVE} judges the claim on {pros['scope']}, the scope is {scope}")
+    season_key = next((k for k in d if re.fullmatch(r"season_\d{4}", k)), None)
+    season = d.get(season_key) or {}
+    variant = None
+    found = [(m.group(1), v) for k, v in season.items()
+             if (m := re.fullmatch(r"by_region_(\w+)_vs_" + re.escape(bar_key), k)) and m.group(1) != label]
+    if len(found) == 1:
+        [(name, per)] = found
+        vs_model = season.get(f"{name}_minus_{label}") or {}
+        variant = {"label": name, "carried": d.get("carried") == name, "program": d.get("program"),
+                   "prereg_tag": d.get("prereg_tag"), "season": season_key.rsplit("_", 1)[-1],
+                   "vs_model": _brier_paired(vs_model),
+                   "season_2026": [{"region": g, "name": HURRICANE_BASIN_NAMES.get(g, g),
+                                    "n": _scores(v.get("b"))["n"], "events": _scores(v.get("b"))["events"],
+                                    **_brier_paired(v.get("b_minus_a"))} for g, v in per.items()]}
+    m = re.search(r"amendments? ([\w, ]+)\)", str(d.get("program") or ""))
+    return {"scope": scope, "scope_file": rel, "scope_amendment": m.group(1) if m else None, "regions": regions,
+            "variant": variant}
+
+
+# ---------------------------------------------------------------------------
 # The research record: every registered test since the served models were chosen, carried or not
 # ---------------------------------------------------------------------------
 
@@ -1103,6 +1385,54 @@ def research_record(root: Path = ROOT) -> list[dict]:
                     "centre_km_gate": _finite(gates.get("centre_km_median")),
                     "teye_spearman": _finite(meas.get("teye_spearman")),
                     "teye_spearman_gate": _finite(gates.get("teye_spearman"))})
+    return out + _jtwc_research_rows(root)
+
+
+def _jtwc_research_rows(root: Path) -> list[dict]:
+    """The JTWC-basin tests: amendment 13's (J1 against the published v8.2) and amendment 14's (a variant against
+    J1), each read from the file its run wrote. The label the carried candidate became is its artifact's, and the
+    regions it is shown in are the library's scope (``ri_j1.scope``)."""
+    from hazardpulse.hurricane import ri_j1
+
+    out: list[dict] = []
+    v82_label = version_label((_read(root, HURRICANE_V82_SERVED) or {}).get("model_version"))
+    art_rel = ri_j1.MODEL_PATH.relative_to(ri_j1.ROOT).as_posix()
+    became = None
+    if (root / art_rel).exists():
+        became = str(ri_j1.load(root / art_rel)[0].get("label") or "") or None
+    scope_rel = ri_j1.SCOPE_PATH.relative_to(ri_j1.ROOT).as_posix()
+    scope = [HURRICANE_BASIN_NAMES.get(str(g), str(g)) for g in ri_j1.scope(root / scope_rel)]
+
+    def amendment(prog: Any) -> str | None:
+        m = re.search(r"amendments? ([\w, ]+)\)", str(prog or ""))
+        return m.group(1) if m else None
+    d = _read(root, HURRICANE_J1_RESULTS)
+    if d is not None:
+        cands = d.get("candidates") or {}
+        cand = next((k for k in cands if k != J1_CONTROL), None)
+        dv = (d.get("development") or {}).get(cand) or {}
+        carried = d.get("carried") == cand
+        out.append({"key": "j1", "kind": "vs_published", "file": HURRICANE_J1_RESULTS,
+                    "amendment": amendment(d.get("program")), "prereg_tag": d.get("prereg_tag"),
+                    "candidate": cand, "carried": carried, "became": became if carried and became == cand else None,
+                    "control_label": v82_label, "dev_period": _span_of(d.get("by_fold")),
+                    "n_features": len(cands.get(cand) or []) or None, "n": dv.get("n"), "events": dv.get("events"),
+                    **_brier_paired(d.get(f"{cand}_minus_{J1_BAR}")),
+                    "ir": _brier_paired(d.get(f"{cand}_minus_{J1_CONTROL}")),
+                    "noise": [_finite(s.get("d_ll")) for s in d.get("noise_control") or []] or None,
+                    "scope": scope})
+    j2 = _read(root, scope_rel)
+    if j2 is not None and became:
+        var = next((k for k in j2.get("names") or {} if k != became), None)
+        season_key = next((k for k in j2 if re.fullmatch(r"season_\d{4}", k)), None)
+        sea = j2.get(season_key) or {}
+        met = _scores((sea.get("metrics") or {}).get(var))
+        out.append({"key": "j2", "kind": "variant", "file": scope_rel, "amendment": amendment(j2.get("program")),
+                    "prereg_tag": j2.get("prereg_tag"), "candidate": var, "incumbent": became,
+                    "carried": j2.get("carried") == var, "live_entrant": j2.get("live_entrant"),
+                    "season": season_key.rsplit("_", 1)[-1] if season_key else None,
+                    "n": met["n"], "events": met["events"], **_brier_paired(sea.get(f"{var}_minus_{became}")),
+                    "scope": scope})
     return out
 
 

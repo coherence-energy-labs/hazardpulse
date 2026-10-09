@@ -191,7 +191,36 @@ def test_a_pointer_the_artifacts_or_the_prospective_test_do_not_know_is_refused(
 
 LABEL = re.compile(r"\bv\d+\.\d+\b")
 YEARS = re.compile(r"\b(?:19|20)\d\d\s*(?:-|–|&ndash;|\.\.|to)\s*(?:19|20)\d\d\b")
-SHADOW_KEY = re.compile(r"\bri_v\d+(?:_\d+)?_shadow\b")
+# every live record key of our RI models: ri_v9_shadow, ri_v10_2_shadow, ri_j1_shadow (until 2026-10-09 the pattern
+# knew only the v-family's, so a J-family key typed in page code would have passed)
+SHADOW_KEY = re.compile(r"\bri_[a-z]+\d+(?:_\d+)?_shadow\b")
+
+
+def artifact_labels(models_dir: Path = ROOT / "results" / "models") -> set[str]:
+    """Every label a model artifact gives itself in its own ``label`` field that the ``vN.N`` pattern does not
+    already cover -- J1's, and whichever label the next artifact carries -- read from the artifacts, never typed
+    here."""
+    out = set()
+    for p in sorted(models_dir.glob("*.json")):
+        try:
+            art = json.loads(p.read_text(encoding="utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            continue
+        lab = art.get("label") if isinstance(art, dict) else None
+        if isinstance(lab, str) and lab.strip() and not LABEL.fullmatch(lab):
+            out.add(lab.strip())
+    return out
+
+
+def label_pattern(labels: set[str]) -> re.Pattern:
+    """A whole-word match of any of ``labels`` (never matches when there are none)."""
+    if not labels:
+        return re.compile(r"(?!x)x")
+    return re.compile(r"(?<![\w.])(?:" + "|".join(re.escape(x) for x in sorted(labels, key=len, reverse=True))
+                      + r")(?![\w])")
+
+
+ARTIFACT_LABEL = label_pattern(artifact_labels())
 # the code that writes what pages say
 PAGE_CODE = sorted((ROOT / "src/hazardpulse/site").rglob("*.py")) + [
     ROOT / "src/hazardpulse/verification/evidence_pages.py", ROOT / "src/hazardpulse/verification/served_evidence.py"]
@@ -228,7 +257,7 @@ def _docstrings(tree: ast.AST) -> set[int]:
     return out
 
 
-def typed_tokens(source: str, patterns=(LABEL, YEARS)) -> list[tuple[int, str]]:
+def typed_tokens(source: str, patterns=(LABEL, YEARS, ARTIFACT_LABEL)) -> list[tuple[int, str]]:
     """(line, token) for every model label or year range inside a string literal of ``source`` -- f-string parts
     included, docstrings and comments not."""
     tree = ast.parse(source)
@@ -245,6 +274,40 @@ def test_the_lint_fails_on_the_old_page_code():
     found = {tok for _line, tok in typed_tokens(OLD_PAGE_CODE)}
     assert {"v10.1", "2022&ndash;2025", "2022&ndash;2024"} <= found
     assert any(t == "ri_v10_shadow" for _l, t in typed_tokens(OLD_PAGE_CODE, (SHADOW_KEY,)))
+
+
+def j1_page_code(label: str, key: str) -> str:
+    """Page code that types our satellite model's label and live key, as a J1 row written by hand would."""
+    return (f'\ndef _row(storm):\n    v = storm.get("{key}") or {{}}\n'
+            f'    return ("Our satellite model ({label})", f"{{v}} -- {label} is in test")\n'
+            f'def _other():\n    """A docstring may name {label}."""\n    return "{label}_minus_A"\n')
+
+
+def test_the_lint_covers_every_label_an_artifact_gives_itself_and_every_live_key():
+    """The vN.N pattern could not see J1. The lint now also matches every label a model artifact gives itself
+    (read from results/models), and every ri_*_shadow key -- so a J1 row typed by hand fails, while a docstring or a
+    results-file key that merely contains the label does not."""
+    from hazardpulse.hurricane import ri_j1
+    label = json.loads(ri_j1.MODEL_PATH.read_text(encoding="utf-8"))["label"]
+    assert label in artifact_labels() and not LABEL.search(label)          # the old pattern was blind to it
+    code = j1_page_code(label, ri_j1.SHADOW_KEY)
+    found = [tok for _l, tok in typed_tokens(code)]
+    assert found == [label, label]                                         # the row's two literals, nothing else
+    assert [t for _l, t in typed_tokens(code, (SHADOW_KEY,))] == [ri_j1.SHADOW_KEY]
+    assert not typed_tokens(code, (LABEL, YEARS))                          # what the lint saw before
+    assert hand_typed(f"<main><p>Our satellite model, {label}, is in test.</p></main>") == [label]
+
+
+def test_the_label_lint_follows_the_artifacts_not_a_list(tmp_path):
+    """A new artifact's label is covered the moment the artifact exists; a label no artifact gives is not."""
+    (tmp_path / "a.json").write_text(json.dumps({"label": "K7", "members": []}), encoding="utf-8")
+    (tmp_path / "b.json").write_text(json.dumps({"label": "v11.2"}), encoding="utf-8")   # LABEL covers v-labels
+    (tmp_path / "c.json").write_text("not json", encoding="utf-8")
+    labels = artifact_labels(tmp_path)
+    assert labels == {"K7"}
+    rx = label_pattern(labels)
+    assert rx.findall('"K7 row" "K7" "K7_minus_A" "TK7" "K77" "hurricane_ri_k7"') == ["K7", "K7"]
+    assert label_pattern(set()).findall("anything J1 K7") == []
 
 
 def test_page_code_types_no_model_label_and_no_year_range():
@@ -278,7 +341,7 @@ LICENCE = re.compile(r"License v\d+\.\d+")
 
 def hand_typed(page: str) -> list[str]:
     text = LICENCE.sub("", _prose_outside_blocks(page))
-    return LABEL.findall(text) + YEARS.findall(text)
+    return LABEL.findall(text) + YEARS.findall(text) + ARTIFACT_LABEL.findall(text)
 
 
 def test_hand_kept_prose_types_no_model_label_and_no_year_range():
@@ -359,7 +422,14 @@ def test_the_registry_carries_tc1_and_v9_1_and_marks_the_shown_model_from_the_po
     v9 = se.v9_hurricane()
     assert v9["model_version"] in by_version and v9["label"] == "v9.1"
     shown = [x for x in reg["entries"] if (x.get("lineage") or {}).get("shown_on_site")]
-    assert [x["output_schema"]["model_version"] for x in shown] == [se.shown_model()["model_version"]]
+    # two authorities, one per area: the pointer names the one NHC-area model shown beside NOAA's number; the
+    # JTWC-basin model is shown on the storm cards of its scope (ri_j1.scope), and on none when that is empty
+    from hazardpulse.hurricane import ri_j1
+    by_test = {}
+    for x in shown:
+        by_test.setdefault(x["lineage"]["prospective"]["file"], []).append(x["output_schema"]["model_version"])
+    assert by_test.pop("results/hurricane_prospective/v9_shadow.json") == [se.shown_model()["model_version"]]
+    assert by_test == ({se.HURRICANE_J1_PROSPECTIVE: [ri_j1.load()[1]]} if ri_j1.scope() else {})
 
 
 def test_every_model_label_on_the_site_is_one_an_artifact_names():

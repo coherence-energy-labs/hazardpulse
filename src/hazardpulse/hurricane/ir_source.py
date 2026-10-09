@@ -21,13 +21,25 @@ OFFSETS = {"p2": 2, "m4": -4}          # image hour relative to the cycle t
 UA = {"User-Agent": "HazardPulse/1.0 (hurricane RI IR features)"}
 
 
+def fix_positions(records: Iterable, cyc: dt.datetime, models: tuple[str, ...] = ("CARQ",)
+                  ) -> tuple[tuple[float, float] | None, tuple[float, float] | None]:
+    """tau-0 (lat, lon) at t and at t - 6 h, each from the first of ``models`` that has a fix at that cycle. The
+    NHC path reads CARQ (amendment 5). A JTWC-basin storm reads its best track, then the warning (amendment 13b:
+    ``("BEST", "JTWC")``, the analysis priority v8.2's live inputs already use)."""
+    at: dict[dt.datetime, dict[str, tuple[float, float]]] = {}
+    for r in records:
+        if r.model in models and r.tau_hours == 0 and r.lat is not None and r.lon is not None:
+            at.setdefault(r.cycle, {}).setdefault(r.model, (float(r.lat), float(r.lon)))
+
+    def pick(c):
+        got = at.get(c, {})
+        return next((got[m] for m in models if m in got), None)
+    return pick(cyc), pick(cyc - dt.timedelta(hours=6))
+
+
 def carq_positions(records: Iterable, cyc: dt.datetime) -> tuple[tuple[float, float] | None, tuple[float, float] | None]:
     """CARQ tau-0 (lat, lon) at t and at t - 6 h from the storm's a-deck."""
-    at = {}
-    for r in records:
-        if r.model == "CARQ" and r.tau_hours == 0 and r.lat is not None and r.lon is not None:
-            at.setdefault(r.cycle, (float(r.lat), float(r.lon)))
-    return at.get(cyc), at.get(cyc - dt.timedelta(hours=6))
+    return fix_positions(records, cyc, ("CARQ",))
 
 
 def extrapolate(p0, pm6, hours: float) -> tuple[float, float]:
@@ -81,9 +93,10 @@ def crop(counts, lat, lon, centre) -> dict:
             "lon": (centre[1] + dlon[cols]).astype(np.float32), "centre": np.array(centre, np.float64)}
 
 
-def centres(records: Iterable, cyc: dt.datetime) -> dict[str, tuple[dt.datetime, tuple[float, float]]] | None:
-    """``{tag: (image hour, centre)}`` for a cycle, or None without a CARQ fix at t."""
-    p0, pm6 = carq_positions(records, cyc)
+def centres(records: Iterable, cyc: dt.datetime, models: tuple[str, ...] = ("CARQ",)
+            ) -> dict[str, tuple[dt.datetime, tuple[float, float]]] | None:
+    """``{tag: (image hour, centre)}`` for a cycle, or None without a fix at t (``models`` as in ``fix_positions``)."""
+    p0, pm6 = fix_positions(records, cyc, models)
     if p0 is None:
         return None
     return {tag: (cyc + dt.timedelta(hours=h), extrapolate(p0, pm6, h)) for tag, h in OFFSETS.items()}
