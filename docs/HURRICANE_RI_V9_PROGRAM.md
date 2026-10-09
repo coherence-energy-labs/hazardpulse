@@ -643,6 +643,56 @@ any cycle (amendment 9).
   against), on shared cycles.
 - Amendment 4's display rule applies unchanged: the newest carried challenger is v10.4.
 
+## Amendment 10 -- H9: the storm's coherence state (2026-10-08, before any coherence feature is compared with an outcome)
+
+**Why.** Every model in this program sees a storm at one cycle plus its 6-hour change. The coherence framework's
+concept, fitted to this need, is that organization is created by a source, decays unless fed, and persists only
+while it is paid for. Two storms that look the same now can differ: one has held deep, symmetric, retained
+convection over its core for a day, while the other has a fresh burst. That memory is information the models
+do not have. H8 tested the concept's static, spatial form; H9 tests its time form.
+
+**Features (8):** `src/hazardpulse/hurricane/coherence_state.py`, the same code for training and live. Every
+constant is fixed in that file. They are computed from the same storm's rows at or before t, within 36 h, and
+never from a later cycle (tested).
+- **Sources at each past cycle:**
+  - core deep convection (`ir_vcold_0_100`);
+  - ring symmetry (`-ir_asym_50_200`);
+  - heating retention (`h8_core_retention`);
+  - intensity tendency per 6 h (from `v0` at consecutive cycles).
+- **The state is each source's exponentially forgotten mean:**
+  - `coh_conv_12` and `coh_conv_36` (core convection, half-day and day-and-a-half memory);
+  - `coh_sym_36` (symmetry);
+  - `coh_hold_36` (retention);
+  - `coh_spin_36` (intensity tendency).
+- **Plus:**
+  - `coh_conv_rise` (convection now minus its 36-h memory: the source above what the storm has held);
+  - `coh_persist` (the fraction of the past 36 h's cycles with deep convection over at least half the core);
+  - `coh_n` (the memory's support).
+- **Inputs measured before this registration** (no outcome read): the state exists on 3,522 of the 4,692
+  development cycles (every cycle with IR); `coh_spin_36` on 4,431.
+
+**Candidate:** **H9 = H8 + the 8 coherence features**, with H8's settings. The coherence features are
+unconstrained.
+
+**Control:** H8, recomputed by the same script (`scripts/hurricane_ri_h9.py`), must reproduce amendment 8's
+development log loss (0.14161766094567663) to 1e-12, or the run stops.
+
+**Carried rule (amendment 8's):** H9 is carried iff its pooled 30/24 log loss AND its pooled four-threshold
+Brier are both below H8's.
+- Reported, all descriptive: paired 95% intervals, POD at HCCA's false-alarm rate, the drift check, and the
+  coherence features' share of split gain.
+
+**2026:** a declared further read.
+
+**A carried H9 (v10.5).** Before it scores any cycle, an amendment like amendment 9 registers it:
+- live inputs: the storm's earlier cycles' IR images and decks;
+- its claim at half of v10.4's error budget.
+
+**Known before the result.**
+- **The live record holds more cycles.** Training's memory covers the storm's cycles that are in the case
+  table, which are 94% of 6-hour steps. A live memory would read every earlier cycle.
+- **Partial overlap.** `dv_past12` and `dv_past24` already carry some of the intensity tendency.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
