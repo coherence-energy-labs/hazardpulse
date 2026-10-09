@@ -17,6 +17,7 @@ import argparse
 import datetime as dt
 import gzip
 import json
+import signal
 import sys
 import time
 import urllib.request
@@ -30,6 +31,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from hazardpulse.hurricane import goes_abi as g  # noqa: E402
 
 TASKS = ROOT / "results" / "goes" / "tasks.jsonl.gz"
+TASK_BUDGET_S = 180        # one crop (network reads included); a read with no deadline hung shard 16 for 5 h 50 min
 EARLY_HOURS = 10           # no successful crop in the first this-many hours: abort the shard
 MIN_OK_FRACTION = 0.5      # fewer successful crops than this fraction of those attempted: the shard fails
 
@@ -45,6 +47,32 @@ def fetch_text(url: str, tries: int = 4) -> str:
                 raise
             time.sleep(2 * (i + 1))
     raise RuntimeError("unreachable")
+
+
+class Deadline(Exception):
+    pass
+
+
+class _deadline:
+    """Bound a block's wall time with SIGALRM where the platform has it (the Linux runners); elsewhere a no-op, and
+    the per-request HTTP timeout in ``goes_abi`` still bounds every read."""
+
+    def __init__(self, seconds: int):
+        self.seconds = int(seconds)
+
+    def __enter__(self):
+        if hasattr(signal, "SIGALRM"):
+            def _raise(signum, frame):
+                raise Deadline(f"crop exceeded {self.seconds} s")
+            self.prev = signal.signal(signal.SIGALRM, _raise)
+            signal.alarm(self.seconds)
+        return self
+
+    def __exit__(self, *exc):
+        if hasattr(signal, "SIGALRM"):
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, self.prev)
+        return False
 
 
 def task_key(t: dict) -> str:
@@ -84,30 +112,35 @@ def main(argv=None) -> int:
                 by_sat.setdefault(g.satellite_for(hour, t["lon"]), []).append(t)
             except ValueError:
                 by_sat.setdefault("", []).append(t)
+        def record(t, img=None, la=np.nan, lo=np.nan, eye=False, scan="", st="ok"):
+            # one task's fields are appended together, or not at all: run 2 appended a key before its crop raised,
+            # and every later image in shard 8 was filed under its neighbour's key
+            keys.append(task_key(t))
+            imgs.append(img if img is not None else np.full((g.N_R, g.N_AZ), g.MISSING, np.uint8))
+            lats.append(la), lons.append(lo), eyes.append(eye), scans.append(scan), status.append(st)
+
         for sat, group in by_sat.items():
-            key, fh5, h5 = None, None, None
+            key, fh5, h5, disk, opened = None, None, None, None, "missing: no scan"
             try:
                 if sat:
                     key = g.first_scan_at_or_after(g.list_keys(sat, hour, fetch_text), hour)
                 if key is not None:
                     fh5, h5 = g.open_full_disk(sat, key)
                     disk = g.FullDisk(h5)
+            except Exception as exc:  # noqa: BLE001 -- the whole group is recorded missing, the run continues
+                disk, opened = None, f"missing: {type(exc).__name__}: {str(exc)[:120]}"
+            try:
                 for t in group:
-                    keys.append(task_key(t))
-                    if key is None:
-                        imgs.append(np.full((g.N_R, g.N_AZ), g.MISSING, np.uint8))
-                        lats.append(np.nan), lons.append(np.nan), eyes.append(False), scans.append("")
-                        status.append("missing: no scan")
+                    if disk is None:
+                        record(t, st=opened)
                         continue
-                    img, la, lo, eye = g.polar_recentred(disk, t["lat"], t["lon"])
-                    imgs.append(img), lats.append(la), lons.append(lo), eyes.append(eye), scans.append(f"{sat}/{key}")
-                    status.append("ok")
-            except Exception as exc:  # noqa: BLE001 -- recorded per task, the run continues
-                n_done = sum(1 for k in keys if k in {task_key(t) for t in group})
-                for t in group[n_done:]:
-                    keys.append(task_key(t)), imgs.append(np.full((g.N_R, g.N_AZ), g.MISSING, np.uint8))
-                    lats.append(np.nan), lons.append(np.nan), eyes.append(False), scans.append("")
-                    status.append(f"missing: {type(exc).__name__}: {str(exc)[:120]}")
+                    try:
+                        with _deadline(TASK_BUDGET_S):
+                            img, la, lo, eye = g.polar_recentred(disk, t["lat"], t["lon"])
+                    except Exception as exc:  # noqa: BLE001 -- this task only
+                        record(t, st=f"missing: {type(exc).__name__}: {str(exc)[:120]}")
+                        continue
+                    record(t, img, la, lo, eye, f"{sat}/{key}", "ok")
             finally:
                 if h5 is not None:
                     h5.close()
@@ -124,6 +157,9 @@ def main(argv=None) -> int:
             el = time.time() - t_start
             print(f"{done_hours}/{len(hours)} hours, {len(keys)} tasks, {el / 60:.1f} min "
                   f"({el / done_hours:.1f} s/hour)", flush=True)
+    lengths = {len(x) for x in (keys, imgs, lats, lons, eyes, scans, status)}
+    if len(lengths) != 1:
+        raise SystemExit(f"misaligned record arrays {lengths}: refusing to save images under the wrong keys")
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     path = out / f"goes_shard_{a.shard:02d}_of_{a.of:02d}.npz"

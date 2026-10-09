@@ -245,10 +245,16 @@ def polar_recentred(disk: "FullDisk", lat: float, lon: float) -> tuple[np.ndarra
     return img_eye, elat, elon, True
 
 
+READ_TIMEOUT_S = 60.0     # one HTTP request; a read with no deadline hung a collection shard for 5 h 50 min
+
+
 def open_full_disk(sat: str, key: str):
-    """(file handle, h5py.File) for a full-disk key, read by HTTP byte ranges. Close both when done."""
+    """(file handle, h5py.File) for a full-disk key, read by HTTP byte ranges, every request bounded by
+    READ_TIMEOUT_S. Close both when done."""
+    import aiohttp
     import fsspec
     import h5py
-    fh = fsspec.filesystem("http").open(f"{BUCKET.format(sat=sat)}/{key}", "rb", block_size=2 ** 20,
-                                        cache_type="blockcache")
+    fs = fsspec.filesystem("http", client_kwargs={"timeout": aiohttp.ClientTimeout(total=READ_TIMEOUT_S)},
+                           skip_instance_cache=True)
+    fh = fs.open(f"{BUCKET.format(sat=sat)}/{key}", "rb", block_size=2 ** 20, cache_type="blockcache")
     return fh, h5py.File(fh, "r")
