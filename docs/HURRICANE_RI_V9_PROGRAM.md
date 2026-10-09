@@ -977,6 +977,68 @@ no RI label.
 **Unchanged from amendment 12:** the candidate, the control, the carried rule, the descriptive checks, the noise
 control and the 2026 read.
 
+### Amendment 12b outcome (2026-10-09): G1 NOT carried -- 2 km inner-core structure adds nothing H8 lacks
+
+**Collection** (run 37930285529, commit bec84a879, tag `prereg-hurricane-ri-amend12b`).
+- **Crops:** 43,565 tasks, each exactly once. 43,428 were read. Of the 137 missing, 136 are hours with no GOES scan
+  in NOAA's bucket and 1 is a corrupt chunk; they are spread over 26 storms, at most 16 in any one.
+- **Both gates passed:**
+
+  | ADT gate | measured | required |
+  |---|---|---|
+  | matched crops | 29,010 | at least 20,000 |
+  | held-out HSS | **0.834** (0.839 was measured on the old crops) | at least 0.80 |
+  | eye fraction below 50 kt | 0.011 | at most 0.03 |
+  | centre median | 9.6 km | within 15 km |
+  | eye-temperature Spearman | 0.959 | at least 0.90 |
+
+- **Input QA on the development rows** (best-track v0, read at t):
+
+  | v0 | eye fraction |
+  |---|---|
+  | below 50 kt | 0.005 (0.17-0.20 under amendment 12's rule) |
+  | 50-64 kt | 0.017 |
+  | 113 kt and above | 0.839 |
+
+  Eye edge against CARQ RMW: Spearman +0.369 (n 459, p 3e-16); +0.31 below 64 kt, where the old rule gave 0.07.
+- **Coverage:** 4,668 of 4,692 development cycles have their latest hour.
+
+**The registered test** (`results/calibration/hurricane_ri_g1.json`).
+- **Control:** H8 recomputed reproduced amendment 8's log loss, 0.14161766094567663, to 1e-12.
+- **Development:** pooled 30/24, n 2,871 test rows, 193 events.
+
+  | | H8 | G1 | G1 − H8 (95% CI) |
+  |---|---|---|---|
+  | log loss | 0.14162 | 0.14223 | +0.00061 [-0.00027, +0.00155] |
+  | four-threshold Brier | 0.15261 | 0.15377 | **+0.00116 [+0.00008, +0.00233]** |
+  | AUC | 0.9340 | 0.9337 | |
+  | POD at HCCA's false-alarm rate | 0.194 | 0.209 | (HCCA 0.236) |
+
+- **Carried rule:** G1 must beat H8 on BOTH log loss and Brier. It is worse on both. **NOT carried; H8 stands.**
+- **Noise control:** the same 12 columns shuffled within season give dLL -0.00005, +0.00028 and +0.00052 for seeds
+  1-3. G1's +0.00061 sits in that range: the features behave as noise would.
+- **Split gain:** G1's share is 0.024 in total, at most 0.0043 for any one feature (ring deep convection).
+- **Drift:** no flag.
+- **2026 further read** (586 cycles, no claim): log loss 0.1172 (H8) vs 0.1155 (G1), dLL -0.0017
+  [-0.0053, +0.0019]; dBrier4 -0.0009 [-0.0049, +0.0030]. The direction is opposite to development, and both
+  intervals span 0.
+
+**Reading.**
+- **The input is sound.** The eye now agrees with ADT at HSS 0.83 and the eye edge tracks the RMW. A defective
+  input is ruled out as the reason for the null.
+- **The result.** Hourly 2 km inner-core structure (core and ring convection, eye contrast, eyewall edge,
+  symmetry, persistence, trends) adds no RI information beyond H8 at the 24 h horizon in 2020-2025.
+- **Why redundancy is plausible.** H8 already holds amendment 5's 8 km IR convective-structure features (carried
+  as v10.3). It also holds the operational aids, which ingest GOES IR themselves: SHIPS's IR predictors, the
+  DTOPS and RII consensus.
+- **The third null over H8 in a row.** Three structurally different families have now failed against it:
+  amendment 10's coherence state, amendment 11's fusion, and this one. The development test resolves a dLL of
+  about ±0.0009 (0.6% of log loss).
+- **What this means for the next step.** H8 sits at the floor that 193 events can certify. The next real gain
+  needs more independent RI events (earlier seasons, more basins) or a different contract, not another input
+  family on the same 193.
+- **Not a defect:** this is the registered answer, recorded as found.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
