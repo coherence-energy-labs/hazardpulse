@@ -26,13 +26,18 @@ Read it before starting model work, and update it when a branch is decided.
    The site shows numbers bound to artifacts, never typed.
 6. **Kills** are written here with the smallest witness and what survives.
 
-## Champions (2026-10-03)
+## Champions (2026-10-09)
 
 | hazard | published | ours, shown or in shadow | evidence |
 |---|---|---|---|
-| Hurricane RI, NHC basins | NOAA DTOPS | v10.1 shown beside it; challengers **v10.2** (monotone) and **v10.3** (+ satellite IR) in shadow | `docs/HURRICANE_RI_V9_PROGRAM.md` amendments 2-6 |
-| Tornado | v3 (+NWS warning state) | -- | `docs/TORNADO_MODEL_PROGRAM.md` |
-| Earthquake M6+ | **S1 = C0 + GEAR1** (since 2026-10-03) | -- | `docs/EARTHQUAKE_FORECAST_PROGRAM.md` section 10 |
+| Hurricane RI, NHC basins | NOAA DTOPS | **v10.1 shown** beside it (named only in `results/hurricane_prospective/shown_model.json`; amendment 4 decides it at each look). In shadow: **v9.1**, the one entrant whose claim would switch what is *published* (amendment 1, 97.5%); challengers **v10.2** (monotone), **v10.3** (+ satellite IR) and **v10.4** (+ the balanced response, H8) | `docs/HURRICANE_RI_V9_PROGRAM.md` amendments 1-9; live record `results/hurricane_prospective/v9_shadow.json` |
+| Hurricane RI, other basins | HazardPulse v8.2 | -- | `results/calibration/hurricane_ri_evaluation.json`, `hurricane_ri_v8_2_test_composition.json` |
+| Hurricane track and intensity, NHC basins | -- (NHC's official forecast is the authority) | **TC1 shown beside OFCL** on every NHC storm card since 2026-10-08 (`hurricane_tc1-<state digest>`); **TC1+O** recorded, not shown | `docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md` amendment 1; `results/hurricane_tc1/` |
+| Tornado | v3 (+NWS warning state) | -- | `docs/TORNADO_MODEL_PROGRAM.md` (amendment 10: stays served after the format change) |
+| Earthquake M6+ | **S1 = C0 + GEAR1** (since 2026-10-03) | -- | `docs/EARTHQUAKE_FORECAST_PROGRAM.md` sections 10-11 |
+
+The site shows each of these from its artifact (methods, registry, the hurricane page), and since 2026-10-09 the
+methods page carries the research record below -- carried and not carried -- each row read from its results file.
 
 ## Open branches, ranked
 
@@ -54,8 +59,9 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
    - Lesson: one bucket connection gives ~0.9 MB/s and eight give ~10, so parallelise any bulk
      S3 pull.
    - Next from it: a finer inner core. GMGSI is 8 km, so native GOES ABI band 13 (2 km, on AWS,
-     real-time) would resolve eyes and rings properly. Also a learned representation (a small CNN
-     on the crops) in place of the 14 hand-made statistics, with the same controls.
+     real-time) would resolve eyes and rings properly. **Tested as G1 (below): not carried.** Still open: a
+     learned representation (a small CNN on the crops) in place of the hand-made statistics, with the same
+     controls.
 2. **H2. Environment from GFS analyses** (`s3://noaa-gfs-bdp-pds`, 2021+, real-time).
    - Features: 850-200 hPa shear, 700-500 hPa RH, SST and potential intensity at t, computed by one
      code for training and live.
@@ -108,6 +114,25 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
      3. **The tangential-wind tendency itself** (the Sawyer-Eliassen secondary circulation), not the
         balanced heating. It is one more elliptic solve on the same grid.
      - Each needs its own registration; amendment 8's dev data is read.
+8. **H9. DONE (2026-10-08): the storm's coherence state, NOT carried** (amendment 10, `hurricane_ri_h9.json`).
+   dev dLL +0.00275 [+0.00111, +0.00455] against H8, worse beyond its interval. Killed below, with what survives.
+9. **Fusion. DONE (2026-10-08): coherence fusion of every RI source, claim NOT met** (amendment 11,
+   `hurricane_ri_fusion.json`). Fusion minus H8 on DEV 2024-2025 +0.0036 [-0.0014, +0.0082]. Killed below.
+10. **G1. DONE (2026-10-09): the inner core from GOES 2 km, hourly, NOT carried** (amendments 12, 12b, tag
+    `prereg-hurricane-ri-amend12b`, `hurricane_ri_g1.json`).
+    - **The input was sound first.** Amendment 12's eye rule over-called eyes in weak storms; 12b's eye, by ADT's
+      closed-ring definition, passed every registered gate against CIMSS ADT before any outcome was read:
+      held-out (2024-2026) HSS 0.834 (gate 0.80), eye fraction below 50 kt 0.011 (gate 0.03), centre median
+      9.6 km, eye-temperature Spearman 0.959, 29,010 matched crops. `results/goes/adt_check.json` is that check's
+      own output, committed 2026-10-09 from the CI artifact `goes-g1-adt-check` of run 37930285529 (commit
+      bec84a879), SHA-256 `252916ba2bbdff5b7b2f3bd9a37c48ab2f5a8bfc21c0318db11ec331d976faab`.
+    - **Result.** G1 - H8 on dev: dLL +0.00061 [-0.00027, +0.00155], dBrier4 **+0.00116 [+0.00008, +0.00233]**:
+      worse on both, so not carried; H8 (v10.4) stands. The noise control (the 12 columns shuffled within
+      season, seeds 1-3) gave dLL -0.00005 to +0.00052. 2026 further read: -0.0017 [-0.0053, +0.0019], the other
+      direction, spanning 0.
+    - **Reading.** The third null over H8 in a row (H9, fusion, G1). With 193 development events, H8 sits at the
+      floor the data can certify (a dLL of about +-0.0009). The next real gain needs more independent RI events
+      (earlier seasons, more basins) or a different contract, not another input family on the same 193.
 
 ### Hurricane track and intensity (program TC1, `docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md`)
 
@@ -120,12 +145,15 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
      ties.
    - **2026 so far:** track ties OFCL (-0.90). Equal weights would be +15.25 worse, so the online weighting
      does the work.
-2. **TC1-live. Live, on the site, beside NHC's forecast.** An amendment before the first live forecast:
-   - a persisted online state, updated each run;
-   - the live state equal to the backtest's on the same decks;
-   - each test record made at t + 3 h 30, as the RI program's are.
-   - Open risk: the backtest used final decks, so an aid that arrived after t + 3 h 30 was counted. Measure
-     that on the live record.
+2. **TC1-live. DONE (2026-10-08): live, on the site, beside NHC's forecast** (program amendment 1).
+   - The scorer replays the season from the saved models (`results/hurricane_tc1/state.json`); the snapshot was
+     refused unless its replay equals one pass over 2020-2026 bit for bit (6,618 track and 6,895 intensity
+     forecasts per product).
+   - Each NHC storm card shows TC1 beside OFCL, lead by lead. Since 2026-10-09 TC1 has a model identity,
+     `hurricane_tc1-<12 hex>` (the content digest of `state.json`), a registry entry, and a methods entry with
+     its DEV claims, the HCCA comparison stated as descriptive at 95%, TC1+O, and the 2026 further read.
+   - Open risk: the backtest used final decks, so an aid that arrived after t + 3 h 30 was counted. Measured at
+     the looks (2026-12-01, 2027-12-01) on the live record.
 3. **TC2. Intensity conditioned on our RI probability.** Intensity is where TC1 adds nothing, and RI is where
    every consensus fails.
 4. **TC3. Coherence steering (screened-Poisson PV inversion of the GFS analysis) -- ranked LOW, with the
@@ -136,7 +164,8 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
    - **The cheap test that decides it.** Do TC1's DEV track errors grow with weak analysis steering (850-200 hPa
      layer mean from GFS at t), beyond what the members' spread already shows? If not, TC3 is dead without
      building the inversion.
-5. **G1. Genesis probability for invests, against NHC's outlook (TWO).** Feasibility checked 2026-10-08.
+5. **GEN1. Genesis probability for invests, against NHC's outlook (TWO).** Feasibility checked 2026-10-08.
+   (Named G1 until 2026-10-09; renamed because G1 is also the 2 km GOES test of the RI program, amendment 12.)
    - NHC's ATCF archive keeps no invest decks: `atcf/archive/2024/` has 57 AL files, none numbered 90-99.
    - Invest decks exist only in the season's real-time `aid_public` and `btk`.
    - History must come from UCAR RAL's real-time archive (to be confirmed for 2020+).
@@ -378,6 +407,7 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
 | A storm's coherence state (exponentially forgotten memory of core convection, symmetry, heating retention, intensity tendency over 36 h) adds to RI (amendment 10, H9) | dev dLL **+0.00275 [+0.00111, +0.00455]** vs H8 (worse); the same features shuffled cost ~6x less; the retention memory alone +0.00155 | persistence of deep core convection without the RMW-derived memory (-0.00049 [-0.00108, +0.00006], single-feature diagnostic; needs its own registration on unread data) |
 | Coherence fusion of every RI source (Boltzmann weights on forgotten verified log loss, amendment 11) beats the best single source | dev 30/24 LL fusion 0.1527 vs H8 0.1490, d +0.0036 [-0.0014, +0.0082]; NOAA's aids 0.02-0.11 worse than our models, which already take them as inputs | the law as a weighting rule: it beats equal-weight pools by ~0.013. It wins where sources are independent and comparable (TC1 track vs HCCA), not where the best one already holds the rest |
 | An adaptive coherence reach (each M5+ kernel width = distance to its k-th nearest earlier event, l ~ rho^-1/2) beats A's fixed 20 km kernel (earthquake, FIT-stage probe 2026-10-08) | FIT IG 2.4391-2.5029 vs fixed 2.5166 (control reproduced 2.517); every variant worse, narrower always better | nothing at 2-degree cells: sub-50 km reach is sub-cell in active regions, and widening in sparse ones spreads mass off the faults where M6+ recur |
+| Hourly 2 km inner-core structure from GOES (core and ring convection, eye, eyewall edge, symmetry, persistence, trends) adds RI information beyond H8 (amendment 12b, G1) | dev G1 - H8: dLL +0.00061 [-0.00027, +0.00155], dBrier4 +0.00116 [+0.00008, +0.00233]; the shuffled-column noise control gave dLL -0.00005 to +0.00052. The input passed ADT's gates first (held-out HSS 0.834) | nothing at 24 h on 2020-2025's 193 events: the operational aids already ingest GOES IR. More independent events (earlier seasons, more basins) or another contract |
 | A live calibrator from the matured live record, as soon as one exists | tornado 2026-10-04: fitted on 794 storm-forecasts with 0 tornadoes, it published 567-1,822x the model's chance; held-out Brier 467x worse | a calibrator with >= 30 distinct events and a held-out win over the model (`calibrator_admissible`, PR #22) |
 
 **Blocked, not killed:** CIRA's SHIPS developmental data. `rammb-data.cira.colostate.edu` returns

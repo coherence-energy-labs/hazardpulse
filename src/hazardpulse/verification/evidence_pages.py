@@ -13,6 +13,7 @@ bound to the served artifact says so in words; it never falls back to an older m
 from __future__ import annotations
 
 import html
+import math
 import re
 from pathlib import Path
 from typing import Any, Callable
@@ -72,6 +73,15 @@ def _pct_fine(x: float | None) -> str:
     return f"{v:.3f}%"
 
 
+def _pct_sig(x: float | None, sig: int = 2) -> str:
+    """A small probability as a percentage to ``sig`` significant figures: 6.9e-4 -> 0.069%, 1.3e-5 -> 0.0013%."""
+    if x is None or x <= 0:
+        return "--"
+    v = 100.0 * float(x)
+    d = max(0, sig - 1 - math.floor(math.log10(v)))
+    return f"{v:.{d}f}%"
+
+
 def _n(x: Any) -> str:
     try:
         return f"{int(x):,}"
@@ -104,8 +114,14 @@ def _doc(path: str) -> str:
     return f'<a href="{REPO}/blob/main/{_e(path)}" rel="noopener">{_e(path)}</a>'
 
 
-def _years(period: str) -> str:
-    return period
+def _years(period: Any) -> str:
+    """A span read from an artifact ("2022-2025") with an en dash; "--" when the artifact gives none."""
+    return re.sub(r"(\d)-(\d)", r"\1&ndash;\2", _e(period)) if period else "--"
+
+
+def _level(x: float | None) -> str:
+    """A confidence level read from a results file: 0.9875 -> "98.75%", 0.95 -> "95%"."""
+    return "--" if x is None else (f"{100 * x:.4f}".rstrip("0").rstrip(".") + "%")
 
 
 def _when(t: dict) -> str:
@@ -159,27 +175,35 @@ def methods_simple(ev: dict) -> str:
     if hu:
         t = hu["test"]
         ob = (hu.get("other_basins") or {}).get("test") or {}
+        v82 = _e((hu.get("other_basins") or {}).get("label") or "")
         same = hu.get("v8_2_same_cases") or {}
         beaten = [_e(c["against"]) for c in hu.get("claims", []) if c["better"]]
+        ours = hu.get("ours") or {}
+        od = ours.get("dev") or {}
         out.append(_card(
             "hz-hu", "Hurricane",
             "<p>The chance of rapid intensification: maximum sustained winds rising 30 knots or more in 24 hours. For "
             f"storms the National Hurricane Center covers we publish {_e(hu['candidate_name'].split(' (')[0])}, which "
             + (f"beat {_join(beaten)} " if beaten else "was chosen ")
             + f"in a test written down in advance and run once on {_when(t)}: AUC {_f(t['auc'])}"
-            + (f", against {_f(same.get('auc'))} for our v8.2 model on the same cycles" if same.get("auc") is not None else "")
+            + (f", against {_f(same.get('auc'))} for our {v82} model on the same cycles"
+               if same.get("auc") is not None and v82 else "")
             + "."
-            + (f" Everywhere else we publish v8.2 (its method: AUC {_f(ob.get('auc'))} on {_n(ob.get('n'))} held-out "
+            + (f" Everywhere else we publish {v82} (its method: AUC {_f(ob.get('auc'))} on {_n(ob.get('n'))} held-out "
                f"{_when(ob)} cycles from every basin, with best-track inputs"
                + ("; the published model&rsquo;s calibration was fitted on those same cycles"
                   if ((hu.get("other_basins") or {}).get("composition") or {}).get(
                       "served_calibration_fitted_on_test_cases") else "") + ")."
-               if ob.get("auc") is not None else "")
+               if ob.get("auc") is not None and v82 else "")
             + " Each storm says which."
-            + (f" Our newer model, v10.1, scored better than DTOPS over 2022&ndash;2025, each season forecast only "
-               f"from earlier ones (log loss {_f(hu['ours']['dev']['log_loss'])} against "
-               f"{_f(hu['ours']['dev']['dtops_log_loss'])}); it is shown beside DTOPS, labelled experimental, while a "
-               "test written down in advance scores it on new forecasts." if hu.get("ours") else "")
+            + (f" Our newer model, {_e(ours['label'])}, scored better than DTOPS over {_years(ours['dev_period'])}, each "
+               f"season forecast only from earlier ones (log loss {_f(od['log_loss'])} against "
+               f"{_f(od['dtops_log_loss'])}); it is shown beside DTOPS, labelled experimental, while a "
+               "test written down in advance scores it on new forecasts."
+               if ours and od.get("log_loss") is not None and od.get("dtops_log_loss") is not None
+               and ours.get("dev_period") else
+               (f" Our model {_e(ours['label'])} is shown beside DTOPS, labelled experimental, while a test written "
+                "down in advance scores it on new forecasts." if ours else ""))
             + "</p>"))
     else:
         out.append(_card("hz-hu", "Hurricane",
@@ -216,9 +240,51 @@ def _gear1_sentence(g1: dict | None) -> str:
     if not g1 or not g1.get("dev_vs_recalibrated"):
         return ""
     d = g1["dev_vs_recalibrated"]["ig_per_target"]
-    return ("; GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights fitted on "
-            f"2018&ndash;2020, decided on {_e(g1['decided_on']).replace('-', '&ndash;')} against C0 recalibrated on the "
+    return ("; GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights "
+            + (f"fitted on {_years(g1['fitted_on'])}, " if g1.get("fitted_on") else "")
+            + f"decided on {_years(g1['decided_on'])} against C0 recalibrated on the "
             f"same years, {_signed(d['diff'])}{_ci(d['ci'], signed=True)} {EQ_IG_UNIT}")
+
+
+def _cell_region(grid: dict | None, row: int, col: int) -> str | None:
+    """The Flinn-Engdahl region of a forecast cell's centre, from the served grid's own geometry."""
+    try:
+        lat = float(grid["lat_min"]) + (row + 0.5) * float(grid["dlat"])
+        lon = float(grid["lon_min"]) + (col + 0.5) * float(grid["dlon"])
+    except (TypeError, KeyError, ValueError):
+        return None
+    from hazardpulse.site.places import fe_region
+    return fe_region(lat, lon)
+
+
+def earthquake_inputs_sentence(eq: dict | None) -> str:
+    """What the served map's inputs are by ComCat event type, and what the registered test of removing the
+    non-earthquakes decided (amendment E3), read from its run."""
+    it = (eq or {}).get("input_types")
+    if not it or not it.get("non_earthquakes"):
+        return ""
+    top = it.get("top_cell") or {}
+    region = _cell_region(eq.get("grid"), top["row"], top["col"]) if top else None
+    ci = it.get("dev_d_ig_ci") or [None, None]
+    s = (f"Its inputs are ComCat&rsquo;s M5+ events of every type, not only earthquakes: {_n(it['non_earthquakes'])} "
+         f"of the {_n(it['frozen_events'])} in its frozen catalog are other events, nuclear tests among them")
+    if top.get("with") and top.get("without"):
+        s += (f". The cell with the most of them" + (f" ({_e(region)}, {_n(top['removed'])} events)" if region else "")
+              + f" averaged a {_pct_sig(top['with'])} chance over "
+              + (f"{_years(it['dev_years'])}" if it.get("dev_years") else "the decision years")
+              + f", against {_pct_sig(top['without'])} with earthquakes only, {top['with'] / top['without']:.0f} "
+                "times lower")
+    if it.get("margin") is not None and ci[0] is not None:
+        s += (f". A test written down in advance was to remove them all unless the 95% interval of the change in "
+              f"information reached below {_signed(it['margin'], 3)} {EQ_IG_UNIT}; it measured "
+              f"{_signed(it['dev_d_ig'], 4)}{_ci(ci, 4, signed=True)}, so "
+              + ("the earthquakes-only inputs were adopted" if it.get("adopted") else
+                 "the published map keeps them. Removing only the man-made events is an open question")
+              + f" ({_doc(EQ_PROGRAM_DOC)}, {_e(it['program_section'])}; {_doc(it['file'])})")
+    return s
+
+
+EQ_PROGRAM_DOC = se.EARTHQUAKE_PROGRAM
 
 
 def methods_earthquake(ev: dict) -> str:
@@ -262,6 +328,9 @@ def methods_earthquake(ev: dict) -> str:
         rows.append(_kv("Limits", f"Forecasts {_pct(abs(over), 0)} {'more' if over > 0 else 'fewer'} M6+ cell-windows than "
                                   f"occurred in the test period (ratio {_f(cr['value'], 2)}{_ci(cr.get('ci'), 2)}); "
                                   "live catalogs are preliminary in the first days after a large quake"))
+    inputs = earthquake_inputs_sentence(eq)
+    if inputs:
+        rows.append(_kv("Inputs that are not earthquakes", inputs))
     return _card("hz-eq", f'Earthquake <code>{_e(eq["model_version"])}</code>', _facts(rows), ident="earthquake-model")
 
 
@@ -298,6 +367,8 @@ def methods_hurricane(ev: dict) -> str:
     ours = hu.get("ours")
     if ours:
         out.append(_ours_hurricane_card(ours))
+    if hu.get("v9"):
+        out.append(_v9_card(hu["v9"], hu["candidate_name"].split(" (")[0]))
     ob = hu.get("other_basins")
     if ob:
         o = ob["test"]
@@ -322,7 +393,7 @@ def methods_hurricane(ev: dict) -> str:
                           + ")")
             limits.append("the live history is the working best track, which the post-season one the test read revises")
         out.append(_card(
-            "hz-hu", "Hurricane, other basins: HazardPulse v8.2 <code>hurricane_ri_v8_2</code>", _facts([
+            "hz-hu", f"Hurricane, other basins: HazardPulse {_e(ob.get('label'))} <code>{_e(ob['model'])}</code>", _facts([
                 _kv("Architecture", "Histogram-GBT (depth 3 + 4) + L2 logistic + bagged logistic ensemble, "
                                     "Newton-calibrated"),
                 _kv("Key inputs", "Analysis intensity and pressure (CARQ) and their 6&ndash;24 h tendencies, "
@@ -336,7 +407,115 @@ def methods_hurricane(ev: dict) -> str:
                 *([_kv("Limits of that test", "; ".join(limits)[:1].upper() + "; ".join(limits)[1:] + ".")]
                   if limits else []),
             ])))
+    if hu.get("tc1"):
+        out.append(_tc1_card(hu["tc1"]))
     return "\n\n".join(out)
+
+
+def _v9_card(v9: dict, published: str) -> str:
+    """v9.1: the entrant whose prospective claim would switch the published NHC-area number to it."""
+    f = v9["final_2026"]
+    run = v9.get("running") or {}
+    rows = [
+        _kv("What it is", f"Gradient-boosted trees ({_n(v9.get('trees'))} trees, trained on {_years(v9.get('trained'))}) on "
+                          "the early intensity guidance, NOAA&rsquo;s RI probabilities and the official forecast, "
+                          f"wherever {_join([_e(a) for a in v9.get('gate_aids') or []])} have a 24-hour forecast; "
+                          f"{_e(published)} where they do not"),
+        _kv("2026, read once", f"log loss {_f(f['log_loss'], 4)} against {_e(published)}&rsquo;s "
+                               f"{_f(f['dtops_log_loss'], 4)}, Brier {_f(f['brier'], 4)} against {_f(f['dtops_brier'], 4)}, "
+                               f"AUC {_f(f['auc'])} against {_f(f['dtops_auc'])} ({_n(f.get('n'))} cycles, "
+                               f"{_n(f.get('events'))} RI events)"
+            + (": better on all three" if f.get("better_on_every_point") else "")
+            + ("; the claim was met" if f.get("claim") else
+               f"; the claim rule, an interval wholly below zero, was not met, so {_e(published)} stays published")),
+        _kv("Why it still matters", f"It is the one entrant whose claim would change what is published: if its "
+                                    f"prospective test meets its rule at a look ({_level(v9.get('level'))} intervals; "
+                                    + " and ".join(_e(x) for x in v9.get("look_dates") or [])
+                                    + f"), it replaces {_e(published)} as the published number in the NHC areas"),
+        _kv("Live so far (descriptive, no claim before a look)",
+            (f"{_n(run['n'])} cycles from {_n(run.get('storms'))} storms ({_n(run.get('events'))} RI events): log loss "
+             f"{_f(run['log_loss'], 3)} against {_e(published)}&rsquo;s {_f(run['dtops_log_loss'], 3)}, difference "
+             f"{_signed(run.get('d_log_loss'), 3)}{_ci(run.get('d_log_loss_ci'), 3, signed=True)} at "
+             f"{_level(run.get('level'))}"
+             if run else "no cycle has matured yet")),
+        _kv("Status", ("claim met at a look" if v9.get("claimed") else "in shadow: recorded on every live NHC cycle, "
+                       "never shown as the forecast")),
+    ]
+    return _card("hz-hu", f'Hurricane, NHC areas, the entrant that could replace {_e(published)}: '
+                          f'{_e(v9["label"])} <code>{_e(v9["model_version"])}</code>', _facts(rows), ident="hurricane-v9")
+
+
+def _tc1_leads_ahead(diff: dict | None) -> list[str]:
+    """The leads (h) from which every later lead's interval lies wholly below zero."""
+    per = (diff or {}).get("per_lead") or {}
+    leads = sorted(per, key=int)
+    out = []
+    for i, lead in enumerate(leads):
+        if all((per[x].get("ci") or [0, 0])[1] < 0 for x in leads[i:]):
+            out = leads[i:]
+            break
+    return out
+
+
+def tc1_lines(tc: dict) -> list[tuple[str, str]]:
+    """(label, value) lines describing TC1, every number from its bound DEV and 2026 results."""
+    tr, iv = tc["track"], tc["intensity"]
+    span = _years(f"{tc['seasons'][0]}-{tc['seasons'][-1]}") if tc.get("seasons") else "--"
+    choose = tc.get("choose_seasons") or []
+    ld = tc.get("leads") or []
+    leads = f"the {len(ld)} leads from {ld[0]} to {ld[-1]} h" if ld else "its leads"
+
+    def diff(x: dict | None, d: int = 2) -> str:
+        return f"{_signed((x or {}).get('d'), d)}{_ci((x or {}).get('ci'), d, signed=True)}" if x else "--"
+
+    def vs_ofcl(k: dict, unit: str) -> str:
+        v = k["vs_ofcl"]
+        return (f"{diff(v)} {unit} at {_level(v.get('level'))}: "
+                + ("met" if v["claim"] else "not met; the interval includes zero, so this is a tie"))
+
+    hcca = tr.get("vs_hcca") or {}
+    ahead = _tc1_leads_ahead(hcca)
+    lines = [
+        ("What it is", "Our own track and intensity forecast to five days for every storm the National Hurricane Center "
+                       "follows: the real-time computer guidance NHC publishes, each model weighted by how its recent "
+                       "forecasts verified, re-measured every six hours; a new model earns weight as it verifies"),
+        ("How it was chosen", "Pre-registered: settings chosen on "
+                              + (_years(f"{choose[0]}-{choose[-1]}") if choose else "earlier seasons")
+                              + f", tested on {span} against NHC&rsquo;s official forecast ({_doc(tc['program'])})"),
+        (f"Track, {span}", f"mean error {_f(tr['errors']['TC1'], 2)} n mi over {leads}; NHC official "
+                           f"{_f(tr['errors']['OFCL'], 2)}; NHC&rsquo;s corrected consensus HCCA "
+                           f"{_f(tr['errors']['HCCA'], 2)}"),
+        ("Track against the official forecast (the claim)", vs_ofcl(tr, "n mi")),
+        ("Track against HCCA (descriptive, not a claim)",
+         f"{diff(hcca)} n mi at {_level(hcca.get('level'))}"
+         + (f"; ahead at every lead from {ahead[0]} h" if ahead else "")),
+        (f"Intensity, {span}", f"mean error {_f(iv['errors']['TC1'], 2)} kt against NHC official "
+                               f"{_f(iv['errors']['OFCL'], 2)}; against the official forecast {vs_ofcl(iv, 'kt')}"),
+    ]
+    o = tr.get("tc1o_vs_ofcl")
+    if o:
+        lines.append(("TC1+O, also recorded",
+                      "The same weighting with NHC&rsquo;s official forecast as one more member, issued after the "
+                      f"advisory: track {_f(tr['errors']['TC1+O'], 2)} n mi, against the official forecast {diff(o)} at "
+                      f"{_level(o.get('level'))} (" + ("met" if o.get("claim") else "not met") + "); intensity "
+                      f"{_f(iv['errors']['TC1+O'], 2)} kt, {diff(iv.get('tc1o_vs_ofcl'))} ("
+                      + ("met" if (iv.get("tc1o_vs_ofcl") or {}).get("claim") else "not met") + ")"))
+    s26, i26 = tr.get("season_2026_vs_ofcl"), iv.get("season_2026_vs_ofcl")
+    if s26:
+        lines.append(("2026 so far (no claim)",
+                      f"against NHC&rsquo;s official forecast, on operational best tracks"
+                      + (f" ({_n(tc.get('season_2026_storms'))} storms, read {_e(str(tc.get('season_2026_at') or '')[:10])})"
+                         if tc.get("season_2026_storms") else "")
+                      + f": track {diff(s26)} n mi"
+                      + (f", intensity {diff(i26)} kt" if i26 else "") + f" ({_level(s26.get('level'))} intervals)"))
+    lines.append(("Status", "Shown beside NHC&rsquo;s official forecast on every NHC storm, never instead of it; NHC is "
+                            "the authority. Its live record is scored at each look against NHC&rsquo;s best tracks"))
+    return lines
+
+
+def _tc1_card(tc: dict) -> str:
+    return _card("hz-hu", f'Hurricane track and intensity, NHC areas: HazardPulse TC1 <code>{_e(tc["model_version"])}</code>',
+                 _facts([_kv(k, v) for k, v in tc1_lines(tc)]), ident="hurricane-track")
 
 
 def _ours_vs_all_lines(va: dict | None) -> list[tuple[str, str]]:
@@ -401,7 +580,7 @@ def _ours_challenger_lines(ch: dict | None) -> list[tuple[str, str]]:
                               "NOAA&rsquo;s probability rises")
     level_txt = (f" (confidence level {level.replace(' at ', '')})" if level else "")
     return [(f"Variant under test ({_e(ch.get('label') or '')})".replace(" ()", ""),
-             f"<code>{_e(ch['model_version'])}</code>: {what}. 2022&ndash;2025 against {against}: log loss "
+             f"<code>{_e(ch['model_version'])}</code>: {what}. {_years(ch.get('dev_period'))} against {against}: log loss "
              f"{_f(d['log_loss'], 4)} vs {_f(d['champion_log_loss'], 4)}{_ci(ci, 4, signed=True)}, four-threshold "
              f"Brier {_f(d['brier4'], 4)} vs {_f(d['champion_brier4'], 4)}; "
              + ("better at 95%" if settled else "a gain whose interval still includes zero")
@@ -417,28 +596,38 @@ def ours_hurricane_lines(ours: dict) -> list[tuple[str, str]]:
         ("What it is", "Our own model: one exceedance curve P(a rise of k kt in 24 h), k = 15&ndash;45, from the "
                        "early intensity guidance (NOAA&rsquo;s statistical models, the hurricane and global models, "
                        "NHC&rsquo;s consensus aids), NOAA&rsquo;s RI probabilities at six thresholds and the official "
-                       "forecast; NOAA&rsquo;s DTOPS wherever that guidance is missing"),
-        ("2022&ndash;2025, each season forecast only from earlier ones", f"log loss {_f(d['log_loss'])} vs DTOPS "
-                                       f"{_f(d['dtops_log_loss'])} (paired by storm{_ci(d.get('d_log_loss_ci'), signed=True)})"
-                                       + (f"; over DTOPS&rsquo;s four 24-h thresholds, Brier {_f(mt.get('ours'))} vs "
-                                          f"{_f(mt.get('dtops'))}{_ci(mt.get('d_ci'), signed=True)}" if mt else "")),
+                       "forecast" + (f"; {ours['adds']}" if ours.get("adds") else "")
+                       + "; NOAA&rsquo;s DTOPS wherever that guidance is missing"),
+        (f"{_years(ours.get('dev_period'))}, each season forecast only from earlier ones",
+         f"log loss {_f(d['log_loss'])}"
+         + (f" vs DTOPS {_f(d['dtops_log_loss'])} (paired by storm{_ci(d.get('d_log_loss_ci'), signed=True)})"
+            if d.get("dtops_log_loss") is not None else "")
+         + (f"; over DTOPS&rsquo;s four 24-h thresholds, Brier {_f(mt.get('ours'))} vs "
+            f"{_f(mt.get('dtops'))}{_ci(mt.get('d_ci'), signed=True)}" if mt else "")),
         *_ours_vs_all_lines(ours.get("vs_all")),
-        ("2026 so far", f"log loss {_f(s26['log_loss'])} vs DTOPS {_f(s26['dtops_log_loss'])}, AUC {_f(s26['auc'])} "
-                        "(a second look at a season that informed its design, so not a proof)"),
+        ("2026 so far", f"log loss {_f(s26['log_loss'])}"
+                        + (f" vs DTOPS {_f(s26['dtops_log_loss'])}" if s26.get("dtops_log_loss") is not None else "")
+                        + (f", AUC {_f(s26['auc'])}" if s26.get("auc") is not None else "")
+                        + " (a later look at a season that informed its design, so not a proof)"),
         *[line for ch in (ours.get("challengers") or ([ours["challenger"]] if ours.get("challenger") else []))
           for line in _ours_challenger_lines(ch)],
         ("Status", f"{_e(ours['status'])}: shown beside NOAA&rsquo;s number, not instead of it, until the "
-                   "pre-registered prospective test on cycles from 2026-10-04 meets its rule (verdicts "
+                   "pre-registered prospective test on cycles from "
+                   + _e(str(pr.get("start") or "")[:10] or "its start")
+                   + (f" meets its rule at {_level(ours.get('level'))} (verdicts " if ours.get("level") else
+                      " meets its rule (verdicts ")
                    + " and ".join(_e(x) for x in pr.get("look_dates") or [])
-                   + f"); cycles scored so far: {_n(pr.get('matured_and_scored', 0))}"),
+                   + f"); cycles scored so far: {_n(pr.get('matured_and_scored', 0))}"
+                   + (f". Which of our models is shown is named in one file, {_doc(ours['pointer'])}"
+                      if ours.get("pointer") else "")),
     ]
     return lines
 
 
 def _ours_hurricane_card(ours: dict) -> str:
     rows = [_kv(k, v) for k, v in ours_hurricane_lines(ours)]
-    return _card("hz-hu", f'Hurricane, our model (experimental): v10.1 <code>{_e(ours["model_version"])}</code>',
-                 _facts(rows), ident="hurricane-ours")
+    return _card("hz-hu", f'Hurricane, our model (experimental): {_e(ours["label"])} '
+                          f'<code>{_e(ours["model_version"])}</code>', _facts(rows), ident="hurricane-ours")
 
 
 def _tornado_inputs_text(to: dict) -> str:
@@ -484,6 +673,41 @@ def _nws_sentence(to: dict) -> str | None:
     return s
 
 
+def format_change_date(to: dict | None) -> str | None:
+    """The day NOAA switched the ProbSevere format, as the input guard records it: ``5 August 2025``."""
+    d = ((to or {}).get("format_change") or {}).get("date")
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", str(d or ""))
+    if not m:
+        return None
+    months = ("January February March April May June July August September October November December").split()
+    return f"{int(m.group(3))} {months[int(m.group(2)) - 1]} {m.group(1)}"
+
+
+def format_change_sentence(to: dict | None) -> str:
+    """What NOAA's 2025 ProbSevere format change cost the published model, as the registered test measured it
+    (tornado program amendment 10, ``results/tornado_program/t2_2026.json``)."""
+    fc = (to or {}).get("format_change")
+    if not fc or fc.get("auc") is None:
+        return ""
+    period = fc.get("period") or []
+    s = ("A test written down in advance scored the published model on every storm observation "
+         + (f"from {_e(period[0])} to {_e(period[1])} " if len(period) == 2 else "")
+         + f"({_n(fc['n'])} of them, {_n(fc['pos'])} followed by a tornado), all in the new format: AUC "
+         f"{_f(fc['auc'], 4)}, "
+         f"against {_f(fc['auc_2025'], 4)} on its 2025 test, so no loss of ranking is visible (2026 is scored on "
+         "SPC&rsquo;s preliminary reports)")
+    if fc.get("without_inputs_d_auc") is not None:
+        s += (f". A model built without the inputs the feed lost did not rank better "
+              f"({_signed(fc['without_inputs_d_auc'], 4)}{_ci(fc.get('without_inputs_d_auc_ci'), 4, signed=True)} AUC, "
+              "paired by day)")
+    s += ", so the published model stays" if fc.get("served_stays") else ", so it replaced the published model"
+    if fc.get("mean_over_base") is not None:
+        s += (f". It may cost calibration: over that period the model&rsquo;s average forecast was "
+              f"{_f(fc['mean_over_base'], 2)} times the rate at which tornadoes followed. A recalibration for the new "
+              "format is an open question, to be judged on forecasts made after it is registered")
+    return s + f" ({_doc(fc['program'])}, amendment {_e(fc.get('amendment'))}; {_doc(fc['file'])})."
+
+
 def methods_tornado(ev: dict) -> str:
     to = ev.get("tornado")
     if not to:
@@ -499,7 +723,7 @@ def methods_tornado(ev: dict) -> str:
                             + ("; Venn&ndash;Abers band per storm" if to.get("has_band") else "")),
         _kv(f"Inputs ({to['n_inputs']})", _tornado_inputs_text(to)),
         _kv("How it was chosen", f"Pre-registered programme: every choice on 2023; development test 2024; refit "
-                                 f"2020&ndash;2024; final test 2025 read once ({_doc(to['program'])})"),
+                                 f"{_years(to.get('trained_years'))}; final test 2025 read once ({_doc(to['program'])})"),
         _kv("Final test 2025", f"AUC {_f(t['auc'])}{_ci(t['auc_ci'])} on all {_n(t['n'])} storm observations "
                                f"({_n(t['pos'])} tornadic); Brier skill {_signed(t['bss'])}"
                                + (f". 2024: {_f(to['dev']['auc'])}" if to.get("dev") else "")),
@@ -510,6 +734,9 @@ def methods_tornado(ev: dict) -> str:
     if to.get("results_bound") is False:
         rows.append(_kv("Comparisons", "The lab results for this payload are not in the repository, so no "
                                        "comparison is quoted"))
+    fc = format_change_sentence(to)
+    if fc:
+        rows.append(_kv("NOAA&rsquo;s 2025 format change", fc))
     for nu in to.get("tested_not_served") or []:
         if "coherence" in nu["what"] and "PDE" not in nu["what"]:
             rows.append(_kv("Coherence field", f"Tested on top of the HRRR fields: {_signed(nu['delta_auc'], 4)}"
@@ -518,6 +745,149 @@ def methods_tornado(ev: dict) -> str:
     rows.append(_kv("Status", "Published"))
     return _card("hz-to", f'Tornado, storm by storm <code>{_e(to["model_version"])}</code>', _facts(rows),
                  ident="tornado-model")
+
+
+def methods_data_hurricane(ev: dict) -> str:
+    """The Data card's row for our hurricane models: which of them read satellite infrared, from each artifact's
+    own inputs (it said "the v10.3 variant" by hand while v10.4 read the same images)."""
+    hu = ev.get("hurricane") or {}
+    ir = [_e(x) for x in hu.get("ir_models") or []]
+    return ("<div><dt>Our models</dt><dd>The early intensity guidance in NHC&rsquo;s forecast files"
+            + (f"; for {_join(ir)}, also NOAA&rsquo;s GMGSI satellite infrared" if ir else "")
+            + ("; for TC1, the track and intensity guidance in NHC&rsquo;s real-time forecast files" if hu.get("tc1")
+               else "") + "</dd></div>")
+
+
+def _lat(x: Any) -> str:
+    v = float(x)
+    return f"{abs(v):g}&deg;{'S' if v < 0 else 'N'}"
+
+
+def methods_limits(ev: dict) -> str:
+    """The Limits list's items that state what a model was tested on or fed, each read from its results: coverage
+    (until 2026-10-09 a hand-typed sentence here said the other-basins model had no test in the basins where it
+    publishes, while its test held cycles from every basin -- CONTRADICTED below), and what the inputs carry that
+    the models were not built for."""
+    eq, hu, to = ev.get("earthquake"), ev.get("hurricane"), ev.get("tornado")
+    grid = (eq or {}).get("grid") or {}
+    ob = (hu or {}).get("other_basins") or {}
+    v82 = _e(ob.get("label") or "")
+    parts = []
+    if grid.get("lat_min") is not None and grid.get("lat_max") is not None and grid.get("dlat"):
+        parts.append(f"Earthquake: the globe between {_lat(grid['lat_min'])} and {_lat(grid['lat_max'])} on a "
+                     f"{float(grid['dlat']):g}&deg; grid.")
+    if hu:
+        o = ob.get("test") or {}
+        comp = ob.get("composition") or {}
+        basins = ", ".join(f"{_e(b['name'])} {_n(b['n'])}" for b in comp.get("by_basin") or [])
+        parts.append("Hurricane: every active tropical cyclone, with NOAA&rsquo;s guidance in the Atlantic, East and "
+                     "Central Pacific" + (f" and our {v82} model elsewhere" if v82 else "") + "."
+                     + (f" {v82}&rsquo;s method was tested on {_n(o.get('n'))} held-out {_when(o)} cycles from every "
+                        f"basin" + (f" ({basins})" if basins else "") + ", with best-track inputs"
+                        + ("; the published model&rsquo;s calibration was fitted on those same cycles, so that is not "
+                           "a test of it on unseen data" if comp.get("served_calibration_fitted_on_test_cases") else "")
+                        + "." if v82 and o.get("auc") is not None else ""))
+    parts.append("Tornado: every storm NOAA&rsquo;s radar tracks over and near the contiguous US, including northern "
+                 "Mexico and the Gulf; tornado reports, and so the tests, cover the US only.")
+    items = ["<li><strong>Coverage.</strong> " + " ".join(parts) + "</li>"]
+    eqs = earthquake_inputs_sentence(eq)
+    if eqs:
+        items.append(f"<li><strong>Earthquake inputs.</strong> {eqs}.</li>")
+    day = format_change_date(to)
+    fcs = format_change_sentence(to)
+    if day and fcs:
+        items.append(f"<li><strong>Tornado inputs.</strong> NOAA changed the format of its ProbSevere feed on {day}, "
+                     f"and some inputs the model learned from are no longer in it. {fcs}</li>")
+    return "\n".join(items)
+
+
+_RESEARCH_WHAT = {
+    "h8": "The coherence equation solved for the convective heating the vortex can hold inside its local Rossby "
+          "radius, from the satellite infrared and NHC&rsquo;s radius of maximum wind",
+    "h9": "A memory of each storm&rsquo;s recent convection, symmetry, heating retention and intensity trend "
+          "(its &ldquo;coherence state&rdquo;)",
+    "fusion": "Every RI probability, ours and NOAA&rsquo;s, weighted by how each has verified, with old verifications "
+              "forgotten",
+    "g1": "The inner core seen hourly at 2 km by GOES: core and ring convection, the eye, the eyewall&rsquo;s edge, "
+          "symmetry, persistence and their trends",
+}
+
+
+def _research_rows(ev: dict) -> list[str]:
+    rows = []
+    for r in ev.get("research") or []:
+        src = _doc(r["file"])
+        amend = (f" ({'amendments' if ',' in str(r['amendment']) else 'amendment'} {_e(r['amendment'])})"
+                 if r.get("amendment") else "")
+        if r["kind"] == "candidate":
+            nf = f"{_n(r['n_features'])} features: " if r.get("n_features") else ""
+            res = (f"against {_e(r.get('control_label') or r.get('control'))} on {_years(r.get('dev_period'))} "
+                   f"({_n(r.get('n'))} cycles, {_n(r.get('events'))} RI events): log loss {_signed(r['d_ll'], 5)}"
+                   f"{_ci(r['d_ll_ci'], 5, signed=True)}, four-threshold Brier {_signed(r['d_brier4'], 5)}"
+                   f"{_ci(r['d_brier4_ci'], 5, signed=True)} (below zero is better)")
+            if r.get("noise"):
+                res += (f"; the same columns shuffled within each season (a noise control) gave log loss "
+                        f"{_signed(min(r['noise']), 5)} to {_signed(max(r['noise']), 5)}")
+            if r["carried"]:
+                dec = ("Carried" + (f": it is {_e(r['became'])}, in shadow" if r.get("became") else "")
+                       + " (both point estimates below the model it was tested against)")
+            else:
+                worse = [name for name, d, ci in (("log loss", r["d_ll"], r.get("d_ll_ci")),
+                                                  ("Brier", r["d_brier4"], r.get("d_brier4_ci")))
+                         if d is not None and d > 0]
+                beyond = [name for name, ci in (("log loss", r.get("d_ll_ci")), ("Brier", r.get("d_brier4_ci")))
+                          if ci and ci[0] > 0]
+                def which(names: list[str]) -> str:
+                    return "both measures" if len(names) == 2 else names[0]
+                dec = ("Not carried: " + (f"worse on {which(worse)}" if worse else "not better on both measures")
+                       + (f", beyond its interval on {which(beyond)}" if beyond else ""))
+            rows.append(f"<tr><td>{_RESEARCH_WHAT.get(r['key'], _e(r['key']))}{amend}</td><td>{nf}{res}</td>"
+                        f"<td>{dec}</td><td>{src}</td></tr>")
+        elif r["kind"] == "fusion":
+            res = (f"{_n(r.get('n_sources'))} sources; the fusion minus the best single source on the choosing season "
+                   f"({_e(r.get('best_single_label') or r.get('best_single'))}) on {_years(r.get('dev_period'))}, "
+                   f"{_n(r.get('n'))} cycles: log loss {_signed(r['d_ll'], 4)}{_ci(r['d_ll_ci'], 4, signed=True)}")
+            dec = "Claim met" if r.get("claim") else "Claim not met: the interval includes zero"
+            rows.append(f"<tr><td>{_RESEARCH_WHAT['fusion']}{amend}</td><td>{res}</td><td>{dec}</td><td>{src}</td></tr>")
+        elif r["kind"] == "input_check":
+            res = (f"the 2 km eye detector against CIMSS&rsquo;s Advanced Dvorak Technique on {_n(r.get('matched'))} "
+                   f"matched images: skill (HSS) {_f(r.get('hss'))} on the held-out {_years(r.get('held_out'))} images "
+                   f"(required {_f(r.get('hss_gate'), 2)}); an eye called in {_pct(r.get('weak_eye'))} of images "
+                   f"below {_n(r.get('weak_kt'))} kt (allowed {_pct(r.get('weak_eye_gate'))}); centre "
+                   f"{_f(r.get('centre_km'), 1)} km from ADT&rsquo;s (median); eye temperature rank correlation "
+                   f"{_f(r.get('teye_spearman'))}")
+            dec = ("Passed every gate, so the satellite input was sound before any outcome was read"
+                   if r.get("passed") else "Failed a gate")
+            rows.append(f"<tr><td>Input check for the 2 km GOES test: is the eye where ADT says it is?</td>"
+                        f"<td>{res}</td><td>{dec}</td><td>{src}</td></tr>")
+    to_fc = (ev.get("tornado") or {}).get("format_change") or {}
+    if to_fc.get("without_inputs_d_auc") is not None:
+        period = to_fc.get("period") or []
+        rows.append("<tr><td>Tornado: a model without the inputs NOAA&rsquo;s 2025 format change removed "
+                    f"(amendment {_e(to_fc.get('amendment'))})</td><td>AUC {_signed(to_fc['without_inputs_d_auc'], 4)}"
+                    f"{_ci(to_fc.get('without_inputs_d_auc_ci'), 4, signed=True)} against the published model, "
+                    + (f"{_e(period[0])} to {_e(period[1])}" if len(period) == 2 else "") + ", paired by day</td><td>"
+                    + ("Not carried: the published model stays" if to_fc.get("served_stays") else "Carried")
+                    + f"</td><td>{_doc(to_fc['file'])}</td></tr>")
+    it = (ev.get("earthquake") or {}).get("input_types") or {}
+    if it.get("dev_d_ig") is not None:
+        rows.append("<tr><td>Earthquake: only earthquakes in the inputs (" + _e(it.get("program_section")) + ")</td>"
+                    f"<td>information {_signed(it['dev_d_ig'], 4)}{_ci(it.get('dev_d_ig_ci'), 4, signed=True)} "
+                    f"{EQ_IG_UNIT}" + (f" on {_years(it['dev_years'])}" if it.get("dev_years") else "")
+                    + f"; adopted unless the interval reached below {_signed(it.get('margin'), 3)}</td><td>"
+                    + ("Adopted" if it.get("adopted") else "Not adopted: the interval reached below the margin")
+                    + f"</td><td>{_doc(it['file'])}</td></tr>")
+    return rows
+
+
+def methods_research(ev: dict) -> str:
+    """Every registered test since the published models were chosen, the ones that changed nothing included,
+    each row read from the file its run wrote."""
+    rows = _research_rows(ev)
+    if not rows:
+        return "<p>No research results are bound in this build.</p>"
+    return _table(["What was tested", "Result", "Decision", "Results file"], rows,
+                  caption="Registered tests, decided by rules written before their results existed")
 
 
 # ---------------------------------------------------------------------------
@@ -539,13 +909,19 @@ def registry_simple(ev: dict) -> str:
     if hu:
         t = hu["test"]
         beaten = [_e(c["against"]) for c in hu.get("claims", []) if c["better"]]
-        cards.append(('hz-hu', "Hurricane: NOAA DTOPS, and v8.2 elsewhere",
+        v82 = _e((hu.get("other_basins") or {}).get("label") or "")
+        ours, tc1 = hu.get("ours"), hu.get("tc1")
+        cards.append(('hz-hu', "Hurricane: NOAA DTOPS" + (f", and {v82} elsewhere" if v82 else ""),
                       "For storms the National Hurricane Center covers, we publish NOAA&rsquo;s own DTOPS guidance: in a "
                       f"test written down in advance and run once on the {_when(t)} season it "
                       + (f"beat {_join(beaten)}, " if beaten else "")
                       + "ranking a forecast cycle that went on to intensify rapidly above one that did not "
-                      f"{_pct(t['auc'], 0)} of the time. Elsewhere we publish our v8.2 model. Our v10.1 model is shown "
-                      "beside DTOPS, labelled experimental, while it is tested on new forecasts."))
+                      f"{_pct(t['auc'], 0)} of the time."
+                      + (f" Elsewhere we publish our {v82} model." if v82 else "")
+                      + (f" Our {_e(ours['label'])} model is shown beside DTOPS, labelled experimental, while it is "
+                         "tested on new forecasts." if ours else "")
+                      + (" Our track and intensity forecast, TC1, is shown beside NHC&rsquo;s official forecast."
+                         if tc1 else "")))
     if to:
         t = to["test"]
         cards.append(('hz-to', "Tornado: v3",
@@ -555,7 +931,7 @@ def registry_simple(ev: dict) -> str:
     return "\n".join(_card(cls, title, f"<p>{text}</p>") for cls, title, text in cards)
 
 
-_STATUS_CHIP = {"published": "good", "experimental": "warn", "fallback": "neutral"}
+_STATUS_CHIP = {"published": "good", "experimental": "warn", "fallback": "neutral", "shadow": "neutral"}
 
 
 def _registry_row(model: str, hazard: str, status: str, test: str, auc: str, skill: str, arch: str) -> str:
@@ -582,10 +958,22 @@ def registry_active(ev: dict) -> str:
         ours = hu.get("ours")
         if ours:
             d = ours["dev"]
-            rows.append(_registry_row(ours["model_version"], "Hurricane RI (NHC areas, our model v10.1)", "experimental",
-                                      "2022&ndash;2025 (each season out of sample)", f"{_f(d['auc'])}",
-                                      f"LL {_f(d['log_loss'])} vs DTOPS {_f(d['dtops_log_loss'])}",
+            rows.append(_registry_row(ours["model_version"], f"Hurricane RI (NHC areas, our model {_e(ours['label'])})",
+                                      "experimental",
+                                      f"{_years(ours.get('dev_period'))} (each season out of sample)", f"{_f(d['auc'])}",
+                                      f"LL {_f(d['log_loss'])}" + (f" vs DTOPS {_f(d['dtops_log_loss'])}"
+                                                                   if d.get("dtops_log_loss") is not None else ""),
                                       "LightGBM exceedance curve; in prospective verification, shown beside DTOPS"))
+        v9 = hu.get("v9")
+        if v9:
+            f = v9["final_2026"]
+            rows.append(_registry_row(v9["model_version"], f"Hurricane RI (NHC areas, {_e(v9['label'])})", "shadow",
+                                      "2026 (read once)", f"{_f(f['auc'])}",
+                                      f"LL {_f(f['log_loss'])} vs DTOPS {_f(f['dtops_log_loss'])}",
+                                      "LightGBM on the early guidance, gated; "
+                                      + ("claim met on 2026" if f.get("claim") else "claim not met on 2026")
+                                      + ". Its prospective test decides whether it replaces DTOPS as the published "
+                                        "number"))
         ob = hu.get("other_basins")
         if ob:
             o = ob["test"]
@@ -593,6 +981,15 @@ def registry_active(ev: dict) -> str:
                                       f"{_when(o)} (its method; every basin, best-track inputs)",
                                       f"{_f(o['auc'])}{_ci(o['auc_ci'])}",
                                       f"BSS {_signed(o['bss'])}", "GBT + logistic ensemble, Newton-calibrated"))
+        tc = hu.get("tc1")
+        if tc:
+            tr = tc["track"]
+            span = _years(f"{tc['seasons'][0]}-{tc['seasons'][-1]}") if tc.get("seasons") else "--"
+            rows.append(_registry_row(tc["model_version"], "Hurricane track and intensity, to 5 days (NHC areas)",
+                                      "published", f"{span} (pre-registered)", "&mdash;",
+                                      f"track {_f(tr['errors']['TC1'], 1)} n mi vs NHC {_f(tr['errors']['OFCL'], 1)}",
+                                      "Online-weighted consensus of NHC&rsquo;s real-time guidance; shown beside "
+                                      "NHC&rsquo;s official forecast"))
     if to:
         t = to["test"]
         rows.append(_registry_row(to["model_version"], "Tornado within 60 min", "published", "2025",
@@ -610,7 +1007,8 @@ def registry_active(ev: dict) -> str:
                                       f"{_f(pt['auc'])}{_ci(pt['auc_ci'])}", f"BSS {_signed(pt['bss'])}",
                                       f"LightGBM, {_n(p['n_trees'])} trees"))
     return _table(["Model version", "Forecasts", "Status", "Test", "AUC [95% CI]", "Skill", "What it is"], rows,
-                  caption="Every model version that publishes a number now")
+                  caption="Every model version on the site now, and the entrant whose test could change what is "
+                          "published")
 
 
 def registry_history(ev: dict) -> str:
@@ -737,8 +1135,8 @@ def tornado_body(ev: dict) -> str:
         _kv("Training", _e(to["trained"]).replace("..", "&ndash;")),
     ]) + (f'<p class="section-foot">How the test was run: every choice &mdash; inputs, model type, settings, '
           "calibration and the event definition &mdash; was made on 2023; 2024 was a development check; the model "
-          "was then refitted on 2020&ndash;2024 and scored once on 2025, against SPC storm reports matched to each "
-          f"storm&rsquo;s own tracked radar outline. Protocol: {_doc(to['program'])}.</p>")))
+          f"was then refitted on {_years(to.get('trained_years'))} and scored once on 2025, against SPC storm reports "
+          f"matched to each storm&rsquo;s own tracked radar outline. Protocol: {_doc(to['program'])}.</p>")))
 
     rows = [_metric_row("Published model (with the NWS warning state)", t, best=True)]
     fb = to.get("fallback")
@@ -872,10 +1270,13 @@ def tornado_different(ev: dict) -> str:
 
 BLOCKS: dict[str, dict[str, Callable[[dict], str]]] = {
     "methods/index.html": {
+        "methods-data-hurricane": methods_data_hurricane,
         "methods-simple": methods_simple,
         "methods-earthquake": methods_earthquake,
         "methods-hurricane": methods_hurricane,
         "methods-tornado": methods_tornado,
+        "methods-research": methods_research,
+        "methods-limits": methods_limits,
     },
     "registry/index.html": {
         "registry-simple": registry_simple,
@@ -927,11 +1328,47 @@ def render_pages(dist: Path, root: Path = se.ROOT, ev: dict | None = None) -> li
 
 
 def check_pages(dist: Path, root: Path = se.ROOT, ev: dict | None = None) -> list[str]:
-    """Pages whose evidence blocks differ from what the results files say (empty = all current)."""
+    """Pages whose evidence blocks differ from what the results files say, or that carry -- anywhere, inside a
+    block or in the hand-kept prose around one -- a sentence the results contradict (empty = all current)."""
     ev = se.all_evidence(root) if ev is None else ev
     stale = []
     for rel in BLOCKS:
         old = (dist / rel).read_text(encoding="utf-8")
         if render_page(rel, old, ev) != old:
             stale.append(rel)
+        stale += [f"{rel} (contradicted: {c})" for c in contradictions(old)]
     return stale
+
+
+# ---------------------------------------------------------------------------
+# sentences the results contradict
+# ---------------------------------------------------------------------------
+
+_V82_EVERY_BASIN = ("the other-basins model's held-out test holds cycles from every basin, West Pacific among them "
+                    f"({se.HURRICANE_V82_COMPOSITION}, by_basin)")
+_T2_DECIDED = (f"NOAA's 2025 ProbSevere format change was decided by tornado amendment 10 ({se.TORNADO_T2}): the "
+               "switch was 2025-08-05, ranking was unaffected, calibration (T2b) is the open question")
+# Sentences the site once carried in prose that its own artifacts contradict. ``check_pages`` used to compare only
+# the text BETWEEN evidence markers, so a sentence typed around a block -- or in a generated page's code -- could
+# contradict the block beside it and the build stayed green; each of these did until 2026-10-09. A page that
+# carries one, anywhere, now fails ``check_pages`` and ``hazardpulse.site.build.check_site``.
+CONTRADICTED: tuple[tuple[str, str], ...] = (
+    ("which has no test in those basins", _V82_EVERY_BASIN),
+    ("not in the basins where it now publishes", _V82_EVERY_BASIN),
+    ("tested on Atlantic and East Pacific cases", _V82_EVERY_BASIN),
+    ("an open question we are testing", _T2_DECIDED),
+    ("6 August 2025", _T2_DECIDED),
+    ("a gain beyond chance", "the TC1 comparison with HCCA is descriptive at 95%, not one of the test's claims "
+                             f"(results/hurricane_tc1/dev.json, reported TC1-HCCA level)"),
+)
+
+
+def page_text(page: str) -> str:
+    """A page's words as a reader sees them: tags dropped, entities decoded, whitespace collapsed."""
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", page))).strip()
+
+
+def contradictions(page: str) -> list[str]:
+    """Each CONTRADICTED sentence the page carries, with the result that contradicts it."""
+    text = page_text(page).lower()
+    return [f"{phrase!r} -- {why}" for phrase, why in CONTRADICTED if phrase.lower() in text]

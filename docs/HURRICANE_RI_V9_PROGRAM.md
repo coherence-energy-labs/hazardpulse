@@ -359,6 +359,10 @@ The 2026 DTOPS reference is LL 0.1495 and Brier4 0.1476 (586 cycles, third read)
 
   The switch is made by a commit at the look, citing the scorer's frozen output.
 
+  *Implementation note (2026-10-09, display only, no rule changed):* the shown model is named in one file,
+  `results/hurricane_prospective/shown_model.json` (`"shown": "v10_1"`). The site derives its label, artifact,
+  version, live shadow key and challengers from it, so the switch is that one line.
+
 ## Amendment 5 -- convective structure from geostationary IR (2026-10-03, before any IR feature is compared with an outcome)
 
 **Why.** Amendment 3 exhausted the cheap levers on our inputs, so the next gain needs new

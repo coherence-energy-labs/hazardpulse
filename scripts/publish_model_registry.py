@@ -124,7 +124,7 @@ HU_SHADOWS = (
      "results": ["results/calibration/hurricane_ri_v10_selection.json",
                  "results/calibration/hurricane_ri_v10_2026_second_read.json",
                  "results/calibration/hurricane_ri_v10_vs_all.json"],
-     "what": "one threshold-stacked exceedance curve P(dV24 >= k), k = 15-45 kt, on v9's inputs; shown on the site"},
+     "what": "one threshold-stacked exceedance curve P(dV24 >= k), k = 15-45 kt, on v9's inputs"},
     {"file": "hurricane_ri_v10_2.json", "label": "v10.2", "kind": "v10", "shadow_key": "ri_v10_2_shadow",
      "entrant": "v10_2", "amendment": "amendments 3-4", "prereg_tag": "prereg-hurricane-ri-amend3",
      "results": ["results/calibration/hurricane_ri_v10_challengers.json"],
@@ -142,13 +142,26 @@ HU_SHADOWS = (
 HU_PROGRAM = "docs/HURRICANE_RI_V9_PROGRAM.md"
 
 
+def _shown_entrant() -> str | None:
+    """The entrant the site shows beside NOAA's number: named only in the pointer file (served_evidence)."""
+    from hazardpulse.verification import served_evidence as se
+
+    shown = se.shown_model(PROJECT_ROOT)
+    return shown["entrant"] if shown else None
+
+
 def hurricane_shadow_entries(models_dir: Path = MODELS_DIR) -> list[dict]:
     """The hurricane RI models recorded in shadow on every live NHC cycle, with how each was made and
-    where every forecast it issued is kept."""
+    where every forecast it issued is kept. The one the site shows is marked from the pointer file, and each
+    label is checked against its entrant key (and its artifact's own label, where it has one)."""
     from hazardpulse.hurricane import ri_v9, ri_v10
+    from hazardpulse.verification import served_evidence as se
 
+    shown_entrant = _shown_entrant()
     out = []
     for spec in HU_SHADOWS:
+        if se.entrant_label(spec["entrant"]) != spec["label"]:
+            raise SystemExit(f"{spec['file']}: label {spec['label']!r} is not entrant {spec['entrant']!r}")
         path = models_dir / spec["file"]
         if not path.exists():
             continue
@@ -160,12 +173,17 @@ def hurricane_shadow_entries(models_dir: Path = MODELS_DIR) -> list[dict]:
             art, version = ri_v10.load(path)
             n_inputs = len(art["feature_names"])
             prov = art.get("provenance") or {}
+            se.family_label(art, spec["entrant"])                 # refuses an artifact labelled otherwise
         dev = prov.get("dev_2022_2025") or {}
         results = [{"path": r, "sha256": _file_sha256(PROJECT_ROOT / r)} for r in spec["results"]]
+        shown = spec["entrant"] == shown_entrant
         out.append(_make_entry(
             record_id=f"weights_hazardpulse_{version}",
             name=f"HazardPulse Hurricane RI {spec['label']} (shadow, in prospective verification)",
-            description=(f"{spec['what']}. Recorded on every live NHC cycle beside NOAA's published number, never "
+            description=(f"{spec['what']}"
+                         + ("; shown on the site beside NOAA's published number (results/hurricane_prospective/"
+                            "shown_model.json)" if shown else "")
+                         + ". Recorded on every live NHC cycle beside NOAA's published number, never "
                          f"instead of it; chosen by a pre-registered rule ({HU_PROGRAM}, {spec['amendment']})."),
             weights_path=path,
             benchmark={"dev_2022_2025_log_loss_30kt": dev.get("log_loss"), "dev_auc": dev.get("auc"),
@@ -177,7 +195,7 @@ def hurricane_shadow_entries(models_dir: Path = MODELS_DIR) -> list[dict]:
                            "domain": "[0, 1]", "model_version": version},
             paper_url="https://github.com/coherence-energy-labs/hazardpulse",
         ) | {"lineage": {
-            "role": "shadow", "program": HU_PROGRAM, "amendment": spec["amendment"],
+            "role": "shadow", "shown_on_site": shown, "program": HU_PROGRAM, "amendment": spec["amendment"],
             "prereg_tag": spec["prereg_tag"], "candidate": prov.get("candidate"),
             "trained": prov.get("trained"), "rounds": prov.get("rounds"), "seeds": prov.get("seeds"),
             "selection_and_evaluation": results,
@@ -187,6 +205,69 @@ def hurricane_shadow_entries(models_dir: Path = MODELS_DIR) -> list[dict]:
             "prospective": {"file": "results/hurricane_prospective/v9_shadow.json", "entrant": spec["entrant"]},
         }})
     return out
+
+
+TC1_DIR = PROJECT_ROOT / "results" / "hurricane_tc1"
+
+
+def tc1_entry() -> dict | None:
+    """TC1, our track and intensity forecast (docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md), shown beside NHC's
+    official forecast on every NHC storm. Its "weights" are the saved online models the scorer replays each run
+    (results/hurricane_tc1/state.json); its identity is that file's content digest and its benchmark the
+    registered DEV result, both read through served_evidence, which refuses a state not made from the selection
+    and DEV results on disk."""
+    from hazardpulse.hurricane import consensus as cs
+    from hazardpulse.hurricane import tc1_live
+    from hazardpulse.verification import served_evidence as se
+
+    tc = se.tc1_hurricane(PROJECT_ROOT)
+    if tc is None:
+        return None
+    state = TC1_DIR / "state.json"
+    seasons, choose = tc.get("seasons") or [], tc.get("choose_seasons") or []
+    claims = {f"{kind}_vs_official": tc[kind]["vs_ofcl"] for kind in ("track", "intensity")}
+    met = [k for k, c in claims.items() if c.get("claim")]
+
+    def diff(x: dict | None) -> dict | None:
+        return None if not x else {k: x.get(k) for k in ("d", "ci", "level", "claim") if k in x}
+    entry = _make_entry(
+        record_id=f"weights_hazardpulse_{tc['model_version']}",
+        name="HazardPulse TC1 track and intensity forecast (NHC areas, shown beside NHC's official forecast)",
+        description=(
+            "Track and intensity to 120 h for every storm the National Hurricane Center follows: a minimum-variance "
+            "combination of NHC's real-time early aids, each weighted online by its verified errors (exponential "
+            "forgetting, shrinkage toward the diagonal, non-negative weights). Each scorer run replays the season "
+            "from the saved models (amendment 1). Settings chosen on "
+            + (f"{choose[0]}-{choose[-1]}" if choose else "earlier seasons") + ", tested on "
+            + (f"{seasons[0]}-{seasons[-1]}" if seasons else "later seasons")
+            + (f" against NHC's official forecast; claims met: {', '.join(met)}." if met else
+               " against NHC's official forecast; no claim against it was met.")),
+        weights_path=state,
+        benchmark={"dev_seasons": seasons, "scored_leads_h": tc.get("leads"), "claim_level": tc.get("claim_level"),
+                   "track_mean_error_nmi": tc["track"]["errors"], "intensity_mean_error_kt": tc["intensity"]["errors"],
+                   **{k: diff(v) for k, v in claims.items()},
+                   "track_vs_hcca_descriptive": diff(tc["track"].get("vs_hcca")),
+                   "tc1o_track_vs_official": diff(tc["track"].get("tc1o_vs_ofcl")),
+                   "season_2026_track_vs_official": diff(tc["track"].get("season_2026_vs_ofcl"))},
+        framework="hazardpulse.hurricane.consensus (online minimum-variance combination)",
+        input_schema={"track_members": list(cs.TRACK_MEMBERS), "intensity_members": list(cs.INTENSITY_MEMBERS),
+                      "official": cs.OFFICIAL, "selection_sha256": tc.get("selection_sha256"),
+                      "season_end": tc.get("season_end")},
+        output_schema={"outputs": ["track_position_by_lead", "vmax_kt_by_lead"], "leads_h": list(cs.LEADS),
+                       "products": list(tc1_live.PRODUCTS), "shown": "TC1", "model_version": tc["model_version"]},
+        paper_url="https://github.com/coherence-energy-labs/hazardpulse",
+    )
+    entry["weights_uri"] = f"hazardpulse://{state.relative_to(PROJECT_ROOT).as_posix()}"
+    entry["lineage"] = {
+        "role": "shown beside NHC's official forecast", "program": se.TC1_PROGRAM,
+        "amendment": "protocol + amendment 1 (live)", "prereg_tag": tc.get("prereg_tag"),
+        "selection_and_evaluation": [{"path": p, "sha256": _file_sha256(PROJECT_ROOT / p)} for p in (
+            "results/hurricane_tc1/verifier_control.json", "results/hurricane_tc1/nhc_ofcl_published.json",
+            "results/hurricane_tc1/selection.json", "results/hurricane_tc1/dev.json",
+            "results/hurricane_tc1/season_2026.json") if (PROJECT_ROOT / p).exists()],
+        "live_records": {"replay": "dist/data/replay/hu_fcst_*.json", "key": "tc1",
+                         "ledger": "dist/data/hurricane-ledger.jsonl"}}
+    return entry
 
 
 HU_STACK_PATH = MODELS_DIR / "hurricane_ri_stack_v1.json"
@@ -565,6 +646,11 @@ def build_entries() -> list[dict]:
         entries.append(eq_stack_entry)
     # ----- Hurricane RI shadows (ours, in prospective verification) -----
     entries.extend(hurricane_shadow_entries())
+
+    # ----- Hurricane track and intensity: TC1, shown beside NHC's official forecast -----
+    tc1 = tc1_entry()
+    if tc1 is not None:
+        entries.append(tc1)
 
     # ----- Earthquake GBT v1 (not served) -----
     eq_path = MODELS_DIR / "earthquake_gbt_v1.json"

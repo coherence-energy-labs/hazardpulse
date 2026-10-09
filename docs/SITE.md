@@ -36,6 +36,16 @@ lists any page that differs from what the artifacts say, and `tests/test_site_pa
 * Every data file is strict JSON (no `NaN`), so the Worker and every browser can parse it.
 * A forecast whose quality checks ended in `block` is withheld on its page, with the reason.
 * A live skill score is quoted only once 10 or more events have been observed for that model version.
+* No model label, year range or claim is typed around the evidence blocks or in page code
+  (`tests/test_site_claims_bound.py`). Until 2026-10-09 the check compared only the text between the markers, and
+  prose beside a block contradicted it. Now: a sentence the results contradict (`evidence_pages.CONTRADICTED`) fails
+  `check_pages` and `--check` wherever it appears; a `vN.N` label or a year range in a string literal of the page
+  code, or in a hand-kept page outside its blocks, fails the tests unless an artifact justifies it (`ALLOWED`); and
+  every model label on any page must be one an artifact names.
+* Which of our hurricane RI models is shown beside NOAA's number is named in one file,
+  `results/hurricane_prospective/shown_model.json` (`"shown": "<entrant>"`). Its label, artifact, version, the key of
+  its live shadow forecasts and its challengers are derived from it (`served_evidence.shown_model`); switching it at a
+  look (amendment 4) is that one line, and every page follows.
 * Research diagnostics are never presented as the forecast; band words (one scorer's "watch" is an NWS
   term) are not used; a chance below 0.1% reads `<0.1%`, never `0.0%`.
 

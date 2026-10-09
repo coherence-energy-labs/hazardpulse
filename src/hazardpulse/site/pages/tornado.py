@@ -45,31 +45,38 @@ def data_valid_time(to: dict) -> str | None:
 _FED = {"zero": "0", "missing": "a missing value", "the bare number": "the bare number"}
 
 
-def input_gap_notice(to: dict) -> str:
+def input_gap_notice(to: dict, ev: dict | None = None) -> str:
     """The input-format guard's record (hazardpulse.tornado.input_guard), in plain words: which of the model's
-    inputs NOAA's feed no longer carries, and what the model receives instead."""
+    inputs NOAA's feed no longer carries, what the model receives instead, and -- from the registered test that
+    decided it (tornado program amendment 10, bound in ``ev["format_change"]``) -- what that has cost. The date is
+    the guard's own record of the switch (until 2026-10-09 this notice typed the wrong day and called a decided
+    question open)."""
     from hazardpulse.tornado import input_guard
+    from hazardpulse.verification import evidence_pages
     gaps = to.get("input_gaps") or {}
     if not input_guard.has_gaps(gaps):
         return ""
+    day = evidence_pages.format_change_date({"format_change": {"date": input_guard.FORMAT_CHANGE}})
+    since = f"Since NOAA changed the format of its ProbSevere feed on {day}"
     items = list(gaps.get("absent") or []) + list(gaps.get("partial") or []) + list(gaps.get("changed_format") or [])
     used = [g for g in items if int(g.get("model_splits") or 0) > 0]
     unused = [g for g in items if int(g.get("model_splits") or 0) == 0]
     if used:
         fed = {_FED.get(str(g.get("fed")), str(g.get("fed"))) for g in used}
         gone = fmt.join([esc(g.get("label") or g.get("input")) for g in used])
-        text = (f"Since NOAA changed the format of its ProbSevere feed on 6 August 2025, the feed no longer carries "
+        text = (f"{since}, the feed no longer carries "
                 f"{gone}. The model learned from storms before the change, when they were present; it now "
                 f"receives {fmt.join(sorted(fed))} for "
                 + ("it" if len(used) == 1 else "them")
                 + ", as it did for the storms after the change in its 2025 test.")
     else:
-        text = "Since NOAA changed the format of its ProbSevere feed on 6 August 2025, some attributes have changed."
+        text = f"{since}, some attributes have changed."
     if unused:
         text += (f" {fmt.plural(len(unused), 'more input')} the model does not use "
                  + ("is" if len(unused) == 1 else "are") + " missing or in a new format.")
+    cost = evidence_pages.format_change_sentence(ev)
     return (f'<div class="notice notice-warn"><p><strong>Known input gap.</strong> {text} Every forecast records '
-            "which inputs were missing; whether this costs accuracy is an open question we are testing.</p></div>")
+            "which inputs were missing." + (f" {cost}" if cost else "") + "</p></div>")
 
 
 def _warning(s: dict) -> str:
@@ -206,7 +213,7 @@ def page(d: SiteData) -> str:
               ("Storms tracked", f"{len(storms):,}"),
               ("Under an NWS tornado warning", f"{n_warned:,}")])
     notices = (common.forecast_age(to.get("updated_at"), 60, TORNADO.schedule, valid_at=data_valid_time(to))
-               + common.gate_notice(head) + input_gap_notice(to)
+               + common.gate_notice(head) + input_gap_notice(to, d.evidence.get("tornado"))
                + common.official_notice(TORNADO, "For tornado warnings, follow"))
     proj = maps.CONUS
     marks = [maps.dot(proj, s["lat"], s["lon"], cls=f"dot-to {fmt.level(s.get('tornado_probability'))}",
