@@ -819,6 +819,226 @@ written before it scores any cycle sets its error budget at half of v10.4's.
 - **What survives:** the law as a weighting rule (it beats equal weights). It keeps its place where the sources
   are independent and comparable, as in TC1.
 
+## Amendment 12 -- G1: the inner core from GOES 2 km, hourly (2026-10-08, before any G1 feature meets an outcome)
+
+**Why.** Amendments 8, 10 and 11 showed that our RI models are near the information limit of their inputs. The
+8 km GMGSI images (two per cycle) cannot resolve an eye, an eyewall or a ring. GOES ABI band 13 is 2 km and
+available every 10 minutes from 2017, so it also covers 2020, which GMGSI does not. The physics: before RI the
+inner core organizes. Deep convection wraps into a ring, the ring closes and symmetrizes, an eye clears and
+contracts, and the convection persists. The coherence concept enters where it now has the resolution: how long
+core convection has been sustained, and how fast the core symmetrizes.
+
+**Data** (`src/hazardpulse/hurricane/goes_abi.py`, the same code for training and live).
+- **Source:** the operational GOES-East or GOES-West band-13 full disk, chosen by date and by longitude (split at
+  106.2 W). It is read by HTTP byte ranges, at the first scan at or after each hour.
+- **Hours.** For cycle t, the hours t-12 .. t+2:
+  - hours up to t are centred by interpolating the CARQ fixes known at t;
+  - hours t+1 and t+2 are centred by extrapolating the t-6 -> t motion.
+
+  No fix after t is read.
+- **Polar image.** Each hour becomes a storm-centred polar image: 200 radii (1-399 km, 2 km steps) by 64
+  azimuths, bilinear, at 0.6 K.
+- **Eye recentring.** It is re-centred on a clear eye: the warmest sample within 25 km, at least 15 K above the
+  coldest azimuthal mean within 100 km, AND enclosed by cloud of 235 K or colder within 50 km in at least 75% of
+  directions. An exposed low-level centre keeps the analysed centre. *(Replaced by amendment 12b before any
+  outcome: this rule over-called eyes in weak storms.)*
+- **Checks.** The geometry reproduces the GOES-R PUG worked example and its inverse. On Milton 2024-10-07 18Z the
+  eye reads 281 K inside a 192 K ring, recentred 5 km from CARQ.
+- **Coverage.** `results/goes/tasks.jsonl.gz` holds 43,565 crops over 19,566 hours for every 2020-2026 cycle
+  (`scripts/goes_storm_hours.py`). They are collected on 20 runner shards (`research-goes-g1.yml`); a missing
+  scan is recorded, never dropped.
+
+**Features (12)** (`src/hazardpulse/hurricane/goes_features.py`, constants fixed there).
+- **At the latest available hour:**
+  - core deep convection (fraction of samples at or below 208 K within 50 km);
+  - ring deep convection (50-150 km);
+  - eye contrast (the mean within 5 km minus the coldest azimuthal mean within 100 km);
+  - eyewall inner edge (eyed hours only);
+  - ring symmetry (1 - the wavenumber-1 amplitude over the mean of the 20-100 km cloud-top depression);
+  - the coldest cloud top within 100 km.
+- **Over the window:**
+  - sustained core convection (consecutive hours, ending at the latest, with at least half the core at or below
+    208 K);
+  - the symmetrization, eye-contrast and core-convection trends (OLS slopes, at least 4 hours);
+  - the fraction of hours with an eye;
+  - the number of hours read.
+- `tests/test_goes_features.py` pins each feature on synthetic images.
+
+**Candidate:** **G1 = H8 + the 12 G1 features**, with H8's settings. The G1 features are unconstrained.
+
+**Control:** H8, recomputed by `scripts/hurricane_ri_g1.py`, must reproduce amendment 8's development log loss
+(0.14161766094567663) to 1e-12, or the run stops.
+
+**Carried rule (amendment 8's):** G1 is carried iff its pooled 30/24 log loss AND its pooled four-threshold
+Brier are both below H8's.
+- **Reported (descriptive, pre-registered):**
+  - paired 95% intervals;
+  - POD at HCCA's false-alarm rate;
+  - the drift check;
+  - G1's share of split gain;
+  - a **noise control**: the 12 features shuffled within each season, seeds 1-3. G1's gain counts as information
+    only if it clearly exceeds what the shuffled columns give; this is amendment 10's lesson, registered this
+    time.
+- **2026:** a declared further read.
+
+**A carried G1.** Before it scores any cycle, an amendment registers it in the prospective test:
+- live inputs: up to 15 GOES crops per storm per cycle;
+- its error budget: half of v10.4's.
+
+**Known before the result.**
+- **Parallax.** Cloud-top parallax shifts the convection a few km toward the satellite. Eye recentring removes
+  that for eyed storms, not for the rest.
+- **Satellite changes.** The East satellite changes on 2025-04-07 (GOES-16 to GOES-19) and the West on
+  2023-01-04 (GOES-17 to GOES-18). Calibration differs slightly; the drift check reports it.
+- **Few events.** The development set holds about 250 RI events. A real but modest gain may not clear the noise
+  control.
+
+## Amendment 12b -- G1's eye, by ADT's definition (2026-10-09, before any G1 feature meets an outcome)
+
+**Why: a defect, found by input QA.** QA of amendment 12's first full collection read inputs only. It found that
+the eye rule over-called eyes in weak storms: 17-20% of crops below 50 kt, where an eye is physically rare. Below
+64 kt, the image's eye edge also did not track CARQ's radius of maximum wind (Spearman 0.07).
+
+The independent oracle was CIMSS's Advanced Dvorak Technique (ADT), which runs in real time on every storm every
+30 minutes. 26,077 crops were matched to an ADT record within 15 minutes (LAND records excluded). Against ADT's EYE
+scene, the amendment-12 rule scored POD 0.93, FAR 0.60 and HSS 0.44; below 50 kt it called eyes in 20% of crops,
+where ADT called none.
+
+The root cause: "cold cloud in at least 75% of directions" accepts a warm gap in a curved band. A 40-degree gap is
+89% enclosed (`tests/test_goes_abi.py` reproduces this; the old code calls it an eye).
+
+No G1 outcome had been read. The stats and select phases had not run.
+
+**The new eye** (`goes_abi.polar_eye`) follows ADT v9.1's own definitions:
+- **Eye temperature:** the warmest sample within 24 km.
+- **Coldest-warmest cloud temperature:** on each ring from 24 to 136 km, the warmest sample; then the coldest of
+  those rings. It is cold only where some ring of cloud is cold all the way round, so a gap or an exposed centre
+  cannot pass. A ring with a missing sample is skipped.
+- **The rule:** an eye is a closed ring at or below **232 K** whose centre is at least **24 K** warmer than it.
+- **Where the rule is applied:** at the eye candidate, the warmest sample within 24 km of the analysed centre, with
+  the image re-sampled there.
+
+**Fitting and test, inputs only.**
+- **Fit.** The two thresholds were fitted against ADT's EYE scene on the 2020-2023 crops: maximum HSS on a 2 K
+  grid. The optimum is flat: HSS 0.84-0.85 across 230-238 K × 22-30 K.
+- **Held-out read (2024-2026):** HSS **0.839** (POD 0.878, FAR 0.145). The amendment-12 rule scored HSS 0.448 on
+  the same crops.
+- **Eye fraction by ADT intensity, ours (ADT's):**
+
+  | intensity | ours | ADT |
+  |---|---|---|
+  | below 50 kt | 0.02 | 0.00 |
+  | 50-64 kt | 0.04 | 0.03 |
+  | 64-83 kt | 0.17 | 0.14 |
+  | 83-96 kt | 0.40 | 0.44 |
+  | 96-113 kt | 0.58 | 0.61 |
+  | 113 kt and above | 0.82 | 0.87 |
+
+- **The pipeline against ADT's independent processing:**
+  - eye temperature: Spearman +0.955, median difference -0.2 C;
+  - our coldest-warmest temperature vs ADT's mean cloud temperature: Spearman +0.895;
+  - our centre: a median 9 km from ADT's on its eye scenes.
+- **Residual disagreement, misses (ADT eye, rule none).** These are mostly obscured eyes: ADT's own eye
+  temperature in them has a median of -26 C, against +7.6 C where the two agree. ADT keeps these eyes through
+  persistence (+0.25 when the last scene was an eye) and its intensity prior (up to -1 on the eye score below
+  T4.5).
+- **Residual disagreement, "false alarms" (rule eye, ADT none).** These mostly come before ADT's call: ADT calls
+  an eye within the next 12 h after 43-89% of them, by intensity band. Where the rule sees no eye, that rate is
+  4-65%.
+
+**Features.** There are still 12, with the same names.
+- **Eye contrast** becomes ADT's eye temperature minus its coldest-warmest temperature at the eye candidate. It is
+  continuous, so a forming eye shows before it crosses the threshold.
+- **Eyewall inner edge:** the definition is unchanged; it is now gated by the closed-ring eye. Of three
+  definitions it tracked CARQ's RMW best on the rule's eyes: Spearman +0.385, against +0.162 for ADT's dark-gray
+  edge and +0.123 per azimuth (n 392).
+- **Eye fraction** uses the new flag.
+
+**Collection.** All 43,565 crops are re-collected, because amendment 12 stored only the recentred image. Every
+shard now also keeps the analysed-centre image and both ADT temperatures, so a detector can be re-scored without
+re-collecting.
+
+**Gates.** Both must pass before the stats phase reads anything:
+1. `goes_collect.py --verify` (also run inside `hurricane_ri_g1.py stats`): every task key exactly once, with
+   12b's fields.
+2. `scripts/goes_adt_check.py` (the runners' verify job):
+   - held-out HSS of at least 0.80;
+   - an eye fraction below 50 kt of at most 0.03;
+   - a centre median within 15 km;
+   - eye-temperature Spearman of at least 0.90;
+   - at least 20,000 matched crops.
+
+A failed gate is root-caused and fixed, never loosened. No outcome is read until both pass.
+
+**Disclosure.** The 12-hour lead check read ADT scene types after t, a quantity related to intensification. It
+ran after the thresholds were fixed and changed nothing. It read no intensity change, no best track after t and
+no RI label.
+
+**Unchanged from amendment 12:** the candidate, the control, the carried rule, the descriptive checks, the noise
+control and the 2026 read.
+
+### Amendment 12b outcome (2026-10-09): G1 NOT carried -- 2 km inner-core structure adds nothing H8 lacks
+
+**Collection** (run 37930285529, commit bec84a879, tag `prereg-hurricane-ri-amend12b`).
+- **Crops:** 43,565 tasks, each exactly once. 43,428 were read. Of the 137 missing, 136 are hours with no GOES scan
+  in NOAA's bucket and 1 is a corrupt chunk; they are spread over 26 storms, at most 16 in any one.
+- **Both gates passed:**
+
+  | ADT gate | measured | required |
+  |---|---|---|
+  | matched crops | 29,010 | at least 20,000 |
+  | held-out HSS | **0.834** (0.839 was measured on the old crops) | at least 0.80 |
+  | eye fraction below 50 kt | 0.011 | at most 0.03 |
+  | centre median | 9.6 km | within 15 km |
+  | eye-temperature Spearman | 0.959 | at least 0.90 |
+
+- **Input QA on the development rows** (best-track v0, read at t):
+
+  | v0 | eye fraction |
+  |---|---|
+  | below 50 kt | 0.005 (0.17-0.20 under amendment 12's rule) |
+  | 50-64 kt | 0.017 |
+  | 113 kt and above | 0.839 |
+
+  Eye edge against CARQ RMW: Spearman +0.369 (n 459, p 3e-16); +0.31 below 64 kt, where the old rule gave 0.07.
+- **Coverage:** 4,668 of 4,692 development cycles have their latest hour.
+
+**The registered test** (`results/calibration/hurricane_ri_g1.json`).
+- **Control:** H8 recomputed reproduced amendment 8's log loss, 0.14161766094567663, to 1e-12.
+- **Development:** pooled 30/24, n 2,871 test rows, 193 events.
+
+  | | H8 | G1 | G1 − H8 (95% CI) |
+  |---|---|---|---|
+  | log loss | 0.14162 | 0.14223 | +0.00061 [-0.00027, +0.00155] |
+  | four-threshold Brier | 0.15261 | 0.15377 | **+0.00116 [+0.00008, +0.00233]** |
+  | AUC | 0.9340 | 0.9337 | |
+  | POD at HCCA's false-alarm rate | 0.194 | 0.209 | (HCCA 0.236) |
+
+- **Carried rule:** G1 must beat H8 on BOTH log loss and Brier. It is worse on both. **NOT carried; H8 stands.**
+- **Noise control:** the same 12 columns shuffled within season give dLL -0.00005, +0.00028 and +0.00052 for seeds
+  1-3. G1's +0.00061 sits in that range: the features behave as noise would.
+- **Split gain:** G1's share is 0.024 in total, at most 0.0043 for any one feature (ring deep convection).
+- **Drift:** no flag.
+- **2026 further read** (586 cycles, no claim): log loss 0.1172 (H8) vs 0.1155 (G1), dLL -0.0017
+  [-0.0053, +0.0019]; dBrier4 -0.0009 [-0.0049, +0.0030]. The direction is opposite to development, and both
+  intervals span 0.
+
+**Reading.**
+- **The input is sound.** The eye now agrees with ADT at HSS 0.83 and the eye edge tracks the RMW. A defective
+  input is ruled out as the reason for the null.
+- **The result.** Hourly 2 km inner-core structure (core and ring convection, eye contrast, eyewall edge,
+  symmetry, persistence, trends) adds no RI information beyond H8 at the 24 h horizon in 2020-2025.
+- **Why redundancy is plausible.** H8 already holds amendment 5's 8 km IR convective-structure features (carried
+  as v10.3). It also holds the operational aids, which ingest GOES IR themselves: SHIPS's IR predictors, the
+  DTOPS and RII consensus.
+- **The third null over H8 in a row.** Three structurally different families have now failed against it:
+  amendment 10's coherence state, amendment 11's fusion, and this one. The development test resolves a dLL of
+  about ±0.0009 (0.6% of log loss).
+- **What this means for the next step.** H8 sits at the floor that 193 events can certify. The next real gain
+  needs more independent RI events (earlier seasons, more basins) or a different contract, not another input
+  family on the same 193.
+- **Not a defect:** this is the registered answer, recorded as found.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
