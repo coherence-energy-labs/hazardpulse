@@ -1268,6 +1268,76 @@ J1 is never the published number. A J1 failure is written into the record and le
 - **Position source.** Training crops were centred on post-season best-track positions, live crops on the working
   best track or the warning. The live record is the test of whether that costs J1 anything.
 
+## Amendment 14 -- the independent pass on J1, and J2 (2026-10-09, before any live J1 cycle and before any J2 number)
+
+**The independent pass** (an adversary agent that did not build J1; its scripts are in the session scratchpad,
+`j1_adv/`). It first reproduced every published J1 number exactly from a frozen copy of the outcome commit. It also
+re-cut the crops from the GMGSI images: 49,644 of 49,644 feature values were identical. Its verdict on the claim
+as worded, "J1 beats v8.2 in the JTWC basins", was **refuted**.
+
+**The witness: SP.**
+- In the South Pacific (19 storms, 391 cycles, 1 RI event), J1 - v8.2 dLL is **+0.0164 [+0.0051, +0.0362]** and
+  dBrier is +0.0062 [+0.0023, +0.0129], both worse beyond their intervals.
+- In the South Indian Ocean alone it is **-0.0139 [-0.0237, -0.0047]**.
+- The outcome's per-basin table merged SI and SP into "SH" and hid this.
+- **The root is J1's own design:** one `is_sh` flag for both basins. J1 takes its level from SI, which has many
+  events, and over-forecasts quiet SP: a mean forecast of 0.0545 against v8.2's 0.0412 and a realized rate of
+  0.0026. B is already worse there (+0.0099).
+- North Indian Ocean (0 events): dBrier +0.0023 [+0.0001, +0.0059], worse.
+
+**The fragility of the pooled interval.** It excludes 0 by 0.0003. Each of these keeps about 77-85% of the point
+gain, but every interval then includes 0:
+- moving the test crops 15 km: -0.0064 [-0.0133, +0.0005];
+- moving them 30-60 km at random: -0.0059 to -0.0061;
+- dropping one storm (Neoguri 2025): -0.0064 [-0.0127, +0.0001].
+
+Per fold:
+- 2024 alone is not significant: -0.0049 [-0.0146, +0.0046];
+- 2025 is: -0.0102 [-0.0206, -0.0001].
+
+**What survived the attacks:**
+- **IR is information:** J1 - B is -0.0150 [-0.0259, -0.0051] in WP and -0.0101 [-0.0170, -0.0038] in SI.
+- **One IR feature does not explain it:** J1 beats a recalibrated v8.2 + `ir_mean_0_50` by -0.0050 [-0.0090,
+  -0.0010].
+- **Image latency:** the median is 34 min and the maximum 49 min (file-name stamps, n 1,040), well inside
+  t + 3 h 30.
+- **No leakage across folds.**
+- **The AUC gain has no ties.**
+- **The bootstrap seed:** across seeds 0-19 the upper bound stays between -0.0011 and -0.0003.
+
+**What this changes, before J1 scores any live cycle.**
+
+1. **J1's carried claim is stated as measured:** pooled over the JTWC basins in the 2024-2025 hindcast, with crops on
+   best-track positions. It is not stated per basin, and not as a live gain.
+
+2. **Scope.** The live entrant (J2 if carried below, else J1) has a scope. The scope is the basins where its
+   2024-2025 development dLL against v8.2 has a point estimate <= 0, read from the outcome file's per-basin table,
+   with SI and SP reported apart from now on.
+   - The site shows the entrant's row only for storms in its scope.
+   - Its prospective claim is judged only on cycles in its scope.
+   - The shadow is still recorded on every JTWC storm, so the record stays complete.
+   - For J1 the scope is WP and SI: SP and NI are out.
+   - Live SH storms are SI west of 135 E and SP east of it, IBTrACS's boundary, read from the storm's longitude at
+     t.
+
+3. **J2 = J1 with separate basin flags.** It has `is_wp`, `is_ni`, `is_si`, `is_sp` and `is_nhc` in place of
+   `is_sh`; everything else is identical: inputs, rows, learner, seeds, folds and IR.
+   - **Its registered test is the 2026 season** (JTWC rows to date, 90 events). Nothing in J2's design was read
+     from 2026, since the design change comes from the 2024-2025 per-basin witness.
+   - **Arms:** J2 and J1, each trained on storms of 2022-2025, all basins. v8.2 as served is reported beside them.
+   - **J2 is carried iff:**
+     - on the 2026 JTWC rows, its pooled 30/24 log loss AND Brier are both below J1's; and
+     - its SP log loss on 2026 is not above v8.2's (point estimate), since that is the defect J2 exists to fix.
+   - **Reported:** per basin (WP, NI, SI, SP) against both J1 and v8.2; the 2024-2025 development folds for J2,
+     descriptive only, since those rows are read; J2's scope.
+   - **If carried,** J2 replaces J1 as the live entrant before the first live cycle. Its export carries the same
+     reproduction checks as J1's, and the claim rule (v9.1's, 97.5%, JTWC family's first budget) passes to it
+     unchanged. The budget is not spent twice: only one entrant goes live.
+
+4. **Promotion needs the live record.** A claim at a look is judged on live cycles only, that is on working
+   positions. That was already the case in amendment 13b, and this amendment restates it: the hindcast interval
+   is not evidence for promotion.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
