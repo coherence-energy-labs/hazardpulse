@@ -29,7 +29,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from hazardpulse.hurricane import ri_v9, ri_v10  # noqa: E402
+from hazardpulse.hurricane import ri_j1, ri_v9, ri_v10  # noqa: E402
 from hazardpulse.tornado import lgbm_payload as lp  # noqa: E402
 
 LEDGER = ROOT / "dist" / "data" / "hurricane-ledger.jsonl"
@@ -62,11 +62,16 @@ def known_models(root: Path = ROOT) -> dict[str, tuple[str, dict]]:
     if v9_path.exists():
         payload, version = ri_v9.load(v9_path)
         out[version] = ("v9", payload)
-    for name in (ri_v10.MODEL_PATH.name, ri_v10.V10_2_PATH.name, ri_v10.V10_3_PATH.name):
+    # v10.4 was missing here until 2026-10-09: its live shadows were counted "artifact not in repo", never checked
+    for name in (ri_v10.MODEL_PATH.name, ri_v10.V10_2_PATH.name, ri_v10.V10_3_PATH.name, ri_v10.V10_4_PATH.name):
         p = root / "results" / "models" / name
         if p.exists():
             art, version = ri_v10.load(p)
             out[version] = ("v10", art)
+    j1_path = root / "results" / "models" / ri_j1.MODEL_PATH.name
+    if j1_path.exists():
+        art, version = ri_j1.load(j1_path)
+        out[version] = ("j1", art)
     return out
 
 
@@ -88,6 +93,8 @@ def recompute_shadow(kind: str, art: dict, shadow: dict) -> float:
     if kind == "v10":
         got = ri_v10.recompute(art, inputs)
         return max(abs(got[k] - float(v)) for k, v in (shadow.get("model_probabilities") or {}).items())
+    if kind == "j1":
+        return abs(ri_j1.recompute(art, inputs) - float(shadow["model_probability"]))
     row = np.array([[np.nan if inputs.get(n) is None else float(inputs[n]) for n in art["feature_names"]]])
     return abs(float(lp.predict_proba(art, row)[0]) - float(shadow["model_probability"]))
 

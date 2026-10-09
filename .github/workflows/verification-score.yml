@@ -86,6 +86,10 @@ jobs:
         # running record until a look date (2026-12-01, 2027-12-01); the claim is made only at a look
         run: python scripts/score_hurricane_v9_prospective.py
 
+      - name: Score the J1 RI shadow against the published v8.2 (JTWC basins, amendment 13b)
+        # running record until a look date (2026-12-01, 2027-12-01); the claim is made only at a look
+        run: python scripts/score_hurricane_j1_prospective.py
+
       # every hurricane record: the hash chain holds, each entry still matches its replay file, and
       # every shadow recomputes from its stored inputs; a broken record fails this job
       - name: Audit the hurricane forecast records

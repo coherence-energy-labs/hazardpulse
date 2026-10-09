@@ -1203,6 +1203,71 @@ model change and needs its own registration. It is recorded in the ledger as an 
 - what the site shows;
 - the rule that would make it the published number.
 
+## Amendment 13b -- J1 in the live record, and the rule that would publish it (2026-10-09, before J1 scores any live cycle)
+
+**Artifact.** `results/models/hurricane_ri_j1.json` (`hurricane_ri_j1-e697b5f52ae2`, label "J1"). It is the
+registered candidate refit on storms of 2022-2025 in all six basins, which is exactly the model the 2026 further
+read scored. `scripts/hurricane_ri_j1.py export` refuses to write it unless:
+- the refit reproduces that read's log loss (0.19530223835248706) to 1e-12;
+- its names are the registered candidate's;
+- its pure-numpy members reproduce the LightGBM boosters (worst difference 0.0).
+
+`tests/fixtures/hurricane_ri_j1_live_row.json` pins one 2026 row (2026074S13160, p 0.6084).
+
+**Live path** (`hazardpulse.hurricane.ri_j1`, `scripts/fetch_and_score.py`). Every West Pacific (WP), North Indian
+(IO) and Southern Hemisphere (SH) storm the scorer scores gets `ri_j1_shadow`. Its inputs:
+- **v8.2's ensemble**, from the same run, as a logit;
+- **v8.2's 17 inputs**, from the live case;
+- **the 14 IR features**, from GMGSI at t + 2 h and t - 4 h. Each crop is centred on the storm's best-track fix (UCAR
+  RAL's b-deck) at t and t - 6 h, else the JTWC warning's fix, extrapolated by `ir_source.extrapolate`;
+- **the basin flags**: live IO and SH are training's NI and SI/SP.
+
+A missing input stays missing, as in training. The shadow records:
+- the probability, full precision and rounded;
+- the input row;
+- the images read and the positions;
+- **v8.2's own number at full precision**.
+
+J1 is never the published number. A J1 failure is written into the record and leaves the published v8.2 untouched.
+
+**Checks:**
+- `tests/test_hurricane_ri_j1_live.py`: the live scorer builds exactly the training row; v8.2's live ensemble
+  equals the row's `v82_logit` to 1e-9; the scorer records J1 without changing the published number.
+- The record audit recomputes every J1 shadow from its stored inputs. The audit now also covers **v10.4**, whose
+  live shadows it had counted as "artifact not in repo" since amendment 9. After the fix: 323 of 323 shadows
+  recompute.
+
+**The prospective test** (`scripts/score_hurricane_j1_prospective.py`, run by `verification-score.yml`):
+- **Unit, test record and outcome:** amendment 7's, through `hazardpulse.hurricane.cycle_records`, with RAL's b-deck
+  as the operational best track.
+- **Comparator:** v8.2 as published, at full precision. The value must round to the published number, or the
+  cycle is not scored. A published 0.0000 on an RI event would otherwise cost v8.2 about 28 nats on rounding alone.
+- **The claim.** J1 is the first entrant of the **JTWC family**, so it carries that family's first budget of 2.5%
+  under **v9.1's rule**. At each look (2026-12-01 and 2027-12-01), applied once on the full test set and frozen,
+  the claim is met iff J1 - v8.2 has a 97.5% storm-bootstrap interval wholly below 0 on the 30/24 log loss OR on
+  the Brier score, AND both point estimates are <= 0.
+- **Why a separate family is honest.** The NHC family's budget covers claims against NOAA's DTOPS in the NHC
+  basins. J1's claim is against a different comparator, in different basins, on disjoint storms. Later JTWC
+  entrants each get half the previous budget, so this family also stays below 5%.
+- **A met claim:** J1 becomes the published JTWC-basin number, by a commit at the look citing the frozen output.
+- **Before a look:** the output is a running record, and no claim is read from it.
+
+**What the site shows:**
+- **Storm cards:** from J1's first live cycle, every WP, IO and SH storm card shows J1's probability beside the
+  published v8.2, labelled as a model in test (as v10.1 is shown in the NHC basins).
+- **The methods page:** a J1 card with this program's registered result, bound to `hurricane_ri_j1.json`.
+- **The registry:** a J1 row.
+
+**Stated before its first cycle.**
+- **North Indian Ocean.** NI had no RI event in either development test season, so J1 is untested on NI events.
+  There it forecast slightly higher than v8.2 where nothing happened (dBrier +0.0023). The live record reports NI
+  separately.
+- **Image timing.** A run before t + 2 h 40 min may find no t + 2 h image, and that run's record carries NaN IR.
+  The test record is the first made at or after t + 3 h 30 min. Each record names the images it read, so GMGSI's
+  latency is measured from the record itself.
+- **Position source.** Training crops were centred on post-season best-track positions, live crops on the working
+  best track or the warning. The live record is the test of whether that costs J1 anything.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;

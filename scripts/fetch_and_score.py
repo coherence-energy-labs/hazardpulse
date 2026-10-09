@@ -60,6 +60,7 @@ from hazardpulse.hurricane import ri_model  # noqa: E402
 from hazardpulse.hurricane import ri_stack, ships_text  # noqa: E402
 from hazardpulse.hurricane import ri_v9  # noqa: E402
 from hazardpulse.hurricane import ri_v10  # noqa: E402
+from hazardpulse.hurricane import ri_j1  # noqa: E402
 from hazardpulse.hurricane import ri_v9_features as v9fx  # noqa: E402
 
 DIST = Path(__file__).resolve().parents[1] / "dist"
@@ -261,6 +262,11 @@ def jtwc_live_case(storm_id: str, warning_records: list[ATCFRecord], fetch=None)
     case = build_live_case(sid, merged, full_history=track_source == "ral_bdeck")
     if case is not None:
         case["track_source"] = track_source
+        # where J1's IR is cut (amendment 13b): the storm's best track at t and t - 6 h, else the warning's fix
+        from hazardpulse.hurricane import ir_source
+        p0, pm6 = ir_source.fix_positions(merged, dt.datetime.fromisoformat(str(case["issue_time"])), ri_j1.FIX_MODELS)
+        case["fix_positions"] = {"models": list(ri_j1.FIX_MODELS), "t": list(p0) if p0 else None,
+                                 "t_minus_6h": list(pm6) if pm6 else None}
     return case
 
 
@@ -853,6 +859,13 @@ def live_ir_read(sid: str, cycle: dt.datetime, records) -> tuple[dict[str, float
     cen = ir_source.centres(records, cycle)
     if cen is None:
         return ir_features.features(None, None), {"centre": "no CARQ position at t"}
+    return ir_from_centres(cen)
+
+
+def ir_from_centres(cen) -> tuple[dict[str, float], dict[str, object]]:
+    """``(IR features, what was read)`` from ``{tag: (image hour, centre)}``: the run's cached GMGSI image at each
+    hour, cropped by the training code (``ir_source.crop``), featured by ``ir_features``."""
+    from hazardpulse.hurricane import ir_features, ir_source
     crops, read = {}, {}
     for tag, (hour, centre) in cen.items():
         if hour not in _IR_IMAGES:
@@ -861,6 +874,41 @@ def live_ir_read(sid: str, cycle: dt.datetime, records) -> tuple[dict[str, float
         crops[tag] = None if key is None else ir_source.crop(counts, lat, lon, centre)
         read[tag] = {"hour": hour.strftime("%Y-%m-%dT%H:00Z"), "key": key}
     return ir_features.features(crops["p2"], crops["m4"]), read
+
+
+def load_j1() -> dict[str, object] | None:
+    """J1 (amendment 13b), the JTWC-basin shadow, when its artifact is present -- and only with the IR reader:
+    without it every record would carry J1's name with no IR, so it is not scored at all."""
+    if not ri_j1.MODEL_PATH.exists():
+        return None
+    if not ir_reader_available():
+        print("  J1 shadow: NOT scored -- its IR reader (h5py) is not installed")
+        return None
+    art, version = ri_j1.load()
+    return {"artifact": art, "model_version": version}
+
+
+def j1_shadow(case: dict[str, object], j1: dict[str, object], v82_ensemble: float,
+              v82_calibrated: float | None = None) -> dict[str, object]:
+    """J1's record for a JTWC storm (amendment 13b): IR cut around the case's own fixes, the row by name, the
+    probability. Recorded beside v8.2, never published. ``inputs`` and ``model_probability`` let the record
+    audit recompute it."""
+    from hazardpulse.hurricane import ir_features
+    art = j1["artifact"]
+    cycle = dt.datetime.fromisoformat(str(case["issue_time"]))
+    cen = ri_j1.ir_centres(case.get("fix_positions"), cycle)
+    if cen is None:
+        ir, read = ir_features.features(None, None), {"centre": "no position at t"}
+    else:
+        ir, read = ir_from_centres(cen)
+    inputs = ri_j1.live_inputs(art, case, v82_ensemble, ir)
+    prob = ri_j1.recompute(art, inputs)
+    n_ir = sum(1 for n in ir_features.IR_NAMES if inputs.get(n) is not None)
+    return {"status": "ok", "label": ri_j1.LABEL, "model_version": j1["model_version"],
+            "probability": round(prob, 4), "model_probability": prob, "inputs": inputs, "ir": read,
+            "ir_features_read": f"{n_ir} of {len(ir_features.IR_NAMES)}", "positions": case.get("fix_positions"),
+            # v8.2's published number before display rounding: the prospective test compares at full precision
+            "v8_2_model_probability": None if v82_calibrated is None else float(v82_calibrated)}
 
 
 def live_ir_features(sid: str, cycle: dt.datetime, records) -> dict[str, float]:
@@ -1249,6 +1297,7 @@ def score_live_cases(
     v10: dict[str, object] | None = None,
     adeck_fetcher=None,
     challengers: dict[str, dict[str, object]] | None = None,
+    j1: dict[str, object] | None = None,
 ) -> list[dict[str, object]]:
     """Score live cases with the pinned artifacts. No training happens here.
 
@@ -1326,6 +1375,12 @@ def score_live_cases(
             except Exception as exc:  # noqa: BLE001
                 err = {"status": f"error: {type(exc).__name__}: {exc}"}
                 storm.update({k: dict(err) for k in _shadow_keys(v9, v10, challengers)})
+        if j1 is not None and str(case.get("basin", "")).upper() in ri_j1.LIVE_JTWC_BASINS:
+            # J1 (amendment 13b): recorded beside v8.2, never the published number; a failure is written down
+            try:
+                storm[ri_j1.SHADOW_KEY] = j1_shadow(case, j1, float(p["ensemble"][i]), float(p["calibrated"][i]))
+            except Exception as exc:  # noqa: BLE001
+                storm[ri_j1.SHADOW_KEY] = {"status": f"error: {type(exc).__name__}: {exc}"}
         storm["ri_source_label"] = ri_source_label(storm)
         scored.append(storm)
 
@@ -1538,6 +1593,7 @@ def main() -> None:
     v9 = load_v9_model()
     v10 = load_v10_model()
     challengers = load_challengers()
+    j1 = load_j1()
     note = ri_sources_note(stack)
     print()
 
@@ -1653,7 +1709,7 @@ def main() -> None:
           f"cycle's SHIPS text has them, else {model['model_version']}...")
     scored = score_live_cases(model, live_cases, stack=stack, v9=v9, v10=v10,
                               adeck_fetcher=lambda s: adeck_by_storm.get(str(s).upper(), []),
-                              challengers=challengers)
+                              challengers=challengers, j1=j1)
 
     for s in scored:
         ri = s.get("ri_probability", 0) or 0

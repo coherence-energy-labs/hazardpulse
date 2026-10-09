@@ -39,6 +39,7 @@ from hazardpulse.hurricane import ir_source as irs  # noqa: E402
 TASKS = ROOT / "results" / "j1" / "ir_tasks.jsonl.gz"
 ROWS_NAME = "rows.jsonl.gz"
 OUT = ROOT / "results" / "calibration" / "hurricane_ri_j1.json"
+FIXTURE = ROOT / "tests" / "fixtures" / "hurricane_ri_j1_live_row.json"
 FRESH_IBTRACS_TAG = "ibtracs_20261008"
 SERVED = "hurricane_ri_v8_2"           # the JTWC-basin model scripts/fetch_and_score.py serves (SERVED_MODEL_VERSION)
 FIRST, LAST_DEV, FURTHER = 2022, 2025, 2026
@@ -288,9 +289,9 @@ def design(rows: list[dict], names: list[str]) -> np.ndarray:
     return np.array([[float(r[n]) if r.get(n) is not None else np.nan for n in names] for r in rows], float)
 
 
-def fit_predict(train: list[dict], test: list[dict], names: list[str]) -> np.ndarray:
+def fit_models(train: list[dict], names: list[str]):
     """The program's learner: v9.GBT_PARAMS, seeds averaged, early stopping on the last training season, refit on
-    all training rows at the found rounds."""
+    all training rows at the found rounds. Returns ``(boosters, rounds)``."""
     import lightgbm as lgb
     import hurricane_ri_v9 as v9
     last = max(r["j1_season"] for r in train)
@@ -300,15 +301,21 @@ def fit_predict(train: list[dict], test: list[dict], names: list[str]) -> np.nda
     Xa = design(train, names)
     Xi, yi = design(inner, names), np.array([r["ri_label_30kt"] for r in inner], float)
     Xv, yv = design(valid, names), np.array([r["ri_label_30kt"] for r in valid], float)
-    Xt = design(test, names)
-    preds = []
+    models, rounds = [], []
     for s in SEEDS:
         p = dict(v9.GBT_PARAMS, seed=s, bagging_seed=s, feature_fraction_seed=s, data_random_seed=s)
         b = lgb.train(p, lgb.Dataset(Xi, yi), 2000, valid_sets=[lgb.Dataset(Xv, yv)],
                       callbacks=[lgb.early_stopping(100, verbose=False)])
-        rounds = max(1, int(b.best_iteration or 1))
-        preds.append(lgb.train(p, lgb.Dataset(Xa, ya), rounds).predict(Xt))
-    return np.mean(preds, axis=0)
+        r = max(1, int(b.best_iteration or 1))
+        rounds.append(r)
+        models.append(lgb.train(p, lgb.Dataset(Xa, ya), r))
+    return models, rounds
+
+
+def fit_predict(train: list[dict], test: list[dict], names: list[str]) -> np.ndarray:
+    models, _ = fit_models(train, names)
+    Xt = design(test, names)
+    return np.mean([m.predict(Xt) for m in models], axis=0)
 
 
 def metrics(y: np.ndarray, p: np.ndarray) -> dict:
@@ -347,20 +354,91 @@ def _basin_flags(r: dict) -> dict:
             "is_nhc": float(b in ("NA", "EP"))}
 
 
-def select(shard_dir: str) -> int:
+def prepare(shard_dir: str) -> tuple[list[dict], dict[str, list[str]], dict[str, int]]:
+    """``(rows with every feature, {candidate: names}, IR collection status)`` -- the one assembly the test and the
+    export both use."""
     from hazardpulse.hurricane import ri_model as rm
     stats, counts = load_collection(shard_dir)
     with gzip.open(_work() / ROWS_NAME, "rt", encoding="utf-8") as fh:
         rows = [json.loads(line) for line in fh]
     model = rm.load_model(rm.ARTIFACTS[SERVED])
     v82_names = list(model["feature_names"])
-    ir_names = list(irf.IR_NAMES)
     for r in rows:
         r.update(ir_row_features(stats, row_key(r)))
         r.update(_basin_flags(r))
         r["v82_logit"] = float(_logit(r["v82_ensemble"]))
     base = ["v82_logit"] + v82_names + ["is_wp", "is_ni", "is_sh", "is_nhc"]
-    cands = {"J1": base + ir_names, "B": base}
+    return rows, {"J1": base + list(irf.IR_NAMES), "B": base}, counts
+
+
+def export(shard_dir: str) -> int:
+    """Freeze J1 as results/models/hurricane_ri_j1.json: the registered candidate refit on every development
+    season (storms of 2022-2025, all basins), exactly the model the 2026 further read scored. Refused unless the
+    refit reproduces that read's log loss to 1e-12, the names are the registered candidate's, and the artifact
+    reproduces the boosters to 1e-9. Also writes the live-path fixture (one 2026 JTWC row: inputs and
+    probability) the tests recompute."""
+    from hazardpulse.hurricane import ri_j1
+    from hazardpulse.tornado import lgbm_payload as lp
+    rep = json.loads(OUT.read_text(encoding="utf-8"))
+    if rep["carried"] != "J1":
+        raise SystemExit("amendment 13 did not carry J1: nothing to export")
+    rows, cands, _ = prepare(shard_dir)
+    names = cands["J1"]
+    if names != rep["candidates"]["J1"]:
+        raise SystemExit("the names differ from the registered candidate's")
+    if names[0] != "v82_logit" or any(f not in names for f in ri_j1.BASIN_FLAGS):
+        raise SystemExit("the serving module's input names do not match J1's")
+    tr = [r for r in rows if FIRST <= r["j1_season"] <= LAST_DEV]
+    t26 = [r for r in rows if r["j1_season"] == FURTHER and r["basin"] in JTWC]
+    models, rounds = fit_models(tr, names)
+    X26 = design(t26, names)
+    p26 = np.mean([m.predict(X26) for m in models], axis=0)
+    y26 = np.array([r["ri_label_30kt"] for r in t26], float)
+    ll = metrics(y26, p26)["log_loss"]
+    want = rep["further_read_2026"]["J1"]["log_loss"]
+    if abs(ll - want) > 1e-12:
+        raise SystemExit(f"refit 2026 log loss {ll!r} != the further read's {want!r}")
+    members = [lp.export_booster(m, names, calibration={"method": "identity", "a": 1.0, "b": 0.0}, provenance={})
+               for m in models]
+    v82_art = ROOT / "results" / "models" / f"{SERVED}.json"
+    dev = rep["development"]
+    art = {"schema": ri_j1.SCHEMA, "model_name": "hurricane_ri_j1", "label": ri_j1.LABEL, "feature_names": names,
+           "members": members, "live_basins": list(ri_j1.LIVE_JTWC_BASINS), "fix_models": list(ri_j1.FIX_MODELS),
+           "v82_dependency": {"model_version": SERVED, "artifact_sha256": hashlib.sha256(v82_art.read_bytes()).hexdigest()},
+           "provenance": {
+               "program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendments 13, 13a, 13b)", "prereg_tag": rep["prereg_tag"],
+               "trained": "storms of 2022-2025, all six basins (v8.2 is out of sample on every one)",
+               "event": "V(t+24 h) - V(t) >= 30 kt (IBTrACS best track)", "rounds": rounds, "seeds": list(SEEDS),
+               "rows_sha256": rep["rows_sha256"], "ir_tasks_sha256": rep["ir_tasks_sha256"],
+               "ir_source": "NOAA GMGSI longwave, hour t+2h and t-4h, +-4 degrees around the position at t "
+                            "extrapolated along the t-6h -> t motion",
+               "dev_2024_2025_jtwc": {"log_loss": dev["J1"]["log_loss"], "brier": dev["J1"]["brier"],
+                                      "auc": dev["J1"]["auc"], "n": dev["J1"]["n"], "events": dev["J1"]["events"],
+                                      "champion_label": "v8.2", "champion_log_loss": dev["A"]["log_loss"],
+                                      "champion_brier": dev["A"]["brier"],
+                                      "d_log_loss_vs_champion_ci": rep["J1_minus_A"]["d_ll_ci"]},
+               "season_2026_further_read": {"log_loss": ll, "champion_log_loss": rep["further_read_2026"]["A"]["log_loss"],
+                                            "d_log_loss_ci": rep["further_read_2026"]["J1_minus_A"]["d_ll_ci"],
+                                            "n": len(t26), "declared": "no claim"}}}
+    ri_j1.MODEL_PATH.write_bytes(ri_j1.canonical_bytes(art))
+    loaded, version = ri_j1.load(ri_j1.MODEL_PATH)
+    worst = float(np.max(np.abs(ri_j1.predict_matrix(loaded, X26) - p26)))
+    if worst > 1e-9:
+        ri_j1.MODEL_PATH.unlink()
+        raise SystemExit(f"artifact disagrees with the boosters by {worst:.2e}")
+    i = int(np.argmax(p26))                      # the fixture: the 2026 JTWC row J1 rates highest
+    fx = {"storm_id": t26[i]["storm_id"], "issue_time": t26[i]["issue_time"], "basin": t26[i]["basin"],
+          "inputs": {n: (None if not math.isfinite(float(X26[i, j])) else float(X26[i, j])) for j, n in enumerate(names)},
+          "probability": float(p26[i]), "model_version": version}
+    FIXTURE.write_text(json.dumps(fx, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"exported {version}: 2026 log loss {ll!r} reproduced; artifact within {worst:.1e} of the boosters; "
+          f"rounds {rounds}; fixture {fx['storm_id']} {fx['issue_time']} p {fx['probability']:.4f}", flush=True)
+    return 0
+
+
+def select(shard_dir: str) -> int:
+    rows, cands, counts = prepare(shard_dir)
+    ir_names = list(irf.IR_NAMES)
     ir_cov = float(np.mean([math.isfinite(r["ir_mean_0_50"]) for r in rows]))
     print(f"IR collection {counts}; rows with the t + 2 h image's features: {ir_cov:.3f}", flush=True)
 
@@ -446,7 +524,7 @@ def select(shard_dir: str) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=("rows", "collect", "verify", "select"))
+    ap.add_argument("phase", choices=("rows", "collect", "verify", "select", "export"))
     ap.add_argument("shard_dir", nargs="?")
     ap.add_argument("--shard", type=int)
     ap.add_argument("--of", type=int)
@@ -461,6 +539,8 @@ def main(argv=None) -> int:
         _, counts = load_collection(a.shard_dir)
         print(f"collection complete: {sum(counts.values())} tasks, each once; status {counts}")
         return 0
+    if a.phase == "export":
+        return export(a.shard_dir)
     return select(a.shard_dir)
 
 
