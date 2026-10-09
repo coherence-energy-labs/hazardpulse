@@ -1039,6 +1039,82 @@ control and the 2026 read.
   family on the same 193.
 - **Not a defect:** this is the registered answer, recorded as found.
 
+## Amendment 13 -- J1: satellite IR for the JTWC basins (2026-10-09, before any J1 number exists)
+
+**Why.** In the West Pacific, North Indian and Southern Hemisphere basins, we publish v8.2. That model has 17
+track, intensity, MPI and season inputs, and no satellite and no NOAA aids. On the 2022-2024 West Pacific cycles it
+scores log loss 0.2057 (ledger H7).
+
+A descriptive probe on the already-read NHC development rows (`aidfree_probe`, no claim) put a model in that same
+aid-free situation. Track and intensity alone scored log loss 0.2058. Amendment 5's 8 km IR features cut that to
+0.1934: dLL **-0.0124 [-0.0183, -0.0071]**, AUC 0.805 -> 0.843. On top of the aids, IR is worth only -0.0018: the aids
+already compress what the satellite sees, which is also why G1 was null.
+
+GMGSI is a global mosaic, so the same IR can reach every JTWC basin. No J1 row, crop or feature exists yet, and no
+JTWC-basin cycle has met an IR feature.
+
+**Rows.**
+- **Source:** the v8.2 dataset (IBTrACS best track, the `results/hurricane_operational_ri_v8_2_2000_2024.jsonl` v8.2
+  was built from). 2025 is added by the same builder functions on the IBTrACS release of 2026-10-08.
+- **Equivalence control:** that builder must reproduce the frozen file's 2022-2024 rows (features and labels) on at
+  least 99% of cases, and the mismatches are reported. Rows through 2024 are always taken from the frozen file.
+- **Seasons:** storms whose first season is 2022-2025. v8.2 was trained on storms of 2000-2021, so its score is out
+  of sample on every J1 row. 2021 is excluded, because v8.2's in-sample scores there would teach J1 to over-trust
+  it.
+- **Label:** `ri_label_30kt`, v8.2's own (at least 30 kt in 24 h, best track).
+- **Basins:** all six for training (WP, NI, SI, SP, NA, EP). Scoring is on the JTWC basins only (WP, NI, SI, SP).
+
+**IR.** Amendment 5's features (`hazardpulse.hurricane.ir_features`, 14 of them), from GMGSI longwave
+(`hazardpulse.hurricane.ir_source`):
+- images at t + 2 h and t - 4 h;
+- each crop is +-4 degrees around the best-track position at t, extrapolated along the t - 6 h -> t motion with
+  `ir_source.extrapolate`, the live path's own function;
+- a missing image gives NaN, never a dropped row;
+- crops are collected on runners; every task is recorded once, with its status.
+
+**Models.** The learner is the program's: LightGBM with `v9.GBT_PARAMS`, seeds 0-4 averaged, early stopping (100
+rounds) on the last training season, then a refit on all training rows at the found rounds.
+- **J1 (candidate):** logit of v8.2's ensemble, v8.2's 17 inputs, the 14 IR features, and basin indicators (WP,
+  NI, SH, NHC).
+- **B (mechanism control):** J1 without the 14 IR features. It isolates IR from re-learning and recalibration.
+- **A (the bar):** v8.2 exactly as served, i.e. its published calibrated probability. Its calibration was fitted
+  on 2022-2024, so on 2024 the bar is in-sample calibrated. That favours A, and it is stated here.
+
+**Folds:** test 2024 (train 2022-2023) and test 2025 (train 2022-2024), by storm first season. Each fold is scored
+on its JTWC-basin rows only.
+
+**Control:** v8.2 recomputed by `ri_model.score_cases` must reproduce the published v8.2 probability of every
+frozen 2024 row to 1e-12, or the run stops.
+
+**Carried rule.** J1 is carried iff its pooled (2024 + 2025, JTWC basins) 30/24 log loss AND Brier score are both
+below A's.
+
+**Reported (descriptive, pre-registered):**
+- paired 95% storm-bootstrap intervals for J1 - A and J1 - B;
+- AUC;
+- per basin (WP, NI, SH) and per fold;
+- a **noise control:** J1 with the 14 IR columns shuffled within each season, seeds 1-3, against B. IR counts as
+  information only if J1 - B clearly exceeds what the shuffled columns give;
+- IR coverage.
+
+**2026 (JTWC basins, to date):** a declared further read, no claim.
+
+**A carried J1.**
+- **Before it scores any live cycle:** an amendment registers it in the live record beside v8.2, with its live
+  path. The IR is taken from GMGSI at the warning's own position, with JTWC's t - 6 h fix, both from the b-deck
+  history the H7 repair already reads.
+- **On the site:** it is shown beside the published v8.2 as experimental, as v10.1 is in the NHC basins.
+- **Promotion to the published number:** only by a rule registered before its first live cycle.
+
+**Known before the result.**
+- **Position source.** Training crops are centred on best-track positions, which are smoothed after the fact.
+  Live crops are centred on the warning, which v8.2's live inputs already use; the H7 composition table measures
+  what that costs v8.2.
+- **The IR source changes.** GMGSI's geostationary sources change over these years (Himawari-8 -> 9 in 2022,
+  GOES-17 -> 18 in 2023, Meteosat changes), and the features are in counts. The per-fold numbers show any break.
+- **SH seasons.** IBTrACS `season_year` for the Southern Hemisphere is the July-June season. Folds use storm first
+  season, as v8.2's own year selection does.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
