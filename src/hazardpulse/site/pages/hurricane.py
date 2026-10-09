@@ -1,11 +1,14 @@
 """/live/hurricane/: the chance each active tropical cyclone intensifies rapidly in the next 24 hours."""
 from __future__ import annotations
 
+import re
+
 from hazardpulse.site import fmt, maps
 from hazardpulse.site.data import SiteData, basin_of, official_center, ri_source_label, storm_name
 from hazardpulse.site.hazards import HURRICANE
 from hazardpulse.site.pages import common
 from hazardpulse.site.places import coords, describe_far, haversine_km
+from hazardpulse.verification.served_evidence import j1_shown_shadow
 
 esc = fmt.esc
 TC1_LEADS = ("12", "24", "36", "48", "72", "96", "120")
@@ -222,9 +225,26 @@ def _tc1_section(d: SiteData) -> str:
     return common.section("track", "Our track and intensity forecast", body)
 
 
-def _storm_card(s: dict, ob: dict | None = None, shown: dict | None = None, tc1_ev: dict | None = None) -> str:
+def _j1_row(s: dict, j1: dict | None) -> tuple[str, str] | None:
+    """Our satellite model's forecast beside the published v8.2, for a storm in its scope; its label, the key of
+    its live record and its scope come from its artifact and library (``served_evidence.j1_shown_shadow``), never
+    from this page. The published number above is untouched."""
+    v = j1_shown_shadow(s, j1)
+    if v is None:
+        return None
+    m = re.fullmatch(r"\s*(\d+) of (\d+)\s*", str(v.get("ir_features_read") or ""))
+    partial = (f" (only {m.group(1)} of its {m.group(2)} satellite inputs were available for this cycle)"
+               if m and int(m.group(1)) < int(m.group(2)) else "")
+    return (f"Our satellite model ({esc(j1['label'])})",
+            f"{fmt.pct(v['probability'])}{partial} &mdash; shown for comparison while it is tested on new forecasts; "
+            '<a href="/methods/#hurricane-j1">what this is</a>')
+
+
+def _storm_card(s: dict, ob: dict | None = None, shown: dict | None = None, tc1_ev: dict | None = None,
+                j1: dict | None = None) -> str:
     """One storm. ``ob`` is the other-basins model's evidence (its measured caveats), ``shown`` our shown RI
-    model's (its label and the key of its shadow forecast), ``tc1_ev`` TC1's (its version)."""
+    model's (its label and the key of its shadow forecast), ``tc1_ev`` TC1's (its version), ``j1`` our satellite
+    model's for the JTWC basins (its label, the key of its live record and its scope)."""
     sid = esc(s.get("storm_id"))
     name = esc(storm_name(s))
     lat, lon = float(s["lat"]), float(s["lon"])
@@ -246,6 +266,9 @@ def _storm_card(s: dict, ob: dict | None = None, shown: dict | None = None, tc1_
         rows.append((f"Our experimental model ({esc(shown['label'])})",
                      f"{fmt.pct(ours['probability'])}{fallback} &mdash; shown for comparison while it is tested on "
                      'new forecasts; <a href="#ours">what this is</a>'))
+    j1_row = _j1_row(s, j1)
+    if j1_row:
+        rows.append(j1_row)
     rows.append(("Official forecast", f'<a href="{center_url}" rel="noopener">{center}</a>'))
     return (f'<article class="card storm-card" id="storm-{sid}">'
             f'<div class="storm-card-head"><div><h3>{name}</h3><p class="muted">{esc(basin_of(s))} &middot; '
@@ -274,8 +297,20 @@ def _sources(d: SiteData) -> str:
     other = ("<p><strong>West Pacific, Indian Ocean and Southern Hemisphere</strong>, where no public "
              "rapid-intensification guidance exists, and any NHC cycle without usable SHIPS text: "
              + (f"our {label} model." if label else "our model.")
-             + v82_test_text(hu.get("other_basins")) + "</p>")
+             + v82_test_text(hu.get("other_basins")) + j1_sources_text(hu.get("j1"), label) + "</p>")
     return nhc + other + '<p><a href="/methods/#hurricane">Read the full test</a></p>'
+
+
+def j1_sources_text(j1: dict | None, published: str) -> str:
+    """One sentence on our satellite model beside the published number: where it is shown (its scope, from its
+    library) and that it is a model in test, not the published number."""
+    regions = [esc(r["name"]) for r in (j1 or {}).get("regions") or [] if r.get("in_scope")]
+    if not j1 or not regions or not published:
+        return ""
+    return (f" On {_join(regions)} storms, our satellite model {esc(j1['label'])} is shown beside it for comparison "
+            "while it is tested on new forecasts; it would replace "
+            f"{published} only by meeting that test&rsquo;s rule, written down in advance "
+            '(<a href="/methods/#hurricane-j1">its results and rule</a>).')
 
 
 def v82_short(other_basins: dict | None) -> str:
@@ -392,7 +427,8 @@ def page(d: SiteData) -> str:
                              legend=fmt.legend("Chance of rapid intensification, next 24 hours"))
         ev = d.evidence.get("hurricane") or {}
         cards = ('<div class="storm-cards">'
-                 + "".join(_storm_card(s, ev.get("other_basins"), ev.get("ours"), ev.get("tc1")) for s in storms)
+                 + "".join(_storm_card(s, ev.get("other_basins"), ev.get("ours"), ev.get("tc1"), ev.get("j1"))
+                           for s in storms)
                  + "</div>")
         body = (common.section("storms", "Active storms", notices + themap + cards))
     else:

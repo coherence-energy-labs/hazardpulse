@@ -39,13 +39,23 @@ lists any page that differs from what the artifacts say, and `tests/test_site_pa
 * No model label, year range or claim is typed around the evidence blocks or in page code
   (`tests/test_site_claims_bound.py`). Until 2026-10-09 the check compared only the text between the markers, and
   prose beside a block contradicted it. Now: a sentence the results contradict (`evidence_pages.CONTRADICTED`) fails
-  `check_pages` and `--check` wherever it appears; a `vN.N` label or a year range in a string literal of the page
-  code, or in a hand-kept page outside its blocks, fails the tests unless an artifact justifies it (`ALLOWED`); and
-  every model label on any page must be one an artifact names.
+  `check_pages` and `--check` wherever it appears; a `vN.N` label, any label a model artifact gives itself in its
+  `label` field (J1; read from `results/models/*.json`, so the next one is covered when its artifact exists), or a
+  year range in a string literal of the page code, or in a hand-kept page outside its blocks, fails the tests unless
+  an artifact justifies it (`ALLOWED`); every `ri_*_shadow` record key typed in page code fails too; and every model
+  label on any page must be one an artifact names.
 * Which of our hurricane RI models is shown beside NOAA's number is named in one file,
   `results/hurricane_prospective/shown_model.json` (`"shown": "<entrant>"`). Its label, artifact, version, the key of
   its live shadow forecasts and its challengers are derived from it (`served_evidence.shown_model`); switching it at a
   look (amendment 4) is that one line, and every page follows.
+* Our JTWC-basin model, J1 (`docs/HURRICANE_RI_V9_PROGRAM.md` amendments 13-14), is recorded on every West Pacific,
+  North Indian and Southern Hemisphere storm (`ri_j1_shadow`) but shown on a storm card only for a storm in its
+  scope: `ri_j1.storm_region(basin, lon)` in `ri_j1.scope()` (now WP and SI; the scope lives in
+  `results/calibration/hurricane_ri_j2.json`, and `served_evidence.j1_hurricane` refuses one that is not the
+  registered rule on that file's per-region table). The row carries the artifact's label and the record's own
+  probability, only for a record made by the bound artifact; the published v8.2 number above it is untouched.
+  The methods card (`#hurricane-j1`), the research record, the registry row and `model-registry.json` read the same
+  evidence (`tests/test_site_j1.py`, which also checks that every number on the card is in a bound file).
 * Research diagnostics are never presented as the forecast; band words (one scorer's "watch" is an NWS
   term) are not used; a chance below 0.1% reads `<0.1%`, never `0.0%`.
 

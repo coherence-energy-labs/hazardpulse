@@ -18,7 +18,8 @@ REGISTRY = ROOT / "dist" / "data" / "model-registry.json"
 # every artifact a live scorer loads (fetch_and_score*.py)
 LIVE_ARTIFACTS = (
     "hurricane_ri_stack_v1.json", "hurricane_ri_v8_2.json", "hurricane_ri_v9.json", "hurricane_ri_v10.json",
-    "hurricane_ri_v10_2.json", "hurricane_ri_v10_3.json", "earthquake_operational_v1.json",
+    "hurricane_ri_v10_2.json", "hurricane_ri_v10_3.json", "hurricane_ri_v10_4.json", "hurricane_ri_j1.json",
+    "earthquake_operational_v1.json",
     "earthquake_gear1_stack_v1.json", "tornado_v3_w.json", "tornado_v3.json", "tornado_v3_w_30.json",
     "tornado_v3_w_90.json", "tornado_v3_w_ef2.json",
 )
@@ -70,12 +71,23 @@ def test_every_lineage_file_exists_with_the_hash_the_registry_gives(committed):
 
 
 def test_our_shadow_models_name_their_preregistration_and_where_their_forecasts_are_kept(committed):
+    from hazardpulse.hurricane import ri_j1
+
     shadows = [e for e in committed["entries"] if (e.get("lineage") or {}).get("role") == "shadow"]
-    assert {e["name"].split(" (")[0] for e in shadows} >= {f"HazardPulse Hurricane RI {v}" for v in ("v9.1", "v10.1", "v10.2", "v10.3")}
+    j1_label = json.loads(ri_j1.MODEL_PATH.read_text(encoding="utf-8"))["label"]
+    assert {e["name"].split(" (")[0] for e in shadows} >= {f"HazardPulse Hurricane RI {v}"
+                                                            for v in ("v9.1", "v10.1", "v10.2", "v10.3", j1_label)}
+    nhc_entrants = json.loads((ROOT / "results" / "hurricane_prospective" / "v9_shadow.json")
+                              .read_text(encoding="utf-8"))["entrants"]
     for e in shadows:
         lin = e["lineage"]
         assert lin["prereg_tag"] and lin["live_records"]["ledger"] == "dist/data/hurricane-ledger.jsonl"
-        assert lin["prospective"]["entrant"].startswith("v")
+        # each shadow names the prospective test that scores it, and is an entrant that test knows
+        if lin["prospective"]["file"] == "results/hurricane_prospective/v9_shadow.json":
+            assert lin["prospective"]["entrant"] in nhc_entrants, e["name"]
+        else:
+            assert lin["prospective"] == {"file": "results/hurricane_prospective/j1_shadow.json", "entrant": j1_label}
+            assert lin["live_records"]["key"] == ri_j1.SHADOW_KEY and e["output_schema"]["label"] == j1_label
     try:                                    # tags are present in a full clone; CI's shallow one has none
         tags = set(subprocess.run(["git", "tag", "-l", "prereg-*"], cwd=ROOT, capture_output=True, text=True,
                                   check=True).stdout.split())

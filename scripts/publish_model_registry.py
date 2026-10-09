@@ -20,6 +20,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -205,6 +206,68 @@ def hurricane_shadow_entries(models_dir: Path = MODELS_DIR) -> list[dict]:
             "prospective": {"file": "results/hurricane_prospective/v9_shadow.json", "entrant": spec["entrant"]},
         }})
     return out
+
+
+def j1_entry() -> dict | None:
+    """J1, our RI model for the JTWC basins (docs/HURRICANE_RI_V9_PROGRAM.md amendments 13, 13a, 13b, 14), recorded
+    in shadow beside the published v8.2 on every West Pacific, North Indian and Southern Hemisphere storm, shown on
+    the site only in its scope. Identity, label, live key, scope and benchmark are read through served_evidence,
+    which refuses an artifact whose provenance is not its registered result or a scope that is not the registered
+    rule's; nothing here is typed. Nothing is read from the prospective record, which every scorer run rewrites."""
+    from hazardpulse.hurricane import ri_j1
+    from hazardpulse.verification import served_evidence as se
+
+    j1 = se.j1_hurricane(PROJECT_ROOT)
+    if j1 is None:
+        return None
+    art, version = ri_j1.load(PROJECT_ROOT / j1["file"])
+    m, bar, vb = j1["dev"]["model"], j1["dev"]["bar"], j1["vs_bar"]
+    further = j1.get("further") or {}
+    period, label, against = j1["dev_period"], j1["label"], j1["against"]
+    rule = j1["rule"]
+    built = re.search(r"amendments? ([\w, ]+)\)", str(art["provenance"].get("program") or ""))
+    amendments = ", ".join(x for x in ((built.group(1) if built else None), j1.get("scope_amendment")) if x)
+    return _make_entry(
+        record_id=f"weights_hazardpulse_{version}",
+        name=f"HazardPulse Hurricane RI {label} (JTWC basins, shadow, in test beside {against})",
+        description=(
+            f"LightGBM ({j1['seeds']} seeds, averaged) on {against}'s probability (as a logit), its "
+            f"{j1['inputs']['against']} inputs, {j1['inputs']['ir']} NOAA GMGSI infrared cloud-top features and basin "
+            f"indicators; trained on {art['provenance'].get('trained')}. Registered hindcast {period}, every JTWC "
+            f"cycle pooled with crops on best-track positions: log loss {m['log_loss']:.5f} vs {against} "
+            f"{bar['log_loss']:.5f}, carried. Recorded on every live {', '.join(j1['live_basins'])} storm beside "
+            f"{against}, never instead of it; shown on the site and judged only in its scope "
+            f"({', '.join(j1['scope']) or 'none'}, {j1['scope_file']}). Its prospective test ({rule['scorer']}, looks "
+            f"{', '.join(rule['looks'])}) decides whether it becomes the published number."),
+        weights_path=PROJECT_ROOT / j1["file"],
+        benchmark={"dev_period": period, "dev_cycles": m["n"], "dev_events": m["events"],
+                   "dev_log_loss_30kt": m["log_loss"], "dev_brier": m["brier"], "dev_auc": m["auc"],
+                   "champion": against, "champion_log_loss": bar["log_loss"], "champion_brier": bar["brier"],
+                   "d_log_loss_vs_champion": vb["d_ll"], "d_log_loss_vs_champion_ci": vb["d_ll_ci"],
+                   "interval_level": j1["level"],
+                   "by_region_d_log_loss": {r["region"]: r["d_ll"] for r in j1["regions"]},
+                   "further_read": ({"season": further["season"], "log_loss": further["model"]["log_loss"],
+                                     "champion_log_loss": further["bar"]["log_loss"], "declared": further["declared"]}
+                                    if further else None),
+                   "claim": {"looks": rule["looks"], "level": rule["level"], "scope": j1["scope"]}},
+        framework=art["schema"],
+        input_schema={"n_inputs": j1["inputs"]["total"], "live_basins": j1["live_basins"],
+                      "feature_names_path": f"{j1['file']} (feature_names)"},
+        output_schema={"outputs": ["ri_probability_24h"], "domain": "[0, 1]", "model_version": version,
+                       "label": label},
+        paper_url="https://github.com/coherence-energy-labs/hazardpulse",
+    ) | {"lineage": {
+        "role": "shadow", "status": "in test (shadow)", "shown_on_site": bool(j1["scope"]),
+        "scope": j1["scope"], "program": j1["program"], "amendment": f"amendments {amendments}",
+        "prereg_tag": j1["prereg_tag"], "trained": art["provenance"].get("trained"),
+        "rounds": art["provenance"].get("rounds"), "seeds": art["provenance"].get("seeds"),
+        "selection_and_evaluation": [{"path": p, "sha256": _file_sha256(PROJECT_ROOT / p)}
+                                     for p in (j1["results"], j1["scope_file"]) if p],
+        "live_records": {"replay": "dist/data/replay/hu_fcst_*.json", "key": j1["shadow_key"],
+                         "ledger": "dist/data/hurricane-ledger.jsonl",
+                         "audit": "results/hurricane_prospective/record_audit.json"},
+        "prospective": {"file": j1["prospective"]["file"], "entrant": label},
+    }}
 
 
 TC1_DIR = PROJECT_ROOT / "results" / "hurricane_tc1"
@@ -646,6 +709,11 @@ def build_entries() -> list[dict]:
         entries.append(eq_stack_entry)
     # ----- Hurricane RI shadows (ours, in prospective verification) -----
     entries.extend(hurricane_shadow_entries())
+
+    # ----- Hurricane RI, JTWC basins: J1, in test beside the published v8.2 -----
+    j1 = j1_entry()
+    if j1 is not None:
+        entries.append(j1)
 
     # ----- Hurricane track and intensity: TC1, shown beside NHC's official forecast -----
     tc1 = tc1_entry()
