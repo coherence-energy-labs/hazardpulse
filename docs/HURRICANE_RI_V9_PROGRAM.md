@@ -789,6 +789,36 @@ written before it scores any cycle sets its error budget at half of v10.4's.
   term. They do not guarantee beating it. The realistic win is robustness to drift.
 - **A thin CHOOSE.** CHOOSE is one season.
 
+### Amendment 11 outcome (2026-10-08): claim NOT met
+
+**Control.** The source table reproduces V5, V8 and H8's registered development log losses exactly.
+
+**Selection.** CHOOSE (2023) picked eta 0.05, tau 365 days, a linear pool and no alignment, with CHOOSE log loss
+0.1407. The best single source on CHOOSE was H8 (0.1412).
+
+| 30/24 log loss | fusion | H8 | V8 | V5 | V2 | DTOPS | SHIPS-RII | RIOC | RIOL | RIOB | equal-weight pool |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| DEV 2024-2025 | 0.1527 | 0.1490 | **0.1482** | 0.1501 | 0.1510 | 0.169 | 0.227 | 0.204 | 0.206 | 0.264 | 0.166 (linear) / 0.164 (log) |
+| 2026 (further read) | 0.1245 | **0.1179** | 0.1190 | 0.1265 | 0.1296 | 0.150 | 0.189 | 0.171 | 0.219 | 0.227 | 0.134 / 0.139 |
+
+**The claim:** fusion minus H8 on DEV is **+0.0036 [-0.0014, +0.0082]**, so it is not met. On 2026 it is +0.0066
+[-0.0003, +0.0124].
+
+**Why.**
+- **The weighting law works.** It beats the equal-weight pools by about 0.013 on DEV.
+- **But it cannot beat a source that has already absorbed the others.** Our models take NOAA's aids as inputs
+  and are 0.02-0.11 better than each of them.
+- **Soft weights let the weak aids dilute the pool.** CHOOSE's single season picked the soft temperature
+  (eta 0.05), and from there the weak aids pull the fused forecast down.
+- **Where the concept does win.** TC1 combines independent dynamical models of comparable skill. Here every
+  strong source is one family, already fed with the rest.
+
+**Status.**
+- **Killed for RI, as specified:** coherence fusion of our models with NOAA's aids. A pool cannot add what the
+  best source already holds.
+- **What survives:** the law as a weighting rule (it beats equal weights). It keeps its place where the sources
+  are independent and comparable, as in TC1.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
