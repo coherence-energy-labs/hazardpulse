@@ -5,6 +5,9 @@ name: Research -- G1 GOES 2 km inner-core crops
 # ranges from NOAA's public buckets. Twenty shards in parallel; each saves what it finished inside its time budget
 # and lists the rest, so a rerun can complete it. Run 1 (37869128599) read 0 of 43,429 attempted crops -- a
 # NumPy-version TypeError in the reader -- and still reported success; the collector now fails such a shard.
+# Amendment 12b: the eye is ADT's closed ring (goes_abi.polar_eye), every shard also keeps the analysed-centre image,
+# and a verify job gates the whole collection -- every task key exactly once, then the eye decisions against CIMSS
+# ADT's operational scene type (scripts/goes_adt_check.py; inputs only, no outcome is read).
 
 on:
   workflow_dispatch:
@@ -38,4 +41,36 @@ jobs:
         with:
           name: goes-g1-shard-${{ matrix.shard }}
           path: goes_out/
+          retention-days: 30
+
+  verify:
+    needs: collect
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy scipy
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: goes-g1-shard-*
+          path: shards
+      - name: Every task key exactly once, with amendment 12b's fields
+        env:
+          PYTHONPATH: src
+        run: python scripts/goes_collect.py --verify shards
+      - name: Eye decisions against CIMSS ADT (gates in the script)
+        env:
+          PYTHONPATH: src
+        run: python scripts/goes_adt_check.py shards --adt-dir adt --out adt_check.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: goes-g1-adt-check
+          path: |
+            adt_check.json
+            adt/
           retention-days: 30

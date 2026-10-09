@@ -840,7 +840,8 @@ core convection has been sustained, and how fast the core symmetrizes.
   azimuths, bilinear, at 0.6 K.
 - **Eye recentring.** It is re-centred on a clear eye: the warmest sample within 25 km, at least 15 K above the
   coldest azimuthal mean within 100 km, AND enclosed by cloud of 235 K or colder within 50 km in at least 75% of
-  directions. An exposed low-level centre keeps the analysed centre.
+  directions. An exposed low-level centre keeps the analysed centre. *(Replaced by amendment 12b before any
+  outcome: this rule over-called eyes in weak storms.)*
 - **Checks.** The geometry reproduces the GOES-R PUG worked example and its inverse. On Milton 2024-10-07 18Z the
   eye reads 281 K inside a 192 K ring, recentred 5 km from CARQ.
 - **Coverage.** `results/goes/tasks.jsonl.gz` holds 43,565 crops over 19,566 hours for every 2020-2026 cycle
@@ -891,6 +892,90 @@ Brier are both below H8's.
   2023-01-04 (GOES-17 to GOES-18). Calibration differs slightly; the drift check reports it.
 - **Few events.** The development set holds about 250 RI events. A real but modest gain may not clear the noise
   control.
+
+## Amendment 12b -- G1's eye, by ADT's definition (2026-10-09, before any G1 feature meets an outcome)
+
+**Why: a defect, found by input QA.** QA of amendment 12's first full collection read inputs only. It found that
+the eye rule over-called eyes in weak storms: 17-20% of crops below 50 kt, where an eye is physically rare. Below
+64 kt, the image's eye edge also did not track CARQ's radius of maximum wind (Spearman 0.07).
+
+The independent oracle was CIMSS's Advanced Dvorak Technique (ADT), which runs in real time on every storm every
+30 minutes. 26,077 crops were matched to an ADT record within 15 minutes (LAND records excluded). Against ADT's EYE
+scene, the amendment-12 rule scored POD 0.93, FAR 0.60 and HSS 0.44; below 50 kt it called eyes in 20% of crops,
+where ADT called none.
+
+The root cause: "cold cloud in at least 75% of directions" accepts a warm gap in a curved band. A 40-degree gap is
+89% enclosed (`tests/test_goes_abi.py` reproduces this; the old code calls it an eye).
+
+No G1 outcome had been read. The stats and select phases had not run.
+
+**The new eye** (`goes_abi.polar_eye`) follows ADT v9.1's own definitions:
+- **Eye temperature:** the warmest sample within 24 km.
+- **Coldest-warmest cloud temperature:** on each ring from 24 to 136 km, the warmest sample; then the coldest of
+  those rings. It is cold only where some ring of cloud is cold all the way round, so a gap or an exposed centre
+  cannot pass. A ring with a missing sample is skipped.
+- **The rule:** an eye is a closed ring at or below **232 K** whose centre is at least **24 K** warmer than it.
+- **Where the rule is applied:** at the eye candidate, the warmest sample within 24 km of the analysed centre, with
+  the image re-sampled there.
+
+**Fitting and test, inputs only.**
+- **Fit.** The two thresholds were fitted against ADT's EYE scene on the 2020-2023 crops: maximum HSS on a 2 K
+  grid. The optimum is flat: HSS 0.84-0.85 across 230-238 K × 22-30 K.
+- **Held-out read (2024-2026):** HSS **0.839** (POD 0.878, FAR 0.145). The amendment-12 rule scored HSS 0.448 on
+  the same crops.
+- **Eye fraction by ADT intensity, ours (ADT's):**
+
+  | intensity | ours | ADT |
+  |---|---|---|
+  | below 50 kt | 0.02 | 0.00 |
+  | 50-64 kt | 0.04 | 0.03 |
+  | 64-83 kt | 0.17 | 0.14 |
+  | 83-96 kt | 0.40 | 0.44 |
+  | 96-113 kt | 0.58 | 0.61 |
+  | 113 kt and above | 0.82 | 0.87 |
+
+- **The pipeline against ADT's independent processing:**
+  - eye temperature: Spearman +0.955, median difference -0.2 C;
+  - our coldest-warmest temperature vs ADT's mean cloud temperature: Spearman +0.895;
+  - our centre: a median 9 km from ADT's on its eye scenes.
+- **Residual disagreement, misses (ADT eye, rule none).** These are mostly obscured eyes: ADT's own eye
+  temperature in them has a median of -26 C, against +7.6 C where the two agree. ADT keeps these eyes through
+  persistence (+0.25 when the last scene was an eye) and its intensity prior (up to -1 on the eye score below
+  T4.5).
+- **Residual disagreement, "false alarms" (rule eye, ADT none).** These mostly come before ADT's call: ADT calls
+  an eye within the next 12 h after 43-89% of them, by intensity band. Where the rule sees no eye, that rate is
+  4-65%.
+
+**Features.** There are still 12, with the same names.
+- **Eye contrast** becomes ADT's eye temperature minus its coldest-warmest temperature at the eye candidate. It is
+  continuous, so a forming eye shows before it crosses the threshold.
+- **Eyewall inner edge:** the definition is unchanged; it is now gated by the closed-ring eye. Of three
+  definitions it tracked CARQ's RMW best on the rule's eyes: Spearman +0.385, against +0.162 for ADT's dark-gray
+  edge and +0.123 per azimuth (n 392).
+- **Eye fraction** uses the new flag.
+
+**Collection.** All 43,565 crops are re-collected, because amendment 12 stored only the recentred image. Every
+shard now also keeps the analysed-centre image and both ADT temperatures, so a detector can be re-scored without
+re-collecting.
+
+**Gates.** Both must pass before the stats phase reads anything:
+1. `goes_collect.py --verify` (also run inside `hurricane_ri_g1.py stats`): every task key exactly once, with
+   12b's fields.
+2. `scripts/goes_adt_check.py` (the runners' verify job):
+   - held-out HSS of at least 0.80;
+   - an eye fraction below 50 kt of at most 0.03;
+   - a centre median within 15 km;
+   - eye-temperature Spearman of at least 0.90;
+   - at least 20,000 matched crops.
+
+A failed gate is root-caused and fixed, never loosened. No outcome is read until both pass.
+
+**Disclosure.** The 12-hour lead check read ADT scene types after t, a quantity related to intensification. It
+ran after the thresholds were fixed and changed nothing. It read no intensity change, no best track after t and
+no RI label.
+
+**Unchanged from amendment 12:** the candidate, the control, the carried rule, the descriptive checks, the noise
+control and the 2026 read.
 
 ## Known uncertainty, stated before the result
 

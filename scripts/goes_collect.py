@@ -4,10 +4,12 @@
 
 Tasks come from results/goes/tasks.jsonl.gz. A shard holds every task whose hour index mod ``of`` equals ``shard``,
 so all storms at one hour share one file opening. Each hour's operational GOES (East or West, by longitude) is read
-at the first band-13 full-disk scan at or after the hour, by HTTP byte ranges. Each task gets
-``goes_abi.polar_recentred``, re-centred on a clear eye.
+at the first band-13 full-disk scan at or after the hour, by HTTP byte ranges. Each task gets ``goes_abi.polar_eye``:
+the image around the analysed centre, and the ADT closed-ring eye decision made around the eye candidate.
 
-Output: ``<out>/goes_shard_<i>_of_<n>.npz`` holding keys, uint8 polar images, centres, the eye flag and the scan read.
+Output: ``<out>/goes_shard_<i>_of_<n>.npz`` holding keys, the uint8 polar feature images (around the eye when there is
+one) AND the analysed-centre images (so a detector can be re-scored without re-collecting), the feature images'
+centres, the eye flag, the ADT eye and coldest-warmest temperatures, and the scan read.
 A task whose hour has no scan or no readable file is recorded with status "missing", never dropped silently. When
 the time budget runs out, the done part is saved and the rest listed as "not_attempted", so a rerun can finish it.
 """
@@ -86,14 +88,55 @@ def task_key(t: dict) -> str:
     return f"{t['storm']}_{t['hour']}_{t['kind']}{('_' + t['cycle']) if t['cycle'] else ''}"
 
 
+SHARD_FIELDS = ("keys", "images", "analysed", "lat", "lon", "eye", "teye", "tcw", "scan", "status")
+
+
+def verify(shard_dir: str, tasks_path: Path | None = None) -> dict[str, int]:
+    """A collection is usable only if every shard carries amendment 12b's fields (the analysed-centre image and the
+    ADT temperatures), every shard's arrays align, and every task key is present exactly once: run 2 filed images
+    under neighbours' keys, and a local re-run collected other shards' hours. Returns status counts; raises
+    SystemExit naming the first violation."""
+    with gzip.open(tasks_path or TASKS, "rt", encoding="utf-8") as fh:
+        want = {task_key(json.loads(line)) for line in fh}
+    seen: set[str] = set()
+    counts: dict[str, int] = {}
+    for p in sorted(Path(shard_dir).rglob("goes_shard_*.npz")):
+        with np.load(p) as z:
+            lacking = [f for f in SHARD_FIELDS if f not in z.files]
+            if lacking:
+                raise SystemExit(f"{p}: no {lacking} -- written before amendment 12b's eye detector; re-collect")
+            if len({len(z[f]) for f in SHARD_FIELDS}) != 1:
+                raise SystemExit(f"{p}: misaligned arrays")
+            for k, st in zip(z["keys"], z["status"]):
+                k = str(k)
+                if k in seen:
+                    raise SystemExit(f"{p}: task {k} collected twice")
+                seen.add(k)
+                head = str(st).split(":")[0]
+                counts[head] = counts.get(head, 0) + 1
+    if seen != want:
+        raise SystemExit(f"shards hold {len(seen)} task keys, the task list {len(want)}: {len(want - seen)} missing "
+                         f"(e.g. {sorted(want - seen)[:3]}), {len(seen - want)} not in the list (e.g. {sorted(seen - want)[:3]})")
+    if counts.get("not_attempted"):
+        raise SystemExit(f"{counts['not_attempted']} tasks were not attempted (a shard ran out of time): rerun them")
+    return counts
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--shard", type=int, required=True)
-    ap.add_argument("--of", type=int, required=True)
+    ap.add_argument("--shard", type=int)
+    ap.add_argument("--of", type=int)
     ap.add_argument("--out", default="goes_out")
     ap.add_argument("--max-hours", type=int, default=0)
     ap.add_argument("--budget-min", type=float, default=330.0)
+    ap.add_argument("--verify", metavar="SHARD_DIR", help="check a whole collection instead of collecting")
     a = ap.parse_args(argv)
+    if a.verify:
+        counts = verify(a.verify)
+        print(f"collection complete: {sum(counts.values())} tasks, each once; status {counts}", flush=True)
+        return 0
+    if a.shard is None or a.of is None:
+        ap.error("--shard and --of are required to collect")
     t_start = time.time()
     with gzip.open(TASKS, "rt", encoding="utf-8") as fh:
         tasks = [json.loads(line) for line in fh]
@@ -104,13 +147,25 @@ def main(argv=None) -> int:
     hours = sorted(by_hour)
     if a.max_hours:
         hours = hours[:a.max_hours]
-    keys, imgs, lats, lons, eyes, scans, status = [], [], [], [], [], [], []
+    keys, imgs, imgs_a, lats, lons, eyes, teyes, tcws, scans, status = [], [], [], [], [], [], [], [], [], []
+    blank = np.full((g.N_R, g.N_AZ), g.MISSING, np.uint8)
+
+    def record(t, crop=None, scan="", st="ok"):
+        # one task's fields are appended together, or not at all: run 2 appended a key before its crop raised,
+        # and every later image in shard 8 was filed under its neighbour's key
+        keys.append(task_key(t))
+        imgs.append(crop.image if crop is not None else blank)
+        imgs_a.append(crop.analysed if crop is not None else blank)
+        lats.append(crop.lat if crop is not None else np.nan), lons.append(crop.lon if crop is not None else np.nan)
+        eyes.append(bool(crop.eye) if crop is not None else False)
+        teyes.append(crop.teye if crop is not None else np.nan), tcws.append(crop.tcw if crop is not None else np.nan)
+        scans.append(scan), status.append(st)
+
     done_hours = 0
     for hour_s in hours:
         if (time.time() - t_start) / 60.0 > a.budget_min:
             for t in by_hour[hour_s]:
-                keys.append(task_key(t)), imgs.append(np.full((g.N_R, g.N_AZ), g.MISSING, np.uint8))
-                lats.append(np.nan), lons.append(np.nan), eyes.append(False), scans.append(""), status.append("not_attempted")
+                record(t, st="not_attempted")
             continue
         hour = dt.datetime.strptime(hour_s, "%Y%m%d%H")
         by_sat: dict[str, list[dict]] = {}
@@ -119,13 +174,6 @@ def main(argv=None) -> int:
                 by_sat.setdefault(g.satellite_for(hour, t["lon"]), []).append(t)
             except ValueError:
                 by_sat.setdefault("", []).append(t)
-        def record(t, img=None, la=np.nan, lo=np.nan, eye=False, scan="", st="ok"):
-            # one task's fields are appended together, or not at all: run 2 appended a key before its crop raised,
-            # and every later image in shard 8 was filed under its neighbour's key
-            keys.append(task_key(t))
-            imgs.append(img if img is not None else np.full((g.N_R, g.N_AZ), g.MISSING, np.uint8))
-            lats.append(la), lons.append(lo), eyes.append(eye), scans.append(scan), status.append(st)
-
         for sat, group in by_sat.items():
             key, fh5, h5, disk, opened = None, None, None, None, "missing: no scan"
             try:
@@ -143,11 +191,11 @@ def main(argv=None) -> int:
                         continue
                     try:
                         with _deadline(TASK_BUDGET_S):
-                            img, la, lo, eye = g.polar_recentred(disk, t["lat"], t["lon"])
+                            crop = g.polar_eye(disk, t["lat"], t["lon"])
                     except Exception as exc:  # noqa: BLE001 -- this task only
                         record(t, st=f"missing: {type(exc).__name__}: {str(exc)[:120]}")
                         continue
-                    record(t, img, la, lo, eye, f"{sat}/{key}", "ok")
+                    record(t, crop, f"{sat}/{key}", "ok")
             finally:
                 if h5 is not None:
                     h5.close()
@@ -164,15 +212,17 @@ def main(argv=None) -> int:
             el = time.time() - t_start
             print(f"{done_hours}/{len(hours)} hours, {len(keys)} tasks, {el / 60:.1f} min "
                   f"({el / done_hours:.1f} s/hour)", flush=True)
-    lengths = {len(x) for x in (keys, imgs, lats, lons, eyes, scans, status)}
+    lengths = {len(x) for x in (keys, imgs, imgs_a, lats, lons, eyes, teyes, tcws, scans, status)}
     if len(lengths) != 1:
         raise SystemExit(f"misaligned record arrays {lengths}: refusing to save images under the wrong keys")
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     path = out / f"goes_shard_{a.shard:02d}_of_{a.of:02d}.npz"
-    np.savez_compressed(path, keys=np.array(keys), images=np.stack(imgs) if imgs else np.zeros((0, g.N_R, g.N_AZ), np.uint8),
-                        lat=np.array(lats), lon=np.array(lons), eye=np.array(eyes), scan=np.array(scans),
-                        status=np.array(status))
+    empty = np.zeros((0, g.N_R, g.N_AZ), np.uint8)
+    np.savez_compressed(path, keys=np.array(keys), images=np.stack(imgs) if imgs else empty,
+                        analysed=np.stack(imgs_a) if imgs_a else empty, lat=np.array(lats), lon=np.array(lons),
+                        eye=np.array(eyes, bool), teye=np.array(teyes, float), tcw=np.array(tcws, float),
+                        scan=np.array(scans), status=np.array(status))
     n_ok = sum(s == "ok" for s in status)
     attempted = sum(1 for s in status if s not in ("missing: no scan", "not_attempted"))
     print(f"shard {a.shard}/{a.of}: {len(keys)} tasks, {n_ok} ok, {len(keys) - n_ok} not ok "

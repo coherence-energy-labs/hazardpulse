@@ -20,18 +20,28 @@ def _image(ring_km=30.0, ring_k=190.0, eye_k=285.0, env_k=270.0, east_only=False
     return g.encode(bt)
 
 
+def _stats(img, eye=None):
+    """hour_stats with the eye decision and ADT temperatures taken from the image itself, as the collector does."""
+    te, tc = g.adt_temperatures(img)
+    return gf.hour_stats(img, g.is_eye(te, tc) if eye is None else eye, te, tc)
+
+
 def test_an_eyed_symmetric_core_reads_as_one():
-    s = gf.hour_stats(_image(), eye=True)
+    s = _stats(_image())
+    assert s["eye"]
     assert s["eye_contrast"] > 60 and s["cold_min"] == pytest.approx(190.0, abs=1.0)
     assert 15.0 <= s["eye_radius"] <= 30.0                         # the eyewall's inner edge, under the ring
     assert s["sym"] == pytest.approx(1.0, abs=0.02)
     assert s["core_cold"] > 0.2 and s["ring_cold"] < s["core_cold"]
 
 
-def test_a_one_sided_core_is_asymmetric_and_has_no_eye_radius():
-    s = gf.hour_stats(_image(east_only=True), eye=False)
-    full = gf.hour_stats(_image(), eye=False)
-    assert s["sym"] < full["sym"] - 0.2 and math.isnan(s["eye_radius"])
+def test_a_one_sided_core_is_asymmetric_and_has_no_eye():
+    s = _stats(_image(east_only=True))
+    full = _stats(_image())
+    assert s["sym"] < full["sym"] - 0.2 and math.isnan(s["eye_radius"]) and not s["eye"]
+    # the eye contrast is the closed-ring contrast: a warm centre beside one-sided cloud scores none of it
+    # (here the environment, 270 K, is the warmest point of every ring: 285 - 270 = 15 K, under the eye threshold)
+    assert full["eye_contrast"] > 60 and s["eye_contrast"] < g.EYE_DELTA_K
 
 
 def _overcast(radius_km=60.0, cold_k=190.0, env_k=270.0):
@@ -42,21 +52,21 @@ def _overcast(radius_km=60.0, cold_k=190.0, env_k=270.0):
 
 def test_missing_data_gives_nan_never_a_number():
     blank = np.full((g.N_R, g.N_AZ), g.MISSING, np.uint8)
-    s = gf.hour_stats(blank, eye=False)
+    s = gf.hour_stats(blank, False, math.nan, math.nan)
     assert all(math.isnan(s[k]) for k in ("core_cold", "ring_cold", "eye_contrast", "sym", "cold_min"))
     f = gf.features([(k, None) for k in range(-12, 3)])
     assert f["g_n"] == 0.0 and all(math.isnan(f[n]) for n in gf.G1_NAMES if n != "g_n")
 
 
 def test_the_dynamics_read_the_window():
-    cold = gf.hour_stats(_overcast(), eye=False)                               # deep convection over the core
-    warm = gf.hour_stats(_overcast(radius_km=10.0, cold_k=230.0), eye=False)
+    cold = _stats(_overcast(), eye=False)                               # deep convection over the core
+    warm = _stats(_overcast(radius_km=10.0, cold_k=230.0), eye=False)
     assert cold["core_cold"] >= gf.SUSTAIN > warm["core_cold"]
     hours = [(k, warm) for k in range(-12, -3)] + [(k, cold) for k in range(-3, 3)]
     f = gf.features(hours)
     assert f["g_core_run"] == 6.0 and f["g_n"] == 15.0              # sustained for the last six hours
     assert f["g_core_trend"] > 0 and f["g_eye_frac"] == 0.0
-    sym_hours = [(k, gf.hour_stats(_image(east_only=k < 0), eye=False)) for k in range(-12, 3)]
+    sym_hours = [(k, _stats(_image(east_only=k < 0), eye=False)) for k in range(-12, 3)]
     assert gf.features(sym_hours)["g_sym_trend"] > 0                 # symmetrizing
     assert gf.features([(-1, cold), (2, warm)])["g_core_run"] == 0.0  # the latest hour decides
     assert math.isnan(gf.features([(-1, cold), (0, warm)])["g_sym_trend"])   # too few points for a trend

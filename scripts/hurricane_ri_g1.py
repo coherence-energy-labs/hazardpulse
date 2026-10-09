@@ -1,4 +1,4 @@
-"""Hurricane RI amendment 12 (docs/HURRICANE_RI_V9_PROGRAM.md): G1 = H8 + the inner core from GOES 2 km, hourly.
+"""Hurricane RI amendments 12 and 12b (docs/HURRICANE_RI_V9_PROGRAM.md): G1 = H8 + the inner core from GOES 2 km, hourly.
 
     PYTHONPATH=src python scripts/hurricane_ri_g1.py stats <shard dir>   # per-hour inner-core stats from the crops
     PYTHONPATH=src python scripts/hurricane_ri_g1.py select              # the registered test
@@ -37,21 +37,20 @@ ch.CANDS["G1"] = dict(names=ch.CANDS["H8"]["names"] + list(gf.G1_NAMES), mono=Tr
 NOISE_SEEDS = (1, 2, 3)
 
 
-def stats(shard_dir: str) -> int:
-    """Per-hour inner-core stats for every collected task (``status == "ok"``), keyed by task key."""
+def stats(shard_dir: str, tasks_path: Path | None = None) -> int:
+    """Per-hour inner-core stats for every collected task (``status == "ok"``), keyed by task key -- only from a
+    collection ``goes_collect.verify`` accepts (amendment 12b's fields, aligned, every task key exactly once)."""
+    import goes_collect
+    status_counts = goes_collect.verify(shard_dir, tasks_path)
     out, n_ok, n_all = {}, 0, 0
-    status_counts: dict[str, int] = {}
     for p in sorted(Path(shard_dir).rglob("goes_shard_*.npz")):
         with np.load(p) as z:
-            keys, imgs, eyes, status = z["keys"], z["images"], z["eye"], z["status"]
-            for k, img, eye, st in zip(keys, imgs, eyes, status):
+            for k, img, eye, te, tc, st in zip(z["keys"], z["images"], z["eye"], z["teye"], z["tcw"], z["status"]):
                 n_all += 1
-                head = str(st).split(":")[0]
-                status_counts[head] = status_counts.get(head, 0) + 1
                 if str(st) != "ok":
                     continue
                 n_ok += 1
-                s = gf.hour_stats(img, bool(eye))
+                s = gf.hour_stats(img, bool(eye), float(te), float(tc))
                 out[str(k)] = {n: (None if isinstance(v, float) and math.isnan(v) else v) for n, v in s.items()}
     STATS.write_text(json.dumps({"tasks": n_all, "ok": n_ok, "status": status_counts, "stats": out}), encoding="utf-8")
     v9.log(f"{n_ok} of {n_all} tasks ok ({status_counts}); wrote {STATS}")
@@ -158,8 +157,8 @@ def select() -> int:
            f"{further['G1']['summary_30']['log_loss']:.4f}, dLL {further['paired']['d_ll']:+.4f} "
            f"[{further['paired']['d_ll_ci'][0]:+.4f}, {further['paired']['d_ll_ci'][1]:+.4f}]")
     OUT.write_text(json.dumps({
-        "phase": "amendment 12 select", "program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendment 12)",
-        "prereg_tag": "prereg-hurricane-ri-amend12",
+        "phase": "amendment 12b select", "program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendments 12, 12b)",
+        "prereg_tag": "prereg-hurricane-ri-amend12b",
         "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "dev_table_sha256": v9.sha(v10.DEV10), "control_H8_log_loss": h8_ll, "g1_names": list(gf.G1_NAMES),
         "crop_status": doc["status"], "coverage_dev": cov, "development": dev, "carried": "G1" if carried else "H8",

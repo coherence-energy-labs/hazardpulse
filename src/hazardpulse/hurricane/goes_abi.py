@@ -13,7 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import math
 import re
-from typing import Iterable
+from typing import Iterable, NamedTuple
 
 import numpy as np
 
@@ -190,59 +190,77 @@ class FullDisk:
         return encode(enc)
 
 
-EYE_SEARCH_KM = 25.0      # an eye is looked for within this distance of the analysed centre
-EYE_CONTRAST_K = 15.0     # ... and counts only if this much warmer than the coldest azimuthal mean within 100 km
+# The eye, by the CIMSS Advanced Dvorak Technique's own definitions (ADT v9.1 user's guide, section 5): the eye
+# temperature is the warmest sample within 24 km of the centre; the cloud region is 24-136 km, and its
+# "coldest-warmest" temperature is the warmest sample on each ring, coldest over the rings -- cold only where some
+# ring of cloud is cold ALL the way round, so a warm gap in a curved band, or a centre exposed beside one-sided
+# convection, can never pass for an eye. An eye is a closed ring at least EYE_RING_MAX_K cold whose centre is
+# EYE_DELTA_K warmer than it. The two thresholds were fitted to ADT's operational scene type for 2020-2023 (inputs
+# only, no outcome) and read on 2024-2026, where the rule scored HSS 0.839 (POD 0.878, FAR 0.145) against ADT's EYE
+# scene; the detector it replaces scored 0.448 there and called eyes in 24 % of sub-50 kt crops (ADT: 0 %).
+# Where the two still disagree, ADT's persistence and intensity prior lag a visible eye: crops this rule calls an
+# eye before ADT does are followed by an ADT eye within 12 h 43-89 % of the time (4-65 % otherwise). Program
+# amendment 12b; scripts/goes_adt_check.py re-measures all of it.
+EYE_REGION_KM = 24.0
+CLOUD_INNER_KM, CLOUD_OUTER_KM = 24.0, 136.0
+EYE_RING_MAX_K = 232.0    # the closed ring's warmest sample: about -41 C, inside ADT's dark-gray band
+EYE_DELTA_K = 24.0        # eye minus closed ring
+
+_EYE_R = RADII_KM < EYE_REGION_KM
+_CLOUD_R = (RADII_KM >= CLOUD_INNER_KM) & (RADII_KM <= CLOUD_OUTER_KM)
 
 
-def find_eye(img: np.ndarray) -> tuple[float, float] | None:
-    """(bearing rad, distance km) of a clear eye in a polar image -- the warmest sample within EYE_SEARCH_KM, if at
-    least EYE_CONTRAST_K warmer than the coldest azimuthal mean within 100 km -- else None. The analysed centre
-    is a few km off a pinhole eye (position error, cloud-top parallax), and inner-core features need the eye."""
+def adt_temperatures(img: np.ndarray) -> tuple[float, float]:
+    """(eye temperature, coldest-warmest cloud temperature) in K around a polar image's centre. A ring with any
+    missing sample cannot show that it is closed and is skipped; NaN when no sample or no whole ring remains."""
     bt = decode(img)
-    inner = RADII_KM <= EYE_SEARCH_KM
-    block = bt[inner]
-    if not np.isfinite(block).any():
+    eye = bt[_EYE_R]
+    teye = float(np.nanmax(eye)) if np.isfinite(eye).any() else math.nan
+    warmest = np.max(bt[_CLOUD_R], axis=1)                 # NaN on any ring with a missing sample
+    tcw = float(np.nanmin(warmest)) if np.isfinite(warmest).any() else math.nan
+    return teye, tcw
+
+
+def is_eye(teye: float, tcw: float) -> bool:
+    return bool(math.isfinite(teye) and math.isfinite(tcw) and tcw <= EYE_RING_MAX_K and teye - tcw >= EYE_DELTA_K)
+
+
+def eye_candidate(img: np.ndarray) -> tuple[float, float] | None:
+    """(bearing rad, distance km) of the warmest sample within EYE_REGION_KM of the centre, else None."""
+    bt = decode(img)[_EYE_R]
+    if not np.isfinite(bt).any():
         return None
-    with np.errstate(all="ignore"):
-        ring = np.nanmean(bt[(RADII_KM >= 1.0) & (RADII_KM <= 100.0)], axis=1)
-    if not np.isfinite(ring).any():
-        return None
-    i, j = np.unravel_index(np.nanargmax(block), block.shape)
-    if block[i, j] - np.nanmin(ring) < EYE_CONTRAST_K:
-        return None
-    return float(AZIMUTHS[j]), float(RADII_KM[inner][i])
+    i, j = np.unravel_index(np.nanargmax(bt), bt.shape)
+    return float(AZIMUTHS[j]), float(RADII_KM[_EYE_R][i])
 
 
-ENCLOSE_K = 235.0         # an eye is ringed by cloud at least this cold ...
-ENCLOSE_KM = 50.0         # ... within this distance of it ...
-ENCLOSE_FRAC = 0.75       # ... in at least this fraction of directions (an exposed low-level centre is not)
+class EyeCrop(NamedTuple):
+    analysed: np.ndarray      # the polar image around the analysed centre, always
+    image: np.ndarray         # the image the features read: around the eye when there is one, else ``analysed``
+    lat: float                # the centre of ``image``
+    lon: float
+    eye: bool
+    teye: float               # ADT temperatures around the eye candidate (K)
+    tcw: float
 
 
-def enclosed(img: np.ndarray) -> float:
-    """The fraction of directions around a polar image's centre that reach cloud colder than ENCLOSE_K within
-    ENCLOSE_KM (from 4 km out)."""
-    bt = decode(img)
-    band = bt[(RADII_KM >= 4.0) & (RADII_KM <= ENCLOSE_KM)]
-    with np.errstate(all="ignore"):
-        coldest = np.nanmin(np.where(np.isfinite(band), band, np.inf), axis=0)
-    return float(np.mean(coldest <= ENCLOSE_K))
-
-
-def polar_recentred(disk: "FullDisk", lat: float, lon: float) -> tuple[np.ndarray, float, float, bool]:
-    """(polar image, centre lat, centre lon, eye found): the polar image around the analysed centre, re-sampled
-    around a clear eye when ``find_eye`` finds one AND cold cloud encloses it (``enclosed`` >= ENCLOSE_FRAC). A warm
-    spot beside one-sided convection -- an exposed centre -- keeps the analysed centre. Deterministic: the same in
-    training and live."""
+def polar_eye(disk: "FullDisk", lat: float, lon: float) -> EyeCrop:
+    """The analysed-centre image, and the eye decision made where ADT makes it -- around the eye: the image is
+    re-sampled at the warmest sample within 24 km of the analysed centre (the analysed centre is a median 9 km from
+    ADT's on its eye scenes) and the closed-ring rule is applied there. A warm gap passes the first step and fails
+    the second. Deterministic: the same in training and live."""
     img = disk.polar(lat, lon)
-    eye = find_eye(img)
-    if eye is None:
-        return img, lat, lon, False
-    elat, elon = destination(lat, lon, np.array(eye[0]), np.array(eye[1]))
-    elat, elon = float(elat), float(elon)
-    img_eye = disk.polar(elat, elon)
-    if enclosed(img_eye) < ENCLOSE_FRAC:
-        return img, lat, lon, False
-    return img_eye, elat, elon, True
+    cand = eye_candidate(img)
+    if cand is None:
+        teye, tcw = adt_temperatures(img)
+        return EyeCrop(img, img, lat, lon, False, teye, tcw)
+    clat, clon = destination(lat, lon, np.array(cand[0]), np.array(cand[1]))
+    clat, clon = float(clat), float(clon)
+    img_c = disk.polar(clat, clon)
+    teye, tcw = adt_temperatures(img_c)
+    if is_eye(teye, tcw):
+        return EyeCrop(img, img_c, clat, clon, True, teye, tcw)
+    return EyeCrop(img, img, lat, lon, False, teye, tcw)
 
 
 READ_TIMEOUT_S = 60.0     # one HTTP request; a read with no deadline hung a collection shard for 5 h 50 min

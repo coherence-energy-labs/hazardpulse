@@ -9,9 +9,14 @@ storm is symmetrizing. Every constant is fixed here before any feature meets an 
 Per hour, from a storm-centred polar image (``goes_abi``):
 - ``core_cold``: the fraction of samples within 50 km at or below DEEP_K (deep convection);
 - ``ring_cold``: the same fraction at 50-150 km;
-- ``eye_contrast``: the mean within 5 km minus the coldest azimuthal mean within 100 km;
-- ``eye_radius``: when an eye was found, the smallest radius where the azimuthal mean falls halfway from the eye
-  to that coldest ring -- the eyewall's inner edge, measured from the image (NaN without an eye);
+- ``eye_contrast``: ADT's eye temperature minus its coldest-warmest cloud temperature, around the eye candidate
+  (``goes_abi.adt_temperatures``) -- large only where a ring of cold cloud is closed round a warm centre, and
+  continuous, so a forming eye shows before it crosses the eye threshold (amendment 12b: it replaced a 5 km mean
+  minus the coldest azimuthal mean, which a warm gap beside a curved band also maximized);
+- ``eye_radius``: when the closed-ring rule finds an eye, the smallest radius where the azimuthal mean falls halfway
+  from the 5 km mean to the coldest azimuthal mean -- the eyewall's inner edge (NaN without an eye). Of three
+  definitions it tracked CARQ's radius of maximum wind best on the rule's eyes (Spearman +0.39, n 392; ADT's
+  dark-gray edge +0.16);
 - ``sym``: 1 - (wavenumber-1 amplitude / mean) of the 20-100 km cloud-top depression (300 K - BT) by azimuth;
 - ``cold_min``: the coldest cloud top within 100 km.
 """
@@ -40,12 +45,14 @@ def _frac_cold(bt: np.ndarray) -> float:
     return float(np.mean(bt[fin] <= DEEP_K))
 
 
-def hour_stats(img: np.ndarray, eye: bool) -> dict[str, float]:
-    """One hour's inner-core quantities from a uint8 polar image."""
+def hour_stats(img: np.ndarray, eye: bool, teye: float, tcw: float) -> dict[str, float]:
+    """One hour's inner-core quantities from a uint8 polar image, its eye decision and the ADT temperatures the
+    decision was made on (``goes_abi.EyeCrop``)."""
     bt = g.decode(img)
     r = g.RADII_KM
+    contrast = float(teye) - float(tcw) if math.isfinite(teye) and math.isfinite(tcw) else math.nan
     out = {"core_cold": _frac_cold(bt[r <= 50.0]), "ring_cold": _frac_cold(bt[(r > 50.0) & (r <= 150.0)]),
-           "eye_contrast": math.nan, "eye_radius": math.nan, "sym": math.nan, "cold_min": math.nan, "eye": bool(eye)}
+           "eye_contrast": contrast, "eye_radius": math.nan, "sym": math.nan, "cold_min": math.nan, "eye": bool(eye)}
     inner = bt[r <= 100.0]
     if np.isfinite(inner).mean() < MIN_VALID:
         return out
@@ -56,7 +63,6 @@ def hour_stats(img: np.ndarray, eye: bool) -> dict[str, float]:
     ring_min = float(np.nanmin(am))
     centre = bt[r <= 5.0]
     eye_t = float(np.nanmean(centre)) if np.isfinite(centre).any() else math.nan
-    out["eye_contrast"] = eye_t - ring_min
     out["cold_min"] = float(np.nanmin(inner))
     if eye and math.isfinite(eye_t):
         half = (eye_t + ring_min) / 2.0

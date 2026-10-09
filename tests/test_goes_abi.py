@@ -92,16 +92,66 @@ def test_the_reader_opens_a_file_whose_attributes_are_one_element_arrays_with_wa
     assert d.lon0 == -75.0 and d.scale == pytest.approx(0.1) and d.fill == -1 and d.dx > 0 > d.dy
 
 
-def test_an_enclosed_eye_recentres_and_an_exposed_centre_does_not():
-    ring = _synthetic_disk(ring_km=30.0)                         # a full cold ring: a real eye
-    img, la, lo, eye = g.polar_recentred(ring, 20.03, -60.02)     # analysed centre ~4 km off the eye
-    assert eye and abs(la - 20.0) < 0.03 and abs(lo + 60.0) < 0.03
-    assert g.decode(img)[0].mean() > 280.0
+def _bearing_deg(d, clat=20.0, clon=-60.0):
+    X, Y = np.meshgrid(d.x, d.y)
+    lat, lon = g.xy_to_latlon(X, Y, d.lon0)
+    return (np.degrees(np.arctan2(np.radians(lon - clon) * np.cos(np.radians(clat)), np.radians(lat - clat))) + 360) % 360
+
+
+def test_a_closed_ring_eye_is_found_around_the_eye_and_the_analysed_image_is_kept():
+    ring = _synthetic_disk(ring_km=30.0)                          # a full cold ring: a real eye
+    c = g.polar_eye(ring, 20.03, -60.02)                          # analysed centre ~4 km off the eye
+    assert c.eye and abs(c.lat - 20.0) < 0.03 and abs(c.lon + 60.0) < 0.03
+    assert g.decode(c.image)[0].mean() > 290.0                    # the feature image sits in the eye
+    # the candidate is the warmest 2 km sample, ~2 km from the eye's centre, so the best ring's warmest point is a
+    # few K above the 190 K ring floor
+    assert c.tcw < 210.0 and c.teye - c.tcw > 80.0
+    assert np.array_equal(c.analysed, ring.polar(20.03, -60.02))  # the analysed-centre image, as sampled
+
+
+def test_an_exposed_centre_is_not_an_eye():
     half = _synthetic_disk(ring_km=30.0)                          # cold cloud on the east side only
     X, _ = np.meshgrid(half.x, half.y)
     half.cmi = np.where(X > float(g.latlon_to_xy(20.0, -60.0, half.lon0)[0]), half.cmi, 290.0)
-    img2, la2, lo2, eye2 = g.polar_recentred(half, 20.03, -60.02)
-    assert not eye2 and (la2, lo2) == (20.03, -60.02)              # exposed: the analysed centre stays
+    c = g.polar_eye(half, 20.03, -60.02)
+    assert not c.eye and (c.lat, c.lon) == (20.03, -60.02)        # the analysed centre stays
+    assert np.array_equal(c.image, c.analysed) and c.tcw > 280.0  # no ring is cold all the way round
+
+
+def test_a_warm_gap_in_a_curved_band_is_not_an_eye():
+    """The weak-storm defect: a band wrapped 320 degrees round a warm centre, open in one 40-degree sector. The old
+    rule (warm spot + cold cloud in >= 75 % of directions) called it an eye; ADT's coldest-warmest ring cannot,
+    because every ring crosses the gap."""
+    band = _synthetic_disk(ring_km=30.0)
+    band.cmi = np.where((_bearing_deg(band) > 160) & (_bearing_deg(band) < 200), 290.0, band.cmi)
+    c = g.polar_eye(band, 20.0, -60.0)
+    assert not c.eye and c.tcw > 280.0
+
+
+def test_a_cold_overcast_with_a_slightly_warmer_centre_is_not_an_eye():
+    cdo = _synthetic_disk(ring_km=30.0)
+    X, Y = np.meshgrid(cdo.x, cdo.y)
+    lat, lon = g.xy_to_latlon(X, Y, cdo.lon0)
+    r = 111.2 * np.hypot(lat - 20.0, (lon + 60.0) * math.cos(math.radians(20.0)))
+    cdo.cmi = np.where(r < 150.0, 200.0 + 15.0 * np.exp(-(r / 8.0) ** 2), 290.0)   # closed, cold, centre +15 K
+    c = g.polar_eye(cdo, 20.0, -60.0)
+    assert not c.eye and c.tcw == pytest.approx(200.0, abs=1.0) and c.teye - c.tcw < g.EYE_DELTA_K
+
+
+def test_the_adt_temperatures_skip_a_ring_that_cannot_show_it_is_closed_and_the_thresholds_are_inclusive():
+    bt = np.full((g.N_R, g.N_AZ), 220.0)
+    bt[g.RADII_KM < 24.0] = 280.0
+    bt[(g.RADII_KM >= 24.0) & (g.RADII_KM < 40.0)] = 200.0
+    img = g.encode(bt)
+    assert g.adt_temperatures(img)[1] == pytest.approx(200.0, abs=0.3)
+    img[(g.RADII_KM >= 24.0) & (g.RADII_KM < 40.0), 5] = g.MISSING   # one missing sample on each cold ring
+    assert g.adt_temperatures(img)[1] == pytest.approx(220.0, abs=0.3)
+    blank = np.full((g.N_R, g.N_AZ), g.MISSING, np.uint8)
+    te, tc = g.adt_temperatures(blank)
+    assert math.isnan(te) and math.isnan(tc) and not g.is_eye(te, tc)
+    assert g.is_eye(g.EYE_RING_MAX_K + g.EYE_DELTA_K, g.EYE_RING_MAX_K)
+    assert not g.is_eye(g.EYE_RING_MAX_K + 0.6 + g.EYE_DELTA_K, g.EYE_RING_MAX_K + 0.6)
+    assert not g.is_eye(g.EYE_RING_MAX_K + g.EYE_DELTA_K - 0.6, g.EYE_RING_MAX_K)
 
 
 def test_the_polar_image_puts_the_ring_at_its_radius_in_every_direction():
