@@ -693,6 +693,43 @@ Brier are both below H8's.
   table, which are 94% of 6-hour steps. A live memory would read every earlier cycle.
 - **Partial overlap.** `dv_past12` and `dv_past24` already carry some of the intensity tendency.
 
+### Amendment 10 outcome (2026-10-08): H9 NOT carried -- the memory made it worse
+
+**Control:** H8 reproduced 0.14161766094567663 (`results/calibration/hurricane_ri_h9.json`).
+
+| | dev 30/24 LL | dev Brier4 | AUC | POD at HCCA's FAR | 2026 LL (further read) |
+|---|---|---|---|---|---|
+| H8 (v10.4) | **0.14162** | **0.15261** | **0.9340** | **0.194** | **0.1172** |
+| H9 = H8 + coherence state | 0.14436 | 0.15495 | 0.9318 | 0.178 | 0.1193 |
+
+**H9 - H8:**
+- dev: dLL **+0.00275 [+0.00111, +0.00455]**, dBrier4 +0.00235 [+0.00025, +0.00465];
+- 2026: dLL +0.0021 [-0.0028, +0.0063].
+
+This is a loss beyond the interval on dev, and the same sign on 2026. The coherence features take 2.6% of
+the split gain.
+
+**Root cause.** Diagnostics after the decision; they cannot change it. Scripts are in the session record, and
+the numbers are below.
+1. **It is not "any added columns hurt".** The same eight features, shuffled within each season (meaning
+   destroyed, marginals kept), cost -0.00003, +0.00049 and +0.00076 over three seeds. The real features cost
+   about 6x more. They carry a pattern that holds in the training seasons and fails in later ones.
+2. **One feature carries most of it.** Each feature was added to H8 alone:
+   - the retention memory `coh_hold_36`: +0.00155 [-0.00001, +0.00330];
+   - every other feature: within +-0.0005.
+
+   The full set is worse than the sum of its parts. Retention depends on CARQ's RMW, an operational estimate,
+   and a 36-h memory of it compounds whatever the estimate's season-to-season practice does. The persistence of
+   deep core convection (`coh_persist`, -0.00049 [-0.00108, +0.00006]) is the only feature pointing the other
+   way.
+
+**Status.** The time form of the concept, as storm memory, is killed for this program's inputs. A narrower
+version survives: core-convection persistence without the RMW-derived memory. It would need its own
+registration, judged on data not yet read.
+- The tornado program found the same thing independently on 2023: ProbSevere storm-history summaries (block E)
+  added nothing (dAUC +0.0005 [-0.0008, +0.0019]).
+- On both hazards, storm memory is already absorbed by the operational inputs, which are built on trends.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
