@@ -819,6 +819,79 @@ written before it scores any cycle sets its error budget at half of v10.4's.
 - **What survives:** the law as a weighting rule (it beats equal weights). It keeps its place where the sources
   are independent and comparable, as in TC1.
 
+## Amendment 12 -- G1: the inner core from GOES 2 km, hourly (2026-10-08, before any G1 feature meets an outcome)
+
+**Why.** Amendments 8, 10 and 11 showed that our RI models are near the information limit of their inputs. The
+8 km GMGSI images (two per cycle) cannot resolve an eye, an eyewall or a ring. GOES ABI band 13 is 2 km and
+available every 10 minutes from 2017, so it also covers 2020, which GMGSI does not. The physics: before RI the
+inner core organizes. Deep convection wraps into a ring, the ring closes and symmetrizes, an eye clears and
+contracts, and the convection persists. The coherence concept enters where it now has the resolution: how long
+core convection has been sustained, and how fast the core symmetrizes.
+
+**Data** (`src/hazardpulse/hurricane/goes_abi.py`, the same code for training and live).
+- **Source:** the operational GOES-East or GOES-West band-13 full disk, chosen by date and by longitude (split at
+  106.2 W). It is read by HTTP byte ranges, at the first scan at or after each hour.
+- **Hours.** For cycle t, the hours t-12 .. t+2:
+  - hours up to t are centred by interpolating the CARQ fixes known at t;
+  - hours t+1 and t+2 are centred by extrapolating the t-6 -> t motion.
+
+  No fix after t is read.
+- **Polar image.** Each hour becomes a storm-centred polar image: 200 radii (1-399 km, 2 km steps) by 64
+  azimuths, bilinear, at 0.6 K.
+- **Eye recentring.** It is re-centred on a clear eye: the warmest sample within 25 km, at least 15 K above the
+  coldest azimuthal mean within 100 km, AND enclosed by cloud of 235 K or colder within 50 km in at least 75% of
+  directions. An exposed low-level centre keeps the analysed centre.
+- **Checks.** The geometry reproduces the GOES-R PUG worked example and its inverse. On Milton 2024-10-07 18Z the
+  eye reads 281 K inside a 192 K ring, recentred 5 km from CARQ.
+- **Coverage.** `results/goes/tasks.jsonl.gz` holds 43,565 crops over 19,566 hours for every 2020-2026 cycle
+  (`scripts/goes_storm_hours.py`). They are collected on 20 runner shards (`research-goes-g1.yml`); a missing
+  scan is recorded, never dropped.
+
+**Features (12)** (`src/hazardpulse/hurricane/goes_features.py`, constants fixed there).
+- **At the latest available hour:**
+  - core deep convection (fraction of samples at or below 208 K within 50 km);
+  - ring deep convection (50-150 km);
+  - eye contrast (the mean within 5 km minus the coldest azimuthal mean within 100 km);
+  - eyewall inner edge (eyed hours only);
+  - ring symmetry (1 - the wavenumber-1 amplitude over the mean of the 20-100 km cloud-top depression);
+  - the coldest cloud top within 100 km.
+- **Over the window:**
+  - sustained core convection (consecutive hours, ending at the latest, with at least half the core at or below
+    208 K);
+  - the symmetrization, eye-contrast and core-convection trends (OLS slopes, at least 4 hours);
+  - the fraction of hours with an eye;
+  - the number of hours read.
+- `tests/test_goes_features.py` pins each feature on synthetic images.
+
+**Candidate:** **G1 = H8 + the 12 G1 features**, with H8's settings. The G1 features are unconstrained.
+
+**Control:** H8, recomputed by `scripts/hurricane_ri_g1.py`, must reproduce amendment 8's development log loss
+(0.14161766094567663) to 1e-12, or the run stops.
+
+**Carried rule (amendment 8's):** G1 is carried iff its pooled 30/24 log loss AND its pooled four-threshold
+Brier are both below H8's.
+- **Reported (descriptive, pre-registered):**
+  - paired 95% intervals;
+  - POD at HCCA's false-alarm rate;
+  - the drift check;
+  - G1's share of split gain;
+  - a **noise control**: the 12 features shuffled within each season, seeds 1-3. G1's gain counts as information
+    only if it clearly exceeds what the shuffled columns give; this is amendment 10's lesson, registered this
+    time.
+- **2026:** a declared further read.
+
+**A carried G1.** Before it scores any cycle, an amendment registers it in the prospective test:
+- live inputs: up to 15 GOES crops per storm per cycle;
+- its error budget: half of v10.4's.
+
+**Known before the result.**
+- **Parallax.** Cloud-top parallax shifts the convection a few km toward the satellite. Eye recentring removes
+  that for eyed storms, not for the rest.
+- **Satellite changes.** The East satellite changes on 2025-04-07 (GOES-16 to GOES-19) and the West on
+  2023-01-04 (GOES-17 to GOES-18). Calibration differs slightly; the drift check reports it.
+- **Few events.** The development set holds about 250 RI events. A real but modest gain may not clear the noise
+  control.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;
