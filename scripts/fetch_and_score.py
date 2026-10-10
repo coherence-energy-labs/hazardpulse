@@ -1142,9 +1142,11 @@ def tc2b_record(storm: dict[str, object], rec: dict[str, object], deck) -> dict[
     else:
         curve = {int(k): float(v) for k, v in (sh.get("model_probabilities") or {}).items() if v is not None}
     out, info = tc2.project(tc1_int, v0, curve, tc2.TC2B_TAPER_END_H)
+    # an open edge of the bracket (no lower or no upper bound) is null: JSON has no infinity
+    bracket = [b if b is not None and math.isfinite(b) else None for b in info["bracket"]] if info.get("bracket") else None
     return {"status": "ok", "label": "TC2b", "intensity": {str(k): round(v, 1) for k, v in sorted(out.items())},
             "moved_tc1": bool(info.get("applied")), "shift_24h_kt": info.get("shift_24h"),
-            "bracket_kt": info.get("bracket"), "v0_kt": v0, "why_unmoved": why or info.get("why"),
+            "bracket_kt": bracket, "v0_kt": v0, "why_unmoved": why or info.get("why"),
             "curve_from": "ri_v10_4_shadow", "curve_model_version": sh.get("model_version")}
 
 
@@ -1450,6 +1452,23 @@ def _render_hurricane_geojson(storms: list[dict[str, object]]) -> str:
     return json.dumps({"type": "FeatureCollection", "features": features})
 
 
+def strict_json(obj, path: str = "") -> tuple[object, list[str]]:
+    """``(a copy with every non-finite float as None, the paths where one was)``: what browsers and the Worker
+    can parse."""
+    bad: list[str] = []
+
+    def walk(x, p):
+        if isinstance(x, float) and not math.isfinite(x):
+            bad.append(p or "/")
+            return None
+        if isinstance(x, dict):
+            return {k: walk(v, f"{p}/{k}") for k, v in x.items()}
+        if isinstance(x, (list, tuple)):
+            return [walk(v, f"{p}/{i}") for i, v in enumerate(x)]
+        return x
+    return walk(obj, path), bad
+
+
 def write_outputs(
     scored_storms: list[dict[str, object]],
     now: dt.datetime,
@@ -1465,6 +1484,13 @@ def write_outputs(
     (amendment 7 rule 2), kept beside the storms -- never among them, so nothing publishes them.
     """
     forecast_id = f"hu_fcst_{now.strftime('%Y%m%d_%H%M')}"
+    # Strict JSON before anything is written or hashed: a bare -Infinity (TC2b's open bracket, 2026-10-10 03:39Z)
+    # is valid to Python's json module and invalid to every browser and to the Worker, and took
+    # /api/v1/live/hurricane down until the next run. Every non-finite number becomes null, and the run says where.
+    scored_storms, bad = strict_json(scored_storms)
+    catch_up, bad_c = strict_json(catch_up) if catch_up else (catch_up, [])
+    for where in bad + bad_c:
+        print(f"  WARNING: non-finite number written as null at {where}")
     sources: dict[str, int] = {}
     for s in scored_storms:
         key = str(s.get("ri_source", RI_SOURCE_V82))
@@ -1485,7 +1511,7 @@ def write_outputs(
         output[cr.CATCH_UP_KEY] = catch_up
     storms_path = DIST / "data" / "live-storms.json"
     storms_path.parent.mkdir(parents=True, exist_ok=True)
-    storms_path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+    storms_path.write_text(json.dumps(output, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     print(f"  Wrote {storms_path} ({len(scored_storms)} storms)")
 
     # Write GeoJSON for MapLibre hurricane map
@@ -1508,7 +1534,7 @@ def write_outputs(
     }
     if catch_up:
         replay_payload[cr.CATCH_UP_KEY] = catch_up
-    replay_path.write_text(json.dumps(replay_payload, indent=2) + "\n", encoding="utf-8")
+    replay_path.write_text(json.dumps(replay_payload, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     print(f"  Wrote {replay_path}" + (f" (+{len(catch_up)} catch-up shadow records)" if catch_up else ""))
     entry = append_hurricane_ledger(forecast_id, now, model_version, scored_storms, catch_up=catch_up)
     print(f"  Ledger: {HU_LEDGER_PATH.name} +1 (hash {entry['hash'][:12]}, prev {entry['prev_hash'][:12]})")
@@ -1555,7 +1581,7 @@ def write_outputs(
                     hazard["n_active_storms"] = 0
                 break
         pulse["updated_at"] = now.isoformat() + "Z"
-        pulse_path.write_text(json.dumps(pulse, indent=2) + "\n", encoding="utf-8")
+        pulse_path.write_text(json.dumps(pulse, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         print(f"  Updated {pulse_path}")
 
 
