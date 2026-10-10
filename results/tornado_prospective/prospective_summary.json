@@ -1,8 +1,8 @@
 {
-  "scored_as_of": "2026-10-10T19:46:42Z",
+  "scored_as_of": "2026-10-10T23:53:19Z",
   "replay_dir": "dist/data/replay",
-  "n_replay_artifacts": 1828,
-  "n_matured_forecasts": 1809,
+  "n_replay_artifacts": 1837,
+  "n_matured_forecasts": 1813,
   "forecast_horizon_hours": 24,
   "match_radius_km": 40.0,
   "match_window_hours": 4.0,
@@ -10,81 +10,81 @@
   "outcome_time_convention": "SPC daily files are convective days (12 UTC to 12 UTC); HHMM is UTC; rows before 1200 are placed on the next UTC date",
   "status": "ok",
   "calibration_dataset": "results/tornado_prospective/calibration_dataset.json",
-  "calibration_n": 4843,
+  "calibration_n": 5238,
   "calibration_model_version": "tornado_v3-05a06c843c87",
   "observed_window": {
     "start": "2026-03-13T03:00:00Z",
-    "end": "2026-10-10T19:22:35Z",
-    "n_tornado_reports": 1257,
+    "end": "2026-10-10T22:11:19Z",
+    "n_tornado_reports": 1260,
     "spc_days_unavailable": []
   },
   "n_forecasts_outcome_unavailable": 0,
-  "n_scored_forecasts": 1809,
-  "total_storms_scored": 240909,
+  "n_scored_forecasts": 1813,
+  "total_storms_scored": 241340,
   "total_matched_storms": 634,
-  "total_tornado_reports_in_windows": 12188,
+  "total_tornado_reports_in_windows": 12207,
   "overall_match_rate": 0.0026,
   "skill_reference": "bss_vs_causal_climatology: reference = base rate of the SAME model version's storm-forecasts whose 24 h window matured before the forecast was issued (no outcome leak; versions differ in event definition). bss_vs_sample_climatology: reference = pooled base rate of the scored set itself (in-sample, shown for comparison). Both are null when no event was observed. Scored on the model's full-precision probability.",
   "label_time_convention": "v3 storms are labelled from the storm's ProbSevere valid time, as in training (storm_features.labels); label_after_issue_only drops reports before the run's issue time, for comparison",
   "repeat_storm_forecasts": {
     "rule": "pooled metrics keep one forecast per (model version, storm, valid hour): the first issued",
-    "n_storm_forecasts_before": 240909,
-    "n_dropped": 2253
+    "n_storm_forecasts_before": 241340,
+    "n_dropped": 2289
   },
   "pooled": {
-    "n_storm_forecasts": 238656,
+    "n_storm_forecasts": 239051,
     "n_positive": 634,
-    "base_rate": 0.00265654,
-    "mean_forecast_probability": 0.07416713,
-    "brier": 0.02508317,
-    "auc": 0.7472,
-    "ece": 0.07151,
-    "brier_sample_climatology": 0.00264949,
-    "bss_vs_sample_climatology": -8.4672,
-    "n_with_causal_reference": 235945,
-    "brier_causal_climatology": 0.00264697,
-    "bss_vs_causal_climatology": -8.4506,
+    "base_rate": 0.00265215,
+    "mean_forecast_probability": 0.07404952,
+    "brier": 0.02504208,
+    "auc": 0.7475,
+    "ece": 0.071397,
+    "brier_sample_climatology": 0.00264512,
+    "bss_vs_sample_climatology": -8.4673,
+    "n_with_causal_reference": 236340,
+    "brier_causal_climatology": 0.00264254,
+    "bss_vs_causal_climatology": -8.4508,
     "reliability": [
       {
         "bin": "[0, 0.001)",
-        "n": 49786,
-        "mean_forecast": 0.000695,
-        "observed_frequency": 0.000502,
+        "n": 50088,
+        "mean_forecast": 0.000692,
+        "observed_frequency": 0.000499,
         "n_positive": 25
       },
       {
         "bin": "[0.001, 0.002)",
-        "n": 49243,
+        "n": 49255,
         "mean_forecast": 0.001332,
         "observed_frequency": 0.000731,
         "n_positive": 36
       },
       {
         "bin": "[0.002, 0.005)",
-        "n": 33887,
+        "n": 33922,
         "mean_forecast": 0.002515,
-        "observed_frequency": 0.00183,
+        "observed_frequency": 0.001828,
         "n_positive": 62
       },
       {
         "bin": "[0.005, 0.01)",
-        "n": 8265,
-        "mean_forecast": 0.006664,
-        "observed_frequency": 0.003993,
+        "n": 8290,
+        "mean_forecast": 0.006666,
+        "observed_frequency": 0.003981,
         "n_positive": 33
       },
       {
         "bin": "[0.01, 0.02)",
-        "n": 3106,
-        "mean_forecast": 0.014571,
-        "observed_frequency": 0.012234,
+        "n": 3115,
+        "mean_forecast": 0.014574,
+        "observed_frequency": 0.012199,
         "n_positive": 38
       },
       {
         "bin": "[0.02, 0.05)",
-        "n": 11768,
-        "mean_forecast": 0.039768,
-        "observed_frequency": 0.004079,
+        "n": 11777,
+        "mean_forecast": 0.039758,
+        "observed_frequency": 0.004076,
         "n_positive": 48
       },
       {
@@ -96,9 +96,9 @@
       },
       {
         "bin": "[0.1, 0.2)",
-        "n": 23804,
-        "mean_forecast": 0.141874,
-        "observed_frequency": 0.002857,
+        "n": 23807,
+        "mean_forecast": 0.141876,
+        "observed_frequency": 0.002856,
         "n_positive": 68
       },
       {
@@ -219,58 +219,65 @@
       ]
     },
     "tier1_v3": {
-      "n_storm_forecasts": 5056,
+      "n_storm_forecasts": 5451,
       "n_positive": 0,
       "base_rate": 0.0,
-      "mean_forecast_probability": 0.00024328,
-      "brier": 2.26e-06,
+      "mean_forecast_probability": 0.00044208,
+      "brier": 1.77e-05,
       "auc": null,
-      "ece": 0.000243,
+      "ece": 0.000442,
       "brier_sample_climatology": 0.0,
       "bss_vs_sample_climatology": null,
-      "n_with_causal_reference": 4026,
+      "n_with_causal_reference": 4421,
       "brier_causal_climatology": 0.0,
       "bss_vs_causal_climatology": null,
       "reliability": [
         {
           "bin": "[0, 0.001)",
-          "n": 4862,
-          "mean_forecast": 4.7e-05,
+          "n": 5164,
+          "mean_forecast": 5e-05,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.001, 0.002)",
-          "n": 53,
-          "mean_forecast": 0.001502,
+          "n": 65,
+          "mean_forecast": 0.001457,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.002, 0.005)",
-          "n": 74,
-          "mean_forecast": 0.002893,
+          "n": 109,
+          "mean_forecast": 0.002987,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.005, 0.01)",
-          "n": 44,
-          "mean_forecast": 0.006769,
+          "n": 69,
+          "mean_forecast": 0.006948,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.01, 0.02)",
-          "n": 16,
-          "mean_forecast": 0.013973,
+          "n": 25,
+          "mean_forecast": 0.014491,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.02, 0.05)",
-          "n": 7,
-          "mean_forecast": 0.026789,
+          "n": 16,
+          "mean_forecast": 0.026588,
+          "observed_frequency": 0.0,
+          "n_positive": 0
+        },
+        {
+          "bin": "[0.1, 0.2)",
+          "n": 3,
+          "mean_forecast": 0.154792,
           "observed_frequency": 0.0,
           "n_positive": 0
         }
@@ -337,59 +344,59 @@
   },
   "pooled_by_served_mode": {
     "raw_model_probability": {
-      "n_storm_forecasts": 96085,
+      "n_storm_forecasts": 96480,
       "n_positive": 407,
-      "base_rate": 0.00423583,
-      "mean_forecast_probability": 0.18076573,
-      "brier": 0.05994308,
-      "auc": 0.7549,
-      "ece": 0.17653,
-      "brier_sample_climatology": 0.00421789,
+      "base_rate": 0.00421849,
+      "mean_forecast_probability": 0.18003789,
+      "brier": 0.05969854,
+      "auc": 0.7559,
+      "ece": 0.17582,
+      "brier_sample_climatology": 0.0042007,
       "bss_vs_sample_climatology": -13.2116,
-      "n_with_causal_reference": 94230,
-      "brier_causal_climatology": 0.00421779,
-      "bss_vs_causal_climatology": -13.2805,
+      "n_with_causal_reference": 94625,
+      "brier_causal_climatology": 0.00420019,
+      "bss_vs_causal_climatology": -13.2807,
       "reliability": [
         {
           "bin": "[0, 0.001)",
-          "n": 3427,
-          "mean_forecast": 5.5e-05,
+          "n": 3727,
+          "mean_forecast": 5.9e-05,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.001, 0.002)",
-          "n": 50,
-          "mean_forecast": 0.001452,
+          "n": 64,
+          "mean_forecast": 0.001403,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.002, 0.005)",
-          "n": 75,
-          "mean_forecast": 0.00288,
+          "n": 109,
+          "mean_forecast": 0.002959,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.005, 0.01)",
-          "n": 44,
-          "mean_forecast": 0.006768,
+          "n": 70,
+          "mean_forecast": 0.006919,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.01, 0.02)",
-          "n": 16,
-          "mean_forecast": 0.013975,
+          "n": 25,
+          "mean_forecast": 0.014496,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.02, 0.05)",
-          "n": 9877,
-          "mean_forecast": 0.042811,
-          "observed_frequency": 0.001519,
+          "n": 9886,
+          "mean_forecast": 0.042796,
+          "observed_frequency": 0.001517,
           "n_positive": 15
         },
         {
@@ -401,9 +408,9 @@
         },
         {
           "bin": "[0.1, 0.2)",
-          "n": 23804,
-          "mean_forecast": 0.141874,
-          "observed_frequency": 0.002857,
+          "n": 23807,
+          "mean_forecast": 0.141876,
+          "observed_frequency": 0.002856,
           "n_positive": 68
         },
         {
@@ -622,74 +629,81 @@
       "last_issued_at": "2026-10-03T00:54:52Z"
     },
     "tornado_v3-05a06c843c87": {
-      "n_storm_forecasts": 4843,
+      "n_storm_forecasts": 5238,
       "n_positive": 0,
       "base_rate": 0.0,
-      "mean_forecast_probability": 0.00024943,
-      "brier": 2.35e-06,
+      "mean_forecast_probability": 0.00045585,
+      "brier": 1.841e-05,
       "auc": null,
-      "ece": 0.000249,
+      "ece": 0.000456,
       "brier_sample_climatology": 0.0,
       "bss_vs_sample_climatology": null,
-      "n_with_causal_reference": 3904,
+      "n_with_causal_reference": 4299,
       "brier_causal_climatology": 0.0,
       "bss_vs_causal_climatology": null,
       "reliability": [
         {
           "bin": "[0, 0.001)",
-          "n": 4654,
-          "mean_forecast": 4.7e-05,
+          "n": 4956,
+          "mean_forecast": 5e-05,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.001, 0.002)",
-          "n": 51,
-          "mean_forecast": 0.001489,
+          "n": 63,
+          "mean_forecast": 0.001445,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.002, 0.005)",
-          "n": 71,
-          "mean_forecast": 0.002875,
+          "n": 106,
+          "mean_forecast": 0.002978,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.005, 0.01)",
-          "n": 44,
-          "mean_forecast": 0.006769,
+          "n": 69,
+          "mean_forecast": 0.006948,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.01, 0.02)",
-          "n": 16,
-          "mean_forecast": 0.013973,
+          "n": 25,
+          "mean_forecast": 0.014491,
           "observed_frequency": 0.0,
           "n_positive": 0
         },
         {
           "bin": "[0.02, 0.05)",
-          "n": 7,
-          "mean_forecast": 0.026789,
+          "n": 16,
+          "mean_forecast": 0.026588,
+          "observed_frequency": 0.0,
+          "n_positive": 0
+        },
+        {
+          "bin": "[0.1, 0.2)",
+          "n": 3,
+          "mean_forecast": 0.154792,
           "observed_frequency": 0.0,
           "n_positive": 0
         }
       ],
       "skill_undefined": "no event observed",
       "label_after_issue_only": {
-        "n_storm_forecasts": 4843,
+        "n_storm_forecasts": 5238,
         "n_positive": 0,
         "base_rate": 0.0,
-        "brier": 2.35e-06,
+        "brier": 1.841e-05,
         "auc": null
       },
-      "n_repeat_storm_forecasts_dropped": 0,
-      "n_forecasts": 59,
+      "n_repeat_storm_forecasts_dropped": 36,
+      "n_forecasts": 63,
       "first_issued_at": "2026-10-03T03:39:53Z",
-      "last_issued_at": "2026-10-09T19:22:35Z"
+      "last_issued_at": "2026-10-09T22:11:19Z"
     },
     "tornado_v3-9005905f08b7": {
       "n_storm_forecasts": 213,
@@ -743,15 +757,15 @@
   },
   "mean_auc": 0.7077,
   "median_auc": 0.7826,
-  "mean_brier": 0.03,
+  "mean_brier": 0.0299,
   "per_forecast_bss_own_climatology": {
     "mean": -3.6278,
     "n_defined": 223,
-    "n_undefined_no_observed_tornado": 1586,
+    "n_undefined_no_observed_tornado": 1590,
     "note": "Diagnostic only: each forecast's reference is its own outcome mean (in-sample); undefined when no tornado matched. Use pooled.bss_vs_causal_climatology for skill."
   },
   "n_forecasts_with_valid_auc": 223,
-  "n_forecasts_without_matches": 1586,
+  "n_forecasts_without_matches": 1590,
   "by_tier": {
     "unknown": {
       "n_forecasts": 1,
@@ -810,16 +824,16 @@
       "pooled_bss_vs_sample_climatology": null
     },
     "tier1_v3": {
-      "n_forecasts": 63,
+      "n_forecasts": 67,
       "n_forecasts_with_valid_auc": 0,
-      "total_storms_scored": 5056,
+      "total_storms_scored": 5487,
       "total_matched_storms": 0,
       "match_rate": 0.0,
       "mean_auc": null,
       "median_auc": null,
       "mean_brier": 0.0,
       "pooled_auc": null,
-      "pooled_brier": 2.26e-06,
+      "pooled_brier": 1.77e-05,
       "pooled_bss_vs_causal_climatology": null,
       "pooled_bss_vs_sample_climatology": null
     }
@@ -881,14 +895,14 @@
         "mean_brier": null
       },
       "last_7d": {
-        "n_forecasts": 2,
+        "n_forecasts": 1,
         "mean_auc": null,
         "mean_brier": 0.0
       },
       "last_14d": {
-        "n_forecasts": 32,
+        "n_forecasts": 30,
         "mean_auc": 0.814,
-        "mean_brier": 0.0028
+        "mean_brier": 0.003
       }
     },
     "tier3_ps_only": {
@@ -915,22 +929,22 @@
     },
     "tier1_v3": {
       "last_24h": {
-        "n_forecasts": 12,
+        "n_forecasts": 14,
         "mean_auc": null,
-        "mean_brier": 0.0
+        "mean_brier": 0.0001
       },
       "last_3d": {
-        "n_forecasts": 36,
+        "n_forecasts": 38,
         "mean_auc": null,
         "mean_brier": 0.0
       },
       "last_7d": {
-        "n_forecasts": 63,
+        "n_forecasts": 67,
         "mean_auc": null,
         "mean_brier": 0.0
       },
       "last_14d": {
-        "n_forecasts": 63,
+        "n_forecasts": 67,
         "mean_auc": null,
         "mean_brier": 0.0
       }
