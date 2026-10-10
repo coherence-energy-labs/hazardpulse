@@ -1155,13 +1155,44 @@ def attach_tc1(scored: list[dict[str, object]], adeck_index: dict, adeck_by_stor
         print(f"  TC1: not issued ({type(exc).__name__}: {exc})")
         return 0
     n = 0
+    by_id = {d.storm: d for d in decks}
     for s in nhc:
         rec = got.get(str(s["storm_id"]).lower())
         if rec:
+            try:
+                rec["TC2b"] = tc2b_record(s, rec, by_id.get(str(s["storm_id"]).lower()))
+            except Exception as exc:  # noqa: BLE001 -- TC2b is recorded beside TC1, never in its way
+                rec["TC2b"] = {"status": f"error: {type(exc).__name__}: {exc}"}
             s["tc1"] = rec
             n += 1
     print(f"  TC1: track and intensity for {n} of {len(nhc)} NHC storms, from {len(decks)} season decks")
     return n
+
+
+def tc2b_record(storm: dict[str, object], rec: dict[str, object], deck) -> dict[str, object]:
+    """TC2b (TC1 program amendment 4): TC1's intensity held to the median the storm's own v10.4 shadow curve
+    implies for the same cycle, by the backtest's function and amendment 3's taper. Without a gated curve for that
+    cycle it is TC1, and the record says so."""
+    from hazardpulse.hurricane import tc2
+    tc1_int = {int(k): float(v["vmax_kt"]) for k, v in (rec.get("TC1") or {}).items() if v.get("vmax_kt") is not None}
+    cycle = dt.datetime.fromisoformat(str(rec["cycle"]).replace("Z", ""))
+    an = deck.analysis(cycle) if deck is not None else None
+    v0 = an[2] if an is not None and math.isfinite(an[2]) else None
+    sh = storm.get("ri_v10_4_shadow") or {}
+    curve, why = None, None
+    if sh.get("status") != "ok":
+        why = "no v10.4 shadow"
+    elif sh.get("cycle") != rec["cycle"]:
+        why = f"the v10.4 shadow is for {sh.get('cycle')}, not TC1's cycle"
+    elif not sh.get("gate_ok"):
+        why = "v10.4's gate failed (early guidance missing)"
+    else:
+        curve = {int(k): float(v) for k, v in (sh.get("model_probabilities") or {}).items() if v is not None}
+    out, info = tc2.project(tc1_int, v0, curve, tc2.TC2B_TAPER_END_H)
+    return {"status": "ok", "label": "TC2b", "intensity": {str(k): round(v, 1) for k, v in sorted(out.items())},
+            "moved_tc1": bool(info.get("applied")), "shift_24h_kt": info.get("shift_24h"),
+            "bracket_kt": info.get("bracket"), "v0_kt": v0, "why_unmoved": why or info.get("why"),
+            "curve_from": "ri_v10_4_shadow", "curve_model_version": sh.get("model_version")}
 
 
 def analysis_cycles(records: list[ATCFRecord]) -> list[dt.datetime]:
