@@ -219,7 +219,10 @@ def _write_json(path: Path, payload: dict | list) -> None:
     files are hashed and signed (.gitattributes marks them -text); write_text's newline
     translation made a Windows build rewrite two frozen replays to CRLF (2026-10-03) although
     their content had not changed."""
-    data = (json.dumps(payload, indent=2) + "\n").encode("utf-8")
+    # allow_nan=False: a bare NaN/Infinity is valid to Python and invalid to every browser and to the Worker (it
+    # took /api/v1/laic/* down on 2026-10-04 and /api/v1/live/hurricane on 2026-10-10). These files are hashed, so
+    # nothing is rewritten here: a non-finite number fails the run loudly instead of being published.
+    data = (json.dumps(payload, indent=2, allow_nan=False) + "\n").encode("utf-8")
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.read_bytes() == data:
         return

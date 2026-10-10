@@ -1125,7 +1125,7 @@ def write_outputs(
                 break
         pulse["updated_at"] = now.isoformat() + "Z"
         pulse_path.write_text(
-            json.dumps(pulse, indent=2) + "\n", encoding="utf-8"
+            json.dumps(_sanitize_for_json(pulse), indent=2, allow_nan=False) + "\n", encoding="utf-8"
         )
         print(f"  Updated {pulse_path}")
 
@@ -1448,7 +1448,7 @@ def compute_day_ahead_susceptibility(
     susc_path = DIST / "data" / "live-susceptibility.json"
     susc_path.parent.mkdir(parents=True, exist_ok=True)
     susc_path.write_text(
-        json.dumps(output, indent=2) + "\n", encoding="utf-8"
+        json.dumps(_sanitize_for_json(output), indent=2, allow_nan=False) + "\n", encoding="utf-8"
     )
     print(f"  Wrote {susc_path} ({len(top_cells)} cells)")
 
