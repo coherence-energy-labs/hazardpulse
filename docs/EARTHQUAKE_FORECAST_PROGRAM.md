@@ -606,3 +606,47 @@ What this establishes:
   registration. DEV has now been read for this question, so it cannot decide a variant chosen after seeing it.
   Ledger E3.
 
+
+## 12. Amendment E4 -- GEAR1's weight by how active the cell is (registered 2026-10-10, before any E4 number)
+
+**Why.** S1 gives GEAR1 one global weight (b = 0.257 on log10 G, section 10.1). GEAR1 adds geodetic strain to
+seismicity. That should matter most where our causal catalog says little: a cell that has been quiet, on a fault
+that is straining. Where the catalog is active, C0 already knows. The ledger's E1 item names "a per-region weight"
+as the next experiment. Region classes would put many weights on CHOOSE's 1,512 positives. The one-parameter form
+of the same idea lets the weight change with C0's own activity.
+
+**Candidate S2.** `logit p = a + c z + b g + d z g`, with:
+- `z = logit(p_C0)`, clipped as section 10's `logit`;
+- `g = gear1_log_map(G)`, section 10's served input.
+
+GEAR1's weight is then `b + d z`: it changes with how active C0 says the cell is. It is fitted on CHOOSE by
+maximum Bernoulli likelihood, as S1 was, starting from S1's fitted coefficients with d = 0. S2 nests S1 (d = 0), and
+nothing else changes: the targets, the splits, the scorer and the month-block resamples are section 4's and 10's.
+
+**Control (it stops the run).** S1, refitted on CHOOSE by the same code, reproduces section 10.1's coefficients
+(a 0.30891700168422964, c 0.9442332436931772, b 0.25669330473358914) within 1e-5. Its DEV information gain
+reproduces 2.7362907775152046 within 1e-6. The tolerances allow for a different machine's BLAS; anything larger
+means the data or the code moved.
+
+**Rule (superiority, on DEV, as E1's).** S2 replaces S1 as the served stack iff the 95% month-block interval of
+IG(S2) - IG(S1) on DEV lies entirely above 0. FINAL is a declared second read, reported and never used to decide.
+
+**Prediction of the reason (tests the explanation, not the rule):** d < 0, so GEAR1 counts for less where C0 is
+high. If d >= 0, "strain matters where the catalog is quiet" is not what S2 found, whatever the rule says.
+
+**Reported:**
+- the four coefficients;
+- GEAR1's effective weight `b + d z` at the 10th, 50th and 90th percentiles of z, over all CHOOSE cell-times and
+  over the positive ones;
+- IG, AUC, BSS and `sum p / sum y` for S1 and S2 on CHOOSE, DEV and FINAL;
+- the paired S2 - S1 intervals;
+- AUC among active cells.
+
+**Disclosure.** DEV has decided E1 and E3, and this is its third decision. E4 is a new question: no interaction has
+been fitted or scored before this registration. The rule still takes one more draw from the same months.
+
+**A carried S2** is served by its own amendment. It needs a stack artifact with d, bound to C0's model_version, and
+live parity as in section 10.1. No new live input is needed: the served stack already has p_C0 and G.
+
+**Run.** `python scripts/earthquake_program/gear1_e4.py`, on the published program data, verified by
+`scripts/data_manifest.py --verify` (workflow `research-earthquake-e4.yml`).
