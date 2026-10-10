@@ -225,6 +225,8 @@ def test_the_audit_recomputes_every_shadow_and_catches_each_alteration(scored, s
     assert broken(lambda r: r["storms"][s0][tb.SHADOW_KEY].update(probability_60min=0.123))
     assert broken(lambda r: r["storms"][s0]["v3"].update(probability_60min=0.5))
     assert broken(lambda r: r[tb.SHADOW_KEY]["candidates"]["p60_w"].update(a=1.5))
+    assert broken(lambda r: r["storms"][s0].pop(tb.SHADOW_KEY))                     # a storm left without one
+    assert broken(lambda r: r["storms"][s0][tb.SHADOW_KEY].pop("p60"))              # a bound candidate missing
     assert broken(lambda r: r["storms"][s0]["v3"]["inputs"].update(
         {n: 1e6 for n in ("p_maxllaz", "p_ps_tor", "p_mlcape")}))
 

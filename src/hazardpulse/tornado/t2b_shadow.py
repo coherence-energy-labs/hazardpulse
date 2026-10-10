@@ -215,15 +215,20 @@ def recompute(art: Mapping, payloads_by_sha: Mapping[str, dict], descriptor: Map
                 or d.get("payload_sha256") != c["payload_sha256"]:
             res["mismatched"].append(f"descriptor {k}: not the artifact's calibration or payload")
     rows: dict[str, list[tuple[int, Mapping]]] = {}
+    described = descriptor.get("candidates") or {}
     for i, s in enumerate(storms):
         sh = s.get(SHADOW_KEY)
+        expected = applicable(s)
         if not sh:
+            if any(k in described for k in expected):
+                res["mismatched"].append(f"storm {s.get('storm_id')}: no shadow, though the record's candidates apply")
             continue
         res["storms"] += 1
-        expected = applicable(s)
         for k in CANDIDATES:
             if k in sh and k not in expected:
                 res["mismatched"].append(f"storm {s.get('storm_id')}: carries {k}, which does not apply to it")
+            if k in expected and k in described and k not in sh:
+                res["mismatched"].append(f"storm {s.get('storm_id')}: no {k} shadow, though it applies and was bound")
             if k in sh:
                 rows.setdefault(k, []).append((i, sh[k]))
     for k, items in rows.items():
