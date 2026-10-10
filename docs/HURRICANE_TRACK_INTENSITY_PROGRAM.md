@@ -425,6 +425,39 @@ positive on both: the first two days.
 **The live record (descriptive).** At this program's looks (2026-12-01, 2027-12-01), the live TC2b, TC1 and OFCL
 intensity records are scored by this program's verifier, as amendment 1 does for TC1. A claim needs its own
 registration.
+
+## Amendment 5 -- TC2b+O: the bracket on our best base forecast (2026-10-10, before any TC2b+O number exists)
+
+**Why.** TC2b's bracket is a post-processor: it can hold any intensity forecast to our RI model's median. The best
+base to hold is the one with the lowest registered error.
+- **The base, chosen by a number already registered:** DEV intensity mean error over 24-120 h
+  (`results/hurricane_tc1/dev.json`):
+
+  | TC1+O | OFCL | TC1 |
+  |---|---|---|
+  | **12.599** | 12.627 | 12.832 |
+
+- **TC1+O is ours:** TC1's weighting with NHC's official forecast as one more member. It is issued after the
+  advisory, at t + 3 h 30, as TC1 is.
+
+**TC2b+O is TC1+O's intensity with TC2b's rule, unchanged** (`tc2.project`, amendment 3's taper to 0 by 72 h).
+- **Curves and controls:** amendment 2's (out of fold for DEV, H8 fitted on 2020-2025 for 2026).
+- **V0** is CARQ's intensity at t, as before. Track is TC1+O's.
+
+**The test.** The rule's taper was chosen from DEV on TC1, so neither season is fully clean for a new base. TC2b+O
+must therefore hold on **both**.
+- **Carried iff**, in DEV 2023-2025 AND in 2026, the 24-h difference AND the mean over 24-120 h (TC2b+O minus
+  TC1+O, intensity, AL and EP pooled, this program's verifier) are both below 0 (point estimates).
+- **Reported (95% storm-block, as before):**
+  - TC2b+O against OFCL, HCCA and IVCN in each season;
+  - the RI subset (24 h and 12 h): TC1+O, TC2b+O, OFCL;
+  - shift statistics.
+- **Against OFCL:** this is the comparison that matters to anyone reading the site. It is reported, not claimed.
+  A claim of beating the official forecast needs its own registration at this program's claim level (98.75%).
+
+**A carried TC2b+O** goes live by its own amendment: computed in the live record from TC1+O's intensity and the same
+v10.4 curve. It is shown as our intensity forecast in place of TC2b's, because it is the better base. If it is not
+carried, TC2b stays.
 - **Next:**
   1. TC1 goes live and on the site (its own amendment). Its track is worth showing beside NHC's.
   2. TC2: intensity conditioned on our RI probability. Intensity is where TC1 adds nothing, and RI is where
