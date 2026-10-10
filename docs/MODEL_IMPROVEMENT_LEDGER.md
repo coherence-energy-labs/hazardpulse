@@ -220,6 +220,16 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
    - **Design rule kept:** a bracket may move a forecast only with a curve that knows at least what the forecast
      knew.
    - **Next, ranked low:** any second-day correction is judged only on cycles after its registration.
+3d. **TC1's member set: two public aids it does not use (found 2026-10-10, OBSERVED, not tested).**
+   - **RVCN** is in NHC's public a-decks on every storm from 2023 to 2026 (2023: 42 of 42 decks; 2026: 31 of 31).
+   - **GDMN** appears from 2025: 26 of 33 decks, and 26 of the 31 in 2026.
+   - TC1's members must be early (interpolated) aids that are public in real time. Whether RVCN is an early aid is
+     **unverified**: a late aid would leak the current cycle's models into a forecast issued before they exist.
+   - **The check that decides it:** RVCN's tau-0 position against CARQ, and its 12-h error against TVCN and against
+     a late aid (AVNO), on 2023-2025. An early aid sits on CARQ at tau 0 and has early-aid short-lead errors.
+   - **Ranked low.** TC1 already weights TVCN and HCCA, so a third consensus aid is likely redundant. GDMN has one
+     season of history.
+   - **If pursued:** a member-set amendment, judged on cycles after its registration.
 4. **TC3. Coherence steering (screened-Poisson PV inversion of the GFS analysis) -- ranked LOW, with the
    reason.** The inversion is exact physics for the steering flow, but the information is already in TC1's
    members: each global model integrates its own analysis's steering, and TC1 weights them by how they verify.
