@@ -29,9 +29,15 @@ Recipes (``RECIPES``) -- all train the same four members (v8.1 hyper-parameters)
 * ``hurricane_ri_v8_1_1`` -- v8.1 rows (storm seasons <= 2021) + held-out converged
   calibration on true-clock 2022-2024 rows, as v8.1 is actually served live.
 * ``hurricane_ri_v8_2``   -- true-clock rows (<= 2021) + the same held-out calibration.
+* ``hurricane_ri_v8_3``   -- v8.2's recipe exactly, on the true-clock rows de-duplicated by
+  (storm, issue time): IBTrACS's per-basin files each carry the whole track of a storm that
+  enters the basin, so the v8.2 file counts 178 basin-crossing storms once per basin (5,950
+  byte-identical copies; docs/HURRICANE_RI_V9_PROGRAM.md amendments 13a and 15,
+  scripts/hurricane_ri_v8_3.py).
 
-Which one the scorer serves is decided by scripts/evaluate_hurricane_ri.py at the
-2018/2021 rolling origin, by a rule written down before it ran.
+Which one the scorer serves was decided by scripts/evaluate_hurricane_ri.py at the
+2018/2021 rolling origin (v8.2), then by amendment 15's registered non-inferiority rule
+(results/calibration/hurricane_ri_v8_3.json).
 
 Persistence is JSON with ``float.__repr__`` (lossless for float64) and a provenance block
 binding the artifact to the SHA-256 of every data file it was fitted on (line endings
@@ -60,6 +66,8 @@ RESULTS = PROJECT_ROOT / "results"
 DATASETS = {
     "v8.1": RESULTS / "hurricane_operational_ri_2000_2024_al_sst.jsonl",
     "v8.2": RESULTS / "hurricane_operational_ri_v8_2_2000_2024.jsonl",
+    # the v8.2 file with its byte-identical (storm, issue time) copies removed (scripts/hurricane_ri_v8_3.py data)
+    "v8.3": RESULTS / "hurricane_operational_ri_v8_3_2000_2024.jsonl",
 }
 DEFAULT_TRAINING_DATA = DATASETS["v8.1"]  # the v8.1 pin's data (kept for compatibility)
 
@@ -89,6 +97,15 @@ RECIPES: dict[str, dict[str, Any]] = {
         "dataset": "v8.2",
         "members_years": (2000, 2021),
         "calibration": {"method": "logistic_on_logit_newton", "dataset": "v8.2", "years": (2022, 2024)},
+        "impute_live": [],
+        "served": True,
+    },
+    # Amendment 15: v8.2's recipe exactly, on the de-duplicated rows (a test keeps the two recipes identical
+    # apart from the dataset).
+    "hurricane_ri_v8_3": {
+        "dataset": "v8.3",
+        "members_years": (2000, 2021),
+        "calibration": {"method": "logistic_on_logit_newton", "dataset": "v8.3", "years": (2022, 2024)},
         "impute_live": [],
         "served": True,
     },

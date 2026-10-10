@@ -21,6 +21,7 @@ five places, and each copy had drifted to a different superseded model (0.894, 0
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import math
 import re
@@ -82,12 +83,20 @@ EARTHQUAKE_E1 = "results/earthquake_program/gear1_e1.json"
 HURRICANE_SERVED = "results/models/hurricane_ri_stack_v1.json"
 HURRICANE_FINAL = "results/calibration/hurricane_ri_stack_final.json"
 HURRICANE_ADVERSARY = "results/calibration/hurricane_ri_stack_adversary.json"
-# the model served outside the NHC basins, and its own temporal hold-out (scripts/evaluate_hurricane_ri.py)
+# v8.2, the model served outside the NHC basins until amendment 15, and its own temporal hold-out
+# (scripts/evaluate_hurricane_ri.py)
 HURRICANE_V82_EVALUATION = "results/calibration/hurricane_ri_evaluation.json"
 # what that hold-out was a test OF: its basins, its inputs, the served artifact's calibration, and the
 # served model on West Pacific cycles with a single JTWC warning's inputs (scripts/hurricane_v82_test_composition.py)
 HURRICANE_V82_COMPOSITION = "results/calibration/hurricane_ri_v8_2_test_composition.json"
+# v8.2's artifact: published until amendment 15; since then J1's base and comparator, and the model the NHC
+# program's claims and same-cycle scores name
 HURRICANE_V82_SERVED = "results/models/hurricane_ri_v8_2.json"
+# the live scorer: which HazardPulse model it serves outside the NHC basins (SERVED_MODEL_VERSION) and which model
+# it feeds J1 (J1_BASE_MODEL_VERSION), read from its source. A model that replaced v8.2 by a registered rule
+# carries its decision in results/calibration/<version>.json and its test's composition in
+# results/calibration/<version>_test_composition.json (amendment 15: hurricane_ri_v8_3).
+HURRICANE_SCORER = "scripts/fetch_and_score.py"
 HURRICANE_PROGRAM = "docs/HURRICANE_RI_PROGRAM.md"
 # our own RI models (docs/HURRICANE_RI_V9_PROGRAM.md): the prospective test's running record, the one file that
 # names which of them the site shows, and v9.1 (amendment 1), whose claim would switch what is published
@@ -591,22 +600,7 @@ def hurricane_evidence(root: Path = ROOT) -> dict | None:
     adv = _read(root, HURRICANE_ADVERSARY) or {}
     cases = final.get("final_cases") or {}
     v82 = (((final.get("results") or {}).get("v82_subset") or {}).get("forecasts") or {}).get("v8_2") or {}
-    evaluation = _read(root, HURRICANE_V82_EVALUATION) or {}
-    v82_heldout = (evaluation.get("results") or {}).get("C_v8_2_heldout_newton")
-    origin = evaluation.get("origin") or {}
-    other_basins = None
-    if v82_heldout and v82_version:
-        test_years = origin.get("test") or ["?", "?"]
-        other_basins = {
-            "model": v82_version, "label": v82_label,
-            "test": {"period": f"{test_years[0]}-{test_years[1]} cycles from every basin, held out from the "
-                               "recipe's fit",
-                     "when": f"{test_years[0]}-{test_years[1]}",
-                     "n": int(v82_heldout.get("n") or 0), "auc": _finite(v82_heldout.get("auc")),
-                     "auc_ci": _ci((v82_heldout.get("ci95") or {}).get("auc")),
-                     "bss": _finite(v82_heldout.get("bss_vs_climatology"))},
-            "composition": _v82_composition(root, evaluation, v82_heldout),
-        }
+    other_basins = other_basins_evidence(root, v82_version, v82_label)
     return {
         "hazard": "hurricane", "program": HURRICANE_PROGRAM, "file": HURRICANE_SERVED,
         "model_version": version, "candidate": choice,
@@ -623,7 +617,9 @@ def hurricane_evidence(root: Path = ROOT) -> dict | None:
         },
         "chosen_on_seasons": (final.get("fit") or {}).get("seasons"),
         "fallback_cycles": (((final.get("patterns_used") or {}).get(choice)) or {}).get("fallback_cycles"),
-        "v8_2_same_cases": {"auc": _finite(v82.get("auc")), "bss": _finite(v82.get("bss"))} if v82 else None,
+        # v8.2's scores in the NHC program's final test: named as v8.2 whatever is published now
+        "v8_2_same_cases": ({"auc": _finite(v82.get("auc")), "bss": _finite(v82.get("bss")), "label": v82_label}
+                            if v82 else None),
         "claims": claims,
         "adversary": {"verdict": adv.get("verdict"), "statement": adv.get("surviving_statement")} if adv else None,
         "other_basins": other_basins,
@@ -639,6 +635,157 @@ HURRICANE_BASIN_NAMES = {"WP": "West Pacific", "SI": "South Indian", "NA": "Atla
                          "SP": "South Pacific", "NI": "North Indian", "SA": "South Atlantic",
                          # live (ATCF) codes of the JTWC basins, and a results file's merged southern basin
                          "IO": "North Indian", "SH": "Southern Hemisphere"}
+
+
+def hurricane_scorer_models(root: Path = ROOT) -> dict[str, str]:
+    """``{"served": ..., "j1_base": ...}``: the HazardPulse model the live scorer serves outside the NHC basins and
+    the model it feeds J1, read from the scorer's own constants. A scorer from before amendment 15 has no J1 base
+    constant: it fed J1 the model it served. Empty when the scorer is not in ``root``."""
+    c = _script_constants(root, HURRICANE_SCORER, ("SERVED_MODEL_VERSION", "J1_BASE_MODEL_VERSION"))
+    out = {}
+    if c.get("SERVED_MODEL_VERSION"):
+        out["served"] = str(c["SERVED_MODEL_VERSION"])
+        out["j1_base"] = str(c.get("J1_BASE_MODEL_VERSION") or c["SERVED_MODEL_VERSION"])
+    return out
+
+
+def _lf_sha256(path: Path) -> str:
+    """sha256 of a text file's bytes with CRLF read as LF: the bytes git stores, on every checkout."""
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def other_basins_evidence(root: Path, v82_version: str | None, v82_label: str | None) -> dict | None:
+    """The HazardPulse model published outside the NHC basins, and what its test was a test OF.
+
+    The scorer names the model (``hurricane_scorer_models``). v8.2 (or no scorer in ``root``): its METHOD's
+    temporal hold-out on 2022-2024 cycles from every basin (``_v82_other_basins``). A model that replaced v8.2 by
+    a registered rule (amendment 15: v8.3): its own registered test, bound to the served artifact
+    (``_replacement_other_basins``)."""
+    served = hurricane_scorer_models(root).get("served")
+    if served is None or served == v82_version:
+        return _v82_other_basins(root, v82_version, v82_label)
+    return _replacement_other_basins(root, served, v82_version)
+
+
+def _v82_other_basins(root: Path, v82_version: str | None, v82_label: str | None) -> dict | None:
+    evaluation = _read(root, HURRICANE_V82_EVALUATION) or {}
+    v82_heldout = (evaluation.get("results") or {}).get("C_v8_2_heldout_newton")
+    if not (v82_heldout and v82_version):
+        return None
+    test_years = (evaluation.get("origin") or {}).get("test") or ["?", "?"]
+    return {
+        "model": v82_version, "label": v82_label, "subject": "method", "scope": "every basin",
+        "test": {"period": f"{test_years[0]}-{test_years[1]} cycles from every basin, held out from the "
+                           "recipe's fit",
+                 "when": f"{test_years[0]}-{test_years[1]}",
+                 "n": int(v82_heldout.get("n") or 0), "auc": _finite(v82_heldout.get("auc")),
+                 "auc_ci": _ci((v82_heldout.get("ci95") or {}).get("auc")),
+                 "bss": _finite(v82_heldout.get("bss_vs_climatology"))},
+        "composition": _v82_composition(root, evaluation, v82_heldout),
+    }
+
+
+def _replacement_other_basins(root: Path, served: str, replaced: str | None) -> dict:
+    """A served model that replaced v8.2 by a registered rule: its decision file must have adopted exactly the
+    served artifact (version and stored-bytes sha256), with every control passed and the rule met, and must have
+    replaced the v8.2 this repository holds. Its test is the registered one: the published artifact itself on
+    cycles never used to fit it, against the model it replaced."""
+    art_rel, res_rel = f"results/models/{served}.json", f"results/calibration/{served}.json"
+    art, res = _read(root, art_rel), _read(root, res_rel)
+    if art is None or res is None:
+        raise EvidenceError(f"the scorer serves {served}, but {art_rel} or its decision {res_rel} is not here")
+    if art.get("model_version") != served:
+        raise EvidenceError(f"{art_rel} holds {art.get('model_version')!r}, the scorer serves {served!r}")
+    cand, dec, rule = res.get("candidate") or {}, res.get("decision") or {}, res.get("rule") or {}
+    if dec.get("serve") != served or dec.get("adopt") is not True or rule.get("met") is not True:
+        raise EvidenceError(f"{res_rel} does not adopt {served} by its rule (decision {dec}, rule met "
+                            f"{rule.get('met')!r})")
+    if cand.get("version") != served or cand.get("artifact_sha256") != _lf_sha256(root / art_rel):
+        raise EvidenceError(f"{res_rel} scored another artifact than the served {art_rel}")
+    if not (res.get("controls") or {}).get("all_passed"):
+        raise EvidenceError(f"{res_rel}: its controls did not all pass")
+    was = (res.get("comparator") or {}).get("version")
+    if replaced is None or was != replaced:
+        raise EvidenceError(f"{res_rel} replaced {was!r}; the model this repository published before is {replaced!r}")
+    label, was_label = version_label(served), version_label(was)
+    k, kw = label.replace(".", "_"), was_label.replace(".", "_")
+    reg = res.get("registered") or {}
+    m, w, d = reg.get(k) or {}, reg.get(kw) or {}, reg.get(f"{k}_minus_{kw}") or {}
+    t = res.get("test") or {}
+    seasons = sorted(int(s) for s in t.get("storm_first_seasons") or [])
+    if not seasons or int(t.get("n") or -1) != int(reg.get("n") or -2) or int(m.get("n") or -3) != int(reg.get("n") or -2):
+        raise EvidenceError(f"{res_rel}: its test and its registered numbers disagree")
+    if _finite(rule.get("upper")) != _finite((d.get("d_ll_ci") or [None, None])[1]):
+        raise EvidenceError(f"{res_rel}: the rule's upper bound is not the registered interval's")
+    when = f"{seasons[0]}-{seasons[-1]}"
+    program = str(res.get("program") or "")
+    amendment = re.search(r"\bamendment (\d+\w*)", program)
+    return {
+        "model": served, "label": label, "subject": "model", "scope": "the JTWC basins",
+        "regions": list(t.get("decision_basins") or []),
+        "test": {"period": f"{when} cycles in the JTWC basins, none used to fit it", "when": when,
+                 "n": int(t["n"]), "events": int(t.get("events") or 0), "storms": int(t.get("storms") or 0),
+                 "auc": _finite(m.get("auc")), "auc_ci": None, "bss": None,
+                 "log_loss": _finite(m.get("log_loss")), "brier": _finite(m.get("brier"))},
+        "replaced": {"model": was, "label": was_label, "log_loss": _finite(w.get("log_loss")),
+                     "brier": _finite(w.get("brier")), "auc": _finite(w.get("auc"))},
+        "vs_replaced": {"d_ll": _finite(d.get("d_ll")), "d_ll_ci": _ci(d.get("d_ll_ci")),
+                        "d_brier": _finite(d.get("d_brier")), "d_brier_ci": _ci(d.get("d_brier_ci"))},
+        "rule": {"margin": _finite(rule.get("margin")), "upper": _finite(rule.get("upper")), "met": True},
+        "program": HURRICANE_V9_PROGRAM, "amendment": amendment.group(1) if amendment else None,
+        "results": res_rel, "prereg_tag": res.get("prereg_tag"),
+        "composition": _replacement_composition(root, served, res, art, seasons),
+    }
+
+
+def _replacement_composition(root: Path, served: str, res: dict, art: dict, seasons: list[int]) -> dict | None:
+    """What a replacement model's registered test was a test OF (``hurricane_v82_test_composition.py --model``):
+    refused unless it describes that test -- its cycles, the candidate's AUC, the rows' sha256 and the model."""
+    rel = f"results/calibration/{served}_test_composition.json"
+    comp = _read(root, rel)
+    if comp is None:
+        return None
+    ev, t = comp.get("evaluation") or {}, res.get("test") or {}
+    k = version_label(served).replace(".", "_")
+    auc = _finite(((res.get("registered") or {}).get(k) or {}).get("auc"))
+    if (int(ev.get("n") or -1) != int(t.get("n") or 0) or _finite(ev.get("auc")) != auc
+            or (comp.get("dataset") or {}).get("sha256") != t.get("rows_sha256")
+            or (comp.get("served_artifact") or {}).get("model_version") != served):
+        raise EvidenceError(f"{rel} does not describe the registered test in results/calibration/{served}.json")
+    basins = comp.get("by_basin") or {}
+    if sum(int(b.get("n") or 0) for b in basins.values()) != int(t.get("n") or 0):
+        raise EvidenceError(f"{rel}: its basins do not add up to the test's cycles")
+    cal = art.get("calibration") or {}
+    fitted = [int(y) for y in (cal.get("fitted_on") or {}).get("storm_years") or []]
+    on_test = bool(fitted) and fitted[0] <= seasons[-1] and seasons[0] <= fitted[-1]
+    return _composition_view(comp, on_test)
+
+
+def _composition_view(comp: dict, on_test: bool | None) -> dict:
+    """A test-composition file as the pages read it."""
+    basins = comp.get("by_basin") or {}
+    jt = comp.get("single_jtwc_warning") or {}
+    lf = comp.get("late_best_track_fix") or {}
+    return {
+        "by_basin": [{"basin": b, "name": HURRICANE_BASIN_NAMES.get(b, b), "n": int(v.get("n") or 0),
+                      "events": int(v.get("events") or 0)} for b, v in basins.items()],
+        "inputs": "best track",
+        "served_calibration_fitted_on_test_cases": on_test,
+        "single_jtwc_warning": {
+            "n_inputs": int(jt.get("n_selected_inputs") or 0),
+            "n_missing": len(jt.get("inputs_missing_live") or []),
+            "n_cycles": int(jt.get("west_pacific_test_cycles") or 0),
+            "log_loss": _finite(jt.get("log_loss_single_warning_inputs")),
+            "log_loss_full_inputs": _finite(jt.get("log_loss_full_inputs")),
+            "log_loss_climatology": _finite(jt.get("log_loss_climatology")),
+        } if jt else None,
+        # since 2026-10-05: RAL's history with the warning as the analysis (its cycle's fix not yet published)
+        "late_best_track_fix": {
+            "inputs": sorted(lf.get("inputs_missing_live") or []),
+            "n_missing": len(lf.get("inputs_missing_live") or []),
+            "log_loss": _finite(lf.get("log_loss")),
+        } if lf else None,
+    }
 
 
 def _v82_composition(root: Path, evaluation: dict, heldout: dict) -> dict | None:
@@ -660,28 +807,7 @@ def _v82_composition(root: Path, evaluation: dict, heldout: dict) -> dict | None
     cal = served.get("calibration") or {}
     on_test = (list((cal.get("fitted_on") or {}).get("storm_years") or []) == list(comp.get("test_storm_years") or [None])
                and int(cal.get("n") or -1) == int(heldout.get("n") or 0))
-    jt = comp.get("single_jtwc_warning") or {}
-    lf = comp.get("late_best_track_fix") or {}
-    return {
-        "by_basin": [{"basin": b, "name": HURRICANE_BASIN_NAMES.get(b, b), "n": int(v.get("n") or 0),
-                      "events": int(v.get("events") or 0)} for b, v in basins.items()],
-        "inputs": "best track",
-        "served_calibration_fitted_on_test_cases": bool(on_test) if served else None,
-        "single_jtwc_warning": {
-            "n_inputs": int(jt.get("n_selected_inputs") or 0),
-            "n_missing": len(jt.get("inputs_missing_live") or []),
-            "n_cycles": int(jt.get("west_pacific_test_cycles") or 0),
-            "log_loss": _finite(jt.get("log_loss_single_warning_inputs")),
-            "log_loss_full_inputs": _finite(jt.get("log_loss_full_inputs")),
-            "log_loss_climatology": _finite(jt.get("log_loss_climatology")),
-        } if jt else None,
-        # since 2026-10-05: RAL's history with the warning as the analysis (its cycle's fix not yet published)
-        "late_best_track_fix": {
-            "inputs": sorted(lf.get("inputs_missing_live") or []),
-            "n_missing": len(lf.get("inputs_missing_live") or []),
-            "log_loss": _finite(lf.get("log_loss")),
-        } if lf else None,
-    }
+    return _composition_view(comp, bool(on_test) if served else None)
 
 
 def _ours_vs_all(root: Path, dev: dict, prov: dict, label: str) -> dict | None:
@@ -910,7 +1036,38 @@ def tc1_hurricane(root: Path = ROOT) -> dict | None:
                      "tc1o_vs_ofcl": _tc1_diff(k["claims"].get("TC1+O-OFCL") or {}),
                      "season_2026_vs_ofcl": _tc1_diff(r26.get("TC1-OFCL") or {}),
                      "season_2026_tc1o_vs_ofcl": _tc1_diff(r26.get("TC1+O-OFCL") or {})}
+    out["tc2b"] = tc2b_hurricane(root)
     return out
+
+
+TC2_DIR = "results/hurricane_tc2"
+
+
+def tc2b_hurricane(root: Path = ROOT) -> dict | None:
+    """TC2b (TC1 program amendments 2-4): TC1's intensity held to the median our RI model's 24-h curve implies. Its
+    registered test (2026) and the DEV result of the same first-day rule, read from its results files; None when
+    either is absent. ``ri_subset`` values are ``[mean error, cycles]`` as the test wrote them."""
+    s26 = _read(root, f"{TC2_DIR}/season_2026.json")
+    dev = _read(root, f"{TC2_DIR}/dev.json")
+    if not s26 or not dev:
+        return None
+
+    def ri(doc, products):
+        r = (doc.get("ri_subset") or {}).get("24") or {}
+        return {p: _finite((r.get(p) or [None])[0]) for p in products}, (r.get("TC1") or [None, None])[1]
+
+    ri26, n26 = ri(s26, ("TC1", "TC2b", "OFCL", "HCCA"))
+    ridev, ndev = ri(dev, ("TC1", "TC2", "OFCL", "HCCA"))
+    d24 = ((dev.get("TC2-TC1") or {}).get("per_lead") or {}).get("24") or {}
+    dev_seasons = [int(x) for x in dev.get("seasons") or []]
+    test_season = sorted({int(str(s)[-4:]) for s in s26.get("storms") or [] if str(s)[-4:].isdigit()})
+    return {"label": "TC2b", "program": TC1_PROGRAM, "prereg_tag": s26.get("prereg_tag"),
+            "dev_seasons": dev_seasons, "test_season": test_season[0] if len(test_season) == 1 else None,
+            "carried": s26.get("carried_tc2b") == "TC2b", "files": [f"{TC2_DIR}/dev.json", f"{TC2_DIR}/season_2026.json"],
+            "season_2026_vs_tc1": _tc1_diff(s26.get("TC2b-TC1") or {}),
+            "dev_24h_vs_tc1": {"d": _finite(d24.get("d")), "ci": _ci(d24.get("ci"))},
+            "dev_carried": dev.get("carried") == "TC2",
+            "ri_2026_24h": ri26, "ri_2026_cycles": n26, "ri_dev_24h": ridev, "ri_dev_cycles": ndev}
 
 
 def ours_hurricane(root: Path = ROOT) -> dict | None:
@@ -1095,14 +1252,16 @@ def _span_of(keys: Any) -> str | None:
 
 
 def j1_hurricane(root: Path = ROOT) -> dict | None:
-    """J1 (docs/HURRICANE_RI_V9_PROGRAM.md, amendments 13, 13a, 13b and 14): our RI model for the West Pacific,
-    North Indian and Southern Hemisphere, recorded live beside the published v8.2 and never instead of it.
+    """J1 (docs/HURRICANE_RI_V9_PROGRAM.md, amendments 13, 13a, 13b, 14 and 15): our RI model for the West Pacific,
+    North Indian and Southern Hemisphere, recorded live beside the published number (v8.2 until amendment 15,
+    v8.3 since) and never instead of it; built on v8.2 and tested against it.
 
     * identity, label and live basins: the artifact (``hazardpulse.hurricane.ri_j1.load``), whose label must be the
       one its live records are written under, and the key of those records from the same library;
     * the registered result: ``HURRICANE_J1_RESULTS``, which must be the result the artifact's provenance records
       (log loss, Brier, AUC, cycles, events, the bar's numbers and the interval, bit for bit), must have carried
-      this label, and must have been measured against the v8.2 that is published;
+      this label, and must have been measured against the v8.2 the scorer feeds it (``hurricane_scorer_models``:
+      its J1 base, by version and by the stored-bytes sha256 J1 was exported with);
     * where it is shown (amendment 14): the library's scope and its per-region development numbers;
     * the rule that would publish it: the prospective scorer's own constants (looks, level), and its running
       record when the scorer has written one.
@@ -1123,11 +1282,22 @@ def j1_hurricane(root: Path = ROOT) -> dict | None:
     if res.get("carried") != label:
         raise EvidenceError(f"{HURRICANE_J1_RESULTS} carried {res.get('carried')!r}, not {label!r}")
     v82 = _read(root, HURRICANE_V82_SERVED) or {}
-    against = (art.get("v82_dependency") or {}).get("model_version")
-    if against != v82.get("model_version"):
-        raise EvidenceError(f"{rel} is built on {against!r}; the published other-basins model is "
-                            f"{v82.get('model_version')!r}")
+    dep = art.get("v82_dependency") or {}
+    against = dep.get("model_version")
+    # J1 must be fed (and compared against) the model it was exported with: the scorer's J1 base (amendment 15),
+    # or -- a scorer from before it, or none in ``root`` -- the v8.2 that was published then
+    scorer = hurricane_scorer_models(root)
+    base = scorer.get("j1_base") or v82.get("model_version")
+    if against != base or against != v82.get("model_version"):
+        raise EvidenceError(f"{rel} is built on {against!r}; the scorer feeds it {base!r} and "
+                            f"{HURRICANE_V82_SERVED} holds {v82.get('model_version')!r}")
+    if dep.get("artifact_sha256") and (root / HURRICANE_V82_SERVED).exists() \
+            and dep["artifact_sha256"] != _lf_sha256(root / HURRICANE_V82_SERVED):
+        raise EvidenceError(f"{rel} was exported against another {HURRICANE_V82_SERVED} (sha256 "
+                            f"{str(dep['artifact_sha256'])[:12]}...)")
     against_label = version_label(against)
+    published = scorer.get("served") or against
+    published_label = version_label(published)
     prov = art.get("provenance") or {}
     period, pdev = _dev_block(prov)
     dev = res.get("development") or {}
@@ -1186,6 +1356,8 @@ def j1_hurricane(root: Path = ROOT) -> dict | None:
         "amendment": (m.group(1) if (m := re.search(r"amendments? ([\w, ]+)\)", str(res.get("program") or "")))
                       else None),
         "against": against_label, "against_version": against,
+        # the number published beside J1: v8.2 until amendment 15, v8.3 since (J1's comparator stays v8.2)
+        "published": published_label, "published_version": published,
         "trained": prov.get("trained"), "seeds": len(prov.get("seeds") or []),
         "inputs": {"total": len(names), "against": sum(n in v82_inputs for n in names),
                    "ir": sum(n in ir_features.IR_NAMES for n in names),
@@ -1209,7 +1381,7 @@ def j1_hurricane(root: Path = ROOT) -> dict | None:
 
 
 def j1_shown_shadow(storm: dict, j1: dict | None) -> dict | None:
-    """The J1 forecast a storm card shows beside the published v8.2, or None. Only from bound evidence (``j1``);
+    """The J1 forecast a storm card shows beside the published number, or None. Only from bound evidence (``j1``);
     only for a storm whose region (``ri_j1.storm_region``: live IO is NI, SH is SI west of 135 E and SP east of
     it) is in the scope -- J1 is recorded on every JTWC storm but shown only there (amendment 14); only a record
     the scorer marked "ok", with a probability, and made by the bound artifact (its version)."""

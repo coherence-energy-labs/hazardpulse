@@ -370,7 +370,7 @@ def test_training_data_digest_is_line_ending_invariant(tmp_path):
 # The committed artifact
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("version", ["hurricane_ri_v8_2", "hurricane_ri_v8_1"])
+@pytest.mark.parametrize("version", ["hurricane_ri_v8_3", "hurricane_ri_v8_2", "hurricane_ri_v8_1"])
 def test_committed_artifacts_are_bound_to_their_data_config_and_trainer(version):
     model = ri_model.load_model(ri_model.ARTIFACTS[version])  # raises unless every data sha + config match
     prov = model["provenance"]
@@ -393,6 +393,45 @@ def test_committed_artifacts_are_bound_to_their_data_config_and_trainer(version)
         assert cal["fitted_on"]["storm_years"] == list(recipe["calibration"]["years"])
         assert cal["fitted_on"]["storm_years"][0] > recipe["members_years"][1], "calibration rows must be held out"
         assert cal["n_events"] >= 100
+        for role, years in (("members", recipe["members_years"]), ("calibration", recipe["calibration"]["years"])):
+            spec = prov["data"][role]
+            assert spec["path"] == ri_model._rel(ri_model.DATASETS[recipe["dataset"]])
+            assert spec["sha256"] == ri_model.sha256_file(ri_model.DATASETS[recipe["dataset"]])
+            assert spec["storm_years"] == list(years)
+
+
+def _load_script(name: str):
+    sys.path.insert(0, str(REPO / "scripts"))
+    spec = importlib.util.spec_from_file_location(name, REPO / "scripts" / f"{name}.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_v8_3_is_v8_2s_recipe_on_exactly_the_deduplicated_v8_2_rows():
+    """Amendment 15: v8.3 = v8.2's recipe with only the dataset changed, and that dataset is the frozen v8.2 file
+    with exactly its 5,950 byte-identical (storm, issue time) copies removed by amendment 13a's rule -- every kept
+    line byte-identical, in the frozen order."""
+    v82, v83 = ri_model.RECIPES["hurricane_ri_v8_2"], ri_model.RECIPES["hurricane_ri_v8_3"]
+    assert (v82["dataset"], v83["dataset"]) == ("v8.2", "v8.3")
+    assert (v82["calibration"]["dataset"], v83["calibration"]["dataset"]) == ("v8.2", "v8.3")
+    strip = lambda r: {**{k: v for k, v in r.items() if k != "dataset"},  # noqa: E731
+                       "calibration": {k: v for k, v in r["calibration"].items() if k != "dataset"}}
+    assert strip(v82) == strip(v83)
+
+    v8_3 = _load_script("hurricane_ri_v8_3")
+    d = v8_3.dedupe_frozen()
+    assert (d["frozen_rows"], d["removed"], d["kept_rows"]) == (69_722, 5_950, 63_772)
+    assert ri_model.DATASETS["v8.3"].read_bytes().replace(b"\r\n", b"\n") == d["kept_bytes"]
+    assert ri_model.DATASETS["v8.2"] != ri_model.DATASETS["v8.3"]
+
+
+def test_the_dedupe_refuses_two_different_rows_under_one_key():
+    j1 = _load_script("hurricane_ri_j1")
+    a = {"storm_id": "S", "issue_time": "2020-01-01 00:00:00", "ri_label_30kt": 0}
+    assert j1.dedupe([a, dict(a)]) == ([a], 1)
+    with pytest.raises(SystemExit, match="two different rows"):
+        j1.dedupe([a, dict(a, ri_label_30kt=1)])
 
 
 # ---------------------------------------------------------------------------
@@ -524,14 +563,32 @@ def test_main_scores_active_storms_without_training(monkeypatch):
     assert elapsed < 20.0, f"scoring took {elapsed:.1f}s"
 
 
-def test_the_scorer_serves_what_the_preregistered_evaluation_selected():
+def test_the_scorer_serves_what_the_preregistered_evaluations_selected():
+    """The rolling-origin evaluation chose v8.2 on the v8.2 rows; amendment 15's registered rule replaced it with
+    v8.3, v8.2's recipe on the de-duplicated rows. The scorer serves exactly the artifact that decision scored."""
+    from hazardpulse.hurricane import ri_j1
+
     fas = _load_scorer()
     report = json.loads((REPO / "results" / "calibration" / "hurricane_ri_evaluation.json").read_text(encoding="utf-8"))
-    assert report["decision"]["serve"] == fas.SERVED_MODEL_VERSION
+    assert report["decision"]["serve"] == "hurricane_ri_v8_2"
     assert report["data_sha256"]["v8.2"] == ri_model.sha256_file(ri_model.DATASETS["v8.2"]), \
         "the evaluation was run on a different v8.2 training set; re-run scripts/evaluate_hurricane_ri.py"
+    v82 = ri_model.load_model(ri_model.ARTIFACTS["hurricane_ri_v8_2"])
+    assert v82["provenance"]["data"]["members"]["sha256"] == report["data_sha256"]["v8.2"]
+
+    a15 = json.loads((REPO / "results" / "calibration" / "hurricane_ri_v8_3.json").read_text(encoding="utf-8"))
+    assert a15["prereg_tag"] == "prereg-hurricane-ri-amend15" and a15["controls"]["all_passed"] is True
+    assert a15["comparator"]["version"] == report["decision"]["serve"], "amendment 15 replaced what was served"
+    assert a15["comparator"]["artifact_sha256"] == ri_j1.lf_sha256(ri_model.ARTIFACTS["hurricane_ri_v8_2"])
+    rule = a15["rule"]
+    assert rule["margin"] == 0.002 and rule["upper"] == a15["registered"]["v8_3_minus_v8_2"]["d_ll_ci"][1]
+    assert rule["met"] is (rule["upper"] <= rule["margin"]) is True
+    assert a15["decision"] == {"adopt": True, "serve": fas.SERVED_MODEL_VERSION}
+    assert a15["candidate"]["artifact_sha256"] == ri_j1.lf_sha256(fas.MODEL_ARTIFACT), \
+        "the served artifact is not the one amendment 15 scored"
     served = ri_model.load_model(fas.MODEL_ARTIFACT)
-    assert served["provenance"]["data"]["members"]["sha256"] == report["data_sha256"]["v8.2"]
+    assert served["provenance"]["data"]["members"]["sha256"] == a15["data"]["deduplicated"]["sha256"]
+    assert a15["data"]["deduplicated"]["sha256"] == ri_model.sha256_file(ri_model.DATASETS["v8.3"])
     model = fas.load_serving_model()
     assert model["model_version"] == fas.SERVED_MODEL_VERSION
 
@@ -573,10 +630,10 @@ def test_a_trust_calibrator_fitted_for_another_model_is_not_applied(monkeypatch)
     monkeypatch.setattr(trust, "load_forecaster", lambda *a, **k: Foreign())
     monkeypatch.setattr(trust, "enrich_cells", lambda *a, **k: calls.append(a))
     test_main_scores_active_storms_without_training(monkeypatch)
-    assert calls == [], "a v8.1 calibrator must not re-map, band or sign v8.2 probabilities"
+    assert calls == [], "a v8.1 calibrator must not re-map, band or sign the served model's probabilities"
 
     class Own:
-        model_version = "hurricane_ri_v8_2"
+        model_version = _load_scorer().SERVED_MODEL_VERSION
 
     monkeypatch.setattr(trust, "load_forecaster", lambda *a, **k: Own())
     test_main_scores_active_storms_without_training(monkeypatch)

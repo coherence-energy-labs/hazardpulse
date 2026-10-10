@@ -66,21 +66,44 @@ from hazardpulse.hurricane import ri_v9_features as v9fx  # noqa: E402
 DIST = Path(__file__).resolve().parents[1] / "dist"
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 HISTORICAL_DATA = RESULTS / "hurricane_operational_ri_2000_2024_al_sst.jsonl"
-# The served model, as chosen by scripts/evaluate_hurricane_ri.py's pre-registered rule
-# (results/calibration/hurricane_ri_evaluation.json; a test keeps the two in agreement).
-SERVED_MODEL_VERSION = "hurricane_ri_v8_2"
+# The served model. scripts/evaluate_hurricane_ri.py's pre-registered rule chose v8.2
+# (results/calibration/hurricane_ri_evaluation.json); amendment 15's registered non-inferiority rule
+# replaced it with v8.3, v8.2's recipe on the de-duplicated rows (docs/HURRICANE_RI_V9_PROGRAM.md,
+# results/calibration/hurricane_ri_v8_3.json; a test keeps the scorer and both decisions in agreement).
+SERVED_MODEL_VERSION = "hurricane_ri_v8_3"
 MODEL_ARTIFACT = ri_model.ARTIFACTS[SERVED_MODEL_VERSION]
+# J1 is built on v8.2, whatever is published: its first input is v8.2's ensemble (``v82_logit``, what it was
+# trained on) and its registered comparator is v8.2 (amendments 13b, 14 and 15). It reads them from v8.2's own
+# artifact, scoring the same live cases -- never from the served model's numbers.
+J1_BASE_MODEL_VERSION = "hurricane_ri_v8_2"
+J1_BASE_ARTIFACT = ri_model.ARTIFACTS[J1_BASE_MODEL_VERSION]
 PRIMARY_DOMAIN = "https://hazardpulse.com"
 
 # NHC basins (AL/EP/CP) are served NOAA's own RI guidance, as the pre-registered program
 # chose it (docs/HURRICANE_RI_PROGRAM.md, scripts/hurricane_ri_stack.py; the artifact names the
 # candidate -- since 2026-10-02 A: DTOPS as issued, SHIPS-RII where DTOPS is missing), read from
-# the SAME cycle's SHIPS text. v8.2 serves everything else: the JTWC basins (no public RI
-# guidance) and NHC cycles whose SHIPS text is absent, unreadable, or lacks the needed aids.
-# Every scored storm says which (``ri_source``) and carries the inputs it used.
+# the SAME cycle's SHIPS text. The served HazardPulse model (SERVED_MODEL_VERSION) serves everything
+# else: the JTWC basins (no public RI guidance) and NHC cycles whose SHIPS text is absent, unreadable,
+# or lacks the needed aids. Every scored storm says which (``ri_source``) and carries the inputs it used.
 STACK_ARTIFACT = ri_stack.ARTIFACT_PATH
 RI_SOURCE_STACK = "noaa_aid_stack"
-RI_SOURCE_V82 = "v8.2"
+
+
+def model_label(version: str) -> str:
+    """``hurricane_ri_v8_3`` -> ``v8.3`` (``hurricane_ri_v8_1_1`` -> ``v8.1.1``): the ``ri_source`` and label of a
+    number that HazardPulse model made."""
+    m = re.fullmatch(r"hurricane_ri_v(\d+(?:_\d+)+)", str(version))
+    if m is None:
+        raise ValueError(f"{version!r} is not a hurricane_ri_v<major>_<minor> model version")
+    return "v" + m.group(1).replace("_", ".")
+
+
+# ``ri_source`` and the label of a number the served HazardPulse model made: "v8.3", "HazardPulse v8.3". Records
+# made before amendment 15 carry "v8.2", the model that made them.
+SERVED_LABEL = model_label(SERVED_MODEL_VERSION)
+RI_SOURCE_SERVED = SERVED_LABEL
+# the key under which a JTWC storm's record keeps v8.2's number, J1's comparator, beside the published one
+J1_BASE_KEY = "v8_2"
 # What each pre-registered candidate serves, in words for the site (ri_stack.CANDIDATES).
 STACK_PUBLIC = {
     "A": "DTOPS as issued, and SHIPS-RII where DTOPS is missing",
@@ -94,9 +117,9 @@ STACK_PUBLIC = {
 
 def ri_sources_note(stack: dict[str, object] | None) -> str:
     v82_text = ("West Pacific, Indian Ocean, Southern Hemisphere (no public RI guidance) and any NHC cycle "
-                "without a usable SHIPS text: HazardPulse v8.2.")
+                f"without a usable SHIPS text: HazardPulse {SERVED_LABEL}.")
     if stack is None:
-        return "Every basin: HazardPulse v8.2."
+        return f"Every basin: HazardPulse {SERVED_LABEL}."
     return ("Atlantic, East and Central Pacific: NOAA's rapid-intensification guidance read from NHC's SHIPS "
             f"text for the same cycle -- {STACK_PUBLIC[stack['payload']['candidate']]} -- chosen by a "
             "pre-registered comparison on 2020-2024 and scored once on 2025 (docs/HURRICANE_RI_PROGRAM.md). "
@@ -729,7 +752,7 @@ def build_live_case(
 def load_stack_model() -> dict[str, object]:
     """The served NOAA-aid stack artifact, refused unless it validates (ri_stack.load_artifact).
 
-    Loaded on every run, storms or not, like the v8.2 artifact: a missing or corrupt file fails
+    Loaded on every run, storms or not, like the served artifact: a missing or corrupt file fails
     the job the day it happens, not at the first Atlantic storm.
     """
     payload, version = ri_stack.load_artifact(STACK_ARTIFACT)
@@ -876,23 +899,44 @@ def ir_from_centres(cen) -> tuple[dict[str, float], dict[str, object]]:
     return ir_features.features(crops["p2"], crops["m4"]), read
 
 
+def load_j1_base(art: dict[str, object], path: Path | None = None) -> dict[str, object]:
+    """v8.2, the model J1 reads and is compared against (amendment 15: whatever is published), refused unless it
+    is the artifact J1 was exported with -- its ``v82_dependency`` names the version and the sha256 of the bytes
+    git stores -- and is bound to its own data (``ri_model.load_model``)."""
+    path = J1_BASE_ARTIFACT if path is None else Path(path)
+    dep = art.get("v82_dependency") or {}
+    if dep.get("model_version") != J1_BASE_MODEL_VERSION:
+        raise ri_model.ModelArtifactError(
+            f"J1 is built on {dep.get('model_version')!r}; the scorer feeds it {J1_BASE_MODEL_VERSION!r}")
+    have = ri_j1.lf_sha256(path)
+    if have != dep.get("artifact_sha256"):
+        raise ri_model.ModelArtifactError(
+            f"{path.name} is sha256 {have[:12]}..., J1 was exported against {str(dep.get('artifact_sha256'))[:12]}...")
+    base = ri_model.load_model(path)
+    if base["model_version"] != J1_BASE_MODEL_VERSION:
+        raise ri_model.ModelArtifactError(f"{path} holds {base['model_version']}, expected {J1_BASE_MODEL_VERSION}")
+    return base
+
+
 def load_j1() -> dict[str, object] | None:
     """J1 (amendment 13b), the JTWC-basin shadow, when its artifact is present -- and only with the IR reader:
-    without it every record would carry J1's name with no IR, so it is not scored at all."""
+    without it every record would carry J1's name with no IR, so it is not scored at all. ``base`` is v8.2, the
+    model J1 reads (``load_j1_base``), loaded beside the served one."""
     if not ri_j1.MODEL_PATH.exists():
         return None
     if not ir_reader_available():
         print("  J1 shadow: NOT scored -- its IR reader (h5py) is not installed")
         return None
     art, version = ri_j1.load()
-    return {"artifact": art, "model_version": version}
+    return {"artifact": art, "model_version": version, "base": load_j1_base(art)}
 
 
 def j1_shadow(case: dict[str, object], j1: dict[str, object], v82_ensemble: float,
               v82_calibrated: float | None = None) -> dict[str, object]:
     """J1's record for a JTWC storm (amendment 13b): IR cut around the case's own fixes, the row by name, the
-    probability. Recorded beside v8.2, never published. ``inputs`` and ``model_probability`` let the record
-    audit recompute it."""
+    probability. Recorded beside the published number, never published. ``v82_ensemble`` and ``v82_calibrated``
+    are v8.2's own (``score_live_cases`` scores the case with J1's base, not with the served model).
+    ``inputs`` and ``model_probability`` let the record audit recompute it."""
     from hazardpulse.hurricane import ir_features
     art = j1["artifact"]
     cycle = dt.datetime.fromisoformat(str(case["issue_time"]))
@@ -907,8 +951,11 @@ def j1_shadow(case: dict[str, object], j1: dict[str, object], v82_ensemble: floa
     return {"status": "ok", "label": ri_j1.LABEL, "model_version": j1["model_version"],
             "probability": round(prob, 4), "model_probability": prob, "inputs": inputs, "ir": read,
             "ir_features_read": f"{n_ir} of {len(ir_features.IR_NAMES)}", "positions": case.get("fix_positions"),
-            # v8.2's published number before display rounding: the prospective test compares at full precision
-            "v8_2_model_probability": None if v82_calibrated is None else float(v82_calibrated)}
+            # v8.2's calibrated number before display rounding, J1's registered comparator (published until
+            # amendment 15): the prospective test compares at full precision
+            "v8_2_model_probability": None if v82_calibrated is None else float(v82_calibrated),
+            "v8_2_model_version": ((j1.get("base") or {}).get("model_version") if v82_calibrated is not None
+                                   else None)}
 
 
 def live_ir_features(sid: str, cycle: dt.datetime, records) -> dict[str, float]:
@@ -1108,13 +1155,46 @@ def attach_tc1(scored: list[dict[str, object]], adeck_index: dict, adeck_by_stor
         print(f"  TC1: not issued ({type(exc).__name__}: {exc})")
         return 0
     n = 0
+    by_id = {d.storm: d for d in decks}
     for s in nhc:
         rec = got.get(str(s["storm_id"]).lower())
         if rec:
+            try:
+                rec["TC2b"] = tc2b_record(s, rec, by_id.get(str(s["storm_id"]).lower()))
+            except Exception as exc:  # noqa: BLE001 -- TC2b is recorded beside TC1, never in its way
+                rec["TC2b"] = {"status": f"error: {type(exc).__name__}: {exc}"}
             s["tc1"] = rec
             n += 1
     print(f"  TC1: track and intensity for {n} of {len(nhc)} NHC storms, from {len(decks)} season decks")
     return n
+
+
+def tc2b_record(storm: dict[str, object], rec: dict[str, object], deck) -> dict[str, object]:
+    """TC2b (TC1 program amendment 4): TC1's intensity held to the median the storm's own v10.4 shadow curve
+    implies for the same cycle, by the backtest's function and amendment 3's taper. Without a gated curve for that
+    cycle it is TC1, and the record says so."""
+    from hazardpulse.hurricane import tc2
+    tc1_int = {int(k): float(v["vmax_kt"]) for k, v in (rec.get("TC1") or {}).items() if v.get("vmax_kt") is not None}
+    cycle = dt.datetime.fromisoformat(str(rec["cycle"]).replace("Z", ""))
+    an = deck.analysis(cycle) if deck is not None else None
+    v0 = an[2] if an is not None and math.isfinite(an[2]) else None
+    sh = storm.get("ri_v10_4_shadow") or {}
+    curve, why = None, None
+    if sh.get("status") != "ok":
+        why = "no v10.4 shadow"
+    elif sh.get("cycle") != rec["cycle"]:
+        why = f"the v10.4 shadow is for {sh.get('cycle')}, not TC1's cycle"
+    elif not sh.get("gate_ok"):
+        why = "v10.4's gate failed (early guidance missing)"
+    else:
+        curve = {int(k): float(v) for k, v in (sh.get("model_probabilities") or {}).items() if v is not None}
+    out, info = tc2.project(tc1_int, v0, curve, tc2.TC2B_TAPER_END_H)
+    # an open edge of the bracket (no lower or no upper bound) is null: JSON has no infinity
+    bracket = [b if b is not None and math.isfinite(b) else None for b in info["bracket"]] if info.get("bracket") else None
+    return {"status": "ok", "label": "TC2b", "intensity": {str(k): round(v, 1) for k, v in sorted(out.items())},
+            "moved_tc1": bool(info.get("applied")), "shift_24h_kt": info.get("shift_24h"),
+            "bracket_kt": bracket, "v0_kt": v0, "why_unmoved": why or info.get("why"),
+            "curve_from": "ri_v10_4_shadow", "curve_model_version": sh.get("model_version")}
 
 
 def analysis_cycles(records: list[ATCFRecord]) -> list[dt.datetime]:
@@ -1257,9 +1337,10 @@ def append_hurricane_ledger(forecast_id: str, now: dt.datetime, model_version: s
 
 
 def ri_source_label(storm: dict[str, object]) -> str:
-    """What produced a storm's number, for people: 'NOAA DTOPS', 'NOAA SHIPS-RII', 'HazardPulse v8.2'."""
+    """What produced a storm's number, for people: 'NOAA DTOPS', 'NOAA SHIPS-RII', 'HazardPulse v8.3' (the record's
+    own ``ri_source``: a record v8.2 made says v8.2)."""
     if storm.get("ri_source") != RI_SOURCE_STACK:
-        return "HazardPulse v8.2"
+        return f"HazardPulse {storm.get('ri_source') or SERVED_LABEL}"
     used = (storm.get("ri_inputs") or {}).get("used")
     names = {"DTOP": "DTOPS", "RIOD": "SHIPS-RII", "RIOC": "SHIPS RI consensus"}
     return f"NOAA {names.get(str(used), 'RI guidance (SHIPS-RII/DTOPS)')}"
@@ -1301,24 +1382,45 @@ def score_live_cases(
 ) -> list[dict[str, object]]:
     """Score live cases with the pinned artifacts. No training happens here.
 
-    v8.2 scores every case. With ``stack`` (load_stack_model), an NHC-basin a-deck case whose
-    cycle's SHIPS text carries the needed aids is served NOAA's guidance instead, and keeps
-    v8.2's number beside it (``v8_2``) for comparison. ``ri_probability`` is what is published;
-    every downstream band (pulse risk_band, page) is derived from it.
+    The served model (``model``, SERVED_MODEL_VERSION) scores every case. With ``stack`` (load_stack_model), an
+    NHC-basin a-deck case whose cycle's SHIPS text carries the needed aids is served NOAA's guidance instead, and
+    keeps the served model's number beside it (under its own key, ``v8_3``) for comparison. ``ri_probability``
+    is what is published; every downstream band (pulse risk_band, page) is derived from it.
+
+    With ``j1`` (load_j1), every JTWC-basin case is also scored by J1's base, v8.2 (``j1["base"]``): J1 reads
+    v8.2's ensemble and records v8.2's calibrated number, its comparator, whatever ``model`` is (amendment 15).
+    The record keeps v8.2's rounded number beside the published one (``v8_2``) for the prospective test.
     """
 
     if not live_cases:
         return []
     p = ri_model.score_cases(model, live_cases)
+    source = model_label(model["model_version"])
     n_features = len(model["selected_idx"])
-    # which of v8.2's inputs each case could not provide (imputed at scoring), from the very matrix it scores
+    # which of the served model's inputs each case could not provide (imputed at scoring), from the very
+    # matrix it scores
     names = list(model["feature_names"])
     X_inputs, _, _, _ = build_feature_matrix(live_cases, feature_names=names)
     unavailable = [unavailable_inputs(case, names, X_inputs[i]) for i, case in enumerate(live_cases)]
+    # J1's base, v8.2, on the JTWC-basin cases only: once, from v8.2's own artifact
+    j1_rows = ([i for i, c in enumerate(live_cases) if str(c.get("basin", "")).upper() in ri_j1.LIVE_JTWC_BASINS]
+               if j1 is not None else [])
+    j1_base: dict[int, tuple[float, float]] = {}
+    j1_base_error: str | None = None
+    if j1_rows:
+        try:
+            base = j1["base"]
+            if base["model_version"] != J1_BASE_MODEL_VERSION:
+                raise ri_model.ModelArtifactError(
+                    f"J1's base is {base['model_version']!r}, expected {J1_BASE_MODEL_VERSION!r}")
+            pb = ri_model.score_cases(base, [live_cases[i] for i in j1_rows])
+            j1_base = {i: (float(pb["ensemble"][k]), float(pb["calibrated"][k])) for k, i in enumerate(j1_rows)}
+        except Exception as exc:  # noqa: BLE001 -- J1 is a shadow: its failure is written down, never published
+            j1_base_error = f"error: {type(exc).__name__}: {exc}"
 
     scored: list[dict[str, object]] = []
     for i, case in enumerate(live_cases):
-        v82 = {
+        served = {
             "ri_probability": round(float(p["calibrated"][i]), 4),
             "ri_probability_raw": round(float(p["ensemble"][i]), 4),
             "model_scores": {
@@ -1341,8 +1443,8 @@ def score_live_cases(
             "mslp_hpa": case.get("analysis_mslp_hpa"),
             "category": classify_storm(case.get("analysis_vmax_kt")),
             "issue_time": case.get("issue_time"),
-            **v82,
-            "ri_source": RI_SOURCE_V82,
+            **served,
+            "ri_source": source,
             "ri_inputs": {"analysis_model": case.get("analysis_model"),
                           "track_source": case.get("track_source"),
                           "n_inputs": len(names),
@@ -1365,7 +1467,7 @@ def score_live_cases(
                                     else "logistic pool of NOAA aids fitted 2020-2024"),
                     "ri_source": RI_SOURCE_STACK,
                     "ri_inputs": inputs,
-                    "v8_2": {k: v82[k] for k in ("ri_probability", "model_version")},
+                    source.replace(".", "_"): {k: served[k] for k in ("ri_probability", "model_version")},
                 })
         if _shadow_keys(v9, v10, challengers):
             # shadows: recorded for the prospective test, never the published number; a failure here
@@ -1376,9 +1478,14 @@ def score_live_cases(
                 err = {"status": f"error: {type(exc).__name__}: {exc}"}
                 storm.update({k: dict(err) for k in _shadow_keys(v9, v10, challengers)})
         if j1 is not None and str(case.get("basin", "")).upper() in ri_j1.LIVE_JTWC_BASINS:
-            # J1 (amendment 13b): recorded beside v8.2, never the published number; a failure is written down
+            # J1 (amendments 13b, 15): fed v8.2's own numbers, never the published model's; recorded beside the
+            # published number and never instead of it; a failure is written down
             try:
-                storm[ri_j1.SHADOW_KEY] = j1_shadow(case, j1, float(p["ensemble"][i]), float(p["calibrated"][i]))
+                if j1_base_error is not None:
+                    raise RuntimeError(j1_base_error)
+                ens82, cal82 = j1_base[i]
+                storm[J1_BASE_KEY] = {"ri_probability": round(cal82, 4), "model_version": j1["base"]["model_version"]}
+                storm[ri_j1.SHADOW_KEY] = j1_shadow(case, j1, ens82, cal82)
             except Exception as exc:  # noqa: BLE001
                 storm[ri_j1.SHADOW_KEY] = {"status": f"error: {type(exc).__name__}: {exc}"}
         storm["ri_source_label"] = ri_source_label(storm)
@@ -1409,7 +1516,7 @@ def _render_hurricane_geojson(storms: list[dict[str, object]]) -> str:
                 "storm_id": s.get("storm_id", ""),
                 "storm_name": s.get("storm_name", ""),
                 "ri_probability": s.get("ri_probability", 0),
-                "ri_source": s.get("ri_source", RI_SOURCE_V82),
+                "ri_source": s.get("ri_source", RI_SOURCE_SERVED),
                 "category": s.get("category", ""),
                 "vmax_kt": s.get("vmax_kt"),
                 "mslp_hpa": s.get("mslp_hpa"),
@@ -1417,6 +1524,23 @@ def _render_hurricane_geojson(storms: list[dict[str, object]]) -> str:
             },
         })
     return json.dumps({"type": "FeatureCollection", "features": features})
+
+
+def strict_json(obj, path: str = "") -> tuple[object, list[str]]:
+    """``(a copy with every non-finite float as None, the paths where one was)``: what browsers and the Worker
+    can parse."""
+    bad: list[str] = []
+
+    def walk(x, p):
+        if isinstance(x, float) and not math.isfinite(x):
+            bad.append(p or "/")
+            return None
+        if isinstance(x, dict):
+            return {k: walk(v, f"{p}/{k}") for k, v in x.items()}
+        if isinstance(x, (list, tuple)):
+            return [walk(v, f"{p}/{i}") for i, v in enumerate(x)]
+        return x
+    return walk(obj, path), bad
 
 
 def write_outputs(
@@ -1434,9 +1558,16 @@ def write_outputs(
     (amendment 7 rule 2), kept beside the storms -- never among them, so nothing publishes them.
     """
     forecast_id = f"hu_fcst_{now.strftime('%Y%m%d_%H%M')}"
+    # Strict JSON before anything is written or hashed: a bare -Infinity (TC2b's open bracket, 2026-10-10 03:39Z)
+    # is valid to Python's json module and invalid to every browser and to the Worker, and took
+    # /api/v1/live/hurricane down until the next run. Every non-finite number becomes null, and the run says where.
+    scored_storms, bad = strict_json(scored_storms)
+    catch_up, bad_c = strict_json(catch_up) if catch_up else (catch_up, [])
+    for where in bad + bad_c:
+        print(f"  WARNING: non-finite number written as null at {where}")
     sources: dict[str, int] = {}
     for s in scored_storms:
-        key = str(s.get("ri_source", RI_SOURCE_V82))
+        key = str(s.get("ri_source", RI_SOURCE_SERVED))
         sources[key] = sources.get(key, 0) + 1
 
     # Write live-storms.json
@@ -1454,7 +1585,7 @@ def write_outputs(
         output[cr.CATCH_UP_KEY] = catch_up
     storms_path = DIST / "data" / "live-storms.json"
     storms_path.parent.mkdir(parents=True, exist_ok=True)
-    storms_path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+    storms_path.write_text(json.dumps(output, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     print(f"  Wrote {storms_path} ({len(scored_storms)} storms)")
 
     # Write GeoJSON for MapLibre hurricane map
@@ -1477,7 +1608,7 @@ def write_outputs(
     }
     if catch_up:
         replay_payload[cr.CATCH_UP_KEY] = catch_up
-    replay_path.write_text(json.dumps(replay_payload, indent=2) + "\n", encoding="utf-8")
+    replay_path.write_text(json.dumps(replay_payload, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     print(f"  Wrote {replay_path}" + (f" (+{len(catch_up)} catch-up shadow records)" if catch_up else ""))
     entry = append_hurricane_ledger(forecast_id, now, model_version, scored_storms, catch_up=catch_up)
     print(f"  Ledger: {HU_LEDGER_PATH.name} +1 (hash {entry['hash'][:12]}, prev {entry['prev_hash'][:12]})")
@@ -1507,7 +1638,7 @@ def write_outputs(
                     hazard["risk_band"] = _risk_band(top["ri_probability"])
                     hazard["gate_status"] = "pass"
                     hazard["model_version"] = top.get("model_version", model_version)
-                    hazard["ri_source"] = top.get("ri_source", RI_SOURCE_V82)
+                    hazard["ri_source"] = top.get("ri_source", RI_SOURCE_SERVED)
                     hazard["ri_source_label"] = top.get("ri_source_label") or ri_source_label(top)
                     hazard["forecast_id"] = forecast_id
                     hazard["n_active_storms"] = len(scored_storms)
@@ -1524,7 +1655,7 @@ def write_outputs(
                     hazard["n_active_storms"] = 0
                 break
         pulse["updated_at"] = now.isoformat() + "Z"
-        pulse_path.write_text(json.dumps(pulse, indent=2) + "\n", encoding="utf-8")
+        pulse_path.write_text(json.dumps(pulse, indent=2, allow_nan=False) + "\n", encoding="utf-8")
         print(f"  Updated {pulse_path}")
 
 
@@ -1746,7 +1877,7 @@ def main() -> None:
         trust_version = getattr(_forecaster, "model_version", None)
         # A calibrator is one model's curve: it may re-map, band and SIGN only the storms that
         # model scored (the receipt would otherwise name the wrong model). With two models
-        # serving (NOAA aids in NHC basins, v8.2 elsewhere) that is a per-storm decision.
+        # serving (NOAA aids in NHC basins, the served HazardPulse model elsewhere) that is a per-storm decision.
         own = [s for s in scored if s.get("model_version") == trust_version]
         foreign = len(scored) - len(own)
         if _forecaster is not None and own:

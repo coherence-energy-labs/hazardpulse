@@ -209,8 +209,9 @@ def hurricane_shadow_entries(models_dir: Path = MODELS_DIR) -> list[dict]:
 
 
 def j1_entry() -> dict | None:
-    """J1, our RI model for the JTWC basins (docs/HURRICANE_RI_V9_PROGRAM.md amendments 13, 13a, 13b, 14), recorded
-    in shadow beside the published v8.2 on every West Pacific, North Indian and Southern Hemisphere storm, shown on
+    """J1, our RI model for the JTWC basins (docs/HURRICANE_RI_V9_PROGRAM.md amendments 13, 13a, 13b, 14, 15),
+    recorded in shadow beside the published number (v8.3 since amendment 15; J1 is built on v8.2 and tested against
+    it) on every West Pacific, North Indian and Southern Hemisphere storm, shown on
     the site only in its scope. Identity, label, live key, scope and benchmark are read through served_evidence,
     which refuses an artifact whose provenance is not its registered result or a scope that is not the registered
     rule's; nothing here is typed. Nothing is read from the prospective record, which every scorer run rewrites."""
@@ -224,19 +225,22 @@ def j1_entry() -> dict | None:
     m, bar, vb = j1["dev"]["model"], j1["dev"]["bar"], j1["vs_bar"]
     further = j1.get("further") or {}
     period, label, against = j1["dev_period"], j1["label"], j1["against"]
+    published = j1.get("published") or against
+    beside = (f"the published {published} (its comparator stays {against}, the model it is built on and is fed live)"
+              if published != against else against)
     rule = j1["rule"]
     built = re.search(r"amendments? ([\w, ]+)\)", str(art["provenance"].get("program") or ""))
     amendments = ", ".join(x for x in ((built.group(1) if built else None), j1.get("scope_amendment")) if x)
     return _make_entry(
         record_id=f"weights_hazardpulse_{version}",
-        name=f"HazardPulse Hurricane RI {label} (JTWC basins, shadow, in test beside {against})",
+        name=f"HazardPulse Hurricane RI {label} (JTWC basins, shadow, in test against {against})",
         description=(
             f"LightGBM ({j1['seeds']} seeds, averaged) on {against}'s probability (as a logit), its "
             f"{j1['inputs']['against']} inputs, {j1['inputs']['ir']} NOAA GMGSI infrared cloud-top features and basin "
             f"indicators; trained on {art['provenance'].get('trained')}. Registered hindcast {period}, every JTWC "
             f"cycle pooled with crops on best-track positions: log loss {m['log_loss']:.5f} vs {against} "
             f"{bar['log_loss']:.5f}, carried. Recorded on every live {', '.join(j1['live_basins'])} storm beside "
-            f"{against}, never instead of it; shown on the site and judged only in its scope "
+            f"{beside}, never instead of it; shown on the site and judged only in its scope "
             f"({', '.join(j1['scope']) or 'none'}, {j1['scope_file']}). Its prospective test ({rule['scorer']}, looks "
             f"{', '.join(rule['looks'])}) decides whether it becomes the published number."),
         weights_path=PROJECT_ROOT / j1["file"],
@@ -331,6 +335,69 @@ def tc1_entry() -> dict | None:
         "live_records": {"replay": "dist/data/replay/hu_fcst_*.json", "key": "tc1",
                          "ledger": "dist/data/hurricane-ledger.jsonl"}}
     return entry
+
+
+def _hurricane_served_version() -> str | None:
+    """The HazardPulse RI model the live scorer serves outside the NHC basins (its SERVED_MODEL_VERSION)."""
+    from hazardpulse.verification import served_evidence as se
+    return se.hurricane_scorer_models(PROJECT_ROOT).get("served")
+
+
+def hurricane_served_entry() -> dict | None:
+    """The served other-basins model when it replaced v8.2 by a registered rule (amendment 15: v8.3), read through
+    served_evidence, which refuses a decision file that did not adopt exactly the served artifact. None while v8.2
+    is served (its own entry below describes it)."""
+    from hazardpulse.verification import served_evidence as se
+
+    v82 = _read_json(MODELS_DIR / "hurricane_ri_v8_2.json")
+    ob = se.other_basins_evidence(PROJECT_ROOT, v82.get("model_version"), se.version_label(v82.get("model_version")))
+    if not ob or ob.get("subject") != "model":
+        return None
+    path = MODELS_DIR / f"{ob['model']}.json"
+    model = _read_json(path)
+    res = _read_json(PROJECT_ROOT / ob["results"])
+    t, rep, d, rule = ob["test"], ob["replaced"], ob["vs_replaced"], ob["rule"]
+    cal = model.get("calibration") or {}
+    removed = (res.get("data") or {}).get("removed")
+    recipe = (res.get("candidate") or {}).get("recipe") or {}
+    members = "-".join(str(y) for y in recipe.get("members_years") or [])
+    cal_years = "-".join(str(y) for y in (recipe.get("calibration") or {}).get("years") or [])
+    return _make_entry(
+        record_id=f"weights_hazardpulse_{ob['model']}",
+        name=f"HazardPulse Hurricane RI {ob['label']} (ensemble, pinned, served)",
+        description=(
+            f"{rep['label']}'s recipe exactly (histogram-GBT depth 3 + depth 4 + L2 logistic + bagged logistic, "
+            f"members on storms first seen {members}, a converged Newton logistic calibration on {cal_years}), fitted "
+            f"on its training rows with the {removed} byte-identical copies of basin-crossing storms removed. Adopted "
+            f"by amendment {ob['amendment']}'s registered non-inferiority rule ({ob['program']}): on {t['n']} "
+            f"cycles of storms first seen {t['when']} in the JTWC basins, none used to fit it, log loss "
+            f"{t['log_loss']:.5f} vs {rep['label']} {rep['log_loss']:.5f}, difference {d['d_ll']:+.5f} "
+            f"[{d['d_ll_ci'][0]:+.5f}, {d['d_ll_ci'][1]:+.5f}] (95%, storms resampled), upper end at most "
+            f"+{rule['margin']}. It serves the JTWC basins and any NHC cycle without NOAA's SHIPS text; NHC-basin "
+            "cycles with it are served the NOAA aid entry below."),
+        weights_path=path,
+        benchmark={"test_auc": t["auc"], "test_log_loss_30kt": t["log_loss"], "test_brier": t["brier"],
+                   "n_test_rows": t["n"], "n_test_events": t["events"], "n_test_storms": t["storms"],
+                   "test_window": f"storms first seen {t['when']}, JTWC basins (bootstrap by storm)",
+                   "replaced": rep["model"], "replaced_log_loss_30kt": rep["log_loss"],
+                   "d_log_loss_vs_replaced": d["d_ll"], "d_log_loss_vs_replaced_ci95": d["d_ll_ci"],
+                   "d_brier_vs_replaced": d["d_brier"], "d_brier_vs_replaced_ci95": d["d_brier_ci"],
+                   "rule": {"margin": rule["margin"], "upper": rule["upper"], "met": rule["met"]}},
+        framework="hazardpulse_ri_ensemble_v8_2",
+        input_schema={"n_features_select": len(model.get("selected_features") or []),
+                      "feature_names_path": "src/hazardpulse/hurricane/operational_ri.py"},
+        output_schema={"outputs": ["ri_probability_24h"], "domain": "[0, 1]",
+                       "calibration": f"{cal.get('method', '?')} fitted on held-out seasons"},
+        paper_url="https://github.com/coherence-energy-labs/hazardpulse",
+    ) | {"lineage": {
+        "role": "served", "program": ob["program"], "amendment": f"amendment {ob['amendment']}",
+        "prereg_tag": ob["prereg_tag"],
+        "selection_and_evaluation": [{"path": p, "sha256": _file_sha256(PROJECT_ROOT / p)}
+                                     for p in (ob["results"], f"results/calibration/{ob['model']}_test_composition.json")
+                                     if (PROJECT_ROOT / p).exists()],
+        "training_data": [{"path": spec["path"], "sha256": spec["sha256"], "role": role}
+                          for role, spec in ((model.get("provenance") or {}).get("data") or {}).items()],
+    }}
 
 
 HU_STACK_PATH = MODELS_DIR / "hurricane_ri_stack_v1.json"
@@ -777,6 +844,9 @@ def build_entries() -> list[dict]:
     # evaluation report. The old entry described a model "trained in-process
     # per scoring run" and quoted AUC 0.967 -- measured on v8.1's own label,
     # which spanned 12 h, not the 24 h it was named for.
+    hu_served_entry = hurricane_served_entry()
+    if hu_served_entry is not None:
+        entries.append(hu_served_entry)
     hu_model_path = MODELS_DIR / "hurricane_ri_v8_2.json"
     hu_eval_path = PROJECT_ROOT / "results" / "calibration" / "hurricane_ri_evaluation.json"
     if hu_model_path.exists():
@@ -785,9 +855,11 @@ def build_entries() -> list[dict]:
         served = (hu_eval.get("results") or {}).get("C_v8_2_heldout_newton", {})
         ci = served.get("ci95") or {}
         cal = hu_model.get("calibration") or {}
+        still_served = _hurricane_served_version() == hu_model.get("model_version")
         entries.append(_make_entry(
             record_id=f"weights_hazardpulse_{hu_model.get('model_version', 'hurricane_ri_v8_2')}",
-            name="HazardPulse Hurricane RI v8.2 (ensemble, pinned)",
+            name="HazardPulse Hurricane RI v8.2 (ensemble, pinned)" if still_served else
+                 "HazardPulse Hurricane RI v8.2 (ensemble, pinned; replaced as the published model by v8.3)",
             description=(
                 "Rapid-intensification ensemble (histogram-GBT depth 3 + depth 4 + "
                 "L2 logistic + bagged logistic) predicting a >= 30 kt wind increase "
@@ -795,9 +867,12 @@ def build_entries() -> list[dict]:
                 "file bound to its training-data hash; calibrated by a converged "
                 "Newton logistic fit on seasons the members never trained on. "
                 f"Held-out test: {hu_eval.get('n_test_storms')} storms first seen "
-                f"2022-2024, {hu_eval.get('n_test_events')} RI events. Since 2026-10-02 it "
-                "serves the JTWC basins and any NHC cycle without NOAA's SHIPS text; NHC-basin "
-                "cycles with it are served the NOAA aid entry below."
+                f"2022-2024, {hu_eval.get('n_test_events')} RI events. "
+                + ("Since 2026-10-02 it serves the JTWC basins and any NHC cycle without NOAA's SHIPS text; "
+                   "NHC-basin cycles with it are served the NOAA aid entry below." if still_served else
+                   "It served the JTWC basins and NHC cycles without NOAA's SHIPS text from 2026-10-02 until "
+                   "amendment 15 (docs/HURRICANE_RI_V9_PROGRAM.md) replaced it with v8.3, its recipe on "
+                   "de-duplicated rows. It is still loaded live: J1 is built on it and tested against it.")
             ),
             weights_path=hu_model_path,
             benchmark={

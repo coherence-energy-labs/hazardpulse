@@ -99,7 +99,8 @@ def _live_rows(d: SiteData) -> list[list[str]]:
         rows.append(["to", version, int(r.get("n_storm_forecasts") or 0), int(r.get("n_positive") or 0),
                      r.get("auc"), r.get("bss_vs_causal_climatology"), "Brier skill vs climatology"])
     # hurricane: one row per model version, over storm-cycles (amendment 7: each scored once, against its
-    # own 24 h); two versions publish at once (NOAA's aids in the NHC basins, v8.2 elsewhere)
+    # own 24 h); two versions publish at once (NOAA's aids in the NHC basins, our served model elsewhere: v8.2 until
+    # amendment 15, v8.3 since)
     hu_served = _hurricane_served_versions(d)
     for version, r in sorted((_prospective(d, "hurricane").get("by_model_version") or {}).items()):
         rows.append(["hu", version, int(r.get("n_storm_cycles") or 0), int(r.get("n_events") or 0),
@@ -122,7 +123,7 @@ def _live_rows(d: SiteData) -> list[list[str]]:
 
 def _hurricane_served_versions(d: SiteData) -> dict[str, str]:
     """``{model version: what it publishes}`` for the hurricane models published now, from the evidence
-    bound to the served artifacts (the NOAA-aid stack in the NHC basins, v8.2 elsewhere)."""
+    bound to the served artifacts (the NOAA-aid stack in the NHC basins, the served HazardPulse model elsewhere)."""
     ev = d.evidence.get("hurricane") or {}
     out = {}
     if ev.get("model_version"):
@@ -143,12 +144,17 @@ def _hazard_record_card(d: SiteData, key: str) -> str:
     version = v.get("model_version") or ""
     rows = [("Published model", f"<code>{esc(version)}</code>")]
     if key == "hu":
-        comp = ((ev or {}).get("other_basins") or {}).get("composition") or {}
-        label = esc(((ev or {}).get("other_basins") or {}).get("label") or "")
-        v82 = (f"HazardPulse {label} elsewhere, its method tested on held-out cycles from every basin with best-track "
-               "inputs" + ("; the published model&rsquo;s calibration was fitted on those same cycles"
-                           if comp.get("served_calibration_fitted_on_test_cases") else "")
-               if comp and label else "our own model elsewhere")
+        ob = (ev or {}).get("other_basins") or {}
+        comp = ob.get("composition") or {}
+        label = esc(ob.get("label") or "")
+        if comp and label and ob.get("subject") == "model":       # a replacement, tested itself (amendment 15)
+            v82 = (f"HazardPulse {label} elsewhere, tested on {fmt.years((ob.get('test') or {}).get('when', ''))} "
+                   "cycles in the basins where it publishes, none used to fit it, with best-track inputs")
+        else:
+            v82 = (f"HazardPulse {label} elsewhere, its method tested on held-out cycles from every basin with "
+                   "best-track inputs" + ("; the published model&rsquo;s calibration was fitted on those same cycles"
+                                          if comp.get("served_calibration_fitted_on_test_cases") else "")
+                   if comp and label else "our own model elsewhere")
         rows[0] = ("Published numbers", "NOAA DTOPS (SHIPS-RII as fallback) for the Atlantic, East and Central "
                                         f"Pacific; {v82}")
     rows.append(("Window", h.window))

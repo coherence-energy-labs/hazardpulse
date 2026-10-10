@@ -8,7 +8,7 @@ Pins:
 * the parsimony rule replaces the incumbent only on an interval wholly below 0;
 * --phase final reads 2025 once: it refuses without a selection, and refuses a second time;
 * the committed selection, final report and artifact agree with each other;
-* fetch_and_score routes NHC storms with SHIPS text to the stack, every other case to v8.2,
+* fetch_and_score routes NHC storms with SHIPS text to the stack, every other case to the served HazardPulse model,
   and a trust calibrator touches only its own model's storms;
 * the prospective scorer's calibration pool is deterministic when two models serve.
 """
@@ -365,7 +365,11 @@ def test_an_nhc_storm_with_ships_text_is_served_the_stack(fas):
     assert s["ri_probability"] == 0.15 and s["ri_inputs"]["used"] == "DTOP"
     assert s["ri_inputs"]["ships_text"]["whole_percent"]["DTOP"] == 15
     assert s["ri_inputs"]["ships_text"]["file"] == NOLO
-    assert s["v8_2"]["model_version"] == "hurricane_ri_v8_2" and 0 <= s["v8_2"]["ri_probability"] <= 1
+    # the served HazardPulse model's number is kept beside NOAA's under its own key (amendment 15: v8.3), and
+    # nothing is filed under another model's key
+    assert fas.SERVED_MODEL_VERSION == "hurricane_ri_v8_3" and fas.SERVED_LABEL == "v8.3"
+    assert s["v8_3"]["model_version"] == fas.SERVED_MODEL_VERSION and 0 <= s["v8_3"]["ri_probability"] <= 1
+    assert "v8_2" not in s
     assert s["ri_source_label"] == "NOAA DTOPS"
 
 
@@ -378,32 +382,33 @@ def test_an_nhc_storm_without_dtops_is_served_ships_rii(fas):
     assert s["ri_source_label"] == "NOAA SHIPS-RII"
 
 
-def test_an_nhc_storm_without_ships_text_is_served_v82(fas):
+def test_an_nhc_storm_without_ships_text_is_served_the_hazardpulse_model(fas):
     def absent(sid, cycle):
         return None, "absent (HTTPError)"
     model = fas.load_serving_model()
     case = _case(fas, "EP152026", NOLO_CYCLE)
     [s] = fas.score_live_cases(model, [case], stack=fas.load_stack_model(), ships_fetcher=absent)
     [plain] = fas.score_live_cases(model, [case])
-    assert s["ri_source"] == "v8.2" and s["model_version"] == "hurricane_ri_v8_2"
+    assert s["ri_source"] == fas.SERVED_LABEL and s["model_version"] == fas.SERVED_MODEL_VERSION
+    assert s["ri_source_label"] == f"HazardPulse {fas.SERVED_LABEL}"
     assert s["ri_probability"] == plain["ri_probability"]
     assert s["ri_inputs"]["noaa_aid_stack"]["status"].startswith("ships_text_absent")
     assert set(s["model_scores"]) == {"gbt_d3", "gbt_d4", "logistic", "bagged"}
 
 
 def test_ships_text_for_another_storm_is_not_used(fas):
-    """The fetcher returns Rachel's file under Nolo's name: refused, so v8.2 serves."""
+    """The fetcher returns Rachel's file under Nolo's name: refused, so the served HazardPulse model serves."""
     text = (FIXTURES / "26100212EP1826_ships.txt").read_text(encoding="utf-8")
     [s] = fas.score_live_cases(fas.load_serving_model(), [_case(fas, "EP152026", NOLO_CYCLE)],
                                stack=fas.load_stack_model(), ships_fetcher=_nolo_fetcher([], text))
-    assert s["ri_source"] == "v8.2" and "refused" in s["ri_inputs"]["noaa_aid_stack"]["status"]
+    assert s["ri_source"] == fas.SERVED_LABEL and "refused" in s["ri_inputs"]["noaa_aid_stack"]["status"]
 
 
-def test_a_west_pacific_storm_is_served_v82_and_never_asks_for_ships_text(fas):
+def test_a_west_pacific_storm_is_served_the_hazardpulse_model_and_never_asks_for_ships_text(fas):
     calls: list = []
     [s] = fas.score_live_cases(fas.load_serving_model(), [_case(fas, "WP262026", NOLO_CYCLE, "JTWC")],
                                stack=fas.load_stack_model(), ships_fetcher=_nolo_fetcher(calls))
-    assert calls == [] and s["ri_source"] == "v8.2" and s["model_version"] == "hurricane_ri_v8_2"
+    assert calls == [] and s["ri_source"] == fas.SERVED_LABEL and s["model_version"] == fas.SERVED_MODEL_VERSION
     assert s["ri_inputs"]["noaa_aid_stack"]["status"].startswith("jtwc_basin")
 
 
@@ -443,11 +448,12 @@ def test_main_routes_through_the_network_path(fas, monkeypatch):
     fas.main()
     by_id = {s["storm_id"]: s for s in captured["scored"]}
     assert by_id["EP152026"]["ri_source"] == "noaa_aid_stack" and by_id["EP152026"]["ri_probability"] == 0.15
-    assert by_id["WP262026"]["ri_source"] == "v8.2"
+    assert by_id["WP262026"]["ri_source"] == fas.SERVED_LABEL
     assert st.url_for("EP152026", cycle) in urls and not any("WP26" in u for u in urls)
     top = max(captured["scored"], key=lambda s: s["ri_probability"])
     assert captured["version"] == top["model_version"]
-    assert "DTOPS as issued" in captured["note"] and "HazardPulse v8.2" in captured["note"]
+    assert "DTOPS as issued" in captured["note"] and f"HazardPulse {fas.SERVED_LABEL}" in captured["note"]
+    assert "HazardPulse v8.2" not in captured["note"]
 
 
 def test_a_trust_calibrator_touches_only_its_own_models_storms(fas, monkeypatch):
@@ -456,11 +462,11 @@ def test_a_trust_calibrator_touches_only_its_own_models_storms(fas, monkeypatch)
     model, stack = fas.load_serving_model(), fas.load_stack_model()
     scored = fas.score_live_cases(model, [_case(fas, "EP152026", NOLO_CYCLE), _case(fas, "WP262026", NOLO_CYCLE, "JTWC")],
                                   stack=stack, ships_fetcher=_nolo_fetcher([]))
-    assert {s["ri_source"] for s in scored} == {"noaa_aid_stack", "v8.2"}
+    assert {s["ri_source"] for s in scored} == {"noaa_aid_stack", fas.SERVED_LABEL}
     touched: list = []
 
     class Cal:
-        model_version = "hurricane_ri_v8_2"
+        model_version = fas.SERVED_MODEL_VERSION
 
     monkeypatch.setattr(trust, "load_forecaster", lambda *a, **k: Cal())
     monkeypatch.setattr(trust, "enrich_cells", lambda cells, *a, **k: touched.extend(c["storm_id"] for c in cells))
@@ -475,7 +481,7 @@ def test_a_trust_calibrator_touches_only_its_own_models_storms(fas, monkeypatch)
     monkeypatch.setattr(fas, "build_site_artifacts", lambda: None)
     monkeypatch.setattr(fas, "DIST", REPO / "nonexistent-dist-for-test")
     fas.main()
-    assert touched == ["WP262026"], "a v8.2 calibrator must not re-map the NOAA-aid storm"
+    assert touched == ["WP262026"], "a calibrator of the served HazardPulse model must not re-map the NOAA-aid storm"
 
 
 def test_write_outputs_names_every_model_and_the_headline(fas, tmp_path, monkeypatch):
@@ -488,8 +494,8 @@ def test_write_outputs_names_every_model_and_the_headline(fas, tmp_path, monkeyp
     version = fas.headline_model_version(scored, stack["model_version"])
     fas.write_outputs(scored, NOLO_CYCLE, version, note=fas.ri_sources_note(stack))
     out = json.loads((tmp_path / "data" / "live-storms.json").read_text(encoding="utf-8"))
-    assert out["model_versions"] == sorted({stack["model_version"], "hurricane_ri_v8_2"})
-    assert out["ri_sources"] == {"noaa_aid_stack": 1, "v8.2": 1}
+    assert out["model_versions"] == sorted({stack["model_version"], fas.SERVED_MODEL_VERSION})
+    assert out["ri_sources"] == {"noaa_aid_stack": 1, fas.SERVED_LABEL: 1}
     assert "SHIPS text" in out["ri_sources_note"]
     hu = json.loads((tmp_path / "data" / "live-pulse.json").read_text(encoding="utf-8"))["hazards"][0]
     top = max(scored, key=lambda s: s["ri_probability"])

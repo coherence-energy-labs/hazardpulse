@@ -13,7 +13,8 @@ commit the artifact (results/models/ is gitignored):
     python scripts/train_hurricane_ri.py --recipe hurricane_ri_v8_2 --verify   # refit, require bit-identity
 
 Recipes (see hazardpulse.hurricane.ri_model.RECIPES): hurricane_ri_v8_1 (the original pin,
-comparison only), hurricane_ri_v8_1_1 and hurricane_ri_v8_2 (held-out converged calibration).
+comparison only), hurricane_ri_v8_1_1, hurricane_ri_v8_2 and hurricane_ri_v8_3 (held-out converged
+calibration; v8.3 is v8.2's recipe on the de-duplicated rows, scripts/hurricane_ri_v8_3.py).
 """
 
 from __future__ import annotations
