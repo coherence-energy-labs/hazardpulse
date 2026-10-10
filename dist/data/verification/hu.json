@@ -5,8 +5,8 @@
   "verification_status": "prospective_scored",
   "status_badge": "Scored",
   "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 65 storm forecasts scored against NHC best track; 8 rapid-intensification events observed.",
-  "metric_source": "unverified_live_model",
-  "metric_source_label": "No exact-model benchmark is available in this repo.",
+  "metric_source": "retrospective_holdout_exact_model",
+  "metric_source_label": "Exact-model retrospective benchmark is available.",
   "auc": null,
   "brier": null,
   "brier_skill_score": null,
@@ -83,7 +83,18 @@
     "total_storms_scored": 65,
     "total_ri_events": 8
   },
-  "exact_model_benchmark": null,
+  "exact_model_benchmark": {
+    "availability": "exact_model_benchmark",
+    "label": "Retrospective benchmark available for the current live model version.",
+    "model_version": "hurricane_ri_v8_3",
+    "source_updated_at": null,
+    "auc": null,
+    "auc_ci95": null,
+    "brier": null,
+    "brier_skill_score": null,
+    "reliability_slope": null,
+    "n_cases": null
+  },
   "related_benchmark": null,
   "recommended_action": "Keep scoring matured hurricane forecasts against NHC best track; live AUC stays undefined until at least one rapid-intensification event is observed, so promotion decisions still rest on the retrospective benchmark."
 }
