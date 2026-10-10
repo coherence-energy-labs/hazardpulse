@@ -616,3 +616,70 @@ trained with dissipation and landfall as outcomes rather than as missing rows, p
 registration.
 
 **R48 is not served or shown.** Its artifact is not committed; the build file records what it was.
+
+## Amendment 8 -- R48g: the 48-h curve told what the guidance forecasts for 48 h (2026-10-10, before any R48g number exists)
+
+**A third cause, found after amendment 7's outcome by reading R48's inputs (DERIVED, not measured).**
+- H8's 67 inputs include every guidance forecast H8 uses at 24 h or less:
+  - DSHP, LGEM, IVCN, HCCA, NNIC and AEMI's 24-h change;
+  - the regional and global model means;
+  - NHC's own 12- and 24-h change;
+  - the RI aids to 36 h.
+- **None at 48 h.**
+- The median bracket moves a forecast to the curve's median. At 24 h the curve knew at least what the forecast being
+  moved knew, so moving it was safe. At 48 h, TC2b+O knew the guidance's 48-h forecasts (its members are those aids)
+  and R48 did not. A curve that is calibrated on average but blind to the forecast it moves pulls that forecast
+  toward the average storm.
+- This also covers amendment 7's first hypothesis, since the aids' 48-h forecasts already contain their tracks'
+  landfalls.
+- Survivorship (amendment 7's second hypothesis) cannot by itself explain the result: NHC verifies only cycles that are
+  still tropical at 48 h, so R48 was trained on the population it was tested on.
+
+**R48g.** R48 (amendment 7) with 14 inputs added and nothing else changed (learner, parameters, seeds, early stopping,
+rows, label, folds, thresholds):
+- `dv48_<aid>` for DSHP, LGEM, IVCN, HCCA, NNIC and AEMI: each aid's 48-h forecast minus the CARQ intensity at t;
+- `dv48_regional_mean`, `dv48_regional_max`, `dv48_global_mean`, `dv48_spread`, `frac48_ge50`: H8's group statistics
+  at 48 h, over the same aid lists. The fraction counts aids forecasting a rise of 50 kt or more, the 48-h RI subset's
+  threshold in amendment 7;
+- `ofcl_dv48` and `ofcl_dv36`: NHC's official 48- and 36-h change;
+- `tc1o_dv48`: TC1+O's 48-h intensity minus V0. This is the base forecast TC2b+O starts from, out of sample in time
+  (TC1+O learns online).
+
+**How the inputs are built and constrained.**
+- One new builder, `ri_v9_features.aid_change_features(table, tau)`, computes them from the same a-decks as H8's 24-h
+  inputs.
+- Each input is constrained to raise the probability, exactly as its 24-h counterpart is. The spread is unconstrained
+  (as `dv24_spread` is).
+
+**Controls (each stops the run):**
+1. the new builder at tau = 24 reproduces every development and 2026 row's stored `dv24_*`, `frac_ge30`, `ofcl_dv24`
+   and `ofcl_dv12`: equal, or NaN where the row's is NaN;
+2. R48, rebuilt by the same code with the new inputs left out, reproduces amendment 7's out-of-fold log loss
+   0.2702259918074902 to 1e-12;
+3. DEV TC2b+O reproduces amendment 5's 12.543423 kt (to 1e-9, as amendment 7 checked).
+
+**R48g's gate (it stops the run):** out-of-fold log loss over the 11 thresholds below R48's on the same rows. A curve
+that knows more and is not a better probability has nothing new to say about the median.
+
+**The screen -- TC2c'+O.** TC2c'+O is amendment 7's TC2c+O with R48g's curve in place of R48's: the rule, the 96-h
+taper and the fail-safes are unchanged.
+
+**What the screen can decide.** Amendment 7's kill binds a resurrection to data after its registration, and DEV and
+2026 have been read for this question. So the screen can **kill** R48g but cannot carry it.
+- **Passes iff,** in DEV and in 2026, TC2c'+O minus TC2b+O is below 0 at 48 h and in the mean over 24-120 h (point
+  estimates).
+- **Fails:** R48g is killed and recorded.
+- **Passes:** a separate amendment puts TC2c'+O live in shadow (recorded, not shown). It is decided only on cycles
+  issued after this registration, at the program's looks (2026-12-01, 2027-12-01), by the same rule. A claim
+  ("TC2c'+O beats TC2b+O") needs the 48-h 95% storm-block interval below 0.
+
+**Predictions of the cause above.** These are reported and test the explanation, not the product:
+1. R48g's out-of-fold log loss is below R48's (the gate);
+2. R48g's bracket moves fewer DEV cycles than R48's 485, by a smaller mean |shift| than 8.27 kt;
+3. the DEV 48-h difference against TC2b+O falls below half of amendment 7's +1.045 (that is, below +0.52).
+
+If 2 or 3 fails, base-forecast blindness does not account for amendment 7's result. That stands whatever the screen
+says.
+
+**Reported:** per-threshold log loss against R48 and climatology; feature coverage; per lead; against OFCL, HCCA and
+IVCN; the RI subsets at 24 h and 48 h; shift statistics.
