@@ -87,13 +87,16 @@ LEDGER_PATH = DIST / "data" / "earthquake-ledger.jsonl"
 # catalog. Its model_version is bound to the artifact's content (CRLF-normalised SHA-256),
 # so every forecast, ledger entry and replay names exactly the bytes that produced it.
 from hazardpulse.earthquake import operational_forecast as eq_operational  # noqa: E402
+from hazardpulse.earthquake import served as _served_stack  # noqa: E402
 
 OPERATIONAL_ARTIFACT_PATH = (
     Path(__file__).resolve().parents[1] / "results" / "models" / "earthquake_operational_v1.json"
 )
-# Amendment E1 (section 10): S1 = the C0 artifact above + GEAR1's long-term rate, a small stack
-# bound to C0's exact model_version. When present it is what is published.
-STACK_PATH = Path(__file__).resolve().parents[1] / "results" / "models" / "earthquake_gear1_stack_v1.json"
+# The stack on the C0 artifact above that is published (section 10, E1: S1 = C0 + GEAR1; section 12, E4: S2, GEAR1
+# weighted by the cell's activity), bound to C0's exact model_version and named once in hazardpulse.earthquake.served.
+# A named stack that is missing stops the run: it never falls back to publishing C0 alone.
+STACK_PATH = (Path(__file__).resolve().parents[1] / _served_stack.SERVED_STACK_RELPATH
+              if _served_stack.SERVED_STACK_RELPATH else None)
 # Cells listed on the page / in the replay beyond the active ones: the highest-probability
 # cells of the full grid, so a high forecast is never hidden for lack of recent M2.5+ events.
 TOP_PROBABILITY_CELLS = 25
@@ -101,7 +104,7 @@ TOP_PROBABILITY_CELLS = 25
 
 def _served_model_version() -> str:
     try:
-        if STACK_PATH.exists():
+        if STACK_PATH is not None:                # a named stack that is missing raises: never C0's version
             return eq_operational.stack_model_version(STACK_PATH)
         return eq_operational.artifact_model_version(OPERATIONAL_ARTIFACT_PATH)
     except Exception:  # missing at import time; run_pipeline refuses to publish without it
@@ -1170,7 +1173,7 @@ def run_pipeline(
     # FAIL CLOSED: the served probability is the artifact's model; without it nothing is
     # published (the old tiers are case-control nowcasts of other quantities).
     artifact = eq_operational.load_artifact(OPERATIONAL_ARTIFACT_PATH)
-    stack = eq_operational.load_stack(STACK_PATH, artifact) if STACK_PATH.exists() else None
+    stack = eq_operational.load_stack(STACK_PATH, artifact) if STACK_PATH is not None else None   # missing: raises
     served_version = stack.model_version if stack is not None else artifact.model_version
     if served_version != MODEL_VERSION:
         raise RuntimeError(f"the served earthquake model changed while running: {served_version} != {MODEL_VERSION}")

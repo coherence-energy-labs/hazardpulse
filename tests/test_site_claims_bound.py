@@ -388,9 +388,11 @@ def test_the_new_evidence_is_read_from_its_files_and_left_out_when_it_describes_
     assert se._tornado_format_change(tmp_path, {"model_version": to["model_version"], "test": to["test"]}) is None
 
     e3 = json.loads((ROOT / se.EARTHQUAKE_E3).read_text(encoding="utf-8"))
-    it = eq["input_types"]
+    e1_dev = json.loads((ROOT / se.EARTHQUAKE_E1).read_text(encoding="utf-8"))["splits"]["dev"]
+    it = se._earthquake_input_types(ROOT, e3["stack"], e3["base"], e1_dev)      # E3's own model: its numbers
     assert (it["non_earthquakes"], it["frozen_events"]) == (e3["frozen_non_earthquakes_removed"], e3["frozen_events"])
     assert it["adopted"] is e3["rule"]["E3s_replaces_S1"] is False
+    assert eq["input_types"] == (it if e3["stack"] == eq["model_version"] else None)   # S2 served: E3 is about S1
     assert se._earthquake_input_types(ROOT, "another-model", eq["base_model_version"], {}) is None
 
     from hazardpulse.hurricane import tc1_live

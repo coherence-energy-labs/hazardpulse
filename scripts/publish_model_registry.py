@@ -480,49 +480,80 @@ def hurricane_stack_entry(stack_path: Path = HU_STACK_PATH, final_path: Path = H
 
 EQ_OPERATIONAL_PATH = MODELS_DIR / "earthquake_operational_v1.json"
 EQ_PROGRAM_FINAL_PATH = PROJECT_ROOT / "results" / "earthquake_program" / "final.json"
-EQ_STACK_PATH = MODELS_DIR / "earthquake_gear1_stack_v1.json"
+from hazardpulse.earthquake.served import SERVED_STACK_RELPATH as _EQ_SERVED_STACK  # noqa: E402
+
+# the served stack on C0, named once (hazardpulse.earthquake.served): S1 (section 10, E1) or S2 (section 12, E4)
+EQ_STACK_PATH = PROJECT_ROOT / _EQ_SERVED_STACK if _EQ_SERVED_STACK else None
 EQ_E1_PATH = PROJECT_ROOT / "results" / "earthquake_program" / "gear1_e1.json"
+EQ_PROGRAM_DIR = "results/earthquake_program/"
+# each stack candidate: its evaluation report (section 10's format), section, registration tag, lineage files
+EQ_STACKS = {
+    "S1": {"report": "gear1_e1.json", "section": "section 10 (E1)", "prereg_tag": "prereg-earthquake-gear1",
+           "lineage": ("gear1_cells.json", "gear1_e1.json", "stack_artifact.json"),
+           "title": "S1 (C0 + GEAR1, served)", "formula": "logit p = a + c logit(p_C0) + b log10 G",
+           "decided": "decided on 2021-2022 against C0 recalibrated on the same years", "doc_section": "section 10"},
+    "S2": {"report": "gear1_served.json", "section": "section 12 (E4)", "prereg_tag": "prereg-earthquake-e4",
+           "lineage": ("gear1_cells.json", "gear1_e4.json", "gear1_served.json", "stack_artifact.json"),
+           "title": "S2 (C0 + GEAR1 weighted by the cell's activity, served)",
+           "formula": "logit p = a + c logit(p_C0) + (b + d logit(p_C0)) log10 G",
+           "decided": "decided on 2021-2022 against S1, GEAR1 with one weight", "doc_section": "section 12"},
+}
 
 
-def earthquake_stack_entry(path: Path = EQ_STACK_PATH, e1_path: Path = EQ_E1_PATH,
-                           base_path: Path = EQ_OPERATIONAL_PATH) -> dict | None:
-    """The served earthquake model since amendment E1: C0 + GEAR1 (a stack bound to C0's version)."""
-    if not path.exists():
+def _eq_stack_candidate(meta: dict) -> str:
+    return (meta.get("provenance") or {}).get("candidate", "S1")
+
+
+def _served_eq_stack_candidate() -> str | None:
+    """The served stack's candidate (S1, S2), or None when C0 alone is served."""
+    if EQ_STACK_PATH is None:
+        return None
+    return _eq_stack_candidate(json.loads(EQ_STACK_PATH.read_text(encoding="utf-8")))
+
+
+def earthquake_stack_entry(path: Path | None = EQ_STACK_PATH, base_path: Path = EQ_OPERATIONAL_PATH) -> dict | None:
+    """The served earthquake model: a stack on C0 (S1 since amendment E1, S2 since E4), bound to C0's version. None
+    when C0 alone is served; a named stack that is missing raises, as the scorer does."""
+    if path is None:
         return None
     from hazardpulse.earthquake import operational_forecast as eq_op
 
     stack = eq_op.load_stack(path, eq_op.load_artifact(base_path))
-    e1 = _read_json(e1_path)
-    bound = bool(e1) and (e1.get("coefficients_fitted_on_choose") or {}).get("S1") == {
-        k: stack.meta["coefficients"][k] for k in ("a", "c", "b")}
-    fin = ((e1.get("splits") or {}).get("final") or {}) if bound else {}
-    dev = ((e1.get("splits") or {}).get("dev") or {}) if bound else {}
-    s1 = (fin.get("models") or {}).get("S1") or {}
+    cand = _eq_stack_candidate(stack.meta)
+    spec = EQ_STACKS[cand]
+    rep = _read_json(PROJECT_ROOT / EQ_PROGRAM_DIR / spec["report"])
+    bound = bool(rep) and (rep.get("coefficients_fitted_on_choose") or {}).get(cand) == stack.meta["coefficients"]
+    fin = ((rep.get("splits") or {}).get("final") or {}) if bound else {}
+    dev = ((rep.get("splits") or {}).get("dev") or {}) if bound else {}
+    s1 = (fin.get("models") or {}).get(cand) or {}
     g1 = (stack.meta.get("provenance") or {}).get("gear1") or {}
     return _make_entry(
         record_id=f"weights_hazardpulse_{stack.model_version}",
-        name="HazardPulse Earthquake operational forecast S1 (C0 + GEAR1, served)",
+        name=f"HazardPulse Earthquake operational forecast {spec['title']}",
         description=(
             "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for every cell: "
-            f"logit p = a + c logit(p_C0) + b log10 G, with p_C0 from {stack.base_model_version} and G the GEAR1 "
+            f"{spec['formula']}, with p_C0 from {stack.base_model_version} and G the GEAR1 "
             "long-term rate (Bird et al. 2015; geodetic strain + smoothed seismicity; CC-BY-4.0) on the grid. "
-            "Weights fitted on 2018-2020, decided on 2021-2022 against C0 recalibrated on the same years "
-            "(docs/EARTHQUAKE_FORECAST_PROGRAM.md section 10); 2023-2025 is a declared second read."
+            f"Weights fitted on 2018-2020, {spec['decided']} "
+            f"(docs/EARTHQUAKE_FORECAST_PROGRAM.md {spec['doc_section']}); 2023-2025 is a declared second read."
             + ("" if bound else " No evaluation is bound to this file.")),
         weights_path=path,
         benchmark={
             "benchmark_type": "operational forward test on every cell-time of the grid (not case-control)",
             "benchmark_bound_to_this_artifact": bound,
             "decided_on": "weekly issue times 2021-2022" if bound else None,
-            "dev_ig_vs_recalibrated_C0": ((dev.get("paired") or {}).get("S1-S0") or {}).get("ig_per_target"),
+            "dev_ig_vs_recalibrated_C0": ((dev.get("paired") or {}).get(f"{cand}-S0") or {}).get("ig_per_target"),
+            **({"dev_ig_vs_S1": ((dev.get("paired") or {}).get("S2-S1") or {}).get("ig_per_target")}
+               if cand == "S2" else {}),
             "test_window": "weekly issue times 2023-2025, 30-day windows (a declared second read)" if bound else None,
             "test_information_gain_per_target_nats": (s1.get("ig_per_target") or {}).get("value"),
             "test_information_gain_ci95": (s1.get("ig_per_target") or {}).get("ci95"),
             "test_auc": (s1.get("auc") or {}).get("value"), "test_auc_ci95": (s1.get("auc") or {}).get("ci95"),
             "test_bss_vs_uniform": (s1.get("bss") or {}).get("value"),
-            "paired_this_minus_C0": ((fin.get("paired") or {}).get("S1-C0")) if bound else None,
+            "paired_this_minus_C0": ((fin.get("paired") or {}).get(f"{cand}-C0")) if bound else None,
         },
-        framework="hazardpulse_eq_operational_stack_v1",
+        framework=("hazardpulse_eq_operational_stack_v2" if stack.meta["schema"] == eq_op.STACK_SCHEMA_V2
+                   else "hazardpulse_eq_operational_stack_v1"),
         input_schema={"base_model_version": stack.base_model_version, "gear1_sha256": g1.get("sha256"),
                       "gear1_source": g1.get("source")},
         output_schema={"outputs": ["m6_probability_30d_every_cell"], "domain": "[0, 1]",
@@ -571,7 +602,7 @@ def earthquake_operational_entry(path: Path = EQ_OPERATIONAL_PATH,
     return _make_entry(
         record_id=f"weights_hazardpulse_{art.model_version}",
         name=(f"HazardPulse Earthquake operational forecast v1 (candidate {candidate}, "
-              + ("base of the served S1)" if EQ_STACK_PATH.exists() else "served)")),
+              + (f"base of the served {_served_eq_stack_candidate()})" if EQ_STACK_PATH is not None else "served)")),
         description=(
             "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for "
             f"every cell of the global grid, from {kind} of ComCat M5+ events since 1973 strictly "
@@ -754,7 +785,7 @@ def build_entries() -> list[dict]:
                "prospective": "results/earthquake_prospective/"}
     if eq_op_entry is not None:
         eq_op_entry["lineage"] = {
-            "role": "base of the served S1" if eq_stack_entry is not None else "served",
+            "role": f"base of the served {_served_eq_stack_candidate()}" if eq_stack_entry is not None else "served",
             "program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md", "amendment": "sections 1-9",
             "prereg_tag": None,
             "registration": "sections 1-8 frozen before the first fit; their SHA-256 is recorded in section 9",
@@ -765,12 +796,12 @@ def build_entries() -> list[dict]:
             "live_records": eq_live}
         entries.append(eq_op_entry)
     if eq_stack_entry is not None:
+        spec = EQ_STACKS[_served_eq_stack_candidate()]
         eq_stack_entry["lineage"] = {
-            "role": "served", "program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md", "amendment": "section 10 (E1)",
-            "prereg_tag": "prereg-earthquake-gear1",
-            "selection_and_evaluation": [{"path": p, "sha256": _file_sha256(PROJECT_ROOT / p)} for p in (
-                "results/earthquake_program/gear1_cells.json", "results/earthquake_program/gear1_e1.json",
-                "results/earthquake_program/stack_artifact.json")],
+            "role": "served", "program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md", "amendment": spec["section"],
+            "prereg_tag": spec["prereg_tag"],
+            "selection_and_evaluation": [{"path": EQ_PROGRAM_DIR + p, "sha256": _file_sha256(PROJECT_ROOT / EQ_PROGRAM_DIR / p)}
+                                         for p in spec["lineage"]],
             "external_data": {"GEAR1": "Zenodo 7086053 GEAR1.dat (CC-BY-4.0), SHA-256 in gear1_cells.json"},
             "live_records": eq_live}
         entries.append(eq_stack_entry)

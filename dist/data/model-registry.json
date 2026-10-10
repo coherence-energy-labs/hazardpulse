@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "publisher": "HazardPulse / Coherence Energy Labs",
-  "generated_at": "2026-10-10T03:42:37.503584Z",
+  "generated_at": "2026-10-10T11:05:03.180801Z",
   "n_entries": 19,
   "entries": [
     {
@@ -49,7 +49,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:35.867251Z",
+      "release_utc": "2026-10-10T11:05:01.535424Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -98,7 +98,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:35.909900Z",
+      "release_utc": "2026-10-10T11:05:01.572540Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -148,7 +148,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:35.938497Z",
+      "release_utc": "2026-10-10T11:05:01.602091Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -198,7 +198,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:35.975594Z",
+      "release_utc": "2026-10-10T11:05:01.638269Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -248,7 +248,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:35.997411Z",
+      "release_utc": "2026-10-10T11:05:01.663024Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -304,14 +304,14 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.021604Z",
+      "release_utc": "2026-10-10T11:05:01.683402Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
     },
     {
       "record_id": "weights_hazardpulse_eq_operational_C0_v1-d28c62a2e35b",
-      "name": "HazardPulse Earthquake operational forecast v1 (candidate C0, base of the served S1)",
+      "name": "HazardPulse Earthquake operational forecast v1 (candidate C0, base of the served S2)",
       "description": "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for every cell of the global grid, from boosted trees (LightGBM, scored in NumPy) over its long-term smoothed-seismicity rate, an ETAS-style short-term clustering rate and recent catalog counts of ComCat M5+ events since 1973 strictly before the issue time. Parameters fitted by Bernoulli likelihood on weekly issue times 2005-2017; chosen on 2018-2020 by a pre-registered information-gain rule with a parsimony clause; scored once on 2023-2025 (docs/EARTHQUAKE_FORECAST_PROGRAM.md). The artifact holds the parameters and the frozen M5+ catalog; live events after its cutoff come from the scorer's USGS fetch.",
       "weights_uri": "hazardpulse://results/models/earthquake_operational_v1.json",
       "weights_path": "results/models/earthquake_operational_v1.json",
@@ -440,12 +440,12 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.700276Z",
+      "release_utc": "2026-10-10T11:05:02.190681Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
       "lineage": {
-        "role": "base of the served S1",
+        "role": "base of the served S2",
         "program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md",
         "amendment": "sections 1-9",
         "prereg_tag": null,
@@ -484,15 +484,15 @@
       }
     },
     {
-      "record_id": "weights_hazardpulse_eq_operational_S1_gear1_v1-d409c534bb4c",
-      "name": "HazardPulse Earthquake operational forecast S1 (C0 + GEAR1, served)",
-      "description": "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for every cell: logit p = a + c logit(p_C0) + b log10 G, with p_C0 from eq_operational_C0_v1-d28c62a2e35b and G the GEAR1 long-term rate (Bird et al. 2015; geodetic strain + smoothed seismicity; CC-BY-4.0) on the grid. Weights fitted on 2018-2020, decided on 2021-2022 against C0 recalibrated on the same years (docs/EARTHQUAKE_FORECAST_PROGRAM.md section 10); 2023-2025 is a declared second read.",
-      "weights_uri": "hazardpulse://results/models/earthquake_gear1_stack_v1.json",
-      "weights_path": "results/models/earthquake_gear1_stack_v1.json",
-      "size_bytes": 225310,
-      "blake3": "d3ea10c7f69249d1747761b7f1e389a85694fcc54f02dcd9f4f131f7d15c25ce",
-      "sha256": "d409c534bb4ca574be6ee5b05d28a7053115bce8fcd7a1a2bf6ded4bbe773f73",
-      "framework": "hazardpulse_eq_operational_stack_v1",
+      "record_id": "weights_hazardpulse_eq_operational_S2_gear1_v2-ecb87f020f99",
+      "name": "HazardPulse Earthquake operational forecast S2 (C0 + GEAR1 weighted by the cell's activity, served)",
+      "description": "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for every cell: logit p = a + c logit(p_C0) + (b + d logit(p_C0)) log10 G, with p_C0 from eq_operational_C0_v1-d28c62a2e35b and G the GEAR1 long-term rate (Bird et al. 2015; geodetic strain + smoothed seismicity; CC-BY-4.0) on the grid. Weights fitted on 2018-2020, decided on 2021-2022 against S1, GEAR1 with one weight (docs/EARTHQUAKE_FORECAST_PROGRAM.md section 12); 2023-2025 is a declared second read.",
+      "weights_uri": "hazardpulse://results/models/earthquake_gear1_stack_v2.json",
+      "weights_path": "results/models/earthquake_gear1_stack_v2.json",
+      "size_bytes": 225438,
+      "blake3": "58a739db7daf796b878eef52dd6a659d597380fdddd9296cfcb8cbc72cd9b47d",
+      "sha256": "ecb87f020f99abe272f1bd6dbc738f608c497c7b95e36de86bfad48d8cbfb393",
+      "framework": "hazardpulse_eq_operational_stack_v2",
       "format": "json",
       "input_schema": {
         "base_model_version": "eq_operational_C0_v1-d28c62a2e35b",
@@ -505,11 +505,12 @@
         ],
         "domain": "[0, 1]",
         "calibration": "the stack's logistic weights (fitted by Bernoulli likelihood on 2018-2020)",
-        "model_version": "eq_operational_S1_gear1_v1-d409c534bb4c",
+        "model_version": "eq_operational_S2_gear1_v2-ecb87f020f99",
         "coefficients": {
-          "a": 0.30891700168422964,
-          "c": 0.9442332436931772,
-          "b": 0.25669330473358914
+          "a": -0.5386595234045181,
+          "c": 0.7461788191936157,
+          "b": -0.07815908648879437,
+          "d": -0.07326573161498508
         }
       },
       "benchmark": {
@@ -517,57 +518,65 @@
         "benchmark_bound_to_this_artifact": true,
         "decided_on": "weekly issue times 2021-2022",
         "dev_ig_vs_recalibrated_C0": {
-          "diff": 0.015883118358372972,
+          "diff": 0.02979048727441036,
           "ci95": [
-            0.001950550206330548,
-            0.029808453171298207
+            0.014148505935786138,
+            0.0458881373232704
           ],
-          "frac_boot_le_0": 0.016
+          "frac_boot_le_0": 0.0005
+        },
+        "dev_ig_vs_S1": {
+          "diff": 0.0139073689160365,
+          "ci95": [
+            0.001516319789187848,
+            0.025523650515839734
+          ],
+          "frac_boot_le_0": 0.015
         },
         "test_window": "weekly issue times 2023-2025, 30-day windows (a declared second read)",
-        "test_information_gain_per_target_nats": 2.6047309963492284,
+        "test_information_gain_per_target_nats": 2.6133805581418295,
         "test_information_gain_ci95": [
-          2.479799616100079,
-          2.7250768778735295
+          2.489305236978176,
+          2.7320432697409816
         ],
-        "test_auc": 0.9686514551297539,
+        "test_auc": 0.968720390004432,
         "test_auc_ci95": [
-          0.9643775877831003,
-          0.9725923876875584
+          0.9644724677336102,
+          0.9726253165027496
         ],
-        "test_bss_vs_uniform": 0.02076368474679824,
+        "test_bss_vs_uniform": 0.021865496213490765,
         "paired_this_minus_C0": {
           "ig_per_target": {
-            "diff": 0.01153377786903409,
+            "diff": 0.020183339661636435,
             "ci95": [
-              -0.0011560725283194407,
-              0.023811189712158124
+              0.003202905439769244,
+              0.036637854539457504
             ],
-            "frac_boot_le_0": 0.033
+            "frac_boot_le_0": 0.008
           },
           "auc": {
-            "diff": 0.0005657929997436861,
+            "diff": 0.0006347278744217588,
             "ci95": [
-              4.2095547713172726e-07,
-              0.0013004235617450064
+              -9.485846528573537e-05,
+              0.0014778571538368195
             ],
-            "frac_boot_le_0": 0.025
+            "frac_boot_le_0": 0.0465
           },
           "brier": {
-            "diff": 1.6434983564112167e-07,
+            "diff": -6.868679951909816e-07,
             "ci95": [
-              -3.3361789170986895e-07,
-              6.64958608687281e-07
+              -1.4791637655697911e-06,
+              9.757647058558824e-08
             ],
-            "frac_boot_le_0": 0.2665
+            "frac_boot_le_0": 0.9595
           },
           "bss": {
-            "diff": -0.0002127334824287841,
+            "diff": 0.000889077984263742,
             "ci95": [
-              -0.0008415135724039152,
-              0.00043984233468048425
+              -0.00012282310286806374,
+              0.0020254572770575896
             ],
-            "frac_boot_le_0": 0.7335
+            "frac_boot_le_0": 0.0405
           }
         }
       },
@@ -576,27 +585,31 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.797956Z",
+      "release_utc": "2026-10-10T11:05:02.266971Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
       "lineage": {
         "role": "served",
         "program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md",
-        "amendment": "section 10 (E1)",
-        "prereg_tag": "prereg-earthquake-gear1",
+        "amendment": "section 12 (E4)",
+        "prereg_tag": "prereg-earthquake-e4",
         "selection_and_evaluation": [
           {
             "path": "results/earthquake_program/gear1_cells.json",
             "sha256": "1a6e04893eab8fd144c8b2f3421b3c7c68ad32b966596d3a5a3a7e7b71accfe2"
           },
           {
-            "path": "results/earthquake_program/gear1_e1.json",
-            "sha256": "72407c74f73a7d31e4932ca38f4b804f0974008bf56978beff8d2d8dc009a5d7"
+            "path": "results/earthquake_program/gear1_e4.json",
+            "sha256": "fe257dc245988e8495c4a9f2aaa8c92f4b1b385190b5d38f9d66137d7cb93c2c"
+          },
+          {
+            "path": "results/earthquake_program/gear1_served.json",
+            "sha256": "7ec7a2687dab8805ee5274aad7a92bfbbbfe0445c65f14db5b8a419db49652bb"
           },
           {
             "path": "results/earthquake_program/stack_artifact.json",
-            "sha256": "ddcee50ea38751a1a164b80878e2e47513c8829e2f5070e6c3c35eb6e660b733"
+            "sha256": "bd7ab1ef701418fe36b91321e08bdf609c5175ffc4554a995d2b5eb8e146449f"
           }
         ],
         "external_data": {
@@ -642,7 +655,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.902364Z",
+      "release_utc": "2026-10-10T11:05:02.401542Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -711,7 +724,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.938667Z",
+      "release_utc": "2026-10-10T11:05:02.435838Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -796,7 +809,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.973490Z",
+      "release_utc": "2026-10-10T11:05:02.478293Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -873,7 +886,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.031604Z",
+      "release_utc": "2026-10-10T11:05:02.542752Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -950,7 +963,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.097647Z",
+      "release_utc": "2026-10-10T11:05:02.618758Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -1067,7 +1080,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.246155Z",
+      "release_utc": "2026-10-10T11:05:02.824445Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -1266,7 +1279,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.278028Z",
+      "release_utc": "2026-10-10T11:05:02.905219Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -1345,7 +1358,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.456202Z",
+      "release_utc": "2026-10-10T11:05:03.078638Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -1403,7 +1416,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.479164Z",
+      "release_utc": "2026-10-10T11:05:03.131062Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -1480,7 +1493,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.499144Z",
+      "release_utc": "2026-10-10T11:05:03.164871Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -1619,7 +1632,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.502782Z",
+      "release_utc": "2026-10-10T11:05:03.180008Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -1671,7 +1684,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:35.867251Z",
+      "release_utc": "2026-10-10T11:05:01.535424Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -1720,7 +1733,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:35.909900Z",
+      "release_utc": "2026-10-10T11:05:01.572540Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -1770,7 +1783,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:35.938497Z",
+      "release_utc": "2026-10-10T11:05:01.602091Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -1820,7 +1833,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:35.975594Z",
+      "release_utc": "2026-10-10T11:05:01.638269Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -1870,7 +1883,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:35.997411Z",
+      "release_utc": "2026-10-10T11:05:01.663024Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -1926,14 +1939,14 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.021604Z",
+      "release_utc": "2026-10-10T11:05:01.683402Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
     },
     {
       "record_id": "weights_hazardpulse_eq_operational_C0_v1-d28c62a2e35b",
-      "name": "HazardPulse Earthquake operational forecast v1 (candidate C0, base of the served S1)",
+      "name": "HazardPulse Earthquake operational forecast v1 (candidate C0, base of the served S2)",
       "description": "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for every cell of the global grid, from boosted trees (LightGBM, scored in NumPy) over its long-term smoothed-seismicity rate, an ETAS-style short-term clustering rate and recent catalog counts of ComCat M5+ events since 1973 strictly before the issue time. Parameters fitted by Bernoulli likelihood on weekly issue times 2005-2017; chosen on 2018-2020 by a pre-registered information-gain rule with a parsimony clause; scored once on 2023-2025 (docs/EARTHQUAKE_FORECAST_PROGRAM.md). The artifact holds the parameters and the frozen M5+ catalog; live events after its cutoff come from the scorer's USGS fetch.",
       "weights_uri": "hazardpulse://results/models/earthquake_operational_v1.json",
       "weights_path": "results/models/earthquake_operational_v1.json",
@@ -2062,12 +2075,12 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.700276Z",
+      "release_utc": "2026-10-10T11:05:02.190681Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
       "lineage": {
-        "role": "base of the served S1",
+        "role": "base of the served S2",
         "program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md",
         "amendment": "sections 1-9",
         "prereg_tag": null,
@@ -2106,15 +2119,15 @@
       }
     },
     {
-      "record_id": "weights_hazardpulse_eq_operational_S1_gear1_v1-d409c534bb4c",
-      "name": "HazardPulse Earthquake operational forecast S1 (C0 + GEAR1, served)",
-      "description": "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for every cell: logit p = a + c logit(p_C0) + b log10 G, with p_C0 from eq_operational_C0_v1-d28c62a2e35b and G the GEAR1 long-term rate (Bird et al. 2015; geodetic strain + smoothed seismicity; CC-BY-4.0) on the grid. Weights fitted on 2018-2020, decided on 2021-2022 against C0 recalibrated on the same years (docs/EARTHQUAKE_FORECAST_PROGRAM.md section 10); 2023-2025 is a declared second read.",
-      "weights_uri": "hazardpulse://results/models/earthquake_gear1_stack_v1.json",
-      "weights_path": "results/models/earthquake_gear1_stack_v1.json",
-      "size_bytes": 225310,
-      "blake3": "d3ea10c7f69249d1747761b7f1e389a85694fcc54f02dcd9f4f131f7d15c25ce",
-      "sha256": "d409c534bb4ca574be6ee5b05d28a7053115bce8fcd7a1a2bf6ded4bbe773f73",
-      "framework": "hazardpulse_eq_operational_stack_v1",
+      "record_id": "weights_hazardpulse_eq_operational_S2_gear1_v2-ecb87f020f99",
+      "name": "HazardPulse Earthquake operational forecast S2 (C0 + GEAR1 weighted by the cell's activity, served)",
+      "description": "P(at least one ComCat M6.0+ epicentre in the 2-degree cell within the next 30 days) for every cell: logit p = a + c logit(p_C0) + (b + d logit(p_C0)) log10 G, with p_C0 from eq_operational_C0_v1-d28c62a2e35b and G the GEAR1 long-term rate (Bird et al. 2015; geodetic strain + smoothed seismicity; CC-BY-4.0) on the grid. Weights fitted on 2018-2020, decided on 2021-2022 against S1, GEAR1 with one weight (docs/EARTHQUAKE_FORECAST_PROGRAM.md section 12); 2023-2025 is a declared second read.",
+      "weights_uri": "hazardpulse://results/models/earthquake_gear1_stack_v2.json",
+      "weights_path": "results/models/earthquake_gear1_stack_v2.json",
+      "size_bytes": 225438,
+      "blake3": "58a739db7daf796b878eef52dd6a659d597380fdddd9296cfcb8cbc72cd9b47d",
+      "sha256": "ecb87f020f99abe272f1bd6dbc738f608c497c7b95e36de86bfad48d8cbfb393",
+      "framework": "hazardpulse_eq_operational_stack_v2",
       "format": "json",
       "input_schema": {
         "base_model_version": "eq_operational_C0_v1-d28c62a2e35b",
@@ -2127,11 +2140,12 @@
         ],
         "domain": "[0, 1]",
         "calibration": "the stack's logistic weights (fitted by Bernoulli likelihood on 2018-2020)",
-        "model_version": "eq_operational_S1_gear1_v1-d409c534bb4c",
+        "model_version": "eq_operational_S2_gear1_v2-ecb87f020f99",
         "coefficients": {
-          "a": 0.30891700168422964,
-          "c": 0.9442332436931772,
-          "b": 0.25669330473358914
+          "a": -0.5386595234045181,
+          "c": 0.7461788191936157,
+          "b": -0.07815908648879437,
+          "d": -0.07326573161498508
         }
       },
       "benchmark": {
@@ -2139,57 +2153,65 @@
         "benchmark_bound_to_this_artifact": true,
         "decided_on": "weekly issue times 2021-2022",
         "dev_ig_vs_recalibrated_C0": {
-          "diff": 0.015883118358372972,
+          "diff": 0.02979048727441036,
           "ci95": [
-            0.001950550206330548,
-            0.029808453171298207
+            0.014148505935786138,
+            0.0458881373232704
           ],
-          "frac_boot_le_0": 0.016
+          "frac_boot_le_0": 0.0005
+        },
+        "dev_ig_vs_S1": {
+          "diff": 0.0139073689160365,
+          "ci95": [
+            0.001516319789187848,
+            0.025523650515839734
+          ],
+          "frac_boot_le_0": 0.015
         },
         "test_window": "weekly issue times 2023-2025, 30-day windows (a declared second read)",
-        "test_information_gain_per_target_nats": 2.6047309963492284,
+        "test_information_gain_per_target_nats": 2.6133805581418295,
         "test_information_gain_ci95": [
-          2.479799616100079,
-          2.7250768778735295
+          2.489305236978176,
+          2.7320432697409816
         ],
-        "test_auc": 0.9686514551297539,
+        "test_auc": 0.968720390004432,
         "test_auc_ci95": [
-          0.9643775877831003,
-          0.9725923876875584
+          0.9644724677336102,
+          0.9726253165027496
         ],
-        "test_bss_vs_uniform": 0.02076368474679824,
+        "test_bss_vs_uniform": 0.021865496213490765,
         "paired_this_minus_C0": {
           "ig_per_target": {
-            "diff": 0.01153377786903409,
+            "diff": 0.020183339661636435,
             "ci95": [
-              -0.0011560725283194407,
-              0.023811189712158124
+              0.003202905439769244,
+              0.036637854539457504
             ],
-            "frac_boot_le_0": 0.033
+            "frac_boot_le_0": 0.008
           },
           "auc": {
-            "diff": 0.0005657929997436861,
+            "diff": 0.0006347278744217588,
             "ci95": [
-              4.2095547713172726e-07,
-              0.0013004235617450064
+              -9.485846528573537e-05,
+              0.0014778571538368195
             ],
-            "frac_boot_le_0": 0.025
+            "frac_boot_le_0": 0.0465
           },
           "brier": {
-            "diff": 1.6434983564112167e-07,
+            "diff": -6.868679951909816e-07,
             "ci95": [
-              -3.3361789170986895e-07,
-              6.64958608687281e-07
+              -1.4791637655697911e-06,
+              9.757647058558824e-08
             ],
-            "frac_boot_le_0": 0.2665
+            "frac_boot_le_0": 0.9595
           },
           "bss": {
-            "diff": -0.0002127334824287841,
+            "diff": 0.000889077984263742,
             "ci95": [
-              -0.0008415135724039152,
-              0.00043984233468048425
+              -0.00012282310286806374,
+              0.0020254572770575896
             ],
-            "frac_boot_le_0": 0.7335
+            "frac_boot_le_0": 0.0405
           }
         }
       },
@@ -2198,27 +2220,31 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.797956Z",
+      "release_utc": "2026-10-10T11:05:02.266971Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
       "lineage": {
         "role": "served",
         "program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md",
-        "amendment": "section 10 (E1)",
-        "prereg_tag": "prereg-earthquake-gear1",
+        "amendment": "section 12 (E4)",
+        "prereg_tag": "prereg-earthquake-e4",
         "selection_and_evaluation": [
           {
             "path": "results/earthquake_program/gear1_cells.json",
             "sha256": "1a6e04893eab8fd144c8b2f3421b3c7c68ad32b966596d3a5a3a7e7b71accfe2"
           },
           {
-            "path": "results/earthquake_program/gear1_e1.json",
-            "sha256": "72407c74f73a7d31e4932ca38f4b804f0974008bf56978beff8d2d8dc009a5d7"
+            "path": "results/earthquake_program/gear1_e4.json",
+            "sha256": "fe257dc245988e8495c4a9f2aaa8c92f4b1b385190b5d38f9d66137d7cb93c2c"
+          },
+          {
+            "path": "results/earthquake_program/gear1_served.json",
+            "sha256": "7ec7a2687dab8805ee5274aad7a92bfbbbfe0445c65f14db5b8a419db49652bb"
           },
           {
             "path": "results/earthquake_program/stack_artifact.json",
-            "sha256": "ddcee50ea38751a1a164b80878e2e47513c8829e2f5070e6c3c35eb6e660b733"
+            "sha256": "bd7ab1ef701418fe36b91321e08bdf609c5175ffc4554a995d2b5eb8e146449f"
           }
         ],
         "external_data": {
@@ -2264,7 +2290,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.902364Z",
+      "release_utc": "2026-10-10T11:05:02.401542Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -2333,7 +2359,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.938667Z",
+      "release_utc": "2026-10-10T11:05:02.435838Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -2418,7 +2444,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:36.973490Z",
+      "release_utc": "2026-10-10T11:05:02.478293Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -2495,7 +2521,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.031604Z",
+      "release_utc": "2026-10-10T11:05:02.542752Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -2572,7 +2598,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.097647Z",
+      "release_utc": "2026-10-10T11:05:02.618758Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -2689,7 +2715,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.246155Z",
+      "release_utc": "2026-10-10T11:05:02.824445Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -2888,7 +2914,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.278028Z",
+      "release_utc": "2026-10-10T11:05:02.905219Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -2967,7 +2993,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.456202Z",
+      "release_utc": "2026-10-10T11:05:03.078638Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -3025,7 +3051,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.479164Z",
+      "release_utc": "2026-10-10T11:05:03.131062Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish",
@@ -3102,7 +3128,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.499144Z",
+      "release_utc": "2026-10-10T11:05:03.164871Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"
@@ -3241,7 +3267,7 @@
       "license": "Apache-2.0",
       "publisher": "HazardPulse / Coherence Energy Labs",
       "publisher_url": "https://hazardpulse.com",
-      "release_utc": "2026-10-10T03:42:37.502782Z",
+      "release_utc": "2026-10-10T11:05:03.180008Z",
       "rf_npe_compatible": false,
       "modality": "natural_hazard_prediction",
       "source": "hazardpulse_publish"

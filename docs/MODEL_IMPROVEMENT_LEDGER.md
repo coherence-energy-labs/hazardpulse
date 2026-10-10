@@ -34,7 +34,7 @@ Read it before starting model work, and update it when a branch is decided.
 | Hurricane RI, other basins (JTWC: WP, IO, SH) | **HazardPulse v8.3** (since 2026-10-10: v8.2's recipe on de-duplicated rows, non-inferior by amendment 15's rule; v8.2 kept as J1's base) | **J1 in test** beside it (amendments 13b and 14): recorded on every JTWC storm (`ri_j1_shadow`), shown only on storm cards in its scope, WP and SI (`ri_j1.scope()`). Never the published number unless its prospective claim is met at a look (v9.1's rule at 97.5%, the JTWC family's first budget; 2026-12-01, 2027-12-01; live in-scope cycles only) | `results/calibration/hurricane_ri_evaluation.json`, `hurricane_ri_v8_2_test_composition.json`; J1: `hurricane_ri_j1.json`, `hurricane_ri_j2.json` (scope); live record `results/hurricane_prospective/j1_shadow.json` |
 | Hurricane track and intensity, NHC basins | -- (NHC's official forecast is the authority) | **TC1 shown beside OFCL** on every NHC storm card since 2026-10-08 (`hurricane_tc1-<state digest>`); **TC1+O** recorded, not shown; **TC2b** (TC1's intensity held to our RI model's median, amendments 2-4) recorded since 2026-10-10, in test; **TC2b+O** (the same on TC1+O, amendments 5-6; DEV mean 12.543 kt vs OFCL 12.627, no claim) recorded and shown on storm cards since 2026-10-10, in test | `docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md` amendment 1; `results/hurricane_tc1/` |
 | Tornado | v3 (+NWS warning state) | **T2b in shadow** (amendment 11: the served payloads' margins Platt-refitted on new-format data; `t2b_shadow` on every v3 forecast; decided at 2027-07-01 / 2028-07-01) | `docs/TORNADO_MODEL_PROGRAM.md` (amendment 10: stays served after the format change) |
-| Earthquake M6+ | **S1 = C0 + GEAR1** (since 2026-10-03) | -- | `docs/EARTHQUAKE_FORECAST_PROGRAM.md` sections 10-11 |
+| Earthquake M6+ | **S2 = C0 + GEAR1 weighted by the cell's activity** (since 2026-10-10, amendment E4; S1 served 2026-10-03 to 2026-10-10) | -- | `docs/EARTHQUAKE_FORECAST_PROGRAM.md` sections 10-12 |
 
 The site shows each of these from its artifact (methods, registry, the hurricane page), and since 2026-10-09 the
 methods page carries the research record below -- carried and not carried -- each row read from its results file.
@@ -246,7 +246,21 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
    - GEAR1 *alone* loses to our causal smoothed seismicity by 0.2-0.3 nats. The best public global
      model is a useful input, not a better forecast.
    - Open from it: GEAR1's strain-rate term only enters as one global weight. A per-region or
-     per-depth weight is the next experiment (pre-register it; fit on CHOOSE).
+     per-depth weight is the next experiment (pre-register it; fit on CHOOSE). Done as E4.
+1a. **E4. DONE (2026-10-10): S2 -- GEAR1's weight follows the cell's activity, CARRIED** (section 12, tag
+   `prereg-earthquake-e4`, `results/earthquake_program/gear1_e4.json`).
+   - **The form:** `logit p = a + c z + b g + d z g`, with z = logit(p_C0). It is the one-parameter version of
+     "per region", along the axis the physics names: strain should matter where the catalog is quiet.
+   - **Result:** DEV S2 - S1 **+0.0139 [+0.0015, +0.0255]** nats per target; FINAL second read +0.0087
+     [+0.0001, +0.0169].
+   - **The registered prediction held:** d = -0.073, so GEAR1's weight is 0.73 in a typical cell and 0.11
+     where M6+ earthquakes happen.
+   - **Size:** GEAR1's total contribution about doubles (S1 - S0 was +0.016).
+   - **Serving (section 12.2):** stack schema v2, built with formula and live parity on a runner. The scorer,
+     evidence and registry read one constant (`hazardpulse.earthquake.served`). A named stack that is missing now
+     stops the run; it used to fall back to C0 alone.
+   - **Open from it:** DEV has decided E1, E3 and E4. The prospective record (section 8) is the independent
+     check.
 2. **E2.** The margin over smoothed seismicity is at the edge of zero.
    - Decide whether this is power (number of M6+ quakes) or a real limit, with a per-year
      breakdown and a power estimate before any new features.

@@ -713,3 +713,21 @@ the program data.
 - **The switch:** the live scorer, the served-model evidence and the model registry move to the v2 file in one
   change, together with the files above. A missing stack would silently serve C0 alone, so the pointer never moves
   ahead of its file.
+
+**12.2 outcome (2026-10-10): S2 is served.**
+- **The build:** run `research-earthquake-serve.yml` 38046531563 on `b77bcde58`.
+- **The served version:** `eq_operational_S2_gear1_v2-ecb87f020f99`, on `eq_operational_C0_v1-d28c62a2e35b`.
+- **Parity:** formula 5.6e-17, live 5.6e-17.
+- **The served evaluation** (`gear1_served.json`) reproduces the registered runs. S2's information gain matches
+  `gear1_e4.json` on every split, and S1's matches `gear1_e1.json`. The reference models A, B, C0, S1 and D agree
+  with E1's report to 1e-15.
+- **FINAL second read, S2 against each model:**
+
+  | | S1 | S0 | C0 | A | B |
+  |---|---|---|---|---|---|
+  | S2 minus it (nats per target) | +0.009 | +0.022 | +0.020 | +0.081 | +0.011 |
+
+- **The switch:** the scorer, the evidence and the registry name the served stack once
+  (`hazardpulse.earthquake.served`).
+- **S1's file stays in the repository,** so every forecast issued under `eq_operational_S1_gear1_v1-d409c534bb4c`
+  can still be recomputed.
