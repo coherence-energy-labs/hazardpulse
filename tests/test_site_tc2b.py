@@ -25,7 +25,7 @@ def test_a_good_tc2b_record_adds_its_column_with_its_own_label_and_winds():
     assert "With our RI model (TC2b)" in html and ">65 kt<" in html
     row12 = html[html.find(">12 h<"):html.find(">24 h<")]
     assert row12.count(" kt<") == 3 and ">50 kt<" in row12            # TC1 42, TC2b 50, NHC 45
-    assert "moved TC1 by 15 kt at 24 hours" in html
+    assert "moved them by 15 kt at 24 hours" in html and "TC1&rsquo;s winds" in html
     relabelled = hurricane._tc1_table(_storm(dict(GOOD, label="X9")))       # the label is the record's, not the page's
     assert "With our RI model (X9)" in relabelled and "TC2b" not in relabelled.split("caption")[0]
 
@@ -36,4 +36,13 @@ def test_no_tc2b_or_a_failed_one_leaves_tc1s_table_exactly_as_it_was():
     assert hurricane._tc1_table(_storm({"status": "error: x"})) == plain
     agree = dict(GOOD, moved_tc1=False, shift_24h_kt=None, intensity={"12": 42.0, "24": 50.0})
     html = hurricane._tc1_table(_storm(copy.deepcopy(agree)))
-    assert "this cycle it agrees with TC1" in html
+    assert "our rapid-intensification model agrees with them" in html
+
+
+def test_tc2b_plus_o_is_preferred_where_the_record_has_it():
+    st = _storm(GOOD)
+    st["tc1"]["TC2b+O"] = dict(GOOD, label="TC2b+O", base="TC1+O", intensity={"12": 47.0, "24": 61.0}, shift_24h_kt=6.0)
+    html = hurricane._tc1_table(st)
+    assert "With our RI model (TC2b+O)" in html and ">61 kt<" in html and "combined with NHC&rsquo;s" in html
+    st["tc1"]["TC2b+O"] = {"status": "error: x"}                       # a failed TC2b+O falls back to TC2b
+    assert "With our RI model (TC2b)" in hurricane._tc1_table(st)

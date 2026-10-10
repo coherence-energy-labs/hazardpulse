@@ -226,12 +226,77 @@ def read2026() -> int:
     return 0
 
 
+TC2BO_OUT = OUT_DIR / "tc2bo.json"
+
+
+def _evaluate_o(decks, truth_of, seasons, curve_of) -> dict:
+    """Amendment 5: TC1+O and TC2b+O (TC2b's rule on TC1+O) against each other and NHC's aids."""
+    case_list = tc1.cases(decks, truth_of, seasons)
+    run_o = cs.run(decks, tc1.chosen("intensity", official=True), "intensity", keep_weights=False)
+    prod_o, stats = tc2_product(decks, run_o, curve_of, tc2.TC2B_TAPER_END_H)
+    products = {"TC1+O": run_o, "TC2b+O": prod_o, "OFCL": "OFCL", "HCCA": "HCCA", "IVCN": "IVCN"}
+    errs = tc1.score(case_list, "intensity", REPORT_LEADS, products)
+    ri = _ri_subset(case_list)
+    return {"errors": {p: tc1.mean_error(e, tc1.SCORED_LEADS) for p, e in errs.items()},
+            "errors_12h": {p: (float(np.mean(list(e[12].values()))) if e[12] else None, len(e[12])) for p, e in errs.items()},
+            "TC2b+O-TC1+O": tc1.paired(errs["TC2b+O"], errs["TC1+O"], tc1.SCORED_LEADS, tc1.REPORT_LEVEL),
+            "TC2b+O-TC1+O_12h": tc1.paired(errs["TC2b+O"], errs["TC1+O"], (12,), tc1.REPORT_LEVEL),
+            "reported": {f"{p}-{q}": tc1.paired(errs[p], errs[q], tc1.SCORED_LEADS, tc1.REPORT_LEVEL)
+                         for p in ("TC2b+O", "TC1+O") for q in ("OFCL", "HCCA", "IVCN")},
+            "shift_stats": stats,
+            "ri_subset": {"cycles": len(ri), **{
+                str(ld): {p: (float(np.mean([v for k, v in errs[p][ld].items() if k in ri])) if any(k in ri for k in errs[p][ld]) else None,
+                              sum(1 for k in errs[p][ld] if k in ri)) for p in ("TC1+O", "TC2b+O", "OFCL", "HCCA")}
+                for ld in (12, 24)}}}
+
+
+def tc2bo() -> int:
+    """Amendment 5's registered test: TC2b+O against TC1+O on DEV and on 2026; carried iff both seasons agree."""
+    dev_curves = json.loads(CURVES_DEV.read_text(encoding="utf-8"))["curves"]
+    c26 = json.loads(CURVES_2026.read_text(encoding="utf-8"))["curves"]
+    seasons = tc1.WARMUP + tc1.CHOOSE + tc1.DEV
+    truth = tc1.load_truth(seasons)
+    decks = tc1.load_decks(tc1.ALL_TECHS, seasons)
+    dev_res = _evaluate_o(decks, lambda d: tc1.truth_for(d, truth), tc1.DEV, dev_curves)
+    want = json.loads(tc1.DEV_OUT.read_text(encoding="utf-8"))["intensity"]["errors"]["TC1+O"]["mean_over_leads"]
+    got = dev_res["errors"]["TC1+O"]["mean_over_leads"]
+    if abs(got - want) > 1e-9:
+        raise SystemExit(f"control failed: TC1+O DEV intensity {got!r} != the registered {want!r}")
+    storms = tc1.fetch_2026()
+    decks26 = tc1.load_decks(tc1.ALL_TECHS, seasons + (2026,))
+    t26 = {s: tc1.btk_truth(s) for s in storms}
+    res26 = _evaluate_o(decks26, lambda d: t26.get(d.storm, {}), (2026,), c26)
+
+    def ok(r):
+        d = r["TC2b+O-TC1+O"]
+        return bool(d.get("n_storms") and d["per_lead"]["24"]["d"] < 0 and d["mean_over_leads"]["d"] < 0)
+    carried = ok(dev_res) and ok(res26)
+    TC2BO_OUT.write_text(json.dumps({
+        "phase": "TC2b+O test (amendment 5)", "program": "docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md (amendment 5)",
+        "prereg_tag": "prereg-tc2bo", "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "control_tc1o_dev_intensity": got, "storms_2026": storms, "carried": "TC2b+O" if carried else "TC1+O",
+        "dev": dev_res, "season_2026": res26}, indent=1), encoding="utf-8")
+    tc1.log(f"control passed: TC1+O DEV intensity {got:.6f}")
+    for name, r in (("DEV", dev_res), ("2026", res26)):
+        d = r["TC2b+O-TC1+O"]
+        e = r["errors"]
+        tc1.log(f"{name}: " + ", ".join(f"{p} {v['mean_over_leads']:.3f}" for p, v in e.items() if v["mean_over_leads"])
+                + f" | TC2b+O - TC1+O mean {d['mean_over_leads']['d']:+.3f} [{d['mean_over_leads']['ci'][0]:+.3f}, "
+                f"{d['mean_over_leads']['ci'][1]:+.3f}], 24 h {d['per_lead']['24']['d']:+.3f} "
+                f"[{d['per_lead']['24']['ci'][0]:+.2f}, {d['per_lead']['24']['ci'][1]:+.2f}]"
+                + f" | vs OFCL {r['reported']['TC2b+O-OFCL']['mean_over_leads']['d']:+.3f} "
+                f"[{r['reported']['TC2b+O-OFCL']['mean_over_leads']['ci'][0]:+.3f}, {r['reported']['TC2b+O-OFCL']['mean_over_leads']['ci'][1]:+.3f}]"
+                + f" | RI {json.dumps(r['ri_subset'])}")
+    tc1.log(f"CARRIED TC2b+O: {carried}")
+    return 0
+
+
 def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=("curves", "dev", "read2026"))
+    ap.add_argument("phase", choices=("curves", "dev", "read2026", "tc2bo"))
     a = ap.parse_args(argv)
-    return {"curves": curves, "dev": dev, "read2026": read2026}[a.phase]()
+    return {"curves": curves, "dev": dev, "read2026": read2026, "tc2bo": tc2bo}[a.phase]()
 
 
 if __name__ == "__main__":

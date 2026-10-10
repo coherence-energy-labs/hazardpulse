@@ -139,8 +139,8 @@ def _tc1_table(s: dict, tc1_ev: dict | None = None) -> str:
             return "&mdash;"
         return f"{fmt.num(haversine_km(a['lat'], a['lon'], b['lat'], b['lon']) / KM_PER_NM)} n mi"
 
-    # TC2b (TC1 program amendment 4): TC1's winds held to our RI model's median, recorded beside TC1, in test
-    t2 = tc.get("TC2b") if (tc.get("TC2b") or {}).get("status") == "ok" else None
+    # TC2b+O (amendment 6) where the record has it, else TC2b (amendment 4): winds held to our RI model's median
+    t2 = next((tc[k] for k in ("TC2b+O", "TC2b") if (tc.get(k) or {}).get("status") == "ok"), None)
     t2i = (t2 or {}).get("intensity") or {}
 
     def t2kt(lead):
@@ -155,10 +155,11 @@ def _tc1_table(s: dict, tc1_ev: dict | None = None) -> str:
     if t2:
         label = esc(t2.get("label") or "")
         moved = t2.get("moved_tc1") and t2.get("shift_24h_kt") is not None
-        caption += (f" {label}, in test: TC1&rsquo;s winds held to what our rapid-intensification model expects "
+        base = "our forecast combined with NHC&rsquo;s" if t2.get("base") == "TC1+O" else "TC1&rsquo;s"
+        caption += (f" {label}, in test: {base} winds held to what our rapid-intensification model expects "
                     "over the next day"
-                    + (f"; this cycle it moved TC1 by {fmt.num(t2['shift_24h_kt'], 0)} kt at 24 hours." if moved
-                       else "; this cycle it agrees with TC1."))
+                    + (f"; this cycle it moved them by {fmt.num(t2['shift_24h_kt'], 0)} kt at 24 hours." if moved
+                       else "; this cycle our rapid-intensification model agrees with them."))
     head = (["Hours ahead", "HazardPulse position", "HazardPulse winds"]
             + ([f"With our RI model ({esc(t2.get('label') or '')})"] if t2 else [])
             + ["NHC position", "NHC winds", "Apart"])
@@ -267,8 +268,34 @@ def _tc2b_paragraph(t: dict | None) -> str:
             f"{fmt.num(rdev.get('TC2'), 1)} kt on {t.get('ri_dev_cycles') or 0} cycles of {dev_span}. Over every "
             f"cycle the change is small: {fmt.num(lead24.get('d'), 2)} kt at 24 hours {ci(lead24)} and "
             f"{fmt.num(s26.get('d'), 2)} kt {ci(s26)} over one to five days on {test_season} ({_level(s26.get('level'))} "
-            "intervals), because most cycles are left as they were. It is shown beside TC1 on the storm cards while "
-            "it is tested on new forecasts.</p>")
+            "intervals), because most cycles are left as they were.</p>" + _tc2bo_sentence(t.get("tc2bo"), dev_span, test_season))
+
+
+def _tc2bo_sentence(bo: dict | None, dev_span: str, test_season) -> str:
+    """TC2b+O (amendment 5): the same rule on TC1+O, which the storm cards show -- every number from ``tc2bo.json``."""
+    if not bo:
+        return ("<p>It is shown beside TC1 on the storm cards while it is tested on new forecasts.</p>")
+    label = esc(bo.get("label") or "")
+    d, s = bo.get("dev") or {}, bo.get("season_2026") or {}
+    vo, so = d.get("vs_ofcl") or {}, s.get("vs_ofcl") or {}
+
+    def ci(x):
+        return f"[{fmt.num(x['ci'][0], 2)}, {fmt.num(x['ci'][1], 2)}]" if x and x.get("ci") else ""
+
+    lead = ("below" if (vo.get("d") or 0) < 0 else "above")
+    return (f"<p><strong>What the storm cards show: {label}.</strong> The same rule applied to TC1+O, our forecast "
+            "with NHC&rsquo;s official forecast as one more member, which had the lowest intensity error of our "
+            f"forecasts. It improved on TC1+O in both seasons tested. On {dev_span} its average intensity error over one "
+            f"to five days, {fmt.num(d['mean'].get('TC2b+O'), 2)} kt, was {lead} NHC&rsquo;s official "
+            f"{fmt.num(d['mean'].get('OFCL'), 2)} kt (difference {fmt.num(vo.get('d'), 2)} kt {ci(vo)}, which could be "
+            f"chance); on {test_season} NHC&rsquo;s official forecast leads, {fmt.num(s['mean'].get('OFCL'), 2)} against "
+            f"{fmt.num(s['mean'].get('TC2b+O'), 2)} kt ({fmt.num(so.get('d'), 2)} kt {ci(so)}). On the cycles that "
+            f"intensified rapidly, its 24-hour error was {fmt.num(d['ri_24h'].get('TC2b+O'), 1)} kt against "
+            f"TC1+O&rsquo;s {fmt.num(d['ri_24h'].get('TC1+O'), 1)} on {dev_span} and "
+            f"{fmt.num(s['ri_24h'].get('TC2b+O'), 1)} against {fmt.num(s['ri_24h'].get('TC1+O'), 1)} on {test_season} "
+            f"(NHC: {fmt.num(d['ri_24h'].get('OFCL'), 1)} and {fmt.num(s['ri_24h'].get('OFCL'), 1)}). It is shown "
+            "beside our track forecast while it is tested on new forecasts; no claim against NHC&rsquo;s official "
+            "forecast is made.</p>")
 
 
 def _j1_row(s: dict, j1: dict | None) -> tuple[str, str] | None:

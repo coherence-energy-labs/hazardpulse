@@ -92,3 +92,15 @@ def test_an_open_bracket_is_strict_json_and_the_writer_never_publishes_a_non_fin
     json.dumps(out, allow_nan=False)                                  # raises on any non-finite number
     clean, bad = fs.strict_json({"a": [1.0, float("-inf")], "b": {"c": float("nan"), "d": 2}})
     assert clean == {"a": [1.0, None], "b": {"c": None, "d": 2}} and bad == ["/a/1", "/b/c"]
+
+
+def test_tc2b_plus_o_is_the_same_rule_on_tc1_plus_os_own_winds():
+    fs = _fs()
+    rec = _rec()
+    rec["TC1+O"] = {k: dict(v, vmax_kt=v["vmax_kt"] + 4.0) for k, v in rec["TC1"].items()}   # TC1+O: 4 kt higher
+    out = fs.tc2b_record(_storm(), rec, _Deck(35.0), base="TC1+O", label="TC2b+O")
+    want, _ = tc2.project({int(k): v["vmax_kt"] for k, v in rec["TC1+O"].items()}, 35.0,
+                          {int(k): v for k, v in CURVE.items()}, tc2.TC2B_TAPER_END_H)
+    assert out["label"] == "TC2b+O" and out["base"] == "TC1+O"
+    assert out["intensity"] == {str(k): round(v, 1) for k, v in sorted(want.items())}
+    assert out["shift_24h_kt"] == pytest.approx(11.0)                   # TC1+O +19 kt; the bracket starts at +30

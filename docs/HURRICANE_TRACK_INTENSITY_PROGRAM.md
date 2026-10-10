@@ -425,6 +425,88 @@ positive on both: the first two days.
 **The live record (descriptive).** At this program's looks (2026-12-01, 2027-12-01), the live TC2b, TC1 and OFCL
 intensity records are scored by this program's verifier, as amendment 1 does for TC1. A claim needs its own
 registration.
+
+## Amendment 5 -- TC2b+O: the bracket on our best base forecast (2026-10-10, before any TC2b+O number exists)
+
+**Why.** TC2b's bracket is a post-processor: it can hold any intensity forecast to our RI model's median. The best
+base to hold is the one with the lowest registered error.
+- **The base, chosen by a number already registered:** DEV intensity mean error over 24-120 h
+  (`results/hurricane_tc1/dev.json`):
+
+  | TC1+O | OFCL | TC1 |
+  |---|---|---|
+  | **12.599** | 12.627 | 12.832 |
+
+- **TC1+O is ours:** TC1's weighting with NHC's official forecast as one more member. It is issued after the
+  advisory, at t + 3 h 30, as TC1 is.
+
+**TC2b+O is TC1+O's intensity with TC2b's rule, unchanged** (`tc2.project`, amendment 3's taper to 0 by 72 h).
+- **Curves and controls:** amendment 2's (out of fold for DEV, H8 fitted on 2020-2025 for 2026).
+- **V0** is CARQ's intensity at t, as before. Track is TC1+O's.
+
+**The test.** The rule's taper was chosen from DEV on TC1, so neither season is fully clean for a new base. TC2b+O
+must therefore hold on **both**.
+- **Carried iff**, in DEV 2023-2025 AND in 2026, the 24-h difference AND the mean over 24-120 h (TC2b+O minus
+  TC1+O, intensity, AL and EP pooled, this program's verifier) are both below 0 (point estimates).
+- **Reported (95% storm-block, as before):**
+  - TC2b+O against OFCL, HCCA and IVCN in each season;
+  - the RI subset (24 h and 12 h): TC1+O, TC2b+O, OFCL;
+  - shift statistics.
+- **Against OFCL:** this is the comparison that matters to anyone reading the site. It is reported, not claimed.
+  A claim of beating the official forecast needs its own registration at this program's claim level (98.75%).
+
+**A carried TC2b+O** goes live by its own amendment: computed in the live record from TC1+O's intensity and the same
+v10.4 curve. It is shown as our intensity forecast in place of TC2b's, because it is the better base. If it is not
+carried, TC2b stays.
+
+### Amendment 5 outcome (2026-10-10): TC2b+O CARRIED on both seasons
+
+`results/hurricane_tc2/tc2bo.json`.
+
+**Control.** TC1+O's DEV intensity reproduced its registered 12.598598 kt. In 2026 the decks were fetched again at
+the run, so 2026 moved with the season's newest cycles.
+
+**Intensity error, mean over 24-120 h (kt):**
+
+| | TC1+O | TC2b+O | OFCL | HCCA | IVCN |
+|---|---|---|---|---|---|
+| DEV 2023-2025 | 12.599 | **12.543** | 12.627 | 13.223 | 12.781 |
+| 2026 | 11.334 | **11.272** | 11.046 | 10.279 | 13.841 |
+
+**TC2b+O minus TC1+O.** Every point estimate is below 0 in both seasons, so **TC2b+O is carried**.
+
+| | 24 h | mean, 24-120 h |
+|---|---|---|
+| DEV | **-0.169 [-0.34, -0.02]** | **-0.055 [-0.109, -0.012]** |
+| 2026 | -0.126 [-0.57, +0.23] | -0.062 [-0.199, +0.053] |
+
+**Against NHC's official forecast (reported, no claim):**
+- **DEV: -0.069 [-0.61, +0.47].** This is the first of our intensity forecasts whose DEV mean is below OFCL's.
+- **2026: +0.392 [-0.77, +1.20].** OFCL and HCCA are unusually good this season.
+
+**RI subset, 24 h:**
+
+| | TC1+O | TC2b+O | OFCL |
+|---|---|---|---|
+| DEV (157 cycles) | 23.2 kt | **20.5 kt** | 18.5 kt |
+| 2026 (30 cycles) | 24.0 kt | **19.4 kt** | 18.3 kt |
+
+## Amendment 6 -- TC2b+O live (2026-10-10, before its first live forecast)
+
+**What runs.** Beside TC2b (amendment 4), the scorer computes **TC2b+O**:
+- from the record's TC1+O intensity at each lead;
+- with the same CARQ V0 and the same gated v10.4 curve for TC1's cycle;
+- by the same `tc2.project` with the 72-h taper.
+
+It is recorded as `tc1["TC2b+O"]`, with the same fields and the same fail-safe: without a gated curve it is TC1+O
+and says why. It never changes any other number in the record.
+
+**The site.** Each NHC storm card's "with our RI model" column shows TC2b+O's winds where the record has them, and
+TC2b's otherwise. The column's label comes from the record. The hurricane page states amendment 5's numbers, bound
+to `tc2bo.json`.
+
+**The live record (descriptive)** at this program's looks: TC2b+O, TC1+O and OFCL. A claim against OFCL needs its
+own registration at 98.75%.
 - **Next:**
   1. TC1 goes live and on the site (its own amendment). Its track is worth showing beside NHC's.
   2. TC2: intensity conditioned on our RI probability. Intensity is where TC1 adds nothing, and RI is where

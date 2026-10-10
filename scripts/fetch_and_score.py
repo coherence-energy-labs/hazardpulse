@@ -1159,22 +1159,25 @@ def attach_tc1(scored: list[dict[str, object]], adeck_index: dict, adeck_by_stor
     for s in nhc:
         rec = got.get(str(s["storm_id"]).lower())
         if rec:
-            try:
-                rec["TC2b"] = tc2b_record(s, rec, by_id.get(str(s["storm_id"]).lower()))
-            except Exception as exc:  # noqa: BLE001 -- TC2b is recorded beside TC1, never in its way
-                rec["TC2b"] = {"status": f"error: {type(exc).__name__}: {exc}"}
+            # TC2b on TC1 (amendment 4) and TC2b+O on TC1+O (amendment 6): recorded beside them, never in their way
+            for label, base in (("TC2b", "TC1"), ("TC2b+O", "TC1+O")):
+                try:
+                    rec[label] = tc2b_record(s, rec, by_id.get(str(s["storm_id"]).lower()), base=base, label=label)
+                except Exception as exc:  # noqa: BLE001
+                    rec[label] = {"status": f"error: {type(exc).__name__}: {exc}"}
             s["tc1"] = rec
             n += 1
     print(f"  TC1: track and intensity for {n} of {len(nhc)} NHC storms, from {len(decks)} season decks")
     return n
 
 
-def tc2b_record(storm: dict[str, object], rec: dict[str, object], deck) -> dict[str, object]:
-    """TC2b (TC1 program amendment 4): TC1's intensity held to the median the storm's own v10.4 shadow curve
-    implies for the same cycle, by the backtest's function and amendment 3's taper. Without a gated curve for that
-    cycle it is TC1, and the record says so."""
+def tc2b_record(storm: dict[str, object], rec: dict[str, object], deck, base: str = "TC1",
+                label: str = "TC2b") -> dict[str, object]:
+    """TC2b (TC1 program amendment 4; on TC1+O, TC2b+O, amendment 6): the ``base`` product's intensity held to the
+    median the storm's own v10.4 shadow curve implies for the same cycle, by the backtest's function and amendment
+    3's taper. Without a gated curve for that cycle it is the base, and the record says so."""
     from hazardpulse.hurricane import tc2
-    tc1_int = {int(k): float(v["vmax_kt"]) for k, v in (rec.get("TC1") or {}).items() if v.get("vmax_kt") is not None}
+    tc1_int = {int(k): float(v["vmax_kt"]) for k, v in (rec.get(base) or {}).items() if v.get("vmax_kt") is not None}
     cycle = dt.datetime.fromisoformat(str(rec["cycle"]).replace("Z", ""))
     an = deck.analysis(cycle) if deck is not None else None
     v0 = an[2] if an is not None and math.isfinite(an[2]) else None
@@ -1191,7 +1194,8 @@ def tc2b_record(storm: dict[str, object], rec: dict[str, object], deck) -> dict[
     out, info = tc2.project(tc1_int, v0, curve, tc2.TC2B_TAPER_END_H)
     # an open edge of the bracket (no lower or no upper bound) is null: JSON has no infinity
     bracket = [b if b is not None and math.isfinite(b) else None for b in info["bracket"]] if info.get("bracket") else None
-    return {"status": "ok", "label": "TC2b", "intensity": {str(k): round(v, 1) for k, v in sorted(out.items())},
+    return {"status": "ok", "label": label, "base": base,
+            "intensity": {str(k): round(v, 1) for k, v in sorted(out.items())},
             "moved_tc1": bool(info.get("applied")), "shift_24h_kt": info.get("shift_24h"),
             "bracket_kt": bracket, "v0_kt": v0, "why_unmoved": why or info.get("why"),
             "curve_from": "ri_v10_4_shadow", "curve_model_version": sh.get("model_version")}
