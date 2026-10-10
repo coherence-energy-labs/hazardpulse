@@ -1731,7 +1731,8 @@ def main() -> None:
     n_receipts = stamp_receipts(scored, issued_at, _signer)
     print(f"  Receipts: {n_receipts} of {len(scored)} storms (signed={_signer is not None})")
     # amendment 11 (T2b): the recalibrations in shadow, after every published field is final
-    t2b_descriptor = attach_t2b_shadow(scored, V3_SUITE) if scoring_tier == "tier1_v3" else None
+    t2b_descriptor = (attach_t2b_shadow(scored, V3_SUITE, RESULTS / "models" / t2b_recal.ARTIFACT_FILE)
+                      if scoring_tier == "tier1_v3" else None)
 
     for s in scored[:10]:
         print(

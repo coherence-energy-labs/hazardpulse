@@ -926,27 +926,38 @@ def summarize(
 
 
 def _t2b():
-    """scripts/score_tornado_t2b_prospective.py (tornado program amendment 11), by path."""
-    import importlib.util
+    """scripts/score_tornado_t2b_prospective.py (tornado program amendment 11) beside this script, or None when it
+    cannot be loaded -- then the T2b record is not updated, and nothing else here changes."""
     mod = sys.modules.get("score_tornado_t2b_prospective")
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(
-            "score_tornado_t2b_prospective", Path(__file__).resolve().parent / "score_tornado_t2b_prospective.py")
+    if mod is not None:
+        return mod
+    path = Path(__file__).resolve().parent / "score_tornado_t2b_prospective.py"
+    if not path.exists():
+        return None
+    import importlib.util
+    try:
+        spec = importlib.util.spec_from_file_location("score_tornado_t2b_prospective", path)
         mod = importlib.util.module_from_spec(spec)
-        sys.modules["score_tornado_t2b_prospective"] = mod
         spec.loader.exec_module(mod)
+    except Exception as exc:  # noqa: BLE001 -- the T2b test never stops the verifier
+        print(f"  T2b: {path.name} could not be loaded ({type(exc).__name__}: {exc}); its record is not updated")
+        return None
+    sys.modules["score_tornado_t2b_prospective"] = mod      # only once it loaded: never a half-made module
     return mod
 
 
 def _t2b_artifact_sha() -> str | None:
-    """The recalibration artifact's digest, or None (absent: there is no T2b record to keep)."""
+    """The recalibration artifact's digest (this project's results/models), or None: absent, unreadable, or its
+    prospective test cannot be loaded. Then there is no T2b record to keep, and nothing else here changes."""
     try:
         from hazardpulse.tornado import t2b_shadow
-        art = t2b_shadow.load()
+        art = t2b_shadow.load(REPO_ROOT / "results" / "models" / t2b_shadow.ARTIFACT_FILE)
     except Exception as exc:  # a broken artifact never stops the verifier; its test is then not updated
         print(f"  T2b: artifact unreadable ({type(exc).__name__}: {exc}); its record is not updated")
         return None
-    return None if art is None else t2b_shadow.digest(art)
+    if art is None or _t2b() is None:
+        return None
+    return t2b_shadow.digest(art)
 
 
 def _t2b_note_unscorable(artifact: dict, t2b_sha: str | None, pending: list[str]) -> None:

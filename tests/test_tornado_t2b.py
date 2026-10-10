@@ -391,6 +391,13 @@ def test_the_rule_replaces_a_clearly_worse_calibration(prospective):
     assert res["replace"] is True
 
 
+def test_better_points_are_not_enough_the_interval_must_lie_below_zero(prospective):
+    res = prospective.evaluate(_rows(n_days=40, per_day=400, seed=1, served_scale=0.98), decide=True)
+    assert res["rule_parts"]["brier_below"] and res["rule_parts"]["log_loss_below"]      # both points better ...
+    assert res["d_brier_ci95"][0] < 0 <= res["d_brier_ci95"][1]                          # ... within the noise
+    assert res["replace"] is False
+
+
 def test_the_rule_keeps_an_equal_calibration(prospective):
     res = prospective.evaluate(_rows(recal_from="served"), decide=True)
     assert res["d_brier"] == 0.0 and res["replace"] is False             # not strictly below: never a switch
@@ -482,3 +489,119 @@ def test_the_verifier_labels_the_products_horizons_from_the_same_call(verifier, 
     lab = verifier.label_storms(art, [report], tracks=verifier.TrackSource(fetch=_moving_north))
     assert (lab["y_storm_30"][0], lab["y_true"][0], lab["y_storm_90"][0]) == want
     assert lab["storm_times"] == [dt.datetime(2025, 5, 6, 18, 0, 39)]
+
+
+# ---------------------------------------------------------------------------------------------- the verifier, end to end
+SPC_HEADER = "Time,F_Scale,Location,County,State,Lat,Lon,Comments\n"
+
+
+class _Resp:
+    def __init__(self, data: bytes):
+        self._d = data
+
+    def read(self):
+        return self._d
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def _sandbox(tmp_path: Path, art: dict):
+    import shutil
+    (tmp_path / "scripts").mkdir()
+    for f in ("score_tornado_prospective.py", "score_tornado_t2b_prospective.py"):
+        shutil.copyfile(ROOT / "scripts" / f, tmp_path / "scripts" / f)
+    (tmp_path / "results" / "models").mkdir(parents=True)
+    _write(art, tmp_path / "results" / "models" / tb.ARTIFACT_FILE)
+    return _load("t2b_stp_sandboxed", tmp_path / "scripts" / "score_tornado_prospective.py")
+
+
+def _two_storm_track(day):
+    """Two stationary storms, A (35, -97) and B (33, -90), at every slot of 2027-03-10 18:00:39Z + 30 min."""
+    if day != "20270310":
+        return [{"valid_time": "20270311_000039 UTC", "storms": []}]
+    t0 = dt.datetime(2027, 3, 10, 18, 0, 39)
+    return [{"valid_time": (t0 + dt.timedelta(minutes=30 * k)).strftime("%Y%m%d_%H%M%S UTC"),
+             "storms": [{"id": sid, "lat": la, "lon": lo, "motion_east": 0.0, "motion_south": 0.0,
+                         "geometry": _square(la, lo)} for sid, la, lo in (("A", 35.0, -97.0), ("B", 33.0, -90.0))]}
+            for k in range(4)]
+
+
+def _shadow_record(replay: Path, sha: str, fid="to_fcst_20270310_1805"):
+    storms = []
+    for sid, la, lo, served, recal in (("A", 35.0, -97.0, 0.02, 0.03), ("B", 33.0, -90.0, 0.004, 0.002)):
+        storms.append({"storm_id": sid, "lat": la, "lon": lo, "motion_east": 0.0, "motion_south": 0.0,
+                       "geometry": _square(la, lo), "valid_time": "20270310_180039 UTC", "tornado_probability": served,
+                       "model_version": "tornado_v3-05a06c843c87",
+                       "v3": {"model": "v3_w", "probability_60min": served},
+                       tb.SHADOW_KEY: {"probability_60min": recal,
+                                       "p60_w": {"margin": -5.0, "served": served, "recal": recal},
+                                       "p60": {"margin": -5.5, "served": served / 2, "recal": recal}}})
+    replay.mkdir(parents=True, exist_ok=True)
+    (replay / f"{fid}.json").write_text(json.dumps({
+        "forecast_id": fid, "hazard": "tornado", "issued_at": "2027-03-10T18:05:00Z", "forecast_horizon_hours": 24,
+        "scoring_tier": "tier1_v3", "storms": storms,
+        tb.SHADOW_KEY: {"status": "ok", "artifact_sha256": sha}}), encoding="utf-8")
+
+
+def _run_verifier(m, tmp_path, monkeypatch, failing=()):
+    import urllib.error
+    import urllib.request
+    report = "1820,UNK,1 N Somewhere,County,OK,35.0,-97.0,a tornado under storm A (TEST)\n"
+
+    def fake_urlopen(req, timeout=None, context=None):
+        key = (req.full_url if hasattr(req, "full_url") else str(req)).rsplit("/", 1)[-1][:6]
+        if key in failing:
+            raise urllib.error.URLError("simulated outage")
+        return _Resp((SPC_HEADER + (report if key == "270310" else "")).encode("utf-8"))
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    real = m.TrackSource
+    monkeypatch.setattr(m, "TrackSource", lambda fetch=None: real(fetch=_two_storm_track))
+    out = tmp_path / "out"
+    assert m.main(["--replay-dir", str(tmp_path / "replay"), "--output-dir", str(out),
+                   "--score-as-of", "2027-03-12T00:00:00Z"]) == 0
+    return json.loads((out / "t2b_shadow.json").read_text(encoding="utf-8"))
+
+
+def test_the_verifier_feeds_every_shadow_record_to_the_rule_with_its_own_labels(tmp_path, monkeypatch, suite,
+                                                                                  prospective):
+    art = _artifact(suite)
+    m = _sandbox(tmp_path, art)
+    _shadow_record(tmp_path / "replay", tb.digest(art))
+    _shadow_record(tmp_path / "replay", "f" * 64, fid="to_fcst_20270310_1806")      # another artifact: not counted
+    res = _run_verifier(m, tmp_path, monkeypatch)
+    assert res["artifact_sha256"] == tb.digest(art)
+    # by 2027-03-12 only the cool-season descriptive read is due; the March record is after it, so it holds nothing
+    assert list(res["looks"]) == ["2027-01-01"] and res["looks"]["2027-01-01"]["kind"] == "descriptive"
+    assert res["looks"]["2027-01-01"]["candidates"]["p60_w"]["n"] == 0
+    run = res["running"]
+    assert run["p60_w"]["n"] == 2 and run["p60_w"]["events"] == 1 and run["p60_w"]["claim"] == "none before a look"
+    assert run["p60"]["n"] == 2 and run["p30"]["n"] == 0
+    assert run["p60_w"]["served"]["brier"] == pytest.approx(((0.02 - 1) ** 2 + 0.004 ** 2) / 2)
+    assert run["p60_w"]["recalibrated"]["brier"] == pytest.approx(((0.03 - 1) ** 2 + 0.002 ** 2) / 2)
+
+
+def test_a_shadow_record_the_verifier_cannot_label_is_counted_never_a_negative(tmp_path, monkeypatch, suite,
+                                                                               prospective):
+    art = _artifact(suite)
+    m = _sandbox(tmp_path, art)
+    _shadow_record(tmp_path / "replay", tb.digest(art))
+    res = _run_verifier(m, tmp_path, monkeypatch, failing={"270310"})
+    assert res["records_unscorable_this_run"] == 1 and res["running"]["p60_w"]["n"] == 0
+
+
+def test_without_its_artifact_the_verifier_keeps_no_t2b_record(tmp_path, monkeypatch, suite):
+    m = _sandbox(tmp_path, _artifact(suite))
+    (tmp_path / "results" / "models" / tb.ARTIFACT_FILE).unlink()
+    _shadow_record(tmp_path / "replay", "a" * 64)
+    out = tmp_path / "out"
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: _Resp(SPC_HEADER.encode()))
+    real = m.TrackSource
+    monkeypatch.setattr(m, "TrackSource", lambda fetch=None: real(fetch=_two_storm_track))
+    assert m.main(["--replay-dir", str(tmp_path / "replay"), "--output-dir", str(out),
+                   "--score-as-of", "2027-03-12T00:00:00Z"]) == 0
+    assert (out / "prospective_summary.json").exists() and not (out / "t2b_shadow.json").exists()
