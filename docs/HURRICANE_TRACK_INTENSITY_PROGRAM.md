@@ -570,3 +570,49 @@ A curve that speaks to 48 h directly lets the second day be bracketed by evidenc
 
 **A carried TC2c+O** goes live by its own amendment: computed in the live record from TC2b+O's intensity, V0, and
 R48's curve on the v10.4 shadow's recorded inputs. It is shown in TC2b+O's place.
+
+### Amendment 7 outcome (2026-10-10): R48 has skill; TC2c+O NOT carried -- a good 48-h curve is not a good 48-h median
+
+`results/hurricane_tc2/r48_build.json`, `results/hurricane_tc2/tc2c.json`.
+
+**R48 passed its gate.**
+- 2,508 of 4,692 development cycles have a 48-h label.
+- Out-of-fold (2022-2025) log loss over its 11 thresholds is 0.270, against climatology's 0.420. It is better at every
+  threshold, from 15 kt (0.425 vs 0.667) to 65 kt (0.146 vs 0.198).
+
+**Control.** DEV TC2b+O reproduced amendment 5's 12.543423 kt.
+
+**TC2c+O minus TC2b+O.** Both seasons are worse, so **TC2c+O is not carried**.
+
+| | 48 h | 72 h | mean, 24-120 h |
+|---|---|---|---|
+| DEV | **+1.045 [+0.56, +1.64]** | +0.037 | **+0.216 [+0.098, +0.355]** |
+| 2026 | +0.260 [-0.35, +0.70] | +0.107 | +0.073 [-0.054, +0.183] |
+
+**Even in the 48-h RI subset (>= 50 kt in 48 h) it is worse:**
+- DEV: 30.8 -> 33.4 kt (OFCL 27.0);
+- 2026: 24.1 -> 24.5 kt.
+
+**The shifts.** On DEV the rule moved 485 of 1,566 cycles with a curve (255 up, 230 down), by a mean of 8.3 kt and up to
++48 kt. They were large and nearly symmetric.
+
+**Why (HYPOTHESIS, two named causes).**
+1. **R48 has no track.** Its inputs are H8's, built for the next 24 h, with nothing about where the storm will be on day
+   two. TC1+O's 48-h intensity already carries the aids' landfalls and recurvatures, and the bracket overrode them.
+2. **Survivorship.** R48 learned only from cycles still tropical at t + 48 h, then bracketed every cycle, including
+   storms about to dissipate or move inland.
+
+At 24 h neither bites, which is why TC2b and TC2b+O work there.
+
+**Killed:** "R48's median bracket improves the second day." The smallest witness is the DEV 48-h difference,
++1.045 [+0.56, +1.64].
+
+**What survives:**
+- R48 as a probability (skill over climatology at every threshold, out of fold);
+- the median bracket at 24 h, where TC2b+O stays.
+
+**Resurrect if:** a 48-h curve conditioned on the forecast track (land along TC1's path, hours over water), and
+trained with dissipation and landfall as outcomes rather than as missing rows, passes the same test on data after its
+registration.
+
+**R48 is not served or shown.** Its artifact is not committed; the build file records what it was.
