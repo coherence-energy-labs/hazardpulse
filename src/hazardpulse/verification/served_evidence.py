@@ -1059,6 +1059,19 @@ def tc2b_hurricane(root: Path = ROOT) -> dict | None:
     ri26, n26 = ri(s26, ("TC1", "TC2b", "OFCL", "HCCA"))
     ridev, ndev = ri(dev, ("TC1", "TC2", "OFCL", "HCCA"))
     d24 = ((dev.get("TC2-TC1") or {}).get("per_lead") or {}).get("24") or {}
+    bo = _read(root, f"{TC2_DIR}/tc2bo.json") or {}
+    tc2bo = None
+    if bo.get("carried") == "TC2b+O":
+        def season(r):
+            e = r.get("errors") or {}
+            ri = (r.get("ri_subset") or {}).get("24") or {}
+            return {"mean": {p: _finite((e.get(p) or {}).get("mean_over_leads")) for p in ("TC2b+O", "TC1+O", "OFCL", "HCCA")},
+                    "vs_base": _tc1_diff(r.get("TC2b+O-TC1+O") or {}),
+                    "vs_ofcl": _tc1_diff((r.get("reported") or {}).get("TC2b+O-OFCL") or {}),
+                    "ri_24h": {p: _finite((ri.get(p) or [None])[0]) for p in ("TC1+O", "TC2b+O", "OFCL")},
+                    "ri_cycles": (ri.get("TC1+O") or [None, None])[1]}
+        tc2bo = {"label": "TC2b+O", "file": f"{TC2_DIR}/tc2bo.json", "dev": season(bo.get("dev") or {}),
+                 "season_2026": season(bo.get("season_2026") or {})}
     dev_seasons = [int(x) for x in dev.get("seasons") or []]
     test_season = sorted({int(str(s)[-4:]) for s in s26.get("storms") or [] if str(s)[-4:].isdigit()})
     return {"label": "TC2b", "program": TC1_PROGRAM, "prereg_tag": s26.get("prereg_tag"),
@@ -1067,7 +1080,7 @@ def tc2b_hurricane(root: Path = ROOT) -> dict | None:
             "season_2026_vs_tc1": _tc1_diff(s26.get("TC2b-TC1") or {}),
             "dev_24h_vs_tc1": {"d": _finite(d24.get("d")), "ci": _ci(d24.get("ci"))},
             "dev_carried": dev.get("carried") == "TC2",
-            "ri_2026_24h": ri26, "ri_2026_cycles": n26, "ri_dev_24h": ridev, "ri_dev_cycles": ndev}
+            "ri_2026_24h": ri26, "ri_2026_cycles": n26, "ri_dev_24h": ridev, "ri_dev_cycles": ndev, "tc2bo": tc2bo}
 
 
 def ours_hurricane(root: Path = ROOT) -> dict | None:
