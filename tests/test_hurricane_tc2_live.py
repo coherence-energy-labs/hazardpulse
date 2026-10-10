@@ -79,3 +79,16 @@ def test_no_analysis_intensity_means_no_move():
     out = fs.tc2b_record(_storm(), _rec(), None)
     assert not out["moved_tc1"] and out["v0_kt"] is None
     assert dt.datetime.fromisoformat(CYCLE.replace("Z", "")).hour == 6
+
+
+def test_an_open_bracket_is_strict_json_and_the_writer_never_publishes_a_non_finite_number():
+    """2026-10-10 03:39Z: TC2b recorded its open lower edge as -inf, Python wrote -Infinity, and the Worker could not
+    parse live-storms.json -- /api/v1/live/hurricane answered 404 until the next run."""
+    import json
+    fs = _fs()
+    steady = {"15": 0.3, "20": 0.2, "25": 0.1, "30": 0.05, "35": 0.03, "40": 0.02, "45": 0.01}   # no lower edge
+    out = fs.tc2b_record(_storm(model_probabilities=steady), _rec(), _Deck(35.0))
+    assert out["bracket_kt"] == [None, 15.0]
+    json.dumps(out, allow_nan=False)                                  # raises on any non-finite number
+    clean, bad = fs.strict_json({"a": [1.0, float("-inf")], "b": {"c": float("nan"), "d": 2}})
+    assert clean == {"a": [1.0, None], "b": {"c": None, "d": 2}} and bad == ["/a/1", "/b/c"]

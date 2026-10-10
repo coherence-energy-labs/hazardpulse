@@ -103,8 +103,39 @@ def test_every_data_file_is_strict_json():
     def reject(token):
         raise ValueError(f"non-finite number {token}")
     for p in sorted((DIST / "data").rglob("*.json")):
+        rel = p.relative_to(DIST / "data").as_posix()
+        if rel in KNOWN_NONSTRICT_RECORDS:
+            _only_the_known_non_finite(p, KNOWN_NONSTRICT_RECORDS[rel])
+            continue
         json.loads(p.read_text(encoding="utf-8"), parse_constant=reject)
     json.loads((DIST / "speculation-rules.json").read_text(encoding="utf-8"), parse_constant=reject)
+
+
+# Forecast records written before the writer refused non-finite numbers (fetch_and_score.strict_json,
+# 2026-10-10). They stay byte for byte: the hash-chained ledger covers their content, and rewriting one would
+# break the record audit. Each may hold non-finite numbers ONLY at the path given, and nowhere else.
+KNOWN_NONSTRICT_RECORDS = {
+    # TC2b's open lower bracket edge was written as -Infinity by its first live run (03:39Z); the Worker could not
+    # parse that run's live-storms.json, and /api/v1/live/hurricane answered 404 until the fix
+    "replay/hu_fcst_20261010_0337.json": re.compile(r"storms/\d+/tc1/TC2b/bracket_kt/[01]"),
+}
+
+
+def _only_the_known_non_finite(p, allowed):
+    import math
+
+    def walk(x, path):
+        if isinstance(x, dict):
+            for k, v in x.items():
+                yield from walk(v, f"{path}/{k}" if path else k)
+        elif isinstance(x, list):
+            for i, v in enumerate(x):
+                yield from walk(v, f"{path}/{i}")
+        elif isinstance(x, float) and not math.isfinite(x):
+            yield path
+    found = list(walk(json.loads(p.read_text(encoding="utf-8")), ""))
+    assert found, f"{p.name} is listed as non-strict but is strict now: remove it from the list"
+    assert all(allowed.fullmatch(f) for f in found), f"{p.name}: non-finite numbers outside the known path: {found}"
 
 
 def test_the_headers_allow_nothing_from_another_origin_and_prefetch_by_header():
