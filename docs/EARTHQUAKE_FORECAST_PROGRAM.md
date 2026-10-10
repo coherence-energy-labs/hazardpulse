@@ -650,3 +650,66 @@ live parity as in section 10.1. No new live input is needed: the served stack al
 
 **Run.** `python scripts/earthquake_program/gear1_e4.py`, on the published program data, verified by
 `scripts/data_manifest.py --verify` (workflow `research-earthquake-e4.yml`).
+
+### 12.1 Outcome (2026-10-10) -- S2 carried: GEAR1 counts where the catalog is quiet
+
+Run `research-earthquake-e4.yml` 38045192081 on `edf580c9d` (tag `prereg-earthquake-e4`); result
+`results/earthquake_program/gear1_e4.json`.
+- The program data restored and verified file by file.
+- **Control.** S1 refitted reproduced section 10.1's coefficients to 7.7e-14 and its DEV information gain to 3.1e-15.
+
+**Coefficients fitted on CHOOSE.** S2: a -0.539, c 0.746, b -0.078, **d -0.0733**. S1, unchanged: 0.309, 0.944, 0.257.
+
+**GEAR1's weight `b + d z` by how active C0 says the cell is:**
+
+| z = logit(p_C0) | over all CHOOSE cell-times | over the positive ones |
+|---|---|---|
+| 10th percentile | -11.06 -> **0.73** | -6.50 -> 0.40 |
+| median | -11.01 -> 0.73 | -4.31 -> 0.24 |
+| 90th percentile | -6.72 -> 0.41 | -2.54 -> **0.11** |
+
+GEAR1 gets about seven times more weight in quiet cells than in the most active cells where M6+ earthquakes happen.
+**The registered prediction d < 0 holds:** strain information counts where the catalog says little.
+
+**Information gain per target** (nats; 95% month-block):
+
+| | S1 (served) | S2 | S2 - S1 | dAUC |
+|---|---|---|---|---|
+| CHOOSE (fit) | 2.6155 | 2.6218 | +0.0063 [+0.0008, +0.0121] | +0.00003 [-0.00012, +0.00018] |
+| **DEV (decides)** | 2.7363 | **2.7502** | **+0.0139 [+0.0015, +0.0255]** | **+0.00026 [+0.00015, +0.00038]** |
+| FINAL (2nd read) | 2.6047 | 2.6134 | +0.0087 [+0.0001, +0.0169] | +0.00007 [-0.00013, +0.00023] |
+
+**The rule carries S2:** the DEV interval lies above 0. The FINAL second read goes the same way, and its interval is
+also above 0.
+
+Other measures:
+- AUC: S2 0.9717 (DEV) and 0.9687 (FINAL).
+- AUC among active cells: 0.757 (DEV) and 0.769 (FINAL, equal to S1's).
+- `sum p / sum y`: DEV 1.045 (S1 1.049); FINAL 1.130 (S1 1.133).
+
+**What this establishes.** GEAR1's information is about twice what one global weight could use. Section 10.1's
+S1 - S0 was +0.016 nats on DEV, and letting the weight follow the cell's activity adds +0.014 more. The extra is
+where the crust is straining and the catalog is quiet.
+
+**What it does not establish.** DEV has now decided three amendments (E1, E3 and E4), and this is one more draw from
+the same months. FINAL agrees, and the prospective record (section 8) is the independent check.
+
+### 12.2 Serving S2 (registered 2026-10-10, before the stack is built)
+
+Section 10.1's build, with S2's coefficients. It runs on a runner (`research-earthquake-serve.yml`) because it reads
+the program data.
+- **The stack file:** `results/models/earthquake_gear1_stack_v2.json`, schema
+  `hazardpulse/earthquake-operational-stack/v2`. It holds the four coefficients and GEAR1's 30-day log map.
+  - It is bound to C0's exact model_version.
+  - Its provenance names its evaluation (`gear1_e4.json`, candidate S2).
+  - The v1 schema still loads, with d = 0, so S1's file and every forecast it issued can still be recomputed.
+- **Parity, enforced before the file is accepted (it is removed if any fails):**
+  1. formula: the stack on C0's cached DEV forecasts reproduces the evaluated S2 grid to 1e-12;
+  2. live: the live code path reproduces the evaluated S2 at three FINAL issue times to 1e-9 (section 10.1's
+     tolerance).
+- **The served evaluation:** `results/earthquake_program/gear1_served.json`, in section 10's report format for the
+  served candidate: S2 against S0, S1, C0, A, B and D on every split. It is checked against the registered run
+  before it is written: S2's information gain on DEV and FINAL must reproduce `gear1_e4.json` to 1e-9.
+- **The switch:** the live scorer, the served-model evidence and the model registry move to the v2 file in one
+  change, together with the files above. A missing stack would silently serve C0 alone, so the pointer never moves
+  ahead of its file.
