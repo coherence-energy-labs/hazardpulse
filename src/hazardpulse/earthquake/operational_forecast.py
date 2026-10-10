@@ -678,10 +678,12 @@ def forecast_from_artifact(art: LoadedArtifact, live_events: Iterable[dict], iss
 
 
 # ---------------------------------------------------------------------------
-# Stack on the served artifact (docs/EARTHQUAKE_FORECAST_PROGRAM.md section 10, amendment E1)
+# Stack on the served artifact (docs/EARTHQUAKE_FORECAST_PROGRAM.md section 10, amendment E1; section 12, E4)
 # ---------------------------------------------------------------------------
 
-STACK_SCHEMA = "hazardpulse/earthquake-operational-stack/v1"
+STACK_SCHEMA = "hazardpulse/earthquake-operational-stack/v1"         # S1: logit p = a + c z + b g
+STACK_SCHEMA_V2 = "hazardpulse/earthquake-operational-stack/v2"      # S2: ... + d z g (amendment E4)
+STACK_SCHEMAS = (STACK_SCHEMA, STACK_SCHEMA_V2)
 STACK_CLIP = 1e-12
 
 
@@ -697,6 +699,7 @@ class LoadedStack:
     g_log10: np.ndarray
     meta: dict
     sha256: str = ""          # CRLF-normalised SHA-256 of the stack file (sha256_text_file)
+    d: float = 0.0            # the z g interaction (schema v2); a v1 stack has none
 
 
 SERVED_DIGEST_SCHEMA = "hazardpulse/earthquake-served-digest/v1"
@@ -730,15 +733,23 @@ def stack_model_version(path) -> str:
 
 
 def write_stack(path, *, model_name: str, base_model_version: str, a: float, c: float, b: float,
-                g_log10: np.ndarray, provenance: dict) -> str:
+                g_log10: np.ndarray, provenance: dict, d: float | None = None) -> str:
     """``logit p = a + c logit(p_base) + b g_log10[cell]`` on top of the artifact named
-    ``base_model_version``; returns the stack's model_version."""
+    ``base_model_version``; with ``d`` (schema v2, amendment E4) ``+ d logit(p_base) g_log10[cell]``,
+    so GEAR1's weight is ``b + d logit(p_base)``. Returns the stack's model_version."""
     g = np.asarray(g_log10, np.float64)
     if g.shape != (N_CELLS,) or not np.all(np.isfinite(g)):
         raise OperationalArtifactError(f"stack map must be {N_CELLS} finite values")
-    body = {"schema": STACK_SCHEMA, "model_name": model_name, "base_model_version": base_model_version,
-            "formula": "logit p = a + c logit(p_base) + b g_log10[cell]",
-            "coefficients": {"a": float(a), "c": float(c), "b": float(b)},
+    if d is not None and not np.isfinite(d):
+        raise OperationalArtifactError("stack interaction d must be finite")
+    co = {"a": float(a), "c": float(c), "b": float(b)}
+    if d is None:
+        schema, formula = STACK_SCHEMA, "logit p = a + c logit(p_base) + b g_log10[cell]"
+    else:
+        schema, formula = STACK_SCHEMA_V2, "logit p = a + c logit(p_base) + b g_log10[cell] + d logit(p_base) g_log10[cell]"
+        co["d"] = float(d)
+    body = {"schema": schema, "model_name": model_name, "base_model_version": base_model_version,
+            "formula": formula, "coefficients": co,
             "g_log10": [float(x) for x in g], "provenance": provenance}
     text = json.dumps(body, separators=(",", ":"), allow_nan=False)
     Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -751,8 +762,8 @@ def load_stack(path, base: LoadedArtifact) -> LoadedStack:
     """Refused unless it names exactly the loaded base artifact's model_version."""
     path = Path(path)
     meta = json.loads(path.read_text(encoding="utf-8"))
-    if meta.get("schema") != STACK_SCHEMA:
-        raise OperationalArtifactError(f"{path}: schema {meta.get('schema')!r} != {STACK_SCHEMA!r}")
+    if meta.get("schema") not in STACK_SCHEMAS:
+        raise OperationalArtifactError(f"{path}: schema {meta.get('schema')!r} is not one of {STACK_SCHEMAS!r}")
     if meta.get("base_model_version") != base.model_version:
         raise OperationalArtifactError(f"{path} stacks on {meta.get('base_model_version')!r}, "
                                        f"the served base is {base.model_version!r}")
@@ -760,15 +771,21 @@ def load_stack(path, base: LoadedArtifact) -> LoadedStack:
     if g.shape != (N_CELLS,) or not np.all(np.isfinite(g)):
         raise OperationalArtifactError(f"{path}: map is not {N_CELLS} finite values")
     co = meta["coefficients"]
+    v2 = meta["schema"] == STACK_SCHEMA_V2
+    if set(co) != ({"a", "c", "b", "d"} if v2 else {"a", "c", "b"}):
+        raise OperationalArtifactError(f"{path}: coefficients {sorted(co)} do not match schema {meta['schema']!r}")
     sha = sha256_text_file(path)
     return LoadedStack(path=path, model_name=meta["model_name"], model_version=f"{meta['model_name']}-{sha[:12]}",
                        base_model_version=base.model_version, a=float(co["a"]), c=float(co["c"]),
-                       b=float(co["b"]), g_log10=g, meta=meta, sha256=sha)
+                       b=float(co["b"]), g_log10=g, meta=meta, sha256=sha, d=float(co["d"]) if v2 else 0.0)
 
 
 def apply_stack(stack: LoadedStack, p_base: np.ndarray) -> np.ndarray:
     p = np.clip(np.asarray(p_base, np.float64), STACK_CLIP, 1 - STACK_CLIP)
-    eta = stack.a + stack.c * (np.log(p) - np.log1p(-p)) + stack.b * stack.g_log10
+    z = np.log(p) - np.log1p(-p)
+    eta = stack.a + stack.c * z + stack.b * stack.g_log10
+    if stack.d:
+        eta = eta + stack.d * z * stack.g_log10
     return 0.5 * (1.0 + np.tanh(0.5 * eta))
 
 
