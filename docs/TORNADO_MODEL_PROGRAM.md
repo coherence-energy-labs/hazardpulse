@@ -354,6 +354,135 @@ Paired, (d) - (a), day bootstrap 2,000:
   calibration. A recalibration of the served model for the new format is a new question with its own
   registration: 2026-01..09 has now been read, so it is judged on forecasts made after it is registered.
 
+## Amendment 11 (2026-10-10, before any candidate number): T2b, the served models' calibration for the new format
+
+**The question.** Amendment 10 kept the served models: the format change costs no ranking skill. It left one
+question open. On 2026-01..09 the served +W model's mean forecast was 0.81x the base rate (9.68e-4 against
+1.19e-3), and no rule there was written for calibration. This amendment changes no input and no tree. It asks
+only whether each served payload's Platt map, refitted on the new format, gives better probabilities from the SAME
+raw score. The fit window contains 2026-01..09, which has been read, so the answer is decided only on forecasts
+made after this registration.
+
+**Candidates**, one per served payload that the live record can label, each decided on its own:
+- `p60_w`: `tornado_v3_w.json`, the published 60-min probability whenever the NWS feed answers. **Primary.**
+- `p60`: `tornado_v3.json`, the fallback, served when the feed does not answer. MEASURED: 213 of the 5,660 v3 storm
+  forecasts of 2026-10-03..10 (four feed outages).
+- `p30`, `p90`: `tornado_v3_w_30.json`, `tornado_v3_w_90.json`.
+
+Each candidate is that payload's raw margin (`lgbm_payload.predict_raw`, the sum of its trees, unchanged) mapped by
+a new Platt fit. The fit uses `definitive_model.fit_platt`: maximum likelihood, Newton with a backtracking line
+search (amendment 9). That is the code that fitted every served calibration (`tornado_lab._final_core`), and like
+them the fit is unweighted on the whole population.
+
+**Fit data.** Every new-format storm observation at the program's 30-minute slots (`probsevere.slot_start_keys`),
+from 2025-08-05 20:48Z (the first new-format scan, amendment 10) through 2026-09-30.
+- Rows come from amendment 10's row builder (`t2_decide.day_rows`'s steps), keeping all three horizons:
+  - block P from `storm_features.block_p`, with the two absent attributes 0.0, as served;
+  - block W from the IEM warning archive (`verification.nws_warnings`), as for every +W fit.
+- On 2025-08-05 only rows at or after 20:48Z are kept.
+- **Labels: the training labels `storm_30`, `storm_60`, `storm_90`** (`storm_features.labels` on the storm's own
+  track).
+  - The reports are SPC's preliminary filtered tornado reports throughout the window, timed as the prospective
+    verifier times them. Each map is therefore fitted against the report source its live record is judged on.
+  - Training used the final database, but the final 2026 database does not exist yet.
+  - A day whose label window reaches a convective day SPC cannot serve is dropped and counted, as in amendment 10.
+- **Checks; each one stops the fit:**
+  - every day of the window was built;
+  - `p_ps` and `p_vil_density` are 0.0 on every kept row;
+  - at least one 2025-08-05 row before the cut has `p_ps` != 0, so the cut does separate the two formats;
+  - the fit converges (`PlattNotConverged` otherwise);
+  - the fitted `a` > 0. Only then is the map increasing, so it cannot change the ranking.
+- **Output:**
+  - `results/models/tornado_v3_recal_t2b.json`, the artifact: per candidate a, b, the payload's SHA-256, n, events
+    and days; plus the window, the data's SHA-256, and the code's SHA-256s and commit.
+  - `results/tornado_program/t2b_fit.json`: the fit's facts.
+  - In-sample numbers are descriptive and decide nothing.
+- The artifact is fixed at its commit. A record that carries any other artifact digest does not count.
+
+**Controls. Each one runs before the fit is used, and any failure stops it.**
+1. **The served (a, b) reproduce.** `fit_platt` is run on each payload's own saved leave-one-year-out scores (2021-2024):
+   `_lab_avail/oof/v3_plus_W.npz`, `v3_primary.npz`, `v3_plus_W_30.npz`, `v3_plus_W_90.npz`. It must return the
+   payload's a and b within 1e-9 (`tornado_lab.oof_only`'s standard). These files exist only on the machine that
+   built the store (88 MB each, not in the repository). This control runs there, and its result is committed with
+   the files' SHA-256s.
+2. **The fit's margin path reproduces the served probabilities.** On every live v3 record that stored its inputs,
+   `sigmoid(a * predict_raw + b)` with the served (a, b) must give back:
+   - the record's `probability_60min`, from the payload that served it;
+   - each `probability_30min` / `_90min` that the coherence rule did not clip.
+
+   The tolerance is 4 ulp (amendment 10's `MAX_PROB_ULP`), checked on the runner.
+3. **Amendment 10's control** (`t2_decide.py control`): the P inputs parsed from S3 must equal the live records'
+   stored inputs exactly.
+
+**Live shadow.**
+- **When it starts:** with the first live tornado run whose checkout carries the artifact.
+- **What each v3 storm forecast carries** (`t2b_shadow`), per candidate that applies to that storm:
+  - which candidates apply: `p60_w` and the products when the +W model served; `p60` on every storm, since the
+    fallback reads only block P, which every record stores;
+  - the payload's raw margin;
+  - the served payload's own probability from that margin (before the products' coherence clip);
+  - the recalibrated probability.
+- **`t2b_shadow.probability_60min`** is the recalibrated probability of the model that served the storm.
+- **The record also states** what produced the shadow: the artifact's SHA-256, and each candidate's (a, b) and
+  payload SHA-256.
+- **It is recorded, never published.** No published field changes: `tornado_probability`, `risk_band`, every `v3`
+  field, the band and the receipt.
+- **The record audit** recomputes each margin exactly from the stored inputs, and each probability within 1e-12.
+- **Without the artifact**, or with an artifact fitted for another payload, there is no shadow and the forecast is
+  unchanged.
+
+**The rule** (prospective; per candidate):
+- **Record:** every v3 forecast record from the first one carrying this artifact's shadow up to the look date. It
+  is labelled as the prospective verifier labels v3 (`score_tornado_prospective`): `storm_features.labels` on the
+  storm's archived track, SPC's preliminary reports, counted from the storm's valid time, at the candidate's own
+  horizon. One forecast is kept per storm per valid hour (the first issued). A record that cannot be labelled is
+  left out and counted.
+- **Compared:** the served probability against the recalibrated one, both as recorded and both from the same
+  recorded margin.
+- **Replace iff:** the recalibration's Brier score AND its log loss are both below the served calibration's,
+  AND the 95% interval of Brier(recalibrated) - Brier(served) lies wholly below 0.
+  - The interval is a percentile bootstrap, 2,000 draws, seed 42.
+  - It resamples whole **convective days** (12Z-12Z; the SPC file each label comes from). The program's other
+    comparisons resample UTC days. But most tornadoes fall between 21Z and 03Z, so a UTC day cuts an evening
+    outbreak at 00Z into two blocks that are not independent, and that narrows the interval. For a decision, the
+    block is the unit of dependence.
+- **No claim** with fewer than 30 tornadic storm forecasts, or fewer than 10 convective days holding one. A
+  percentile interval over a handful of event clusters is not a 95% interval. The served calibration then stays.
+- **Ranking is unchanged by construction.** With a > 0 the map is strictly increasing in the margin, so AUC is the
+  served model's own, up to float64 ties. AUC is reported, never decided on.
+
+**Looks.** Each look is applied once and then frozen into the output. It counts the records issued before the
+look date. It is computed by the first scoring run at least 3 days after that date, by which time every window has
+matured and SPC's files are posted. If any record is still unscorable for a transient reason, the run waits, for at
+most 14 days.
+- **2027-07-01**, after the 2027 spring peak. In 2025, 1,400 of the 1,579 tornadic storm observations fell before
+  2025-08-06 (base rate 0.151% before, 0.033% after; ledger T2).
+- **2028-07-01**, on the whole record to then, for each candidate the first look did not replace.
+- **No earlier decision.** A look at 2027-01-01 would judge only the cool season, which is a different base rate
+  and a different regime from the spring that carries most of the risk, on a few dozen events. A frozen
+  descriptive read is made at 2027-01-01, and it decides nothing.
+- Two decision looks, each at 2.5% one-sided, bound at 5% per candidate the chance of adopting a calibration that
+  is no better.
+- Before a look the output is a running record, and no claim is read from it.
+
+**After a decision.**
+- A met rule replaces that payload's `calibration`. That makes a new payload file and so a new model version.
+  Everything else in the payload stays, including the Venn-Abers band.
+- The replaced calibration then runs as the shadow for a year, so the switch is itself verified on forecasts made
+  after it.
+- If the rule is still not met at 2028-07-01, the candidate is closed.
+
+**Not recalibrated now: EF2+ (`tornado_v3_w_ef2.json`).** Its label needs each report's rating, and SPC's
+preliminary reports carry none. F_Scale is `UNK` on every row of 250519 (40 reports), 260427 (25) and 260316 (4);
+the rating appears only in the free-text comment. So EF2+ can be neither fitted on new-format data nor judged on
+the live record until SPC's final database covers the window. That is a later amendment.
+
+**Implementation:**
+- `scripts/tornado_program/t2b_recalibrate.py`: control, build, fit. It runs on GitHub's runner via
+  `.github/workflows/research-tornado-t2b.yml`.
+- `hazardpulse.tornado.t2b_shadow`: the shadow; also used by the record audit.
+- `scripts/score_tornado_t2b_prospective.py`: the rule, called by the prospective tornado verifier.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-
