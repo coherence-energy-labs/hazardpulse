@@ -46,3 +46,14 @@ def test_no_curve_or_no_analysis_means_tc2_is_tc1():
     assert tc2.project(tc1, float("nan"), {15: 0.9})[0] == tc1
     same, info = tc2.project(tc1, 35.0, {15: 0.6, 20: 0.4})      # TC1 +15 inside [15, 20)
     assert same == tc1 and not info["applied"]
+
+
+def test_tc2b_tapers_the_shift_to_zero_by_72h():
+    tc1 = {12: 45.0, 24: 50.0, 48: 50.0, 72: 50.0, 96: 50.0}
+    curve = {15: 0.9, 20: 0.8, 25: 0.7, 30: 0.66, 35: 0.4, 40: 0.2, 45: 0.1}
+    b, _ = tc2.project(tc1, 35.0, curve, tc2.TC2B_TAPER_END_H)
+    full, _ = tc2.project(tc1, 35.0, curve)
+    assert b[12] == full[12] and b[24] == full[24] == pytest.approx(65.0)    # the first day is TC2's
+    assert b[48] == pytest.approx(50.0 + 15.0 * 0.5)                          # half the shift at 48 h
+    assert b[72] == pytest.approx(50.0) and b[96] == pytest.approx(50.0)      # TC1 from 72 h
+    assert full[72] == pytest.approx(65.0)                                    # TC2 kept it (the falsified part)

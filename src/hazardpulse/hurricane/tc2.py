@@ -44,19 +44,26 @@ def shift_24h(dv_tc1: float, lo: float, hi: float) -> float:
     return min(max(dv_tc1, lo), hi) - dv_tc1
 
 
-def lead_factor(lead: int, v24: float, v_lead: float) -> float:
+TC2B_TAPER_END_H = 72.0      # amendment 3: the shift is gone by 72 h (chosen from amendment 2's DEV per-lead pattern)
+
+
+def lead_factor(lead: int, v24: float, v_lead: float, taper_end: float | None = None) -> float:
     """The share of the 24-h shift applied at ``lead``: linear to 24 h; beyond, the fraction of the 24-h excess over
-    the background TC1 still holds at that lead (capped at 1, floored at 0)."""
+    the background TC1 still holds at that lead (capped at 1, floored at 0) -- and, with ``taper_end`` (TC2b),
+    times a linear taper from 1 at 24 h to 0 at ``taper_end``."""
     if lead <= 24:
         return lead / 24.0
     den = v24 - BACKGROUND_KT
     if den <= 0:
         return 0.0
-    return min(1.0, max(0.0, (v_lead - BACKGROUND_KT) / den))
+    f = min(1.0, max(0.0, (v_lead - BACKGROUND_KT) / den))
+    if taper_end is not None:
+        f *= max(0.0, (taper_end - lead) / (taper_end - 24.0))
+    return f
 
 
-def project(tc1: Mapping[int, float], v0: float | None, curve: Mapping[int, float] | None
-            ) -> tuple[dict[int, float], dict[str, object]]:
+def project(tc1: Mapping[int, float], v0: float | None, curve: Mapping[int, float] | None,
+            taper_end: float | None = None) -> tuple[dict[int, float], dict[str, object]]:
     """``(TC2 intensity by lead, what was done)``. TC2 is TC1 wherever there is no curve, no analysis intensity or
     no 24-h TC1 forecast -- and wherever TC1's 24-h change already lies inside the bracket."""
     out = {int(k): float(v) for k, v in tc1.items()}
@@ -69,5 +76,5 @@ def project(tc1: Mapping[int, float], v0: float | None, curve: Mapping[int, floa
     if s == 0.0:
         return out, {"applied": False, "why": "TC1 inside the bracket", "bracket": [lo, hi], "dv_tc1": dv}
     for lead, v in out.items():
-        out[lead] = v + s * lead_factor(lead, v24, v)
+        out[lead] = v + s * lead_factor(lead, v24, v, taper_end)
     return out, {"applied": True, "shift_24h": s, "bracket": [lo, hi], "dv_tc1": dv}

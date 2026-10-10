@@ -99,7 +99,7 @@ def curves() -> int:
     return 0
 
 
-def tc2_product(decks, tc1_run: dict, curve_of: dict) -> tuple[dict, dict]:
+def tc2_product(decks, tc1_run: dict, curve_of: dict, taper_end: float | None = None) -> tuple[dict, dict]:
     """TC2 in the shape of a TC1 run, ``{(storm, t, lead): (forecast, None)}``, and the shift statistics."""
     by_storm = {d.storm: d for d in decks}
     cycles: dict = {}
@@ -112,7 +112,7 @@ def tc2_product(decks, tc1_run: dict, curve_of: dict) -> tuple[dict, dict]:
         curve = {int(k): v for k, v in c["curve"].items()} if c and c.get("gate_ok") else None
         an = by_storm[storm].analysis(t)
         v0 = an[2] if an is not None and math.isfinite(an[2]) else None
-        proj, info = tc2.project(by_lead, v0, curve)
+        proj, info = tc2.project(by_lead, v0, curve, taper_end)
         if curve is not None:
             stats["with_curve"] += 1
         if info.get("applied"):
@@ -141,20 +141,23 @@ def _evaluate(decks, truth_of, seasons, curve_of) -> dict:
     case_list = tc1.cases(decks, truth_of, seasons)
     run = cs.run(decks, tc1.chosen("intensity"), "intensity", keep_weights=False)
     prod, stats = tc2_product(decks, run, curve_of)
-    products = {"TC1": run, "TC2": prod, "OFCL": "OFCL", "HCCA": "HCCA", "IVCN": "IVCN"}
+    prod_b, stats_b = tc2_product(decks, run, curve_of, tc2.TC2B_TAPER_END_H)       # amendment 3
+    products = {"TC1": run, "TC2": prod, "TC2b": prod_b, "OFCL": "OFCL", "HCCA": "HCCA", "IVCN": "IVCN"}
     errs = tc1.score(case_list, "intensity", REPORT_LEADS, products)
     res = {"errors": {p: tc1.mean_error(e, tc1.SCORED_LEADS) for p, e in errs.items()},
            "errors_12h": {p: (float(np.mean(list(e[12].values()))) if e[12] else None, len(e[12])) for p, e in errs.items()},
            # the registered primary is the mean over 24-120 h (TC1's scored leads); 12 h is reported on its own
            "TC2-TC1": tc1.paired(errs["TC2"], errs["TC1"], tc1.SCORED_LEADS, tc1.REPORT_LEVEL),
            "TC2-TC1_12h": tc1.paired(errs["TC2"], errs["TC1"], (12,), tc1.REPORT_LEVEL),
-           "reported": {f"TC2-{q}": tc1.paired(errs["TC2"], errs[q], tc1.SCORED_LEADS, tc1.REPORT_LEVEL)
-                        for q in ("OFCL", "HCCA", "IVCN")},
-           "shift_stats": stats}
+           "TC2b-TC1": tc1.paired(errs["TC2b"], errs["TC1"], tc1.SCORED_LEADS, tc1.REPORT_LEVEL),
+           "TC2b-TC1_12h": tc1.paired(errs["TC2b"], errs["TC1"], (12,), tc1.REPORT_LEVEL),
+           "reported": {f"{p}-{q}": tc1.paired(errs[p], errs[q], tc1.SCORED_LEADS, tc1.REPORT_LEVEL)
+                        for p in ("TC2", "TC2b") for q in ("OFCL", "HCCA", "IVCN")},
+           "shift_stats": stats, "shift_stats_tc2b": stats_b}
     ri = _ri_subset(case_list)
     res["ri_subset"] = {"cycles": len(ri), **{
         str(ld): {p: (float(np.mean([v for k, v in errs[p][ld].items() if k in ri])) if any(k in ri for k in errs[p][ld]) else None,
-                      sum(1 for k in errs[p][ld] if k in ri)) for p in ("TC1", "TC2", "OFCL", "HCCA")}
+                      sum(1 for k in errs[p][ld] if k in ri)) for p in ("TC1", "TC2", "TC2b", "OFCL", "HCCA")}
         for ld in (12, 24)}}
     return res, errs
 
@@ -203,11 +206,20 @@ def read2026() -> int:
     decks = tc1.load_decks(tc1.ALL_TECHS, seasons)
     t26 = {s: tc1.btk_truth(s) for s in storms}
     res, _ = _evaluate(decks, lambda d: t26.get(d.storm, {}), (2026,), curve_of)
+    db = res["TC2b-TC1"]
+    carried = bool(db.get("n_storms") and db["per_lead"]["24"]["d"] < 0 and db["mean_over_leads"]["d"] < 0)
     READ_2026.write_text(json.dumps({
-        "phase": "TC2 2026 further read", "program": "docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md (amendment 2)",
-        "prereg_tag": "prereg-tc2", "declared": "the season in progress; operational best tracks; no claim",
-        "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "storms": storms, **res},
-        indent=1), encoding="utf-8")
+        "phase": "TC2b test (amendment 3) and TC2 further read, 2026",
+        "program": "docs/HURRICANE_TRACK_INTENSITY_PROGRAM.md (amendments 2, 3)", "prereg_tag": "prereg-tc2b",
+        "declared": "the season in progress, operational best tracks: TC2b's registered test; TC2 reported",
+        "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "storms": storms,
+        "carried_tc2b": "TC2b" if carried else "TC1", **res}, indent=1), encoding="utf-8")
+    e = res["errors"]
+    tc1.log("2026 mean over 24-120 h (kt): " + ", ".join(f"{p} {v['mean_over_leads']:.3f}" for p, v in e.items() if v["mean_over_leads"]))
+    tc1.log(f"2026 TC2b - TC1 (amendment 3, the registered test): mean {db['mean_over_leads']['d']:+.3f} "
+            f"[{db['mean_over_leads']['ci'][0]:+.3f}, {db['mean_over_leads']['ci'][1]:+.3f}]; " + ", ".join(
+                f"{ld} h {v['d']:+.3f} [{v['ci'][0]:+.2f}, {v['ci'][1]:+.2f}]" for ld, v in db["per_lead"].items())
+            + f"; CARRIED TC2b: {carried}")
     d = res["TC2-TC1"]
     tc1.log(f"2026 TC2 - TC1: mean {d['mean_over_leads']['d']:+.3f} [{d['mean_over_leads']['ci'][0]:+.3f}, "
             f"{d['mean_over_leads']['ci'][1]:+.3f}]; RI subset {json.dumps(res['ri_subset'])}; shifts {json.dumps(res['shift_stats'])}")

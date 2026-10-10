@@ -367,6 +367,64 @@ fitted on 2020-2025 (the v10.4 artifact's model, controlled above).
 
 **A carried TC2b** goes into the live record by its own amendment before its first live forecast, as amendment 2
 said for TC2.
+
+### Amendment 3 outcome (2026-10-10): TC2b CARRIED on 2026
+
+`results/hurricane_tc2/season_2026.json`. Operational best tracks, AL and EP pooled. The curves come from H8 fitted
+on 2020-2025, controlled to 1e-12 above.
+
+**Intensity error, mean over 24-120 h:** TC1 11.949, **TC2b 11.875**, TC2 11.502, OFCL 11.063, HCCA 10.293, IVCN
+13.834 kt.
+
+| TC2b - TC1 (kt) | d | 95% |
+|---|---|---|
+| 24 h | **-0.148** | [-0.62, +0.24] |
+| 48 h | -0.220 | [-0.48, +0.05] |
+| 72-120 h | 0 | by construction |
+| mean, 24-120 h | **-0.074** | [-0.22, +0.05] |
+
+Both point estimates are below 0, so **TC2b is carried**. Neither interval excludes 0: the season is 532 cycles
+with a gated curve, and only 91 of them moved.
+
+**The RI subset (29 cycles), 24 h:**
+
+| | TC1 | **TC2b** | OFCL | HCCA |
+|---|---|---|---|---|
+| 24 h | 25.1 kt | **20.0 kt** | 19.0 kt | 17.2 kt |
+| 12 h | 12.3 kt | **10.3 kt** | | |
+
+In DEV the same first-day rule gave 23.6 -> 20.7 kt at 24 h.
+
+**Shifts:** 90 up, 1 down.
+
+**TC2 (amendment 2's persistence), reported:** -0.447 [-0.92, +0.01] on 2026, against +0.067 on DEV. The long-lead
+effect of the shift changes sign between samples, so it is noise either way. TC2b keeps the part that is
+positive on both: the first two days.
+
+**Reading.**
+- Conditioning TC1 on our RI model's 24-h curve recovers most of the gap between TC1 and NHC in rapid-
+  intensification cases: 5 of 6 kt at 24 h on 2026, 3 of 5 kt on DEV.
+- It barely moves anything else.
+- It does not reach OFCL overall. Forecasters see much more.
+
+## Amendment 4 -- TC2b live (2026-10-10, before its first live forecast)
+
+**What runs.** In each scorer run, after TC1 is issued for a storm (`fetch_and_score.attach_tc1`):
+- **TC2b's intensity** comes from:
+  - TC1's intensity at each lead from that record (rounded to 0.1 kt as recorded);
+  - CARQ's intensity at TC1's cycle, from the same deck;
+  - **the curve the storm's v10.4 shadow recorded for the same cycle:** its own model probabilities, used only
+    when its gate passed.
+- It is computed by `hazardpulse.hurricane.tc2.project` with amendment 3's taper, the backtest's own function.
+- It is recorded as `tc1["TC2b"]`, with whether it moved TC1, the shift and the bracket.
+- With no gated v10.4 curve for the cycle, TC2b is TC1 and the record says so.
+- TC2b never changes TC1's or NHC's numbers in the record, or the published RI number.
+
+**The site.** Each NHC storm card's TC1 table shows TC2b's intensity beside TC1's and NHC's, labelled in test.
+
+**The live record (descriptive).** At this program's looks (2026-12-01, 2027-12-01), the live TC2b, TC1 and OFCL
+intensity records are scored by this program's verifier, as amendment 1 does for TC1. A claim needs its own
+registration.
 - **Next:**
   1. TC1 goes live and on the site (its own amendment). Its track is worth showing beside NHC's.
   2. TC2: intensity conditioned on our RI probability. Intensity is where TC1 adds nothing, and RI is where
