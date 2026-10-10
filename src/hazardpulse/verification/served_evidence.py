@@ -910,7 +910,38 @@ def tc1_hurricane(root: Path = ROOT) -> dict | None:
                      "tc1o_vs_ofcl": _tc1_diff(k["claims"].get("TC1+O-OFCL") or {}),
                      "season_2026_vs_ofcl": _tc1_diff(r26.get("TC1-OFCL") or {}),
                      "season_2026_tc1o_vs_ofcl": _tc1_diff(r26.get("TC1+O-OFCL") or {})}
+    out["tc2b"] = tc2b_hurricane(root)
     return out
+
+
+TC2_DIR = "results/hurricane_tc2"
+
+
+def tc2b_hurricane(root: Path = ROOT) -> dict | None:
+    """TC2b (TC1 program amendments 2-4): TC1's intensity held to the median our RI model's 24-h curve implies. Its
+    registered test (2026) and the DEV result of the same first-day rule, read from its results files; None when
+    either is absent. ``ri_subset`` values are ``[mean error, cycles]`` as the test wrote them."""
+    s26 = _read(root, f"{TC2_DIR}/season_2026.json")
+    dev = _read(root, f"{TC2_DIR}/dev.json")
+    if not s26 or not dev:
+        return None
+
+    def ri(doc, products):
+        r = (doc.get("ri_subset") or {}).get("24") or {}
+        return {p: _finite((r.get(p) or [None])[0]) for p in products}, (r.get("TC1") or [None, None])[1]
+
+    ri26, n26 = ri(s26, ("TC1", "TC2b", "OFCL", "HCCA"))
+    ridev, ndev = ri(dev, ("TC1", "TC2", "OFCL", "HCCA"))
+    d24 = ((dev.get("TC2-TC1") or {}).get("per_lead") or {}).get("24") or {}
+    dev_seasons = [int(x) for x in dev.get("seasons") or []]
+    test_season = sorted({int(str(s)[-4:]) for s in s26.get("storms") or [] if str(s)[-4:].isdigit()})
+    return {"label": "TC2b", "program": TC1_PROGRAM, "prereg_tag": s26.get("prereg_tag"),
+            "dev_seasons": dev_seasons, "test_season": test_season[0] if len(test_season) == 1 else None,
+            "carried": s26.get("carried_tc2b") == "TC2b", "files": [f"{TC2_DIR}/dev.json", f"{TC2_DIR}/season_2026.json"],
+            "season_2026_vs_tc1": _tc1_diff(s26.get("TC2b-TC1") or {}),
+            "dev_24h_vs_tc1": {"d": _finite(d24.get("d")), "ci": _ci(d24.get("ci"))},
+            "dev_carried": dev.get("carried") == "TC2",
+            "ri_2026_24h": ri26, "ri_2026_cycles": n26, "ri_dev_24h": ridev, "ri_dev_cycles": ndev}
 
 
 def ours_hurricane(root: Path = ROOT) -> dict | None:
