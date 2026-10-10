@@ -17,7 +17,9 @@ REGISTRY = ROOT / "dist" / "data" / "model-registry.json"
 
 # every artifact a live scorer loads (fetch_and_score*.py)
 LIVE_ARTIFACTS = (
-    "hurricane_ri_stack_v1.json", "hurricane_ri_v8_2.json", "hurricane_ri_v9.json", "hurricane_ri_v10.json",
+    # v8.3 is the served other-basins model (amendment 15); v8.2 is still loaded live, as J1's base
+    "hurricane_ri_stack_v1.json", "hurricane_ri_v8_3.json", "hurricane_ri_v8_2.json", "hurricane_ri_v9.json",
+    "hurricane_ri_v10.json",
     "hurricane_ri_v10_2.json", "hurricane_ri_v10_3.json", "hurricane_ri_v10_4.json", "hurricane_ri_j1.json",
     "earthquake_operational_v1.json",
     "earthquake_gear1_stack_v1.json", "tornado_v3_w.json", "tornado_v3.json", "tornado_v3_w_30.json",

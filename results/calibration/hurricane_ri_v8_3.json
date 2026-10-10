@@ -1,0 +1,520 @@
+{
+ "phase": "amendment 15 evaluate",
+ "program": "docs/HURRICANE_RI_V9_PROGRAM.md (amendment 15)",
+ "prereg_tag": "prereg-hurricane-ri-amend15",
+ "generated_at": "2026-10-10T03:21:19Z",
+ "candidate": {
+  "version": "hurricane_ri_v8_3",
+  "artifact": "results/models/hurricane_ri_v8_3.json",
+  "artifact_sha256": "2caff7541eb0d98dabdde778a8d4e7ac6b0e00b930e8e28cf66bf6966935e7da",
+  "recipe": {
+   "dataset": "v8.3",
+   "members_years": [
+    2000,
+    2021
+   ],
+   "calibration": {
+    "method": "logistic_on_logit_newton",
+    "dataset": "v8.3",
+    "years": [
+     2022,
+     2024
+    ]
+   },
+   "impute_live": [],
+   "served": true
+  },
+  "training_summary": {
+   "n_cases": 56128,
+   "n_positive": 3394,
+   "n_negative": 52734
+  },
+  "calibration": {
+   "a": 1.227822920608874,
+   "b": -2.545002097739866,
+   "n": 7644,
+   "n_events": 467,
+   "iterations": 7,
+   "grad_inf": 2.0100932645072182e-12,
+   "mean_log_loss": 0.1747866251103563
+  }
+ },
+ "comparator": {
+  "version": "hurricane_ri_v8_2",
+  "artifact": "results/models/hurricane_ri_v8_2.json",
+  "artifact_sha256": "b9b640a7ffc53c5b8e70a08fbc9b98b11f6954768dad0cee5f723030f70ecdd4",
+  "training_summary": {
+   "n_cases": 61405,
+   "n_positive": 3761,
+   "n_negative": 57644
+  },
+  "calibration": {
+   "a": 1.216373792534088,
+   "b": -2.554424575500318,
+   "n": 8317,
+   "n_events": 507,
+   "iterations": 7,
+   "grad_inf": 1.4643470914088156e-12,
+   "mean_log_loss": 0.17576412086244972
+  }
+ },
+ "data": {
+  "frozen": {
+   "path": "results/hurricane_operational_ri_v8_2_2000_2024.jsonl",
+   "sha256": "58746a4aea3da0b19ba4e4cfa833b74be9b44ef49964c3ebeb8a89ab5bc2e84d",
+   "rows": 69722
+  },
+  "deduplicated": {
+   "path": "results/hurricane_operational_ri_v8_3_2000_2024.jsonl",
+   "sha256": "35a4d875e503acc2f7d3d49c026676d0be2d89b325cbdf4a810fe015aac96881",
+   "rows": 63772
+  },
+  "rule": "hurricane_ri_j1.dedupe: one row per (storm_id, issue_time), the first kept; only byte-identical copies removed",
+  "removed": 5950,
+  "removed_storms": 178,
+  "removed_ri": 407,
+  "by_storm_first_season": {
+   "calibration_2022_2024": {
+    "frozen": 8317,
+    "kept": 7644,
+    "removed": 673,
+    "removed_ri": 40
+   },
+   "members_2000_2021": {
+    "frozen": 61405,
+    "kept": 56128,
+    "removed": 5277,
+    "removed_ri": 367
+   }
+  }
+ },
+ "controls": {
+  "a_v82_reproduces": {
+   "refit": {
+    "version": "hurricane_ri_v8_2",
+    "bit_identical": true,
+    "first_difference": null,
+    "trees": [
+     200,
+     150
+    ],
+    "bags": 50,
+    "calibration_mean_log_loss": 0.17576412086244972
+   },
+   "calibration_n": 8317,
+   "calibration_log_loss": 0.17576412086244972,
+   "registered_log_loss": 0.17576412086244972,
+   "abs_diff": 0.0
+  },
+  "b_dedupe": {
+   "removed": 5950,
+   "registered": 5950
+  },
+  "c_test_rows": {
+   "rows_sha256": "0834ab932a98a208f4eadfb0a71bedfd653de314ca1a9be37bfdf943681726ae",
+   "registered_rows_sha256": "0834ab932a98a208f4eadfb0a71bedfd653de314ca1a9be37bfdf943681726ae",
+   "jtwc_counts": {
+    "2025": {
+     "n": 1837,
+     "events": 68
+    },
+    "2026": {
+     "n": 1130,
+     "events": 90
+    }
+   },
+   "v82_recomputed_max_abs_diff": 0.0,
+   "n_rows_checked": 4659
+  },
+  "v83_refit": {
+   "version": "hurricane_ri_v8_3",
+   "bit_identical": true,
+   "first_difference": null,
+   "trees": [
+    200,
+    150
+   ],
+   "bags": 50,
+   "calibration_mean_log_loss": 0.1747866251103563
+  },
+  "all_passed": true
+ },
+ "test": {
+  "rows": ".cache/hurricane_ri_v9/j1/rows.jsonl.gz (hurricane_ri_j1 rows phase, amendment 13a)",
+  "rows_sha256": "0834ab932a98a208f4eadfb0a71bedfd653de314ca1a9be37bfdf943681726ae",
+  "storm_first_seasons": [
+   2025,
+   2026
+  ],
+  "decision_basins": [
+   "WP",
+   "NI",
+   "SI",
+   "SP"
+  ],
+  "n": 2967,
+  "events": 158,
+  "storms": 130
+ },
+ "bootstrap": {
+  "function": "hurricane_ri_j1.paired",
+  "unit": "storm (resampled with replacement; each drawn storm keeps all its cycles; the mean is a ratio of sums)",
+  "replicates": 2000,
+  "rng": "numpy default_rng(0)",
+  "interval": "percentile (2.5, 97.5)",
+  "clip": [
+   1e-12,
+   0.999999999999
+  ]
+ },
+ "registered": {
+  "n": 2967,
+  "events": 158,
+  "storms": 130,
+  "v8_2": {
+   "n": 2967,
+   "events": 158,
+   "log_loss": 0.16559736538976674,
+   "brier": 0.04542918717175564,
+   "auc": 0.8515057838502823,
+   "mean_forecast": 0.06011092412735826
+  },
+  "v8_3": {
+   "n": 2967,
+   "events": 158,
+   "log_loss": 0.1658645871778799,
+   "brier": 0.04555909835794632,
+   "auc": 0.8517310994047163,
+   "mean_forecast": 0.06137886461715291
+  },
+  "v8_3_minus_v8_2": {
+   "d_ll": 0.0002672217881131645,
+   "d_ll_ci": [
+    -0.0006971967652468524,
+    0.0013714885115692589
+   ],
+   "d_brier": 0.00012991118619067358,
+   "d_brier_ci": [
+    -0.00011912412932767398,
+    0.0003828126486319044
+   ]
+  }
+ },
+ "ties_in_jtwc_probabilities": {
+  "v8_2": 0,
+  "v8_3": 0
+ },
+ "rule": {
+  "statement": "v8.3 replaces v8.2 iff the upper end of the 95 % storm-bootstrap interval of the 30/24 log loss difference (v8.3 - v8.2) on the 2025 + 2026 JTWC rows is <= +0.002 nats",
+  "margin": 0.002,
+  "upper": 0.0013714885115692589,
+  "met": true
+ },
+ "decision": {
+  "adopt": true,
+  "serve": "hurricane_ri_v8_3"
+ },
+ "by_region": {
+  "WP": {
+   "n": 1078,
+   "events": 70,
+   "storms": 58,
+   "v8_2": {
+    "n": 1078,
+    "events": 70,
+    "log_loss": 0.17712426198543463,
+    "brier": 0.04948795121358745,
+    "auc": 0.8672902494331066,
+    "mean_forecast": 0.07389200491668801
+   },
+   "v8_3": {
+    "n": 1078,
+    "events": 70,
+    "log_loss": 0.1771446128785034,
+    "brier": 0.04951080379814099,
+    "auc": 0.8664257369614512,
+    "mean_forecast": 0.07387441598645927
+   },
+   "v8_3_minus_v8_2": {
+    "d_ll": 2.0350893068765244e-05,
+    "d_ll_ci": [
+     -0.0018952369224857295,
+     0.002477951102051991
+    ],
+    "d_brier": 2.285258455354245e-05,
+    "d_brier_ci": [
+     -0.000525709519703343,
+     0.0005275937822161219
+    ]
+   }
+  },
+  "NI": {
+   "n": 147,
+   "events": 0,
+   "storms": 12,
+   "v8_2": {
+    "n": 147,
+    "events": 0,
+    "log_loss": 0.030446302992441672,
+    "brier": 0.001965401878713528,
+    "auc": null,
+    "mean_forecast": 0.029361659754755295
+   },
+   "v8_3": {
+    "n": 147,
+    "events": 0,
+    "log_loss": 0.031613598775395046,
+    "brier": 0.0021537346685324412,
+    "auc": null,
+    "mean_forecast": 0.03041949048693798
+   },
+   "v8_3_minus_v8_2": {
+    "d_ll": 0.0011672957829533773,
+    "d_ll_ci": [
+     0.0003406149276993867,
+     0.0020111450466091217
+    ],
+    "d_brier": 0.0001883327898189131,
+    "d_brier_ci": [
+     4.4483362884708123e-05,
+     0.00035672399997721397
+    ]
+   }
+  },
+  "SI": {
+   "n": 1302,
+   "events": 67,
+   "storms": 38,
+   "v8_2": {
+    "n": 1302,
+    "events": 67,
+    "log_loss": 0.17109770154346077,
+    "brier": 0.046692219152633184,
+    "auc": 0.8346607045742945,
+    "mean_forecast": 0.05130353812679619
+   },
+   "v8_3": {
+    "n": 1302,
+    "events": 67,
+    "log_loss": 0.17170885951779843,
+    "brier": 0.046866493472262113,
+    "auc": 0.8336092815275847,
+    "mean_forecast": 0.053173243731900785
+   },
+   "v8_3_minus_v8_2": {
+    "d_ll": 0.0006111579743376752,
+    "d_ll_ci": [
+     -0.00045163511818071064,
+     0.0016643080353336771
+    ],
+    "d_brier": 0.00017427431962892942,
+    "d_brier_ci": [
+     -0.0001295362824926117,
+     0.0004963770322483201
+    ]
+   }
+  },
+  "SP": {
+   "n": 440,
+   "events": 21,
+   "storms": 22,
+   "v8_2": {
+    "n": 440,
+    "events": 21,
+    "log_loss": 0.16623321532196492,
+    "brier": 0.04626864435784638,
+    "auc": 0.8357767928173656,
+    "mean_forecast": 0.06268218172873773
+   },
+   "v8_3": {
+    "n": 440,
+    "events": 21,
+    "log_loss": 0.16578682582178725,
+    "brier": 0.04651005644652539,
+    "auc": 0.8414592567337198,
+    "mean_forecast": 0.06538918737539745
+   },
+   "v8_3_minus_v8_2": {
+    "d_ll": -0.00044638950017765694,
+    "d_ll_ci": [
+     -0.00341571878608177,
+     0.0020323246235447946
+    ],
+    "d_brier": 0.0002414120886790077,
+    "d_brier_ci": [
+     -0.0004050190902905361,
+     0.0007980636846623318
+    ]
+   }
+  }
+ },
+ "by_season": {
+  "2025": {
+   "n": 1837,
+   "events": 68,
+   "storms": 80,
+   "v8_2": {
+    "n": 1837,
+    "events": 68,
+    "log_loss": 0.13521095962622187,
+    "brier": 0.0351199868701265,
+    "auc": 0.8392993715292788,
+    "mean_forecast": 0.05454990731482762
+   },
+   "v8_3": {
+    "n": 1837,
+    "events": 68,
+    "log_loss": 0.13625163997895556,
+    "brier": 0.03538703585871951,
+    "auc": 0.8353257074452166,
+    "mean_forecast": 0.05571425576106479
+   },
+   "v8_3_minus_v8_2": {
+    "d_ll": 0.0010406803527336895,
+    "d_ll_ci": [
+     -0.00011395080824222284,
+     0.0024537900775434256
+    ],
+    "d_brier": 0.00026704898859301223,
+    "d_brier_ci": [
+     -1.8226054830586378e-06,
+     0.0005383694635252852
+    ]
+   }
+  },
+  "2026": {
+   "n": 1130,
+   "events": 90,
+   "storms": 50,
+   "v8_2": {
+    "n": 1130,
+    "events": 90,
+    "log_loss": 0.21499544272395432,
+    "brier": 0.062188480051483704,
+    "auc": 0.8575320512820512,
+    "mean_forecast": 0.06915126738808283
+   },
+   "v8_3": {
+    "n": 1130,
+    "events": 90,
+    "log_loss": 0.21400528098710472,
+    "brier": 0.06209545128810528,
+    "auc": 0.860940170940171,
+    "mean_forecast": 0.07058761370443953
+   },
+   "v8_3_minus_v8_2": {
+    "d_ll": -0.0009901617368495827,
+    "d_ll_ci": [
+     -0.0026357480821557703,
+     0.0004953517957908953
+    ],
+    "d_brier": -9.302876337843789e-05,
+    "d_brier_ci": [
+     -0.0005693185499811059,
+     0.00036908447101435967
+    ]
+   }
+  }
+ },
+ "all_basins": {
+  "n": 4659,
+  "events": 253,
+  "storms": 194,
+  "v8_2": {
+   "n": 4659,
+   "events": 253,
+   "log_loss": 0.16252848022801328,
+   "brier": 0.04476750726576253,
+   "auc": 0.8620556948035288,
+   "mean_forecast": 0.05769373938130441
+  },
+  "v8_3": {
+   "n": 4659,
+   "events": 253,
+   "log_loss": 0.16270053765063597,
+   "brier": 0.04484289133162416,
+   "auc": 0.8619211316225269,
+   "mean_forecast": 0.059153263695422814
+  },
+  "v8_3_minus_v8_2": {
+   "d_ll": 0.000172057422622689,
+   "d_ll_ci": [
+    -0.0006560021352269497,
+    0.001026293377673551
+   ],
+   "d_brier": 7.538406586163965e-05,
+   "d_brier_ci": [
+    -0.0001210867961104823,
+    0.0002751194405534043
+   ]
+  }
+ },
+ "nhc_basins": {
+  "NA": {
+   "n": 484,
+   "events": 25,
+   "storms": 22,
+   "v8_2": {
+    "n": 484,
+    "events": 25,
+    "log_loss": 0.1303248558236861,
+    "brier": 0.03754779291962228,
+    "auc": 0.9383877995642701,
+    "mean_forecast": 0.03458957472907399
+   },
+   "v8_3": {
+    "n": 484,
+    "events": 25,
+    "log_loss": 0.13192952716546047,
+    "brier": 0.037918695130268534,
+    "auc": 0.9354248366013072,
+    "mean_forecast": 0.034256808837385036
+   },
+   "v8_3_minus_v8_2": {
+    "d_ll": 0.0016046713417743658,
+    "d_ll_ci": [
+     -0.00011032419273242931,
+     0.0043637176767809815
+    ],
+    "d_brier": 0.0003709022106462576,
+    "d_brier_ci": [
+     -3.244517882279339e-05,
+     0.0010033086339072746
+    ]
+   }
+  },
+  "EP": {
+   "n": 1208,
+   "events": 70,
+   "storms": 42,
+   "v8_2": {
+    "n": 1208,
+    "events": 70,
+    "log_loss": 0.16789368878494362,
+    "brier": 0.04603500516514191,
+    "auc": 0.8570926437358775,
+    "mean_forecast": 0.06101379612810718
+   },
+   "v8_3": {
+    "n": 1208,
+    "events": 70,
+    "log_loss": 0.16725801623299705,
+    "brier": 0.04585806079715256,
+    "auc": 0.8592141601807682,
+    "mean_forecast": 0.06366197745081774
+   },
+   "v8_3_minus_v8_2": {
+    "d_ll": -0.00063567255194656,
+    "d_ll_ci": [
+     -0.0024331931074741482,
+     0.0010969992941031372
+    ],
+    "d_brier": -0.0001769443679893527,
+    "d_brier_ci": [
+     -0.0006051940857372225,
+     0.00018991825929360747
+    ]
+   }
+  }
+ }
+}

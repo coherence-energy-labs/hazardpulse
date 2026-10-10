@@ -35,8 +35,96 @@ def hu_ev():
     return se.hurricane_evidence()
 
 
-def test_the_v82_test_is_described_as_measured(hu_ev):
+@pytest.fixture(scope="module")
+def hu_ev82(hu_ev):
+    """The evidence as it reads while v8.2 is the served other-basins model (until amendment 15): its METHOD's
+    temporal hold-out. Built by the same function the site uses for v8.2, from the committed files."""
+    v82 = json.loads((ROOT / se.HURRICANE_V82_SERVED).read_text(encoding="utf-8"))["model_version"]
+    return dict(hu_ev, other_basins=se._v82_other_basins(ROOT, v82, se.version_label(v82)))
+
+
+V83_FILES = ("results/models/hurricane_ri_v8_3.json", "results/calibration/hurricane_ri_v8_3.json",
+             "results/calibration/hurricane_ri_v8_3_test_composition.json", se.HURRICANE_SCORER)
+
+
+def test_the_published_v83_test_is_described_as_measured(hu_ev):
+    """Amendment 15: the served other-basins model is v8.3, and its bound test is ITS registered test -- the
+    published artifact on 2025-2026 cycles in the basins where it publishes, none used to fit it -- not v8.2's
+    method on every basin. Every number is the results files'."""
     import types
+    ob = hu_ev["other_basins"]
+    assert se.hurricane_scorer_models()["served"] == ob["model"] == "hurricane_ri_v8_3" and ob["subject"] == "model"
+    res = json.loads((ROOT / "results/calibration/hurricane_ri_v8_3.json").read_text(encoding="utf-8"))
+    comp = json.loads((ROOT / "results/calibration/hurricane_ri_v8_3_test_composition.json").read_text(encoding="utf-8"))
+    c = ob["composition"]
+    assert sum(b["n"] for b in c["by_basin"]) == ob["test"]["n"] == comp["n"] == res["test"]["n"]
+    assert {b["basin"] for b in c["by_basin"]} == set(res["test"]["decision_basins"]) == {"WP", "NI", "SI", "SP"}
+    assert c["served_calibration_fitted_on_test_cases"] is False                     # read from the artifact
+    assert ob["test"]["auc"] == res["registered"]["v8_3"]["auc"]
+    assert ob["replaced"]["log_loss"] == res["registered"]["v8_2"]["log_loss"]
+    assert ob["vs_replaced"]["d_ll_ci"] == res["registered"]["v8_3_minus_v8_2"]["d_ll_ci"]
+    sources = hurricane._sources(types.SimpleNamespace(evidence={"hurricane": hu_ev}))      # the live page's text
+    text = hurricane.v82_test_text(ob)
+    wp = next(b for b in c["by_basin"] if b["basin"] == "WP")
+    for page in (sources, text):
+        for w in WRONG:
+            assert w not in page, w
+        assert "every basin" not in page and "calibration fitted on those same" not in page
+    assert f"West Pacific {wp['n']:,}" in text and "best track" in text and "none of them used to fit it" in text
+    assert f"{ob['test']['log_loss']:.4f}" in text and f"{ob['replaced']['log_loss']:.4f}" in text
+    jt = c["single_jtwc_warning"]
+    assert f"{jt['log_loss']:.3f}" in text and f"{jt['log_loss_climatology']:.3f}" in text
+    ev = {"hurricane": hu_ev, "earthquake": None, "tornado": None}
+    pages = {"methods": ep.methods_hurricane(ev), "methods_simple": ep.methods_simple(ev),
+             "registry": ep.registry_active(ev), "limits": ep.methods_limits(ev)}
+    for name, html in pages.items():
+        for w in WRONG:
+            assert w not in html, (name, w)
+    assert "Its registered test" in pages["methods"] and "calibration fitted on the test" not in pages["methods"]
+    assert "basins where it publishes" in pages["methods_simple"] and "registered test" in pages["registry"]
+    assert "every basin" not in pages["limits"] and "basins where it publishes" in pages["limits"]
+
+
+def test_a_replacement_decision_that_did_not_adopt_the_served_artifact_is_refused(tmp_path):
+    """The other-basins evidence for v8.3 is refused unless its decision file adopted exactly the served artifact
+    by its rule, with every control passed, replacing the v8.2 this repository holds -- and its composition
+    describes that test."""
+    def root(name):
+        r = tmp_path / name
+        for rel in V83_FILES:
+            (r / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / rel, r / rel)
+        return r
+
+    ok = se._replacement_other_basins(root("ok"), "hurricane_ri_v8_3", "hurricane_ri_v8_2")
+    assert ok["label"] == "v8.3" and ok["composition"]["by_basin"]
+    res_rel, comp_rel = V83_FILES[1], V83_FILES[2]
+    cases = {
+        "another artifact": (res_rel, lambda d: d["candidate"].update(artifact_sha256="0" * 64)),
+        "not adopted": (res_rel, lambda d: d["decision"].update(adopt=False, serve="hurricane_ri_v8_2")),
+        "rule not met": (res_rel, lambda d: d["rule"].update(met=False)),
+        "a failed control": (res_rel, lambda d: d["controls"].update(all_passed=False)),
+        "replaced another model": (res_rel, lambda d: d["comparator"].update(version="hurricane_ri_v8_1")),
+        "an upper bound that is not the interval's": (res_rel, lambda d: d["rule"].update(upper=0.001)),
+        "a composition of another test": (comp_rel, lambda d: d["evaluation"].update(n=2000)),
+        "a composition of other rows": (comp_rel, lambda d: d["dataset"].update(sha256="0" * 64)),
+    }
+    for name, (rel, fn) in cases.items():
+        r = root(name.replace(" ", "_").replace("'", ""))
+        d = json.loads((r / rel).read_text(encoding="utf-8"))
+        fn(d)
+        (r / rel).write_text(json.dumps(d), encoding="utf-8")
+        with pytest.raises(se.EvidenceError):
+            se._replacement_other_basins(r, "hurricane_ri_v8_3", "hurricane_ri_v8_2")
+    with pytest.raises(se.EvidenceError):                     # the served file is not the one the decision names
+        se._replacement_other_basins(root("v82"), "hurricane_ri_v8_3", "hurricane_ri_v8_1")
+
+
+def test_the_v82_test_is_described_as_measured(hu_ev82):
+    """While v8.2 was served (and whenever the scorer serves it), its test is its METHOD's hold-out from every
+    basin with its published calibration fitted on those cycles -- the site audit of 2026-10-05."""
+    import types
+    hu_ev = hu_ev82
     sources = hurricane._sources(types.SimpleNamespace(evidence={"hurricane": hu_ev}))      # the live page's text
     for w in WRONG:
         assert w not in sources, w
@@ -100,14 +188,19 @@ def test_the_live_record_counts_only_the_versions_published_now(tmp_path, hu_ev)
     d = _site(tmp_path, hu_ev, old)
     live = record._published_live(d, "hu", hu_ev["model_version"])
     assert "14" not in live and "11" not in live and live.count("none closed yet") == 2
+    # the other-basins model published now is the evidence's (v8.3 since amendment 15); v8.2's records are retired
+    other = hu_ev["other_basins"]["model"]
+    assert other == "hurricane_ri_v8_3"
     served = {hu_ev["model_version"]: {"n_storm_cycles": 7, "n_events": 1},
-              "hurricane_ri_v8_2": {"n_storm_cycles": 5, "n_events": 0}, **old}
+              other: {"n_storm_cycles": 5, "n_events": 0},
+              "hurricane_ri_v8_2": {"n_storm_cycles": 9, "n_events": 0}, **old}
     d2 = _site(tmp_path / "b", hu_ev, served)
     live2 = record._published_live(d2, "hu", hu_ev["model_version"])
     assert "7 storm-cycles" in live2 and "5 storm-cycles" in live2 and "14" not in live2
+    assert "9 storm-cycles" not in live2                                  # v8.2 no longer publishes
     rows = {r[1]: r[2] for r in record._live_rows(d2)}
-    assert rows[f"<code>{hu_ev['model_version']}</code>"] == "published"
-    assert rows["<code>hurricane_ri_v8_1</code>"] == "retired"
+    assert rows[f"<code>{hu_ev['model_version']}</code>"] == rows[f"<code>{other}</code>"] == "published"
+    assert rows["<code>hurricane_ri_v8_1</code>"] == rows["<code>hurricane_ri_v8_2</code>"] == "retired"
     card = record._hazard_record_card(d2, "hu")
     for w in WRONG:
         assert w not in card

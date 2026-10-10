@@ -259,10 +259,19 @@ def test_the_late_fix_measurement_is_the_live_codes_pattern_and_reaches_the_site
     """The composition file's late-fix inputs are what the live code leaves missing (derived, not typed), and
     the evidence the site reads carries the same list and number."""
     from hazardpulse.verification import served_evidence as se
-    comp = json.loads((ROOT / se.HURRICANE_V82_COMPOSITION).read_text(encoding="utf-8"))
+    ob = se.hurricane_evidence()["other_basins"]
+    # every composition file -- v8.2's, and the served replacement's (amendment 15: v8.3) -- carries the live
+    # code's pattern; the site reads the served model's
+    served_rel = (f"results/calibration/{ob['model']}_test_composition.json" if ob.get("subject") == "model"
+                  else se.HURRICANE_V82_COMPOSITION)
+    assert served_rel != se.HURRICANE_V82_COMPOSITION and ob["model"] == "hurricane_ri_v8_3"
+    for rel in (se.HURRICANE_V82_COMPOSITION, served_rel):
+        c = json.loads((ROOT / rel).read_text(encoding="utf-8"))
+        assert c["late_best_track_fix"]["inputs_missing_live"] == LATE, rel
+        assert 0 < c["late_best_track_fix"]["log_loss"] < c["single_jtwc_warning"]["log_loss_climatology"], rel
+    comp = json.loads((ROOT / served_rel).read_text(encoding="utf-8"))
     lf = comp["late_best_track_fix"]
-    assert lf["inputs_missing_live"] == LATE and 0 < lf["log_loss"] < comp["single_jtwc_warning"]["log_loss_climatology"]
-    ev = se.hurricane_evidence()["other_basins"]["composition"]["late_best_track_fix"]
+    ev = ob["composition"]["late_best_track_fix"]
     assert ev == {"inputs": LATE, "n_missing": 4, "log_loss": lf["log_loss"]}
     from hazardpulse.site.pages import hurricane
     text = hurricane.v82_test_text(se.hurricane_evidence()["other_basins"])

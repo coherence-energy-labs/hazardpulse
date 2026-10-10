@@ -52,7 +52,7 @@ def _basis(storm: dict) -> str:
 
 
 def _single_warning(s: dict) -> bool:
-    """The published v8.2 number was scored without inputs the model needs. Since 2026-10-05 a record says
+    """The published HazardPulse number was scored without inputs the model needs. Since 2026-10-05 a record says
     which (``ri_inputs.inputs_missing``): a West Pacific storm now carries its best-track history from RAL's
     b-deck, so the caution shows only when that history was not there. Older records: a JTWC analysis."""
     if str(s.get("ri_source") or "") == "noaa_aid_stack":
@@ -79,10 +79,10 @@ def _single_warning_caveat(ob: dict | None, s: dict | None = None) -> str:
     if jt.get("n_missing") and jt.get("log_loss") is not None and jt.get("log_loss_climatology") is not None:
         return (f"Scored from a single JTWC warning, which does not carry the storm&rsquo;s recent track: "
                 f"{jt['n_missing']} of the model&rsquo;s {jt['n_inputs']} inputs are unknown and filled with "
-                f"typical values. Scored the same way, the {_span(ob)} West Pacific cycles were barely better "
-                "than always forecasting the average (log loss "
-                f"{fmt.num(jt['log_loss'], 3)} against {fmt.num(jt['log_loss_climatology'], 3)}; "
-                f"{fmt.num(jt.get('log_loss_full_inputs'), 3)} with every input). Treat this number as rough.")
+                f"typical values. Scored the same way, the {_span(ob)} West Pacific cycles had a log loss of "
+                f"{fmt.num(jt['log_loss'], 3)}, against {fmt.num(jt['log_loss_climatology'], 3)} for always "
+                f"forecasting the average ({fmt.num(jt.get('log_loss_full_inputs'), 3)} with every input). "
+                "Treat this number as rough.")
     return ("Scored from a single JTWC warning, which does not carry the storm&rsquo;s recent track, so several "
             "of the model&rsquo;s inputs are filled with typical values. Treat this number as rough.")
 
@@ -272,7 +272,7 @@ def _tc2b_paragraph(t: dict | None) -> str:
 
 
 def _j1_row(s: dict, j1: dict | None) -> tuple[str, str] | None:
-    """Our satellite model's forecast beside the published v8.2, for a storm in its scope; its label, the key of
+    """Our satellite model's forecast beside the published number, for a storm in its scope; its label, the key of
     its live record and its scope come from its artifact and library (``served_evidence.j1_shown_shadow``), never
     from this page. The published number above is untouched."""
     v = j1_shown_shadow(s, j1)
@@ -353,15 +353,20 @@ def j1_sources_text(j1: dict | None, published: str) -> str:
     regions = [esc(r["name"]) for r in (j1 or {}).get("regions") or [] if r.get("in_scope")]
     if not j1 or not regions or not published:
         return ""
+    against = esc(j1.get("against") or "")
+    tested = (f"tested on new forecasts against {against}, the model it is built on" if against and against != published
+              else "tested on new forecasts")
     return (f" On {_join(regions)} storms, our satellite model {esc(j1['label'])} is shown beside it for comparison "
-            "while it is tested on new forecasts; it would replace "
+            f"while it is {tested}; it would replace "
             f"{published} only by meeting that test&rsquo;s rule, written down in advance "
             '(<a href="/methods/#hurricane-j1">its results and rule</a>).')
 
 
 def v82_short(other_basins: dict | None) -> str:
-    """One clause on what the other-basins model's test is, for the home page's proof strip: its held-out cycles
-    from every basin (it said by hand, until 2026-10-09, that the model had no test in those basins)."""
+    """One clause on what the other-basins model's test is, for the home page's proof strip: v8.2's method on
+    held-out cycles from every basin (it said by hand, until 2026-10-09, that the model had no test in those
+    basins), or -- for a model that replaced it by a registered rule (amendment 15) -- the published model itself
+    on unseen cycles in the basins where it publishes."""
     ob = (other_basins or {}).get("test") or {}
     label = esc((other_basins or {}).get("label") or "")
     if not label:
@@ -370,6 +375,10 @@ def v82_short(other_basins: dict | None) -> str:
     wp = next((b for b in comp.get("by_basin") or [] if b.get("basin") == "WP"), None)
     if ob.get("auc") is None or not comp.get("by_basin"):
         return f"Elsewhere we publish our {label} model"
+    if (other_basins or {}).get("subject") == "model":
+        return (f"Elsewhere we publish our {label} model; it was tested on {int(ob.get('n') or 0):,} "
+                f"{fmt.years(ob.get('when', ''))} cycles in the basins where it publishes, none used to fit it"
+                + (f", {int(wp['n']):,} of them West Pacific" if wp else ""))
     return (f"Elsewhere we publish our {label} model; its method was tested on {int(ob.get('n') or 0):,} held-out "
             f"{fmt.years(ob.get('when', ''))} cycles from every basin"
             + (f", {int(wp['n']):,} of them West Pacific" if wp else "")
@@ -387,10 +396,49 @@ def v82_test_text(other_basins: dict | None) -> str:
     comp = (other_basins or {}).get("composition") or {}
     when = fmt.years(ob.get("when", ""))
     basins = ", ".join(f"{esc(b['name'])} {int(b['n']):,}" for b in comp.get("by_basin") or [])
+    if (other_basins or {}).get("subject") == "model":
+        return _replacement_test_text(other_basins, when, basins)
     where = f" in every basin ({basins})" if basins else ""
     text = (f" Its method was tested on {int(ob.get('n') or 0):,} forecast cycles from {when}{where}, none of them "
             "used to fit it: it ranked a cycle that went on to intensify rapidly above one that did not "
             f"{fmt.pct(ob.get('auc'), 1)} of the time.")
+    return text + _test_inputs_text(comp, when)
+
+
+def _replacement_test_text(other_basins: dict, when: str, basins: str) -> str:
+    """The test of a model that replaced v8.2 by a registered rule (served_evidence._replacement_other_basins): the
+    published artifact itself, on cycles in the basins where it publishes that were never used to fit it, against
+    the model it replaced -- every number and label from its results file."""
+    ob = other_basins.get("test") or {}
+    rep, d = other_basins.get("replaced") or {}, other_basins.get("vs_replaced") or {}
+    rule = other_basins.get("rule") or {}
+    where = f" in the basins where it publishes ({basins})" if basins else " in the basins where it publishes"
+    text = (f" It was tested on {int(ob.get('n') or 0):,} forecast cycles from {when}{where}, none of them used to fit "
+            "it: it ranked a cycle that went on to intensify rapidly above one that did not "
+            f"{fmt.pct(ob.get('auc'), 1)} of the time.")
+    if rep.get("label") and d.get("d_ll") is not None and rep.get("log_loss") is not None:
+        ci = d.get("d_ll_ci") or [None, None]
+        amendment = other_basins.get("amendment")
+        text += (f" It is {esc(rep['label'])}&rsquo;s method refitted without the duplicate copies of storms that "
+                 f"cross basins, which {esc(rep['label'])}&rsquo;s training rows held"
+                 + (f" (amendment {esc(amendment)})" if amendment else "")
+                 + f"; on the same cycles its log loss was {fmt.num(ob.get('log_loss'), 4)} against "
+                 f"{esc(rep['label'])}&rsquo;s {fmt.num(rep['log_loss'], 4)} (difference {_signed(d['d_ll'], 4)}"
+                 + (f", 95% interval {_signed(ci[0], 4)} to {_signed(ci[1], 4)}" if ci[0] is not None else "")
+                 + ")"
+                 + (f", inside the margin of {_signed(rule['margin'], 3)} written down before the test"
+                    if rule.get("met") and rule.get("margin") is not None else "")
+                 + ".")
+    return text + _test_inputs_text(other_basins.get("composition") or {}, when)
+
+
+def _signed(x: float, d: int) -> str:
+    return ("+" if float(x) >= 0 else fmt.MINUS) + f"{abs(float(x)):.{d}f}"
+
+
+def _test_inputs_text(comp: dict, when: str) -> str:
+    """What the test's inputs were, and what a live West Pacific forecast's lack (from the test's composition)."""
+    text = ""
     if comp.get("inputs") == "best track":
         text += " That test read each storm&rsquo;s inputs from the best track"
         text += (", and the model now published is the same method refitted with its calibration fitted on those "

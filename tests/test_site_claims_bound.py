@@ -234,12 +234,9 @@ def _v82_label() -> str | None:
 
 # A typed token is allowed only with the artifact that justifies it, checked here: if the artifact changes, the
 # allowance fails and the text must be bound or changed.
+# (Until amendment 15, data.py typed "v8.2" as the record token it mapped to a display name; it now derives the name
+# from the token the scorer writes, fetch_and_score.model_label, so that allowance is gone.)
 ALLOWED = {
-    ("src/hazardpulse/site/data.py", "v8.2"): (
-        "the token the scorer writes as a record's ri_source (fetch_and_score.RI_SOURCE_V82), mapped to its display "
-        "name; it must be the served other-basins artifact's own label",
-        lambda: _v82_label() == "v8.2" and 'RI_SOURCE_V82 = "v8.2"' in
-        (ROOT / "scripts/fetch_and_score.py").read_text(encoding="utf-8")),
     ("src/hazardpulse/verification/served_evidence.py", "v8.2"): (
         "a key of the evaluation file's data_sha256, not displayed",
         lambda: "v8.2" in (json.loads((ROOT / se.HURRICANE_V82_EVALUATION).read_text(encoding="utf-8"))
@@ -359,14 +356,19 @@ def test_hand_kept_prose_types_no_model_label_and_no_year_range():
 
 
 def known_labels() -> set[str]:
-    """Every model label an artifact names: the prospective test's entrants, our RI family's artifacts, and the
-    served other-basins model's own version."""
+    """Every model label an artifact names: the prospective test's entrants, our RI family's artifacts, v8.2's
+    artifact (published until amendment 15, J1's base since), and the served other-basins model's own version --
+    the one the scorer serves, named only when its artifact exists."""
     pros = json.loads((ROOT / se.HURRICANE_PROSPECTIVE).read_text(encoding="utf-8"))
     out = {se.entrant_label(k) for k in pros.get("entrants") or {}}
     for entrant, rel, _w, _b in se.HURRICANE_V10_FAMILY:
         if (ROOT / rel).exists():
             out.add(se.family_label(json.loads((ROOT / rel).read_text(encoding="utf-8")), entrant))
     out.add(_v82_label())
+    served = se.hurricane_scorer_models().get("served")
+    served_file = ROOT / "results" / "models" / f"{served}.json"
+    if served and served_file.exists():
+        out.add(se.version_label(json.loads(served_file.read_text(encoding="utf-8"))["model_version"]))
     return out
 
 
@@ -434,7 +436,7 @@ def test_the_registry_carries_tc1_and_v9_1_and_marks_the_shown_model_from_the_po
 
 def test_every_model_label_on_the_site_is_one_an_artifact_names():
     known = known_labels()
-    assert {"v8.2", "v9.1", "v10.1"} <= known
+    assert {"v8.2", "v8.3", "v9.1", "v10.1"} <= known
     bad = {}
     for p in sorted(DIST.rglob("*.html")):
         text = LICENCE.sub("", ep.page_text(p.read_text(encoding="utf-8")))

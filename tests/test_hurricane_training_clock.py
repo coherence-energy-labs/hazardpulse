@@ -108,6 +108,24 @@ def test_committed_v8_2_set_agrees_with_its_own_clock():
     assert bad_label == 0 and bad_dv == 0, (bad_label, bad_dv)
 
 
+def test_committed_v8_3_set_agrees_with_its_own_clock():
+    """v8.3's rows (amendment 15) are v8.2's with the basin-crossing copies removed: the same clock audit holds."""
+    checked, bad_label, bad_dv = _audit(ri_model.DATASETS["v8.3"])
+    assert checked > 40_000
+    assert bad_label == 0 and bad_dv == 0, (bad_label, bad_dv)
+
+
+def test_committed_v8_3_set_has_one_row_per_storm_cycle():
+    keys = set()
+    rows = 0
+    with ri_model.DATASETS["v8.3"].open(encoding="utf-8") as fh:
+        for line in fh:
+            c = json.loads(line)
+            rows += 1
+            keys.add((c["storm_id"], c["issue_time"]))
+    assert rows == len(keys) == 69_722 - 5_950
+
+
 def test_the_same_audit_fails_on_the_legacy_v8_1_set():
     checked, bad_label, bad_dv = _audit(ri_model.DATASETS["v8.1"])
     assert checked > 40_000

@@ -1385,6 +1385,203 @@ Bringing SP into scope would need a new registration, judged on data after it. T
 SI storms, and the claim counts only those cycles. `score_hurricane_j1_prospective.py` reports every JTWC region
 beside the claim set.
 
+## Amendment 15 -- v8.3: v8.2 retrained on de-duplicated data (2026-10-10 ~03:15Z, before any v8.3 number exists)
+
+**Why.** Amendment 13a found that the frozen v8.2 training file (`results/hurricane_operational_ri_v8_2_2000_2024.jsonl`)
+holds 5,950 byte-identical duplicate (storm, issue time) rows, 8.5% of its 69,722, from 178 basin-crossing storms.
+The builder concatenates IBTrACS's per-basin files, and each file carries the whole track of every storm that enters
+its basin. The published JTWC-basin model, v8.2, was fitted with those storms counted once per basin they touched:
+5,255 of the copies fall in its member years, the rest in its calibration years. Amendment 13a recorded the fix as a
+retrain, so a model change that needs its own registration. This is that registration. No v8.3 row file, member,
+calibration or score exists yet.
+
+**v8.3.**
+- **Recipe:** v8.2's exactly (`ri_model.RECIPES["hurricane_ri_v8_2"]`):
+  - the same config (`best_known_operational_ri_config`) and trainer (the same `trainer_fingerprint`);
+  - the four members on storms of first season 2000-2021;
+  - the held-out `logistic_on_logit_newton` calibration on storms of first season 2022-2024;
+  - no live input imputed.
+
+  No feature, hyper-parameter, seed or year split changes.
+- **Data:** `results/hurricane_operational_ri_v8_3_2000_2024.jsonl`, the frozen v8.2 file de-duplicated by amendment
+  13a's rule (`hurricane_ri_j1.dedupe`):
+  - one row per (storm_id, issue_time), the first kept;
+  - only byte-identical copies are removed, and two different rows with one key stop the run;
+  - written with the builder's conventions: one `json.dumps` object per line, LF bytes, the frozen order;
+  - every kept line must be byte-identical to its line in the frozen file.
+- **Artifact:** `results/models/hurricane_ri_v8_3.json`, bound by content hash to that file for both roles, as
+  v8.2's artifact is bound to its own.
+
+**Controls.** Each one stops the run.
+- **(a) The recipe reproduces the served v8.2.** Refitted on the non-de-duplicated frozen file, `hurricane_ri_v8_2`
+  must equal the committed `results/models/hurricane_ri_v8_2.json` bit for bit
+  (`scripts/train_hurricane_ri.py --recipe hurricane_ri_v8_2 --verify`):
+  - every tree split, threshold and leaf;
+  - every logistic and bagged weight;
+  - the imputation medians, the standardisation, and the calibration's a and b;
+  - the same data hashes, config and trainer fingerprint.
+
+  The recipe is deterministic by construction: its only randomness is `RandomState(42)`, in the bags and in the
+  depth-4 trees' subsampling. The artifact was fitted with the numpy (2.3.5) and Python (3.14.3) installed here, so
+  bit-identity is required, not a tolerance. In addition, v8.2 recomputed by `ri_model.score_cases` must give mean
+  log loss 0.17576412086244972 on its 8,317 calibration cases, to 1e-12.
+- **(b) The dedupe removes exactly 5,950 rows** from the frozen file, leaving 63,772. The split by storm first season
+  (members 2000-2021, calibration 2022-2024) is reported.
+- **(c) The test rows are J1's.**
+  - The rows file's sha256 must equal the `rows_sha256` registered in `results/calibration/hurricane_ri_j1.json`
+    (0834ab93...).
+  - Its JTWC rows must number 1,837 (68 RI) for 2025 and 1,130 (90 RI) for 2026, as amendment 13a counted them.
+  - v8.2 recomputed by `score_cases` must reproduce every test row's `v82_calibrated` to 1e-12.
+
+**Test (untouched).** The J1 rows file (`.cache/hurricane_ri_v9/j1/rows.jsonl.gz`). It was built by the same
+builder on the IBTrACS release of 2026-10-08 and de-duplicated by amendment 13a. The test uses its storms of first
+season (`j1_season`) 2025 and 2026 to date.
+- **Decision set:** the JTWC basins (WP, NI, SI, SP), where the model is published: 2,967 cycles, 158 RI events.
+- **Unseen by both models:** members are fitted on storms of 2000-2021 and calibration on 2022-2024.
+- **Arms:** v8.3's calibrated probability, and v8.2 as served (its artifact's calibrated probability).
+
+**Rule.** v8.3 replaces v8.2 as the published model iff it is non-inferior. On the pooled 2025 + 2026 JTWC rows, the
+upper end of the 95% storm-bootstrap interval of the 30/24 log loss difference, v8.3 minus v8.2, must be
+**<= +0.002 nats**. This is a data-correctness fix, so it is adopted unless it measurably hurts.
+- **The bootstrap** is `hurricane_ri_j1.paired`, the one J1's test used:
+  - storms are resampled with replacement, and each drawn storm keeps all its cycles (the mean is a ratio of sums);
+  - 2,000 replicates, numpy `default_rng(0)`;
+  - percentile interval (2.5, 97.5);
+  - probabilities clipped to [1e-12, 1 - 1e-12].
+- **Reported (descriptive, no claim):**
+  - log loss, Brier, AUC and mean forecast for both arms (`hurricane_ri_j1.metrics`);
+  - dBrier with its interval;
+  - per region (WP, NI, SI, SP, with SI and SP apart) and per season (2025, 2026), each with paired intervals;
+  - all six basins pooled (NA and EP included);
+  - v8.3's calibration fit (n, events, a, b, iterations);
+  - the rows removed per role.
+- **Output:** `scripts/hurricane_ri_v8_3.py` writes every number to `results/calibration/hurricane_ri_v8_3.json`.
+
+**What adoption changes, and what it must not.**
+- **It changes the published number.**
+  - The published JTWC-basin number (WP, IO and SH storms) becomes v8.3's.
+  - So does the NHC-basin fallback, which serves the HazardPulse model when a cycle's SHIPS text is absent,
+    unreadable or lacks the aids.
+  - Every record names the model that made its number.
+  - The site names v8.3 as the published JTWC-basin model, bound to its own artifact and evidence, which the
+    project's own scripts generate.
+- **It must not change J1.**
+  - J1 keeps reading v8.2's ensemble, its trained input (`v82_logit`). The scorer loads v8.2's artifact beside the
+    served one and scores the same live cases with it.
+  - J1's shadow keeps recording v8.2's calibrated number at full precision (`v8_2_model_probability`).
+  - J1's prospective comparator stays v8.2 (amendments 13b and 14), and so do its scope, rule, budget and looks.
+  - Amendment 13b checks that the comparator rounds to the published number. That cannot hold once v8.3
+    publishes. After the switch the check is made against v8.2's own rounded number, recorded in the same storm
+    record beside the published one. Records made before the switch are read as before.
+- **It must not change anything else.** These read no v8.2 number and stay as they are:
+  - the NOAA aid stack (candidate A);
+  - the NHC-basin shadows (v9.1, v10.x, challengers);
+  - the trust layer's calibrator, which is fitted for the stack.
+- **If the rule is not met:** v8.2 stays the published model, nothing on the served path changes, and the outcome is
+  recorded here.
+
+**Known before the result.**
+- **Same rows, new weights.** The copies are byte-identical, so no feature or label changes. De-duplication only
+  stops basin-crossing storms counting two or three times, in both the members and the calibration.
+- **Why a margin.** +0.002 nats is about 1.2% of v8.2's pooled log loss on these rows (0.1656, derived from
+  amendments 13 and 14's per-season numbers). The case for v8.3 is correctness, not skill, so the test asks only
+  whether the fix measurably hurts.
+- **v8.2's numbers on these rows are already published** (amendments 13 and 14); v8.3's are not. Nothing about v8.3
+  is chosen after seeing them: its design comes from amendment 13a's finding alone, and the recipe is fixed above.
+- **NHC basins.** The rule reads the JTWC rows only, and the NHC-basin fallback inherits the decision. The all-basin
+  numbers are reported, so a harm there would be visible, but they do not decide.
+
+### Amendment 15 outcome (2026-10-10): v8.3 ADOPTED -- non-inferior to v8.2, and no better
+
+`results/calibration/hurricane_ri_v8_3.json` (`scripts/hurricane_ri_v8_3.py evaluate`); the artifact is
+`results/models/hurricane_ri_v8_3.json`, its rows `results/hurricane_operational_ri_v8_3_2000_2024.jsonl`.
+
+**Controls: all passed.**
+- **(a)** `hurricane_ri_v8_2` refitted on the frozen file is bit-identical to the committed artifact: no first
+  difference, both in `train_hurricane_ri.py --verify` and in the evaluation's own process. Its calibration log loss
+  is 0.17576412086244972 on 8,317 cases, a difference of 0.0. The recipe is deterministic, as registered.
+- **(b)** The dedupe removed exactly 5,950 rows (69,722 -> 63,772), from 178 storms. Every kept line is
+  byte-identical to the frozen file's.
+- **(c)** The rows file is J1's (sha256 0834ab93...). Its JTWC rows are 1,837 (68 RI) for 2025 and 1,130 (90 RI) for
+  2026. v8.2 recomputed reproduces all 4,659 test-season rows' `v82_calibrated` exactly (worst difference 0.0).
+- **Also:** v8.3 refitted from its recipe is bit-identical to its committed artifact.
+
+**The accounting, corrected.** This amendment's "Why" took amendment 13a's split, which counts each removed copy by
+its row's season (5,255 in 2000-2021). The recipe splits by the storm's first season:
+- 5,277 copies (367 RI) left the members and 673 (40 RI) left the calibration;
+- amendment 13a's "814 RI-positive" counts both copies of each pair: the removed copies hold 407;
+- v8.3's members: 56,128 rows (3,394 RI), against v8.2's 61,405 (3,761);
+- its calibration: 7,644 rows (467 RI), a 1.2278, b -2.5450 in 7 Newton steps (v8.2: 8,317 rows, 507 RI, a 1.2164,
+  b -2.5544).
+
+**The registered test.** JTWC basins, storms of first season 2025 and 2026 to date: 2,967 cycles, 158 RI events,
+130 storms.
+
+| | log loss | Brier | AUC |
+|---|---|---|---|
+| v8.2 as served | 0.16560 | 0.04543 | 0.8515 |
+| **v8.3** | **0.16586** | **0.04556** | **0.8517** |
+
+- **v8.3 - v8.2:** dLL **+0.00027 [-0.00070, +0.00137]**, dBrier +0.00013 [-0.00012, +0.00038]
+  (`hurricane_ri_j1.paired`: storms resampled, 2,000 replicates, seed 0).
+- **The rule:** the upper end, +0.00137, is at most +0.002, so **v8.3 is adopted**.
+
+**Per region, season and basin** (descriptive):
+
+| | cycles | RI | storms | v8.2 LL | v8.3 LL | dLL | dBrier |
+|---|---|---|---|---|---|---|---|
+| WP | 1,078 | 70 | 58 | 0.17712 | 0.17714 | +0.00002 [-0.00190, +0.00248] | +0.00002 [-0.00053, +0.00053] |
+| NI | 147 | 0 | 12 | 0.03045 | 0.03161 | +0.00117 [+0.00034, +0.00201] | +0.00019 [+0.00004, +0.00036] |
+| SI | 1,302 | 67 | 38 | 0.17110 | 0.17171 | +0.00061 [-0.00045, +0.00166] | +0.00017 [-0.00013, +0.00050] |
+| SP | 440 | 21 | 22 | 0.16623 | 0.16579 | -0.00045 [-0.00342, +0.00203] | +0.00024 [-0.00041, +0.00080] |
+| 2025 (JTWC) | 1,837 | 68 | 80 | 0.13521 | 0.13625 | +0.00104 [-0.00011, +0.00245] | +0.00027 [-0.000002, +0.00054] |
+| 2026 (JTWC) | 1,130 | 90 | 50 | 0.21500 | 0.21401 | -0.00099 [-0.00264, +0.00050] | -0.00009 [-0.00057, +0.00037] |
+| all six basins | 4,659 | 253 | 194 | 0.16253 | 0.16270 | +0.00017 [-0.00066, +0.00103] | +0.00008 [-0.00012, +0.00028] |
+| NA | 484 | 25 | 22 | 0.13032 | 0.13193 | +0.00160 [-0.00011, +0.00436] | +0.00037 [-0.00003, +0.00100] |
+| EP | 1,208 | 70 | 42 | 0.16789 | 0.16726 | -0.00064 [-0.00243, +0.00110] | -0.00018 [-0.00061, +0.00019] |
+
+AUC, v8.2 -> v8.3: WP 0.867 -> 0.866, SI 0.835 -> 0.834, SP 0.836 -> 0.841 (NI has no event); 2025
+0.839 -> 0.835, 2026 0.858 -> 0.861. v8.2's 2025 and 2026 log losses are amendments 13 and 14's, to the digit.
+
+**Reading.**
+- **No skill change.** Every interval includes zero except the North Indian one. The point estimates change sign
+  between seasons (2025 +0.00104, 2026 -0.00099) and between regions. v8.3 is adopted because it is the correct
+  fit and does not measurably hurt, which is what the rule asks. It is not a better model, and is not presented as
+  one.
+- **North Indian Ocean:** dLL +0.00117 [+0.00034, +0.00201], worse beyond its interval, on 147 cycles with no RI
+  event. v8.3 forecasts slightly higher there (mean 0.0304 against 0.0294) where nothing happened. That is J1's NI
+  pattern too, in a basin with no event in any test season so far.
+- **Level:** both models over-forecast these rows (158 events in 2,967 cycles is 0.0533; mean forecasts 0.0601 and
+  0.0614), and v8.3 slightly more. How much of its +0.00027 that explains was not measured.
+
+**What adoption changed** (the served path, by this rule only):
+- **Scorer:** `scripts/fetch_and_score.py` serves `hurricane_ri_v8_3` (`SERVED_MODEL_VERSION`). Its records name
+  it: `ri_source` "v8.3", label "HazardPulse v8.3". The NHC-basin fallback now serves v8.3, and an NHC record served
+  NOAA's aids keeps v8.3's number beside them under `v8_3`.
+- **J1, decoupled:**
+  - The scorer loads v8.2 (`J1_BASE_MODEL_VERSION`; `load_j1_base` refuses an artifact that is not the one J1 was
+    exported with, by version and stored-bytes sha256).
+  - It scores the same JTWC cases with v8.2 and feeds J1 v8.2's ensemble and calibrated probability, never v8.3's.
+  - The record keeps v8.2's rounded number beside the published one (`v8_2`), and the shadow names it
+    (`v8_2_model_version`).
+- **J1's prospective comparator** (`score_hurricane_j1_prospective.comparator_checks`):
+  - a record made after the switch is scored only if its comparator is v8.2, by name in the shadow and beside it;
+  - its comparator must also equal v8.2's calibration of J1's own `v82_logit` input, to 1e-12, so the record itself
+    shows J1 was fed v8.2;
+  - records made before the switch are read as before.
+- **Tests:** `tests/test_hurricane_ri_j1_live.py` and `tests/test_hurricane_j1_prospective.py` fail if J1 receives
+  the served model's numbers. Re-coupling the scorer (J1 fed v8.3's numbers) fails three of them.
+- **Site and registry:** the other-basins evidence names v8.3 with its own registered test, bound to its artifact
+  (`served_evidence.other_basins_evidence`); its composition comes from `scripts/hurricane_v82_test_composition.py
+  --model hurricane_ri_v8_3`. The registry has a served v8.3 entry, and v8.2's entry says it was replaced and is J1's
+  base.
+
+**Known after the result.**
+- **Records already made:** they were made by v8.2 and keep its label. The record page counts v8.2 as retired.
+- **The NHC-basin fallback:** it now serves v8.3. On these seasons the Atlantic's point estimate was worse
+  (+0.00160 [-0.00011, +0.00436]) and the East Pacific's better (-0.00064 [-0.00243, +0.00110]). Both intervals
+  include zero, and both are descriptive, as registered.
+
 ## Known uncertainty, stated before the result
 
 - The e-deck RI value and the SHIPS-text value are the same quantity rounded to whole percent;

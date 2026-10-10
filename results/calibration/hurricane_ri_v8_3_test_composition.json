@@ -1,0 +1,100 @@
+{
+ "generated_at": "2026-10-10T03:33Z",
+ "script": "scripts/hurricane_v82_test_composition.py --model hurricane_ri_v8_3",
+ "evaluation": {
+  "file": "results/calibration/hurricane_ri_v8_3.json",
+  "candidate": "hurricane_ri_v8_3",
+  "n": 2967,
+  "events": 158,
+  "auc": 0.8517310994047163,
+  "members_storm_years": [
+   2000,
+   2021
+  ],
+  "calibration_storm_years": [
+   2022,
+   2024
+  ]
+ },
+ "dataset": {
+  "path": ".cache/hurricane_ri_v9/j1/rows.jsonl.gz (hurricane_ri_j1 rows phase, amendment 13a)",
+  "sha256": "0834ab932a98a208f4eadfb0a71bedfd653de314ca1a9be37bfdf943681726ae",
+  "inputs": "IBTrACS best track (release of 2026-10-08), the JTWC basins (scripts/build_hurricane_training_data.py; de-duplicated, amendment 13a)"
+ },
+ "test_storm_years": [
+  2025,
+  2026
+ ],
+ "selection": "storms of first season 2025 and 2026 to date in the JTWC basins (WP NI SI SP), as amendment 15 selected them",
+ "n": 2967,
+ "events": 158,
+ "by_basin": {
+  "SI": {
+   "n": 1302,
+   "events": 67
+  },
+  "WP": {
+   "n": 1078,
+   "events": 70
+  },
+  "SP": {
+   "n": 440,
+   "events": 21
+  },
+  "NI": {
+   "n": 147,
+   "events": 0
+  }
+ },
+ "served_artifact": {
+  "model_version": "hurricane_ri_v8_3",
+  "members_storm_years": [
+   2000,
+   2021
+  ],
+  "calibration_storm_years": [
+   2022,
+   2024
+  ],
+  "calibration_n": 7644,
+  "calibration_fitted_on_the_test_cases": false
+ },
+ "single_jtwc_warning": {
+  "fixture": "tests/fixtures/jtwc/wp2626web_20261002.txt",
+  "n_selected_inputs": 17,
+  "inputs_missing_live": [
+   "analysis_dp_12h",
+   "analysis_dp_24h",
+   "analysis_dp_6h",
+   "analysis_dv_12h",
+   "analysis_dv_24h",
+   "analysis_dv_6h",
+   "analysis_mslp_hpa",
+   "storm_age_h",
+   "translation_speed_kmh"
+  ],
+  "west_pacific_test_cycles": 1078,
+  "west_pacific_events": 70,
+  "log_loss_full_inputs": 0.1771446128785034,
+  "log_loss_single_warning_inputs": 0.22693678669913164,
+  "log_loss_climatology": 0.24033593962866456,
+  "climatology": "the West Pacific test cycles' own event rate (a constant fitted in sample)",
+  "note": "descriptive: v8.3 never saw these cycles (members 2000-2021, calibration 2022-2024)"
+ },
+ "late_best_track_fix": {
+  "fixtures": [
+   "tests/fixtures/jtwc/wp2626web_20261002.txt",
+   "tests/fixtures/ral/bwp262026_20261005.dat"
+  ],
+  "what": "since 2026-10-05: RAL's best track to the fix before the warning's cycle, the warning as the analysis (its cycle's fix not yet published)",
+  "inputs_missing_live": [
+   "analysis_dp_12h",
+   "analysis_dp_24h",
+   "analysis_dp_6h",
+   "analysis_mslp_hpa"
+  ],
+  "west_pacific_test_cycles": 1078,
+  "log_loss": 0.18337406041489782,
+  "note": "descriptive, as above; the test's history is the post-season best track"
+ }
+}
