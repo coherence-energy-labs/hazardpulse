@@ -274,12 +274,12 @@ def _gear1_sentence(g1: dict | None) -> str:
     d = g1["dev_vs_recalibrated"]["ig_per_target"]
     act = g1.get("activity") or {}
     s1 = (act.get("dev_vs_S1") or {}).get("ig_per_target") or {}
-    n = {3: "three", 4: "four"}.get(g1.get("n_weights") or 3, str(g1.get("n_weights")))
-    return ("; GEAR1 (Bird et al. 2015) was added by a later pre-registered test: " + n + " weights "
+    return ("; GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights "
             + (f"fitted on {_years(g1['fitted_on'])}, " if g1.get("fitted_on") else "")
             + f"decided on {_years(g1['decided_on'])} against C0 recalibrated on the "
             f"same years, {_signed(d['diff'])}{_ci(d['ci'], signed=True)} {EQ_IG_UNIT}"
-            + ("; a further pre-registered test let GEAR1&rsquo;s weight follow how active the cell is "
+            + ("; a further pre-registered test added a fourth weight so that GEAR1&rsquo;s weight follows how "
+               "active the cell is "
                f"({_f(act.get('weight_typical_cell'), 2)} in a typical cell, {_f(act.get('weight_active_cell'), 2)} "
                f"where M6+ earthquakes happen), decided against GEAR1 with one weight, {_signed(s1['diff'])}"
                f"{_ci(s1['ci'], signed=True)} {EQ_IG_UNIT}" if s1.get("diff") is not None else ""))

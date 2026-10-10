@@ -32,6 +32,7 @@ import numpy as np
 import pytest
 
 from hazardpulse.data import usgs_fdsn
+from hazardpulse.earthquake.served import SERVED_STACK_RELPATH
 from hazardpulse.earthquake import operational_forecast as of
 from hazardpulse.earthquake import prospective
 from hazardpulse.earthquake.coherence_engine import N_LAT, N_LON, grid_cell_to_latlon
@@ -55,7 +56,7 @@ live_record = _LazyLiveRecord()
 UTC = dt.timezone.utc
 DAY = 86400.0
 SERVED_ART = ROOT / "results" / "models" / "earthquake_operational_v1.json"
-SERVED_STACK = ROOT / "results" / "models" / "earthquake_gear1_stack_v1.json"
+SERVED_STACK = ROOT / SERVED_STACK_RELPATH          # the stack the scorer publishes (hazardpulse.earthquake.served)
 
 
 def _script(name: str, rel: str):

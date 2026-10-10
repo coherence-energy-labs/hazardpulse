@@ -404,7 +404,7 @@ def _tornado_format_change(root: Path, main: dict) -> dict | None:
 # Earthquake
 # ---------------------------------------------------------------------------
 
-def _earthquake_activity(root: Path, stack: dict, dev: dict, pair) -> dict | None:
+def _earthquake_activity(root: Path, stack: dict, pair) -> dict | None:
     """Amendment E4 (section 12): how S2 earned its interaction -- its registered decision against S1 and GEAR1's
     weight in a typical cell and in an active one. Bound only to the decision run its provenance names, carried, with
     the stack's own coefficients."""
@@ -418,8 +418,8 @@ def _earthquake_activity(root: Path, stack: dict, dev: dict, pair) -> dict | Non
     w = run.get("gear1_weight_by_activity") or {}
     typical = ((w.get("all_cell_times") or {}).get("p50") or {}).get("gear1_weight_S2")
     active = ((w.get("positive_cell_times") or {}).get("p90") or {}).get("gear1_weight_S2")
-    return {"section": "section 12", "decision_file": rel,
-            "dev_vs_S1": pair(dev, "S2-S1", "S1, GEAR1 with one weight"),
+    return {"section": "section 12", "decision_file": rel,                 # the decision, from its own run
+            "dev_vs_S1": pair(run["splits"]["dev"], "S2-S1", "S1, GEAR1 with one weight"),
             "weight_typical_cell": _finite(typical), "weight_active_cell": _finite(active)}
 
 
@@ -454,7 +454,12 @@ def _earthquake_stack_evidence(root: Path, base_version: str, contract: dict, pa
         return None if p is None else {"name": label, **{k: {"diff": _finite(v.get("diff")), "ci": _ci(v.get("ci95"))}
                                                           for k, v in p.items()}}
     n_issue, n_pos = int(fin["n_issue_times"]), int(fin["n_positive"])
-    activity = _earthquake_activity(root, stack, dev, pair) if name == "S2" else None
+    activity = _earthquake_activity(root, stack, pair) if name == "S2" else None
+    # how GEAR1 was added is E1's registered decision (S1 - S0, three weights), whichever stack is served now
+    e1 = report if name == "S1" else _read(root, EARTHQUAKE_E1)
+    if e1 is None:
+        raise EvidenceError(f"{EARTHQUAKE_E1} missing: the decision that added GEAR1 cannot be shown")
+    e1_dev = e1["splits"]["dev"]
     replaced = "S1" if name == "S2" else "C0"
     s1_file = root / EARTHQUAKE_STACK_S1
     return {
@@ -477,7 +482,7 @@ def _earthquake_stack_evidence(root: Path, base_version: str, contract: dict, pa
         "gear1": {"decided_on": f"{dev['first_issue'][:4]}-{dev['last_issue'][:4]}",
                   "fitted_on": (f"{choose['first_issue'][:4]}-{choose['last_issue'][:4]}"
                                 if choose.get("first_issue") and choose.get("last_issue") else None),
-                  "dev_vs_recalibrated": pair(dev, f"{name}-S0", "C0 recalibrated on the same years"),
+                  "dev_vs_recalibrated": pair(e1_dev, "S1-S0", "C0 recalibrated on the same years"),
                   "dev_vs_C0": pair(dev, f"{name}-C0", "C0"),
                   "n_weights": len(stack["coefficients"]),
                   "activity": activity,

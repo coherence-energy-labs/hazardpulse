@@ -22,7 +22,7 @@ LIVE_ARTIFACTS = (
     "hurricane_ri_v10.json",
     "hurricane_ri_v10_2.json", "hurricane_ri_v10_3.json", "hurricane_ri_v10_4.json", "hurricane_ri_j1.json",
     "earthquake_operational_v1.json",
-    "earthquake_gear1_stack_v1.json", "tornado_v3_w.json", "tornado_v3.json", "tornado_v3_w_30.json",
+    "earthquake_gear1_stack_v2.json", "tornado_v3_w.json", "tornado_v3.json", "tornado_v3_w_30.json",
     "tornado_v3_w_90.json", "tornado_v3_w_ef2.json",
 )
 

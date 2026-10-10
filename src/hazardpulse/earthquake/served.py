@@ -7,4 +7,4 @@ served. A path that names a missing file is an error everywhere: it never falls 
 """
 from __future__ import annotations
 
-SERVED_STACK_RELPATH: str | None = "results/models/earthquake_gear1_stack_v1.json"
+SERVED_STACK_RELPATH: str | None = "results/models/earthquake_gear1_stack_v2.json"   # S2, section 12.2

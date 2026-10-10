@@ -180,6 +180,31 @@ def _served_report_rel() -> str:
     return se.EARTHQUAKE_STACK_REPORTS[(meta.get("provenance") or {}).get("candidate", "S1")]
 
 
+def test_the_served_s2_cites_each_decision_from_its_own_run(tmp_path):
+    """How GEAR1 was added is E1's decision (S1 - S0, three weights); the fourth weight is E4's (S2 - S1). Neither
+    may be quoted from the other's run, and a decision run that did not carry this S2 is refused."""
+    eq = se.earthquake_evidence()
+    if eq["candidate"] != "S2":
+        pytest.skip("S2 is not the served stack")
+    e1 = json.loads((ROOT / se.EARTHQUAKE_E1).read_text(encoding="utf-8"))
+    e4 = json.loads((ROOT / se.EARTHQUAKE_E4).read_text(encoding="utf-8"))
+    g1 = eq["gear1"]
+    assert g1["dev_vs_recalibrated"]["ig_per_target"]["diff"] == e1["splits"]["dev"]["paired"]["S1-S0"]["ig_per_target"]["diff"]
+    assert g1["activity"]["dev_vs_S1"]["ig_per_target"]["diff"] == e4["splits"]["dev"]["paired"]["S2-S1"]["ig_per_target"]["diff"]
+    w = e4["gear1_weight_by_activity"]
+    assert g1["activity"]["weight_typical_cell"] == w["all_cell_times"]["p50"]["gear1_weight_S2"]
+    assert g1["activity"]["weight_active_cell"] == w["positive_cell_times"]["p90"]["gear1_weight_S2"]
+    from hazardpulse.earthquake import operational_forecast as of
+    assert eq["replaced_model_version"] == of.stack_model_version(ROOT / se.EARTHQUAKE_STACK_S1)
+    assert eq["replaced_ig_per_target"]["value"] == json.loads(
+        (ROOT / se.EARTHQUAKE_STACK_REPORTS["S2"]).read_text(encoding="utf-8"))["splits"]["final"]["models"]["S1"]["ig_per_target"]["value"]
+    root = _eq_stack_root(tmp_path)
+    e4["carried_rule"]["S2_replaces_S1"] = False                            # a decision that did not carry it
+    _write(root / se.EARTHQUAKE_E4, e4)
+    with pytest.raises(se.EvidenceError, match="did not carry"):
+        se.earthquake_evidence(root)
+
+
 @pytest.mark.skipif(not se.EARTHQUAKE_STACK or not (ROOT / se.EARTHQUAKE_STACK).exists(), reason="no earthquake stack served")
 def test_the_earthquake_stack_is_shown_only_when_bound_to_its_evaluation_and_base(tmp_path, monkeypatch):
     root = _eq_stack_root(tmp_path)
@@ -217,7 +242,8 @@ def test_the_stack_refuses_another_base_and_applies_its_formula_by_hand(tmp_path
     p = np.full(of.N_CELLS, 0.01)
     p[0] = 1e-15                                                               # clipped, never log(0)
     got = of.apply_stack(stack, p)
-    z = stack.a + stack.c * math.log(0.01 / 0.99) + stack.b * stack.g_log10[5]
+    zc = math.log(0.01 / 0.99)
+    z = stack.a + stack.c * zc + stack.b * stack.g_log10[5] + stack.d * zc * stack.g_log10[5]     # d = 0 for S1
     assert got[5] == pytest.approx(1 / (1 + math.exp(-z)), rel=1e-12) and np.all(np.isfinite(got))
     other = json.loads((ROOT / se.EARTHQUAKE_STACK).read_text(encoding="utf-8"))
     other["base_model_version"] = "eq_operational_C0_v1-000000000000"
