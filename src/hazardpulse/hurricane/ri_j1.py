@@ -3,8 +3,9 @@
 P(RI: V(t + 24 h) - V(t) >= 30 kt) for West Pacific, North Indian and Southern Hemisphere storms. It is LightGBM
 (five seeds, averaged) on v8.2's own score (as a logit), v8.2's 17 inputs, amendment 5's 14 GMGSI IR features at
 t + 2 h and t - 4 h, and basin indicators. It was carried against the published v8.2 on the 2024-2025 JTWC
-cycles (amendment 13 outcome), and it runs live in SHADOW beside v8.2: recorded, never the published number,
-until the rule registered in amendment 13b says otherwise.
+cycles (amendment 13 outcome), and it runs live in SHADOW: recorded, never the published number, until the rule
+registered in amendment 13b says otherwise. Since amendment 15 the published number is v8.3; J1 still reads v8.2's
+ensemble (the scorer scores each case with v8.2's own artifact) and its comparator is still v8.2.
 
 One module for the export, the live scorer and the record audit, so the inputs a shadow records are exactly the
 row it was scored from, and an audit can recompute it.

@@ -130,6 +130,40 @@ def _when(t: dict) -> str:
     return re.sub(r"(\d)-(\d)", r"\1&ndash;\2", _e(t.get("when") or t.get("period", "")))
 
 
+def _replacement_test_row(ob: dict, basins: str) -> str:
+    """The methods card's test row for a model that replaced v8.2 by a registered rule: the published artifact on
+    unseen cycles where it publishes, against the model it replaced, with the rule and where it is written."""
+    o, rep, d, rule = ob.get("test") or {}, ob.get("replaced") or {}, ob.get("vs_replaced") or {}, ob.get("rule") or {}
+    lab = _e(rep.get("label") or "")
+    return (f"AUC {_f(o.get('auc'))} on {_n(o.get('n'))} {_when(o)} cycles ({_n(o.get('events'))} RI events, "
+            f"{_n(o.get('storms'))} storms) in the basins where it publishes" + (f" ({basins})" if basins else "")
+            + ", none used to fit it"
+            + (f"; log loss {_f(o.get('log_loss'), 5)} against {lab}&rsquo;s {_f(rep.get('log_loss'), 5)} on the "
+               f"same cycles (difference {_signed(d.get('d_ll'), 5)}{_ci(d.get('d_ll_ci'), 5, signed=True)}, a 95% "
+               f"interval by storm), Brier {_f(o.get('brier'), 5)} against {_f(rep.get('brier'), 5)}" if lab else "")
+            + (f". It replaced {lab} by a rule written down before the test (amendment {_e(ob.get('amendment'))}, "
+               f"{_doc(ob.get('program') or '')}): the upper end of that interval at most "
+               f"{_signed(rule.get('margin'), 3)}; it was {_signed(rule.get('upper'), 5)}"
+               if lab and ob.get("amendment") and rule.get("margin") is not None else ""))
+
+
+def _other_basins_test(ob: dict) -> str:
+    """What the other-basins model's bound test was, in one clause (served_evidence.other_basins_evidence): v8.2's
+    METHOD on held-out cycles from every basin, or a replacement's own registered test -- the published artifact
+    on unseen cycles in the basins where it publishes, against the model it replaced."""
+    o = ob.get("test") or {}
+    if ob.get("subject") == "model":
+        rep = ob.get("replaced") or {}
+        return (f"tested itself on {_n(o.get('n'))} {_when(o)} cycles in the basins where it publishes, none used to "
+                f"fit it, with best-track inputs: AUC {_f(o.get('auc'))}, log loss {_f(o.get('log_loss'), 4)}"
+                + (f" against {_e(rep['label'])}&rsquo;s {_f(rep.get('log_loss'), 4)}; it replaced {_e(rep['label'])} "
+                   "by a rule written down before the test" if rep.get("label") else ""))
+    return (f"its method: AUC {_f(o.get('auc'))} on {_n(o.get('n'))} held-out {_when(o)} cycles from every basin, with "
+            "best-track inputs"
+            + ("; the published model&rsquo;s calibration was fitted on those same cycles"
+               if (ob.get("composition") or {}).get("served_calibration_fitted_on_test_cases") else ""))
+
+
 def _families(fam: dict[str, int]) -> str:
     return ", ".join(f"{v} {_e(k)}" for k, v in fam.items())
 
@@ -187,14 +221,10 @@ def methods_simple(ev: dict) -> str:
             f"storms the National Hurricane Center covers we publish {_e(hu['candidate_name'].split(' (')[0])}, which "
             + (f"beat {_join(beaten)} " if beaten else "was chosen ")
             + f"in a test written down in advance and run once on {_when(t)}: AUC {_f(t['auc'])}"
-            + (f", against {_f(same.get('auc'))} for our {v82} model on the same cycles"
-               if same.get("auc") is not None and v82 else "")
+            + (f", against {_f(same.get('auc'))} for our {_e(same.get('label') or v82)} model on the same cycles"
+               if same.get("auc") is not None and (same.get("label") or v82) else "")
             + "."
-            + (f" Everywhere else we publish {v82} (its method: AUC {_f(ob.get('auc'))} on {_n(ob.get('n'))} held-out "
-               f"{_when(ob)} cycles from every basin, with best-track inputs"
-               + ("; the published model&rsquo;s calibration was fitted on those same cycles"
-                  if ((hu.get("other_basins") or {}).get("composition") or {}).get(
-                      "served_calibration_fitted_on_test_cases") else "") + ")."
+            + (f" Everywhere else we publish {v82} ({_other_basins_test(hu.get('other_basins') or {})})."
                if ob.get("auc") is not None and v82 else "")
             + " Each storm says which."
             + (f" Our newer model, {_e(ours['label'])}, scored better than DTOPS over {_years(ours['dev_period'])}, each "
@@ -397,12 +427,15 @@ def methods_hurricane(ev: dict) -> str:
             "hz-hu", f"Hurricane, other basins: HazardPulse {_e(ob.get('label'))} <code>{_e(ob['model'])}</code>", _facts([
                 _kv("Architecture", "Histogram-GBT (depth 3 + 4) + L2 logistic + bagged logistic ensemble, "
                                     "Newton-calibrated"),
-                _kv("Key inputs", "Analysis intensity and pressure (CARQ) and their 6&ndash;24 h tendencies, "
-                                  "aid-model intensity forecasts, climatological potential intensity, motion, storm age"),
-                _kv("AUC (its method)", f"{_f(o['auc'])}{_ci(o['auc_ci'])} on {_n(o['n'])} held-out "
-                                        f"{_when(o)} cycles from every basin" + (f" ({basins})" if basins else "")
-                    + (f"; {_f((hu.get('v8_2_same_cases') or {}).get('auc'))} on the 2025 NHC cycles above"
-                       if (hu.get("v8_2_same_cases") or {}).get("auc") is not None else "")),
+                _kv("Key inputs", "Analysis intensity and pressure and their 6&ndash;24 h tendencies, position, time of "
+                                  "year, climatological potential intensity, motion, storm age (no forecast aids)"),
+                (_kv("Its registered test", _replacement_test_row(ob, basins)) if ob.get("subject") == "model" else
+                 _kv("AUC (its method)", f"{_f(o['auc'])}{_ci(o['auc_ci'])} on {_n(o['n'])} held-out "
+                                         f"{_when(o)} cycles from every basin" + (f" ({basins})" if basins else "")
+                     + (f"; {_f((hu.get('v8_2_same_cases') or {}).get('auc'))} on the 2025 NHC cycles above"
+                        if (hu.get("v8_2_same_cases") or {}).get("auc") is not None
+                        and (hu.get("v8_2_same_cases") or {}).get("label", ob.get("label")) == ob.get("label")
+                        else ""))),
                 _kv("Used for", "West Pacific, Indian Ocean and Southern Hemisphere storms (no public RI guidance), "
                                 "and NHC cycles without SHIPS text"),
                 *([_kv("Limits of that test", "; ".join(limits)[:1].upper() + "; ".join(limits)[1:] + ".")]
@@ -671,6 +704,10 @@ def j1_lines(j1: dict) -> list[tuple[str, str]]:
     interval is (quoted from the program), each region apart, the further read, where it is shown and why, and the
     rule that would make it the published number."""
     lab, v82 = _e(j1["label"]), _e(j1.get("against") or "")
+    # the number published beside J1 (v8.3 since amendment 15); J1's comparator stays v82
+    pub = _e(j1.get("published") or j1.get("against") or "")
+    beside = (f"the published {pub}, never instead of it; it is built on {v82} and tested against it"
+              if pub != v82 else f"{v82}, never instead of it")
     inp, dev, period = j1["inputs"], j1["dev"], _years(j1.get("dev_period"))
     level = _level(j1.get("level"))
     model, bar, control = dev["model"], dev["bar"], dev["control"]
@@ -685,7 +722,7 @@ def j1_lines(j1: dict) -> list[tuple[str, str]]:
          f"own probability, its {_n(inp['against'])} inputs, {_n(inp['ir'])} measures of the storm&rsquo;s cloud tops "
          f"from NOAA&rsquo;s GMGSI satellite infrared ({_join([_n(h) for h in inp['ir_hours_after']])} hours after the "
          f"cycle and {_join([_n(h) for h in inp['ir_hours_before']])} hours before) and the basin; trained on "
-         f"{_years(j1.get('trained'))}. It is recorded beside {v82}, never instead of it"),
+         f"{_years(j1.get('trained'))}. It is recorded beside {beside}"),
     ]
     rows = [f'<tr><td>{name}</td><td class="num">{_n(m["n"])}</td><td class="num">{_n(m["events"])}</td>'
             f'<td class="num">{_f(m["log_loss"], 5)}</td><td class="num">{_f(m["brier"], 5)}</td>'
@@ -792,9 +829,12 @@ def j1_lines(j1: dict) -> list[tuple[str, str]]:
     run = pr.get("running")
     lines.append((
         "Status",
-        ("Claim met at a look" if pr.get("claimed") else f"In test beside {v82}")
-        + f": never the published number. Its test against {v82} as published was written before its first live "
-        f"cycle ({_doc(rule.get('scorer') or '')}): at each look ("
+        ("Claim met at a look" if pr.get("claimed") else f"In test beside {pub}")
+        + (f": never the published number. Its test against {v82} as published was written before its first live "
+           if pub == v82 else
+           f": never the published number. Its test against {v82} (published until {pub} replaced it; its "
+           "comparator is unchanged) was written before its first live ")
+        + f"cycle ({_doc(rule.get('scorer') or '')}): at each look ("
         + " and ".join(_e(x) for x in rule.get("looks") or []) + "), on live cycles in its scope only, the claim is "
         f"met if {lab} minus {v82} has a {_level(rule.get('level'))} storm-bootstrap interval wholly below zero on log "
         "loss or on Brier, with both point estimates at or below zero; a met claim makes "
@@ -976,11 +1016,14 @@ def methods_limits(ev: dict) -> str:
         basins = ", ".join(f"{_e(b['name'])} {_n(b['n'])}" for b in comp.get("by_basin") or [])
         parts.append("Hurricane: every active tropical cyclone, with NOAA&rsquo;s guidance in the Atlantic, East and "
                      "Central Pacific" + (f" and our {v82} model elsewhere" if v82 else "") + "."
-                     + (f" {v82}&rsquo;s method was tested on {_n(o.get('n'))} held-out {_when(o)} cycles from every "
-                        f"basin" + (f" ({basins})" if basins else "") + ", with best-track inputs"
-                        + ("; the published model&rsquo;s calibration was fitted on those same cycles, so that is not "
-                           "a test of it on unseen data" if comp.get("served_calibration_fitted_on_test_cases") else "")
-                        + "." if v82 and o.get("auc") is not None else ""))
+                     + ((f" {v82} was tested on {_n(o.get('n'))} {_when(o)} cycles in the basins where it publishes"
+                         + (f" ({basins})" if basins else "") + ", none used to fit it, with best-track inputs."
+                         if ob.get("subject") == "model" else
+                         f" {v82}&rsquo;s method was tested on {_n(o.get('n'))} held-out {_when(o)} cycles from every "
+                         f"basin" + (f" ({basins})" if basins else "") + ", with best-track inputs"
+                         + ("; the published model&rsquo;s calibration was fitted on those same cycles, so that is not "
+                            "a test of it on unseen data" if comp.get("served_calibration_fitted_on_test_cases") else "")
+                         + ".") if v82 and o.get("auc") is not None else ""))
     parts.append("Tornado: every storm NOAA&rsquo;s radar tracks over and near the contiguous US, including northern "
                  "Mexico and the Gulf; tornado reports, and so the tests, cover the US only.")
     items = ["<li><strong>Coverage.</strong> " + " ".join(parts) + "</li>"]
@@ -1210,23 +1253,37 @@ def registry_active(ev: dict) -> str:
         ob = hu.get("other_basins")
         if ob:
             o = ob["test"]
-            rows.append(_registry_row(ob["model"], "Hurricane RI (other basins)", "published",
-                                      f"{_when(o)} (its method; every basin, best-track inputs)",
-                                      f"{_f(o['auc'])}{_ci(o['auc_ci'])}",
-                                      f"BSS {_signed(o['bss'])}", "GBT + logistic ensemble, Newton-calibrated"))
+            if ob.get("subject") == "model":
+                rep = ob.get("replaced") or {}
+                rows.append(_registry_row(ob["model"], "Hurricane RI (other basins)", "published",
+                                          f"{_when(o)} (registered test; the basins where it publishes, unseen cycles, "
+                                          "best-track inputs)", f"{_f(o['auc'])}",
+                                          f"LL {_f(o.get('log_loss'), 4)} vs {_e(rep.get('label') or '')} "
+                                          f"{_f(rep.get('log_loss'), 4)}",
+                                          f"GBT + logistic ensemble, Newton-calibrated; {_e(rep.get('label') or '')}"
+                                          f"&rsquo;s recipe on de-duplicated rows, adopted by amendment "
+                                          f"{_e(ob.get('amendment') or '')}&rsquo;s rule"))
+            else:
+                rows.append(_registry_row(ob["model"], "Hurricane RI (other basins)", "published",
+                                          f"{_when(o)} (its method; every basin, best-track inputs)",
+                                          f"{_f(o['auc'])}{_ci(o['auc_ci'])}",
+                                          f"BSS {_signed(o['bss'])}", "GBT + logistic ensemble, Newton-calibrated"))
         j1 = hu.get("j1")
         if j1:
             m, a, v82 = j1["dev"]["model"], j1["dev"]["bar"], _e(j1.get("against") or "")
+            pub = _e(j1.get("published") or j1.get("against") or "")
             scope = [_e(r["name"]) for r in j1.get("regions") or [] if r.get("in_scope")]
             rows.append(_registry_row(j1["model_version"],
                                       f"Hurricane RI (other basins, our satellite model {_e(j1['label'])})", "shadow",
                                       f"{_years(j1.get('dev_period'))} (registered hindcast, every JTWC cycle pooled)",
                                       f"{_f(m['auc'])}", f"LL {_f(m['log_loss'], 4)} vs {v82} {_f(a['log_loss'], 4)}",
                                       f"LightGBM on {v82}&rsquo;s probability and inputs plus GMGSI satellite infrared; "
-                                      f"recorded beside {v82}"
+                                      f"recorded beside {'the published ' + pub if pub != v82 else v82}"
                                       + (f", shown for {_join(scope)} storms" if scope else ", shown nowhere")
-                                      + f". Its prospective test decides whether it replaces {v82} as the published "
-                                        "number"))
+                                      + (f". Its prospective test against {v82} decides whether it replaces {pub} as "
+                                         "the published number" if pub != v82 else
+                                         f". Its prospective test decides whether it replaces {v82} as the published "
+                                         "number")))
         tc = hu.get("tc1")
         if tc:
             tr = tc["track"]

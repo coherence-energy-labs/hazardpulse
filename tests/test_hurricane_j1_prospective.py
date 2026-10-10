@@ -44,6 +44,64 @@ def test_one_record_per_cycle_full_precision_comparator_and_rounding_guard(tmp_p
     assert [(r["storm_id"], r["a"], r["p"]) for r in recs] == [("WP282026", 0.000041, 0.40)]
 
 
+def _calibration(version):
+    return json.loads((ROOT / "results" / "models" / f"{version}.json").read_text(encoding="utf-8"))["calibration"]
+
+
+def _input_for(p, version="hurricane_ri_v8_2"):
+    """The ``v82_logit`` (an ensemble logit) that ``version``'s calibration maps to ``p``."""
+    cal = _calibration(version)
+    return (float(np.log(p / (1 - p))) - cal["b"]) / cal["a"]
+
+
+def _storm_v83(sid, t, pub83, j1p, v82_full, beside=None, shadow_base="hurricane_ri_v8_2", x=None):
+    """A record made after amendment 15: v8.3 published, v8.2 (J1's comparator) recorded beside it and in the
+    shadow at full precision, J1's first input the v8.2 ensemble behind it."""
+    s = {"storm_id": sid, "issue_time": t.isoformat(), "ri_source": "v8.3", "ri_probability": pub83,
+         "model_version": "hurricane_ri_v8_3",
+         "ri_j1_shadow": {"status": "ok", "model_probability": j1p, "probability": round(j1p, 4),
+                          "model_version": "hurricane_ri_j1-x", "v8_2_model_probability": v82_full,
+                          "v8_2_model_version": shadow_base,
+                          "inputs": {"v82_logit": _input_for(v82_full) if x is None else x}}}
+    if beside is not False:
+        s["v8_2"] = beside or {"ri_probability": round(v82_full, 4), "model_version": "hurricane_ri_v8_2"}
+    return s
+
+
+def test_after_amendment_15_the_comparator_is_v82_never_the_published_v83(tmp_path):
+    """Amendment 15: v8.3 is published and J1's comparator stays v8.2. A record is scored only when its comparator
+    is v8.2's own number -- named so in the shadow and matching v8.2's number recorded beside the published one;
+    the published v8.3 never stands in for it."""
+    j = _mod()
+    t = dt.datetime(2026, 10, 20, 0)
+    _file(tmp_path, t + dt.timedelta(hours=4), [
+        _storm_v83("WP302026", t, 0.0812, 0.30, v82_full=0.064412),                     # good: scored against 0.064412
+        _storm_v83("WP312026", t, 0.0812, 0.30, v82_full=0.0812, beside=False),         # no v8.2 beside: refused
+        _storm_v83("WP322026", t, 0.0812, 0.30, v82_full=0.0812,                        # v8.3 posing as comparator
+                   beside={"ri_probability": 0.0812, "model_version": "hurricane_ri_v8_3"},
+                   shadow_base="hurricane_ri_v8_3"),
+        _storm_v83("WP332026", t, 0.0812, 0.30, v82_full=0.064412,                      # beside disagrees: refused
+                   beside={"ri_probability": 0.0700, "model_version": "hurricane_ri_v8_2"}),
+        _storm_v83("WP342026", t, 0.0812, 0.30, v82_full=0.064412, shadow_base=None),   # shadow names no base
+        # every label says v8.2, but J1's input is the ensemble v8.3's calibration maps to the comparator: the
+        # scorer fed J1 the served model's numbers and called them v8.2's -- refused by the input check
+        _storm_v83("WP372026", t, 0.0812, 0.30, v82_full=0.0812, x=_input_for(0.0812, "hurricane_ri_v8_3")),
+    ])
+    recs = j.collect(tmp_path)
+    assert [(r["storm_id"], r["a"]) for r in recs] == [("WP302026", 0.064412)]
+    assert _calibration("hurricane_ri_v8_2")["a"] != _calibration("hurricane_ri_v8_3")["a"]  # the check can see it
+    # the rule that admitted the good record is the one that refuses the others, record by record
+    good = _storm_v83("WP302026", t, 0.0812, 0.30, v82_full=0.064412)
+    assert j.comparator_checks(good, good["ri_j1_shadow"])
+    assert not j.comparator_checks({**good, "v8_2": {"ri_probability": 0.0812, "model_version": "hurricane_ri_v8_3"}},
+                                   good["ri_j1_shadow"])
+    # records made before amendment 15 are read as before: v8.2 published, the comparator rounds to it
+    legacy = _storm("WP352026", t, 0.0644, 0.30, full=0.064412)
+    assert j.comparator_checks(legacy, legacy["ri_j1_shadow"])
+    assert not j.comparator_checks(_storm("WP362026", t, 0.0812, 0.30, full=0.064412),
+                                   _storm("WP362026", t, 0.0812, 0.30, full=0.064412)["ri_j1_shadow"])
+
+
 def _scored(n_storms, better, seed=0):
     rng = np.random.default_rng(seed)
     out = []

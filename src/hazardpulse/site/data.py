@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -225,7 +226,12 @@ def ri_source_label(storm: dict) -> str:
     if label:
         return label
     src = str(storm.get("ri_source") or "")
-    return {"noaa_aid_stack": "NOAA", "v8.2": "HazardPulse v8.2"}.get(src, src or "&mdash;")
+    if src == "noaa_aid_stack":
+        return "NOAA"
+    # the scorer writes the label of the HazardPulse model that made the number (fetch_and_score.model_label)
+    if re.fullmatch(r"v\d+(?:\.\d+)+", src):
+        return f"HazardPulse {src}"
+    return src or "&mdash;"
 
 
 BASIN_NAMES = {

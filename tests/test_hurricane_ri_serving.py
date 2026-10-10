@@ -563,14 +563,32 @@ def test_main_scores_active_storms_without_training(monkeypatch):
     assert elapsed < 20.0, f"scoring took {elapsed:.1f}s"
 
 
-def test_the_scorer_serves_what_the_preregistered_evaluation_selected():
+def test_the_scorer_serves_what_the_preregistered_evaluations_selected():
+    """The rolling-origin evaluation chose v8.2 on the v8.2 rows; amendment 15's registered rule replaced it with
+    v8.3, v8.2's recipe on the de-duplicated rows. The scorer serves exactly the artifact that decision scored."""
+    from hazardpulse.hurricane import ri_j1
+
     fas = _load_scorer()
     report = json.loads((REPO / "results" / "calibration" / "hurricane_ri_evaluation.json").read_text(encoding="utf-8"))
-    assert report["decision"]["serve"] == fas.SERVED_MODEL_VERSION
+    assert report["decision"]["serve"] == "hurricane_ri_v8_2"
     assert report["data_sha256"]["v8.2"] == ri_model.sha256_file(ri_model.DATASETS["v8.2"]), \
         "the evaluation was run on a different v8.2 training set; re-run scripts/evaluate_hurricane_ri.py"
+    v82 = ri_model.load_model(ri_model.ARTIFACTS["hurricane_ri_v8_2"])
+    assert v82["provenance"]["data"]["members"]["sha256"] == report["data_sha256"]["v8.2"]
+
+    a15 = json.loads((REPO / "results" / "calibration" / "hurricane_ri_v8_3.json").read_text(encoding="utf-8"))
+    assert a15["prereg_tag"] == "prereg-hurricane-ri-amend15" and a15["controls"]["all_passed"] is True
+    assert a15["comparator"]["version"] == report["decision"]["serve"], "amendment 15 replaced what was served"
+    assert a15["comparator"]["artifact_sha256"] == ri_j1.lf_sha256(ri_model.ARTIFACTS["hurricane_ri_v8_2"])
+    rule = a15["rule"]
+    assert rule["margin"] == 0.002 and rule["upper"] == a15["registered"]["v8_3_minus_v8_2"]["d_ll_ci"][1]
+    assert rule["met"] is (rule["upper"] <= rule["margin"]) is True
+    assert a15["decision"] == {"adopt": True, "serve": fas.SERVED_MODEL_VERSION}
+    assert a15["candidate"]["artifact_sha256"] == ri_j1.lf_sha256(fas.MODEL_ARTIFACT), \
+        "the served artifact is not the one amendment 15 scored"
     served = ri_model.load_model(fas.MODEL_ARTIFACT)
-    assert served["provenance"]["data"]["members"]["sha256"] == report["data_sha256"]["v8.2"]
+    assert served["provenance"]["data"]["members"]["sha256"] == a15["data"]["deduplicated"]["sha256"]
+    assert a15["data"]["deduplicated"]["sha256"] == ri_model.sha256_file(ri_model.DATASETS["v8.3"])
     model = fas.load_serving_model()
     assert model["model_version"] == fas.SERVED_MODEL_VERSION
 
@@ -612,10 +630,10 @@ def test_a_trust_calibrator_fitted_for_another_model_is_not_applied(monkeypatch)
     monkeypatch.setattr(trust, "load_forecaster", lambda *a, **k: Foreign())
     monkeypatch.setattr(trust, "enrich_cells", lambda *a, **k: calls.append(a))
     test_main_scores_active_storms_without_training(monkeypatch)
-    assert calls == [], "a v8.1 calibrator must not re-map, band or sign v8.2 probabilities"
+    assert calls == [], "a v8.1 calibrator must not re-map, band or sign the served model's probabilities"
 
     class Own:
-        model_version = "hurricane_ri_v8_2"
+        model_version = _load_scorer().SERVED_MODEL_VERSION
 
     monkeypatch.setattr(trust, "load_forecaster", lambda *a, **k: Own())
     test_main_scores_active_storms_without_training(monkeypatch)

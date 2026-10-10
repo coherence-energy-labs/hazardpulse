@@ -104,13 +104,100 @@ def test_the_shadow_is_recorded_beside_v82_never_published_and_the_audit_recompu
     # the scorer records it under its own key on a JTWC storm and leaves the published number alone
     model = fs.ri_model.load_model(fs.MODEL_ARTIFACT)
     live = dict(case, analysis_model="BEST", track_source="ral_bdeck", storm_name="TEST")
-    scored = fs.score_live_cases(model, [live], j1=j1)
+    scored = fs.score_live_cases(model, [live], j1=dict(j1, base=fs.load_j1_base(art)))
     s = scored[0]
-    assert s[ri_j1.SHADOW_KEY]["status"] == "ok" and s["ri_source"] == "v8.2"
+    assert s[ri_j1.SHADOW_KEY]["status"] == "ok" and s["ri_source"] == fs.SERVED_LABEL == "v8.3"
     # the live v8.2 ensemble, scored by the scorer from the case, is the training row's own v8.2 input
     assert s[ri_j1.SHADOW_KEY]["inputs"]["v82_logit"] == pytest.approx(FIXTURE["inputs"]["v82_logit"], abs=1e-9)
     no_j1 = fs.score_live_cases(model, [live])[0]
     assert ri_j1.SHADOW_KEY not in no_j1 and no_j1["ri_probability"] == s["ri_probability"]
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Amendment 15: v8.3 is published; J1 keeps reading v8.2 (its trained input) and its comparator stays v8.2
+# ---------------------------------------------------------------------------------------------------------------
+
+def _scored_with_j1(monkeypatch):
+    """A JTWC case scored by the scorer as it runs live: the served model, J1 as ``load_j1`` builds it, and every
+    number ``j1_shadow`` receives captured."""
+    fs = _script("fetch_and_score")
+    art, case, _ens, _ir = _live_case_from_fixture()
+    case["fix_positions"] = {"models": list(ri_j1.FIX_MODELS), "t": [-12.6, 156.2], "t_minus_6h": [-12.4, 156.4]}
+    lat, lon = np.arange(-20.0, -5.0, 0.072), np.arange(150.0, 163.0, 0.072)
+    counts = np.full((lat.size, lon.size), 200, np.uint8)
+    monkeypatch.setattr(fs, "_IR_IMAGES", {})
+    monkeypatch.setattr(ir_source, "fetch_image", lambda hour: ("k", counts, lat, lon))
+    monkeypatch.setattr(fs, "ir_reader_available", lambda: True)
+    received: list[tuple[float, float | None]] = []
+    real = fs.j1_shadow
+    monkeypatch.setattr(fs, "j1_shadow", lambda c, j, e, cal=None: received.append((e, cal)) or real(c, j, e, cal))
+    served = fs.load_serving_model()
+    j1 = fs.load_j1()
+    live = dict(case, analysis_model="BEST", track_source="ral_bdeck", storm_name="TEST")
+    s = fs.score_live_cases(served, [live], j1=j1)[0]
+    v82 = fs.ri_model.score_cases(fs.ri_model.load_model(fs.J1_BASE_ARTIFACT), [live])
+    v83 = fs.ri_model.score_cases(served, [live])
+    return fs, s, received, v82, v83
+
+
+def test_j1_reads_v82s_numbers_never_the_served_v83s(monkeypatch):
+    """The scorer serves v8.3 and feeds J1 v8.2's ensemble and calibrated probability, from v8.2's artifact, on the
+    same live case. Fails if J1 receives the served model's numbers (the coupling amendment 15 removed)."""
+    fs, s, received, v82, v83 = _scored_with_j1(monkeypatch)
+    assert fs.SERVED_MODEL_VERSION == "hurricane_ri_v8_3" and fs.J1_BASE_MODEL_VERSION == "hurricane_ri_v8_2"
+    assert s["model_version"] == "hurricane_ri_v8_3" and s["ri_source"] == "v8.3"
+    # the case discriminates: v8.2 and v8.3 give different numbers on it
+    assert float(v82["ensemble"][0]) != float(v83["ensemble"][0])
+    assert float(v82["calibrated"][0]) != float(v83["calibrated"][0])
+    # J1 received v8.2's numbers, bit for bit, and not v8.3's
+    assert received == [(float(v82["ensemble"][0]), float(v82["calibrated"][0]))]
+    sh = s[ri_j1.SHADOW_KEY]
+    assert sh["status"] == "ok"
+    assert sh["inputs"]["v82_logit"] == ri_j1.logit(float(v82["ensemble"][0]))
+    assert sh["inputs"]["v82_logit"] != ri_j1.logit(float(v83["ensemble"][0]))
+    assert sh["inputs"]["v82_logit"] == pytest.approx(FIXTURE["inputs"]["v82_logit"], abs=1e-9)  # J1's training row
+    assert sh["v8_2_model_probability"] == float(v82["calibrated"][0])
+    assert sh["v8_2_model_probability"] != float(v83["calibrated"][0])
+    assert sh["v8_2_model_version"] == "hurricane_ri_v8_2"
+    # the published number is v8.3's; v8.2's is recorded beside it, for J1's comparator
+    assert s["ri_probability"] == round(float(v83["calibrated"][0]), 4)
+    assert s["v8_2"] == {"ri_probability": round(float(v82["calibrated"][0]), 4), "model_version": "hurricane_ri_v8_2"}
+
+
+def test_the_j1_record_passes_its_prospective_comparator_check_and_v83_would_not(monkeypatch):
+    """The record the scorer writes is one the prospective test scores against v8.2; the same record with v8.3's
+    numbers in J1's comparator slots is refused."""
+    _fs, s, _received, _v82, v83 = _scored_with_j1(monkeypatch)
+    jp = _script("score_hurricane_j1_prospective")
+    assert jp.comparator_checks(s, s[ri_j1.SHADOW_KEY])
+    p83 = float(v83["calibrated"][0])
+    coupled = {**s[ri_j1.SHADOW_KEY], "v8_2_model_probability": p83, "v8_2_model_version": "hurricane_ri_v8_3"}
+    assert not jp.comparator_checks({**s, "v8_2": {"ri_probability": round(p83, 4),
+                                                   "model_version": "hurricane_ri_v8_3"}}, coupled)
+
+
+def test_j1s_base_must_be_the_v82_it_was_exported_with(tmp_path):
+    fs = _script("fetch_and_score")
+    art, _ = ri_j1.load()
+    assert fs.load_j1_base(art)["model_version"] == "hurricane_ri_v8_2"
+    # the served v8.3 is not J1's base: refused by its bytes
+    with pytest.raises(fs.ri_model.ModelArtifactError, match="exported against"):
+        fs.load_j1_base(art, fs.MODEL_ARTIFACT)
+    # nor is an artifact J1 does not name
+    with pytest.raises(fs.ri_model.ModelArtifactError, match="built on"):
+        fs.load_j1_base({**art, "v82_dependency": {**art["v82_dependency"], "model_version": "hurricane_ri_v8_3"}})
+
+
+def test_a_j1_given_the_served_model_as_its_base_is_written_down_as_an_error_and_publishes_nothing(monkeypatch):
+    fs, s, _received, _v82, _v83 = _scored_with_j1(monkeypatch)
+    served = fs.load_serving_model()
+    art, version = ri_j1.load()
+    _a, case, _e, _i = _live_case_from_fixture()
+    case.update(fix_positions={"models": list(ri_j1.FIX_MODELS), "t": [-12.6, 156.2], "t_minus_6h": [-12.4, 156.4]},
+                analysis_model="BEST", track_source="ral_bdeck", storm_name="TEST")
+    bad = fs.score_live_cases(served, [case], j1={"artifact": art, "model_version": version, "base": served})[0]
+    assert bad[ri_j1.SHADOW_KEY]["status"].startswith("error:") and "v8_2" not in bad
+    assert bad["ri_probability"] == s["ri_probability"] and bad["model_version"] == "hurricane_ri_v8_3"
 
 
 def test_the_audit_now_covers_v10_4():
