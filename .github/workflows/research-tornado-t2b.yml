@@ -1,0 +1,91 @@
+name: Research -- tornado amendment 11 (T2b)
+
+# Tornado program amendment 11 (docs/TORNADO_MODEL_PROGRAM.md): each served payload's Platt map refitted on NOAA's
+# new ProbSevere format, run where the live scorer runs and off any local machine. The controls first (a mismatch
+# stops everything), then the 2025-08-05 .. 2026-09-30 rows in five parallel parts (none crosses a new year), then
+# the fit. Nothing is committed: the artifact and the fit's facts are uploaded, reviewed and committed by hand.
+#
+# A workflow_dispatch needs the file on the default branch; until this is merged the run is started by a push of
+# THIS file on the research branch (never on main).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/tornado-t2b]
+    paths: [.github/workflows/research-tornado-t2b.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  control:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy scipy && pip install -e .
+      - name: The fit's margin path gives back every live v3 probability (4 ulp)
+        run: python scripts/tornado_program/t2b_recalibrate.py control-live dist/data/replay
+      - name: Amendment 10's control -- the rows' P inputs equal the live records' stored inputs exactly
+        run: python scripts/tornado_program/t2_decide.py control dist/data/replay
+
+  build:
+    needs: control
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: true
+      matrix:
+        part:
+          - { start: "2025-08-05", end: "2025-10-31" }
+          - { start: "2025-11-01", end: "2025-12-31" }
+          - { start: "2026-01-01", end: "2026-03-31" }
+          - { start: "2026-04-01", end: "2026-06-30" }
+          - { start: "2026-07-01", end: "2026-09-30" }
+    env:
+      T2B_DIR: ${{ github.workspace }}/t2b
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy scipy && pip install -e .
+      - name: Rows (ProbSevere slots, storm_30/60/90, warning state)
+        run: python scripts/tornado_program/t2b_recalibrate.py build ${{ matrix.part.start }} ${{ matrix.part.end }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: t2b-rows-${{ matrix.part.start }}
+          path: |
+            t2b/rows/
+            t2b/build_log_*.json
+          retention-days: 30
+
+  fit:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      T2B_DIR: ${{ github.workspace }}/t2b
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy scipy && pip install -e .
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: t2b-rows-*
+          path: t2b
+          merge-multiple: true
+      - name: The fit (Platt on each served payload's raw margin) and its facts
+        run: python scripts/tornado_program/t2b_recalibrate.py fit
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: t2b-fit
+          path: |
+            results/models/tornado_v3_recal_t2b.json
+            results/tornado_program/t2b_fit.json
+          retention-days: 90

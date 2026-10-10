@@ -46,6 +46,9 @@ OUT = ROOT / "results" / "tornado_program" / "t2_2026.json"
 P_NAMES = [f"p_{a}" for a in sf.PS_ATTRS]                 # the store's P-block names, in order
 assert P_NAMES == list(sf.FEATURE_NAMES[: len(P_NAMES)]), "block P is the store's first 28 columns"
 STORM_60 = sf.LABEL_NAMES.index("storm_60")
+#: the three horizons' training labels, kept per row for amendment 11 (t2b_recalibrate.py); amendment 10 reads "y"
+HORIZON_LABELS = ("storm_30", "storm_60", "storm_90")
+HORIZON_IDX = [sf.LABEL_NAMES.index(n) for n in HORIZON_LABELS]
 ABSENT = ("p_ps", "p_vil_density")                          # read as 0.0 since the format change
 W_NAMES = ("w_tor_warning_active", "w_minutes_since_issue")
 CANDIDATES = {   # name -> (+W payload, fallback payload, the two absent inputs as NaN?)
@@ -95,7 +98,7 @@ def day_rows(d: str, reports: dict[str, list[dict]], warnings) -> dict | None:
                 continue
             for s_ in st.get("storms", []):
                 tracks.setdefault(str(s_.get("id")), []).append((tv.timestamp(), s_))
-    P, Y, T, LAT, LON, SID = [], [], [], [], [], []
+    P, Y, Y3, T, LAT, LON, SID = [], [], [], [], [], [], []
     for ts in steps:
         t = dm.parse_probsevere_valid_time(ts.get("valid_time", ""))
         if t is None:
@@ -104,6 +107,7 @@ def day_rows(d: str, reports: dict[str, list[dict]], warnings) -> dict | None:
             lab, _ef, _lead = sf.labels(storm, t.timestamp(), window, track=tracks.get(str(storm.get("id"))))
             P.append(sf.block_p(storm))
             Y.append(int(lab[STORM_60]))
+            Y3.append(lab[HORIZON_IDX])
             T.append(int(t.timestamp()))
             LAT.append(float(storm.get("lat", 0.0)))
             LON.append(float(storm.get("lon", 0.0)))
@@ -113,7 +117,8 @@ def day_rows(d: str, reports: dict[str, list[dict]], warnings) -> dict | None:
     lat, lon, tt = np.asarray(LAT, np.float64), np.asarray(LON, np.float64), np.asarray(T, np.float64)
     active, _, since = nw.tor_warning_state(lat, lon, tt, warnings=warnings, require_coverage=False)
     active = np.asarray(active, bool)
-    return {"P": np.stack(P).astype(np.float32), "y": np.asarray(Y, np.int8), "t": np.asarray(T, np.int64),
+    return {"P": np.stack(P).astype(np.float32), "y": np.asarray(Y, np.int8),
+            "y3": np.stack(Y3).astype(np.int8), "t": np.asarray(T, np.int64),
             "lat": lat.astype(np.float32), "lon": lon.astype(np.float32), "sid": np.asarray(SID),
             "w_active": active.astype(np.float32),
             "w_minutes": np.where(active, np.asarray(since, np.float64), np.nan).astype(np.float32),

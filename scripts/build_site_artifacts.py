@@ -454,8 +454,9 @@ def _ensure_live_publish_artifacts() -> tuple[dict, dict]:
             # 74 KB compressed of a ~170 KB commit (measured 2026-10-05). The record takes the live
             # file's extra fields; the live file (and /api/v1/live/tornado) gains the record's. (The data's
             # valid time, the input-format guard and the products' clip counts are part of the record.)
+            # (and what produced the storms' T2b recalibration shadows, tornado program amendment 11)
             for key in ("disclaimer", "updated_at", "recent_predictions", "data_valid_time",
-                        "input_age_at_issue_min", "input_gaps", "product_coherence"):
+                        "input_age_at_issue_min", "input_gaps", "product_coherence", "t2b_shadow"):
                 if key in tornadoes:
                     artifact[key] = tornadoes[key]
             _write_json(replay_path, artifact)

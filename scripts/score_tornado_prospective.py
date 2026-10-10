@@ -519,9 +519,20 @@ class TrackSource:
         return out
 
 
+#: the horizons a v3 storm is labelled at (storm_features.labels' primary family), 60 min the published one
+V3_HORIZON_LABELS = ("storm_30", "storm_60", "storm_90")
+
+
 def _label_v3_storm(storm: dict, storm_time: dt.datetime, reports_in_window: list, tracks: TrackSource) -> float:
     """The event v3 forecasts (storm_features.labels, the training definition): a tornado report
     within 10 km of THIS storm's tracked polygon within 60 min."""
+    return _label_v3_storm_horizons(storm, storm_time, reports_in_window, tracks)["storm_60"]
+
+
+def _label_v3_storm_horizons(storm: dict, storm_time: dt.datetime, reports_in_window: list,
+                             tracks: TrackSource) -> dict[str, float]:
+    """The same event within 30, 60 and 90 min (``V3_HORIZON_LABELS``), from ONE ``storm_features.labels`` call:
+    the 30/90-min products' labels (tornado program amendment 11)."""
     from hazardpulse.tornado import storm_features as sf
 
     sid = storm.get("storm_id", storm.get("id"))
@@ -533,7 +544,7 @@ def _label_v3_storm(storm: dict, storm_time: dt.datetime, reports_in_window: lis
              "mag": r.get("mag", -1)} for rt, r in reports_in_window]
     track = tracks.track(sid, storm_time) or [(t0, like)]
     lab, _, _ = sf.labels(like, t0, reps, track=track)
-    return float(lab[sf.LABEL_NAMES.index("storm_60")])
+    return {name: float(lab[sf.LABEL_NAMES.index(name)]) for name in V3_HORIZON_LABELS}
 
 
 def model_probability(storm: dict) -> float:
@@ -584,6 +595,9 @@ def label_storms(artifact: dict, tornado_reports: list[dict], tracks: TrackSourc
     reports_from_valid = [(rt, r) for rt, r in timed if earliest <= rt <= window_end]
 
     y_true = np.zeros(len(storms), dtype=np.float64)
+    # a v3 storm's 30/90-min events (amendment 11's products), from the same labels call; NaN for other models
+    y_30 = np.full(len(storms), np.nan)
+    y_90 = np.full(len(storms), np.nan)
     y_after = np.zeros(len(storms), dtype=np.float64)
     y_score = np.zeros(len(storms), dtype=np.float64)
     y_published = np.zeros(len(storms), dtype=np.float64)
@@ -610,7 +624,8 @@ def label_storms(artifact: dict, tornado_reports: list[dict], tracks: TrackSourc
             if tracks is None:
                 tracks = TrackSource()
             mine = [(rt, r) for rt, r in reports_from_valid if rt >= storm_time]
-            y_true[i] = _label_v3_storm(storm, storm_time, mine, tracks)
+            h = _label_v3_storm_horizons(storm, storm_time, mine, tracks)
+            y_true[i], y_30[i], y_90[i] = h["storm_60"], h["storm_30"], h["storm_90"]
             if y_true[i]:
                 after = [(rt, r) for rt, r in mine if rt >= issued_at]
                 y_after[i] = _label_v3_storm(storm, storm_time, after, tracks) if after else 0.0
@@ -627,6 +642,9 @@ def label_storms(artifact: dict, tornado_reports: list[dict], tracks: TrackSourc
         "label_start": earliest,
         "window_end": window_end,
         "y_true": y_true,
+        "y_storm_30": y_30,
+        "y_storm_90": y_90,
+        "storm_times": storm_times,
         "y_true_after_issue": y_after,
         "y_score": y_score,
         "y_published": y_published,
@@ -907,6 +925,35 @@ def summarize(
     }
 
 
+def _t2b():
+    """scripts/score_tornado_t2b_prospective.py (tornado program amendment 11), by path."""
+    import importlib.util
+    mod = sys.modules.get("score_tornado_t2b_prospective")
+    if mod is None:
+        spec = importlib.util.spec_from_file_location(
+            "score_tornado_t2b_prospective", Path(__file__).resolve().parent / "score_tornado_t2b_prospective.py")
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["score_tornado_t2b_prospective"] = mod
+        spec.loader.exec_module(mod)
+    return mod
+
+
+def _t2b_artifact_sha() -> str | None:
+    """The recalibration artifact's digest, or None (absent: there is no T2b record to keep)."""
+    try:
+        from hazardpulse.tornado import t2b_shadow
+        art = t2b_shadow.load()
+    except Exception as exc:  # a broken artifact never stops the verifier; its test is then not updated
+        print(f"  T2b: artifact unreadable ({type(exc).__name__}: {exc}); its record is not updated")
+        return None
+    return None if art is None else t2b_shadow.digest(art)
+
+
+def _t2b_note_unscorable(artifact: dict, t2b_sha: str | None, pending: list[str]) -> None:
+    if t2b_sha is not None and _t2b().carries(artifact, t2b_sha):
+        pending.append(format_utc_z(parse_utc(artifact["issued_at"])))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Score matured tornado replay artifacts against SPC reports.",
@@ -989,6 +1036,11 @@ def main(argv: list[str] | None = None) -> int:
 
     per_forecast_path = output_dir / "per_forecast_scores.jsonl"
 
+    # Tornado program amendment 11 (T2b): the storm forecasts that carry the recalibration artifact's shadow, with
+    # the labels this run gives them, go to its prospective test (scripts/score_tornado_t2b_prospective.py) -- the
+    # record is labelled once per run, here
+    t2b_sha, t2b_rows, t2b_pending = _t2b_artifact_sha(), [], []
+
     if matured:
         earliest = min(parse_utc(a["issued_at"]) for a in matured)
         latest = max(
@@ -1011,15 +1063,19 @@ def main(argv: list[str] | None = None) -> int:
                     # v3 storms need their archived track; without it: unscorable, never "no tornado"
                     print(f"  {artifact['forecast_id']}: {exc} -- left for the next run")
                     unavailable.append(artifact["forecast_id"])
+                    _t2b_note_unscorable(artifact, t2b_sha, t2b_pending)
                     continue
                 if window_overlaps_failed_days(labels.get("label_start", labels["issued_at"]), labels["window_end"], failed_days):
                     # No outcome file for part of the window: unscorable, never "no tornado".
                     unavailable.append(artifact["forecast_id"])
+                    _t2b_note_unscorable(artifact, t2b_sha, t2b_pending)
                     continue
                 mark_first_occurrences(labels, seen_storm_hours)
                 result = score_single_forecast(artifact, all_reports, calib_acc=calib_acc, labels=labels)
                 scored.append((artifact, labels, result))
                 handle.write(json.dumps(result) + "\n")
+                if t2b_sha is not None:
+                    t2b_rows.extend(_t2b().rows_from_forecast(artifact, labels, t2b_sha))
 
         if calib_acc is not None:
             calib_path = write_calibration_dataset(output_dir, calib_acc, hazard="tornado")
@@ -1051,6 +1107,12 @@ def main(argv: list[str] | None = None) -> int:
 
     summary_path = output_dir / "prospective_summary.json"
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+
+    if t2b_sha is not None:
+        if issued_after_dt is not None:
+            print("  T2b: not updated (--issued-after scores a slice; the test's record is every record)")
+        else:
+            _t2b().update(t2b_rows, score_as_of, t2b_pending, t2b_sha, out_path=output_dir / "t2b_shadow.json")
 
     # Also publish a worker-served subset focused on the recovery curve so
     # /verification/tornado/ can render it without loading the full payload.
