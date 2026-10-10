@@ -1,0 +1,60 @@
+{
+ "program": "docs/TORNADO_MODEL_PROGRAM.md (amendment 11, T2b)",
+ "artifact": "results/models/tornado_v3_recal_t2b.json",
+ "artifact_sha256": "ef146847cc503ce32e5ec9b9939e6f1efb189b9ccfa26ad5ac0384f7b46f079e",
+ "scored_as_of": "2026-10-10T09:38:24Z",
+ "first_record": null,
+ "candidates": {
+  "p60_w": {
+   "payload": "tornado_v3_w.json",
+   "label": "storm_60"
+  },
+  "p60": {
+   "payload": "tornado_v3.json",
+   "label": "storm_60"
+  },
+  "p30": {
+   "payload": "tornado_v3_w_30.json",
+   "label": "storm_30"
+  },
+  "p90": {
+   "payload": "tornado_v3_w_90.json",
+   "label": "storm_90"
+  }
+ },
+ "primary": "p60_w",
+ "rule": "replace iff Brier(recal) < Brier(served) AND log loss(recal) < log loss(served) AND the 95% interval of Brier(recal) - Brier(served) (percentile, 2,000 draws, whole convective days 12Z-12Z, seed 42) lies wholly below 0; no claim with fewer than 30 tornadic storm forecasts or 10 convective days holding one",
+ "look_dates": [
+  "2027-07-01",
+  "2028-07-01"
+ ],
+ "descriptive_reads": [
+  "2027-01-01"
+ ],
+ "records_unscorable_this_run": 0,
+ "running": {
+  "p60_w": {
+   "n": 0,
+   "claim": "none before a look",
+   "reason": "no data"
+  },
+  "p60": {
+   "n": 0,
+   "claim": "none before a look",
+   "reason": "no data"
+  },
+  "p30": {
+   "n": 0,
+   "claim": "none before a look",
+   "reason": "no data"
+  },
+  "p90": {
+   "n": 0,
+   "claim": "none before a look",
+   "reason": "no data"
+  }
+ },
+ "looks": {},
+ "looks_pending": {},
+ "note": "before a look this is a running record: no claim is read from it. A look is frozen once written."
+}
