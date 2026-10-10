@@ -139,14 +139,30 @@ def _tc1_table(s: dict, tc1_ev: dict | None = None) -> str:
             return "&mdash;"
         return f"{fmt.num(haversine_km(a['lat'], a['lon'], b['lat'], b['lon']) / KM_PER_NM)} n mi"
 
-    rows = [[f"{lead} h", pos(ours.get(lead)), kt(ours.get(lead)), pos(ofcl.get(lead)), kt(ofcl.get(lead)),
-             apart(ours.get(lead), ofcl.get(lead))]
+    # TC2b (TC1 program amendment 4): TC1's winds held to our RI model's median, recorded beside TC1, in test
+    t2 = tc.get("TC2b") if (tc.get("TC2b") or {}).get("status") == "ok" else None
+    t2i = (t2 or {}).get("intensity") or {}
+
+    def t2kt(lead):
+        return f"{fmt.num(t2i[lead])} kt" if t2i.get(lead) is not None else "&mdash;"
+
+    rows = [[f"{lead} h", pos(ours.get(lead)), kt(ours.get(lead))] + ([t2kt(lead)] if t2 else [])
+            + [pos(ofcl.get(lead)), kt(ofcl.get(lead)), apart(ours.get(lead), ofcl.get(lead))]
             for lead in TC1_LEADS if ours.get(lead) or ofcl.get(lead)]
     caption = (f"Forecast from the {fmt.utc(tc.get('cycle'))} cycle: HazardPulse TC1 beside the National Hurricane "
                "Center&rsquo;s official forecast. Positions are the storm&rsquo;s centre; winds are maximum sustained "
                "(1-minute) winds.")
-    body = common.table(["Hours ahead", "HazardPulse position", "HazardPulse winds", "NHC position", "NHC winds",
-                         "Apart"], rows, cls="tc1-table", caption=caption, num_cols=(2, 4, 5))
+    if t2:
+        label = esc(t2.get("label") or "")
+        moved = t2.get("moved_tc1") and t2.get("shift_24h_kt") is not None
+        caption += (f" {label}, in test: TC1&rsquo;s winds held to what our rapid-intensification model expects "
+                    "over the next day"
+                    + (f"; this cycle it moved TC1 by {fmt.num(t2['shift_24h_kt'], 0)} kt at 24 hours." if moved
+                       else "; this cycle it agrees with TC1."))
+    head = (["Hours ahead", "HazardPulse position", "HazardPulse winds"]
+            + ([f"With our RI model ({esc(t2.get('label') or '')})"] if t2 else [])
+            + ["NHC position", "NHC winds", "Apart"])
+    body = common.table(head, rows, cls="tc1-table", caption=caption, num_cols=(2, 3, 5, 6) if t2 else (2, 4, 5))
     version = _tc1_version(s, tc1_ev)
     body += ('<p class="muted">' + (f"Model <code>{esc(version)}</code> &middot; " if version else "")
              + '<a href="#track">How this forecast is made and how it has scored</a></p>')
@@ -220,9 +236,39 @@ def _tc1_section(d: SiteData) -> str:
            + ("better at the confidence the test required" if o.get("claim") else
               f"a tie at the confidence the test required ({_level(o.get('level'))})")
            + ". It is not shown on the storm cards.</p>" if o else "")
+        + _tc2b_paragraph(tc.get("tc2b"))
         + "<p>Follow the National Hurricane Center for decisions. Ours is shown beside theirs so the two can be "
         'compared as the season goes on. <a href="/methods/#hurricane-track">The full test</a></p>')
     return common.section("track", "Our track and intensity forecast", body)
+
+
+def _tc2b_paragraph(t: dict | None) -> str:
+    """TC2b's test, every number from its results files (``served_evidence.tc2b_hurricane``)."""
+    if not t or not t.get("carried"):
+        return ""
+    label = esc(t.get("label") or "")
+    s26 = t.get("season_2026_vs_tc1") or {}
+    r26, rdev = t.get("ri_2026_24h") or {}, t.get("ri_dev_24h") or {}
+    lead24 = (s26.get("per_lead") or {}).get("24") or {}
+    dev = t.get("dev_seasons") or []
+    dev_span = f"{dev[0]}&ndash;{dev[-1]}" if dev else "the development seasons"
+    test_season = t.get("test_season") or "the test season"
+
+    def ci(x):
+        return f"[{fmt.num(x['ci'][0], 2)}, {fmt.num(x['ci'][1], 2)}]" if x and x.get("ci") else ""
+
+    return (f"<p><strong>With our rapid-intensification model ({label}, in test).</strong> Intensity forecasts miss "
+            "most when a storm intensifies rapidly, which is exactly what our RI model forecasts. "
+            f"{label} holds TC1&rsquo;s winds over the next day to the middle of the range our RI model expects, and "
+            "leaves TC1 alone wherever the two agree. On the cycles that went on to intensify rapidly, the 24-hour "
+            f"wind error fell from {fmt.num(r26.get('TC1'), 1)} to {fmt.num(r26.get('TC2b'), 1)} kt on "
+            f"{t.get('ri_2026_cycles') or 0} cycles of {test_season}, the season it was tested on (NHC&rsquo;s "
+            f"official forecast: {fmt.num(r26.get('OFCL'), 1)} kt), and from {fmt.num(rdev.get('TC1'), 1)} to "
+            f"{fmt.num(rdev.get('TC2'), 1)} kt on {t.get('ri_dev_cycles') or 0} cycles of {dev_span}. Over every "
+            f"cycle the change is small: {fmt.num(lead24.get('d'), 2)} kt at 24 hours {ci(lead24)} and "
+            f"{fmt.num(s26.get('d'), 2)} kt {ci(s26)} over one to five days on {test_season} ({_level(s26.get('level'))} "
+            "intervals), because most cycles are left as they were. It is shown beside TC1 on the storm cards while "
+            "it is tested on new forecasts.</p>")
 
 
 def _j1_row(s: dict, j1: dict | None) -> tuple[str, str] | None:

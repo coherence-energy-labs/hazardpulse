@@ -320,7 +320,15 @@ def test_the_card_states_the_claim_as_measured_and_the_scope_with_its_reasons(j1
     assert "It excludes 0 by" in text and "dropping one storm" in text      # the program's words, quoted
     ni = next(r for r in j1["regions"] if r["events"] == 0)
     assert f"The {ni['name']} basin had no RI event in the test seasons" in text
-    assert "The live record starts with its first matured cycle" in text   # no prospective record yet
+    # the live record's sentence follows the record's own state (it said "starts with" until J1's first live record,
+    # 2026-10-09 21:33Z, and a test that pinned that state broke as soon as the record began)
+    pr = j1["prospective"]
+    if pr.get("running"):
+        assert "Live so far, in its scope" in text
+    elif pr.get("exists"):
+        assert f"{pr['records']:,} live records carry it; none in its scope has matured yet" in text
+    else:
+        assert "The live record starts with its first matured cycle" in text
     assert "never the published number" in text and "on live cycles in its scope only" in text
 
 
