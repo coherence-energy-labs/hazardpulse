@@ -155,6 +155,50 @@ def adeck_features(table: Mapping[tuple[str, int], Fix], basin: str) -> dict[str
     return f
 
 
+def aid_change_names(tau: int, frac_kt: int) -> tuple[str, ...]:
+    """The names ``aid_change_features`` returns at ``tau``: group O's guidance changes and group H's official ones.
+    At 24 h (with 30 kt) they are exactly ``adeck_features``' names; any other lead carries the lead in each name."""
+    frac = "frac_ge30" if (tau, frac_kt) == (24, 30) else f"frac{tau}_ge{frac_kt}"
+    return (*(f"dv{tau}_{a}" for a in INDIVIDUAL), f"dv{tau}_regional_mean", f"dv{tau}_regional_max",
+            f"dv{tau}_global_mean", f"dv{tau}_spread", frac, f"ofcl_dv{tau}", f"ofcl_dv{tau - 12}")
+
+
+def aid_change_features(table: Mapping[tuple[str, int], Fix], tau: int, frac_kt: int) -> dict[str, float]:
+    """The guidance's intensity change to ``tau`` hours, from one cycle's a-deck table, as ``adeck_features`` builds
+    it for 24 h (TC1 program, amendment 8): each INDIVIDUAL aid's change, the REGIONAL mean and max, the GLOBAL mean,
+    the spread over SPREAD_AIDS (three or more), the fraction of those forecasting a rise of ``frac_kt`` or more, and
+    NHC's official change to ``tau`` and ``tau - 12``. NaN where an aid or the CARQ intensity is missing."""
+    names = aid_change_names(tau, frac_kt)
+    f: dict[str, float] = {k: float("nan") for k in names}
+    carq0 = table.get(("CARQ", 0))
+    v0 = carq0.vmax if carq0 else None
+    if v0 is None:
+        return f
+
+    def dv(tech: str, lead: int = tau) -> float:
+        fx = table.get((tech, lead))
+        return float(fx.vmax) - float(v0) if fx is not None and fx.vmax is not None else float("nan")
+
+    for a in INDIVIDUAL:
+        f[f"dv{tau}_{a}"] = dv(a)
+    reg = np.array([dv(a) for a in REGIONAL])
+    glo = np.array([dv(a) for a in GLOBAL])
+    if np.isfinite(reg).any():
+        f[f"dv{tau}_regional_mean"] = float(np.nanmean(reg))
+        f[f"dv{tau}_regional_max"] = float(np.nanmax(reg))
+    if np.isfinite(glo).any():
+        f[f"dv{tau}_global_mean"] = float(np.nanmean(glo))
+    allv = np.array([dv(a) for a in SPREAD_AIDS])
+    allv = allv[np.isfinite(allv)]
+    if len(allv) >= 3:
+        f[f"dv{tau}_spread"] = float(np.std(allv))
+    if len(allv):
+        f[names[10]] = float(np.mean(allv >= frac_kt))
+    f[f"ofcl_dv{tau}"] = dv("OFCL", tau)
+    f[f"ofcl_dv{tau - 12}"] = dv("OFCL", tau - 12)
+    return f
+
+
 def aid_logit(pct: float | None) -> float:
     if pct is None or not math.isfinite(float(pct)):
         return float("nan")

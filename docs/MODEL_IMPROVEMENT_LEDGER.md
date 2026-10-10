@@ -204,7 +204,22 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
    - **Why (hypotheses, untested):** R48 sees neither the track nor land, and it was trained only on storms that
      survived 48 h. The bracket pulls toward a median the storm reaches only if it stays over water.
    - **Resurrect if:** a 48-h curve conditioned on TC1's forecast track, with dissipation and landfall as
-     outcomes rather than exclusions.
+     outcomes rather than exclusions. Superseded by 3c: the cause was a different one.
+3c. **R48g. DONE (2026-10-10): the cause confirmed, the product killed by the 2026 screen** (amendment 8, tag
+   `prereg-r48g`, `results/hurricane_tc2/r48g_build.json`, `r48g_screen.json`).
+   - **The cause, found by reading R48's inputs.** H8's 67 inputs hold every guidance forecast to 24 h and none at
+     48 h. So R48 knew less about day two than the TC2b+O forecast it moved.
+   - **R48g** adds the guidance's 48-h changes and TC1+O's own 48-h change. Its out-of-fold log loss is 0.225,
+     against R48's 0.270 and climatology's 0.420.
+   - **All three registered predictions of the cause held:** a better log loss; fewer and smaller shifts (381 vs 485,
+     3.9 vs 8.3 kt); DEV 48 h +1.045 -> -0.177.
+   - **The screen (it could kill, not carry)** failed on 2026:
+     - TC2c'+O - TC2b+O at 48 h: +0.374 [-0.34, +1.30] in 2026, against -0.177 [-0.43, +0.06] on DEV;
+     - mean: +0.063 in 2026, -0.050 on DEV.
+   - **RI cycles at 48 h** improved in both seasons: DEV 30.8 -> 28.2 kt, 2026 24.1 -> 20.4 kt.
+   - **Design rule kept:** a bracket may move a forecast only with a curve that knows at least what the forecast
+     knew.
+   - **Next, ranked low:** any second-day correction is judged only on cycles after its registration.
 4. **TC3. Coherence steering (screened-Poisson PV inversion of the GFS analysis) -- ranked LOW, with the
    reason.** The inversion is exact physics for the steering flow, but the information is already in TC1's
    members: each global model integrates its own analysis's steering, and TC1 weights them by how they verify.
@@ -480,6 +495,7 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
 | A live calibrator from the matured live record, as soon as one exists | tornado 2026-10-04: fitted on 794 storm-forecasts with 0 tornadoes, it published 567-1,822x the model's chance; held-out Brier 467x worse | a calibrator with >= 30 distinct events and a held-out win over the model (`calibrator_admissible`, PR #22) |
 | TC2's 24-h intensity shift persists to 120 h (TC1 amendment 2) | DEV 72-120 h worse (+0.13 to +0.27 kt); mean +0.07 kt over 24-120 h | the bracket within the curve's own horizon (TC2b: carried on 2026) |
 | A skilful 48-h RI curve (R48) brackets the 48-h intensity median well enough to correct the second day (TC2c+O, TC1 amendment 7) | DEV TC2c+O - TC2b+O mean +0.216 [+0.098, +0.355], 48 h +1.045 [+0.56, +1.64]; 2026 worse too; R48's own log loss 0.270 vs climatology 0.420, so the curve has skill and the median rule fails | TC2b+O within 72 h; a 48-h curve conditioned on the forecast track, with dissipation and landfall as outcomes |
+| Telling the 48-h curve what the guidance forecasts for 48 h (R48g) makes its median bracket improve the second day (TC1 amendment 8) | 2026 TC2c'+O - TC2b+O 48 h +0.374 [-0.34, +1.30], mean +0.063; DEV -0.177 and -0.050, so the seasons disagree in sign | the cause (base-forecast blindness: all three registered predictions held); R48g as a 48-h probability (log loss 0.225 vs R48 0.270); RI cycles improved in both seasons, descriptive |
 | A published file can be checked for strict JSON after the bot commits it | 2026-10-10 03:39Z: TC2b's -Infinity reached live-storms.json; /api/v1/live/hurricane was 404 for ~1 h although the strict-JSON test existed | the writers enforce it (`strict_json`, `allow_nan=False`) |
 
 **Blocked, not killed:** CIRA's SHIPS developmental data. `rammb-data.cira.colostate.edu` returns
