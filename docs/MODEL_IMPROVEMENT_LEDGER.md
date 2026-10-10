@@ -231,7 +231,21 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
    - GEAR1 *alone* loses to our causal smoothed seismicity by 0.2-0.3 nats. The best public global
      model is a useful input, not a better forecast.
    - Open from it: GEAR1's strain-rate term only enters as one global weight. A per-region or
-     per-depth weight is the next experiment (pre-register it; fit on CHOOSE).
+     per-depth weight is the next experiment (pre-register it; fit on CHOOSE). Done as E4.
+1a. **E4. DONE (2026-10-10): S2 -- GEAR1's weight follows the cell's activity, CARRIED** (section 12, tag
+   `prereg-earthquake-e4`, `results/earthquake_program/gear1_e4.json`).
+   - **The form:** `logit p = a + c z + b g + d z g`, with z = logit(p_C0). It is the one-parameter version of
+     "per region", along the axis the physics names: strain should matter where the catalog is quiet.
+   - **Result:** DEV S2 - S1 **+0.0139 [+0.0015, +0.0255]** nats per target; FINAL second read +0.0087
+     [+0.0001, +0.0169].
+   - **The registered prediction held:** d = -0.073, so GEAR1's weight is 0.73 in a typical cell and 0.11
+     where M6+ earthquakes happen.
+   - **Size:** GEAR1's total contribution about doubles (S1 - S0 was +0.016).
+   - **Serving (section 12.2):** stack schema v2, built with formula and live parity on a runner. The scorer,
+     evidence and registry read one constant (`hazardpulse.earthquake.served`). A named stack that is missing now
+     stops the run; it used to fall back to C0 alone.
+   - **Open from it:** DEV has decided E1, E3 and E4. The prospective record (section 8) is the independent
+     check.
 2. **E2.** The margin over smoothed seismicity is at the edge of zero.
    - Decide whether this is power (number of M6+ quakes) or a real limit, with a per-year
      breakdown and a power estimate before any new features.

@@ -198,6 +198,7 @@ def methods_simple(ev: dict) -> str:
             f"globe over the next {eq['horizon_days']:.0f} days, from where earthquakes happen in the long run, how "
             "they cluster after recent ones, and boosted trees on both"
             + (", plus GEAR1, a published global model of where the crust is straining" if g1 else "")
+            + (", weighted most where recent earthquakes are few" if g1 and g1.get("activity") else "")
             + (f". Scored on {_when(t)} (a second look at those years): " if t.get("second_read")
                else f". Tested once on {_when(t)}: ")
             + f"{_signed(t['ig_per_target']['value'], 2)} {EQ_IG_UNIT_EXPLAINED} of information over a uniform map"
@@ -271,10 +272,17 @@ def _gear1_sentence(g1: dict | None) -> str:
     if not g1 or not g1.get("dev_vs_recalibrated"):
         return ""
     d = g1["dev_vs_recalibrated"]["ig_per_target"]
-    return ("; GEAR1 (Bird et al. 2015) was added by a later pre-registered test: three weights "
+    act = g1.get("activity") or {}
+    s1 = (act.get("dev_vs_S1") or {}).get("ig_per_target") or {}
+    n = {3: "three", 4: "four"}.get(g1.get("n_weights") or 3, str(g1.get("n_weights")))
+    return ("; GEAR1 (Bird et al. 2015) was added by a later pre-registered test: " + n + " weights "
             + (f"fitted on {_years(g1['fitted_on'])}, " if g1.get("fitted_on") else "")
             + f"decided on {_years(g1['decided_on'])} against C0 recalibrated on the "
-            f"same years, {_signed(d['diff'])}{_ci(d['ci'], signed=True)} {EQ_IG_UNIT}")
+            f"same years, {_signed(d['diff'])}{_ci(d['ci'], signed=True)} {EQ_IG_UNIT}"
+            + ("; a further pre-registered test let GEAR1&rsquo;s weight follow how active the cell is "
+               f"({_f(act.get('weight_typical_cell'), 2)} in a typical cell, {_f(act.get('weight_active_cell'), 2)} "
+               f"where M6+ earthquakes happen), decided against GEAR1 with one weight, {_signed(s1['diff'])}"
+               f"{_ci(s1['ci'], signed=True)} {EQ_IG_UNIT}" if s1.get("diff") is not None else ""))
 
 
 def _cell_region(grid: dict | None, row: int, col: int) -> str | None:
@@ -1345,20 +1353,28 @@ def registry_history(ev: dict) -> str:
                         "clock (docs/AUDIT_2026-10-01.md)"))
     if eq:
         t = eq["test"]
-        g1 = (eq.get("gear1") or {}).get("dev_vs_recalibrated") or {}
+        act = (eq.get("gear1") or {}).get("activity") or {}
+        g1 = act.get("dev_vs_S1") or (eq.get("gear1") or {}).get("dev_vs_recalibrated") or {}
         how = "a second look at" if t.get("second_read") else "scored once on"
         rows.append(row("promote", eq["model_version"],
                         "Adds GEAR1&rsquo;s long-term rate to C0"
+                        + (", weighted by how active each cell is" if act else "")
                         + (f", decided by a test written down in advance on {_e(eq['gear1'].get('decided_on', '')).replace('-', '&ndash;')}: "
                            f"{_signed(g1['ig_per_target']['diff'])}{_ci(g1['ig_per_target']['ci'], signed=True)} "
-                           f"{EQ_IG_UNIT}" if g1.get("ig_per_target") else "")
+                           f"{EQ_IG_UNIT}" + (" over GEAR1 with one weight" if act else "")
+                           if g1.get("ig_per_target") else "")
                         + f"; on {_when(t)} ({how} those years) {_signed(t['ig_per_target']['value'], 2)} "
                           f"{EQ_IG_UNIT}, AUC {_f(t['auc']['value'])}"))
         replaced = eq.get("replaced_ig_per_target")
-        if replaced and replaced.get("value") is not None and eq.get("base_model_version"):
+        if act and replaced and replaced.get("value") is not None and eq.get("replaced_model_version"):
+            rows.append(row("supersede", eq["replaced_model_version"],
+                            f"GEAR1 with one weight; replaced by the activity-weighted stack. It scored "
+                            f"{_signed(replaced['value'], 2)} {EQ_IG_UNIT} on the same test"))
+        base = eq.get("base_ig_per_target") or replaced
+        if base and base.get("value") is not None and eq.get("base_model_version"):
             rows.append(row("supersede", eq["base_model_version"],
                             f"Now the base of the published model rather than published itself; it scored "
-                            f"{_signed(replaced['value'], 2)} {EQ_IG_UNIT} on the same test"))
+                            f"{_signed(base['value'], 2)} {EQ_IG_UNIT} on the same test"))
         rows.append(row("retire", "eq_coherence_v1_0",
                         "Replaced by the pre-registered operational forecast (docs/EARTHQUAKE_FORECAST_PROGRAM.md); "
                         "its live record is on the track record page"))

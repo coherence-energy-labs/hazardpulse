@@ -125,13 +125,16 @@ def test_reliability_bin_lookup_never_invents_a_rate(tmp_path):
 def test_the_served_earthquake_and_hurricane_models_are_bound_to_their_final_tests():
     eq = se.earthquake_evidence()
     base = json.loads((ROOT / se.EARTHQUAKE_ARTIFACT_RECORD).read_text())["model_version"]
-    if (ROOT / se.EARTHQUAKE_STACK).exists():             # amendment E1: S1 = C0 + GEAR1 is served
+    if se.EARTHQUAKE_STACK:                               # a stack on C0 is served (E1: S1; E4: S2)
         rec = json.loads((ROOT / se.EARTHQUAKE_STACK_RECORD).read_text(encoding="utf-8"))
-        e1 = json.loads((ROOT / se.EARTHQUAKE_E1).read_text(encoding="utf-8"))
-        assert eq["candidate"] == "S1" and eq["model_version"] == rec["model_version"]
+        meta = json.loads((ROOT / se.EARTHQUAKE_STACK).read_text(encoding="utf-8"))
+        cand = (meta.get("provenance") or {}).get("candidate", "S1")
+        rep = json.loads((ROOT / se.EARTHQUAKE_STACK_REPORTS[cand]).read_text(encoding="utf-8"))
+        assert eq["candidate"] == cand and eq["model_version"] == rec["model_version"]
         assert eq["base_model_version"] == base == rec["base_model_version"]
-        assert eq["test"]["auc"]["value"] == e1["splits"]["final"]["models"]["S1"]["auc"]["value"]
+        assert eq["test"]["auc"]["value"] == rep["splits"]["final"]["models"][cand]["auc"]["value"]
         assert eq["test"]["second_read"] is True                  # never presented as a first read
+        assert (eq["gear1"]["activity"] is not None) == (cand == "S2")
     else:
         final = json.loads((ROOT / se.EARTHQUAKE_FINAL).read_text(encoding="utf-8"))
         assert eq["model_version"] == base
@@ -165,16 +168,26 @@ def _eq_stack_root(tmp_path: Path) -> Path:
     for rel in (se.EARTHQUAKE_SERVED, se.EARTHQUAKE_FINAL, se.EARTHQUAKE_ARTIFACT_RECORD, se.EARTHQUAKE_STACK,
                 se.EARTHQUAKE_STACK_RECORD, se.EARTHQUAKE_E1):
         _copy(rel, tmp_path)
+    for rel in (*se.EARTHQUAKE_STACK_REPORTS.values(), se.EARTHQUAKE_E4, se.EARTHQUAKE_STACK_S1):
+        if (ROOT / rel).exists() and not (tmp_path / rel).exists():          # S2's report, decision, S1's file
+            _copy(rel, tmp_path)
     return tmp_path
 
 
-@pytest.mark.skipif(not (ROOT / se.EARTHQUAKE_STACK).exists(), reason="no earthquake stack served")
-def test_the_earthquake_stack_is_shown_only_when_bound_to_its_evaluation_and_base(tmp_path):
+def _served_report_rel() -> str:
+    """The served stack's evaluation report (section 10's format), by the candidate its provenance names."""
+    meta = json.loads((ROOT / se.EARTHQUAKE_STACK).read_text(encoding="utf-8"))
+    return se.EARTHQUAKE_STACK_REPORTS[(meta.get("provenance") or {}).get("candidate", "S1")]
+
+
+@pytest.mark.skipif(not se.EARTHQUAKE_STACK or not (ROOT / se.EARTHQUAKE_STACK).exists(), reason="no earthquake stack served")
+def test_the_earthquake_stack_is_shown_only_when_bound_to_its_evaluation_and_base(tmp_path, monkeypatch):
     root = _eq_stack_root(tmp_path)
-    assert se.earthquake_evidence(root)["candidate"] == "S1"
-    e1 = json.loads((root / se.EARTHQUAKE_E1).read_text(encoding="utf-8"))
-    e1["coefficients_fitted_on_choose"]["S1"]["b"] += 1e-9                   # another fit
-    _write(root / se.EARTHQUAKE_E1, e1)
+    cand = se.earthquake_evidence(root)["candidate"]
+    rel = _served_report_rel()
+    rep = json.loads((root / rel).read_text(encoding="utf-8"))
+    rep["coefficients_fitted_on_choose"][cand]["b"] += 1e-9                  # another fit
+    _write(root / rel, rep)
     with pytest.raises(se.EvidenceError):
         se.earthquake_evidence(root)
     root = _eq_stack_root(tmp_path / "b")
@@ -184,7 +197,10 @@ def test_the_earthquake_stack_is_shown_only_when_bound_to_its_evaluation_and_bas
     with pytest.raises(se.EvidenceError):
         se.earthquake_evidence(root)
     root = _eq_stack_root(tmp_path / "c")
-    (root / se.EARTHQUAKE_STACK).unlink()                                      # no stack: C0, read once
+    (root / se.EARTHQUAKE_STACK).unlink()                       # the named stack is missing: never described as C0
+    with pytest.raises(se.EvidenceError, match="missing"):
+        se.earthquake_evidence(root)
+    monkeypatch.setattr(se, "EARTHQUAKE_STACK", None)                         # C0 served, by name: read once
     eq = se.earthquake_evidence(root)
     assert eq["candidate"] == "C0" and not eq["test"].get("second_read")
 

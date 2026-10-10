@@ -28,6 +28,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from hazardpulse.earthquake.served import SERVED_STACK_RELPATH
+
 ROOT = Path(__file__).resolve().parents[3]
 
 TORNADO_SERVED = "results/models/tornado_v3_w.json"
@@ -74,11 +76,18 @@ EARTHQUAKE_CANDIDATES = {
     "C1": "C0 + the 61 coherence block-S features",
     "D": "the previous served model",
     "S1": "C0 plus GEAR1's long-term rate (geodetic strain and smoothed seismicity, Bird et al. 2015) as one extra term",
+    "S2": ("C0 plus GEAR1's long-term rate (geodetic strain and smoothed seismicity, Bird et al. 2015), weighted by "
+           "how active C0 says the cell is"),
 }
-# Amendment E1 (section 10): the served S1 = the C0 artifact + a stack bound to its model_version
-EARTHQUAKE_STACK = "results/models/earthquake_gear1_stack_v1.json"
+# The served stack on C0 (section 10, E1: S1; section 12, E4: S2), named once in the library: the scorer, this
+# evidence and the registry all serve and describe the same file, or (None) C0 alone
+EARTHQUAKE_STACK = SERVED_STACK_RELPATH
 EARTHQUAKE_STACK_RECORD = "results/earthquake_program/stack_artifact.json"
 EARTHQUAKE_E1 = "results/earthquake_program/gear1_e1.json"
+EARTHQUAKE_E4 = "results/earthquake_program/gear1_e4.json"
+EARTHQUAKE_STACK_S1 = "results/models/earthquake_gear1_stack_v1.json"
+# each stack candidate's evaluation report, in section 10's format
+EARTHQUAKE_STACK_REPORTS = {"S1": EARTHQUAKE_E1, "S2": "results/earthquake_program/gear1_served.json"}
 
 HURRICANE_SERVED = "results/models/hurricane_ri_stack_v1.json"
 HURRICANE_FINAL = "results/calibration/hurricane_ri_stack_final.json"
@@ -395,9 +404,29 @@ def _tornado_format_change(root: Path, main: dict) -> dict | None:
 # Earthquake
 # ---------------------------------------------------------------------------
 
+def _earthquake_activity(root: Path, stack: dict, dev: dict, pair) -> dict | None:
+    """Amendment E4 (section 12): how S2 earned its interaction -- its registered decision against S1 and GEAR1's
+    weight in a typical cell and in an active one. Bound only to the decision run its provenance names, carried, with
+    the stack's own coefficients."""
+    rel = (stack.get("provenance") or {}).get("evaluation")
+    run = _read(root, rel) if rel else None
+    if run is None or rel != EARTHQUAKE_E4:
+        raise EvidenceError(f"the served S2 stack names its decision {rel!r}, not {EARTHQUAKE_E4!r}, or it is missing")
+    if not (run.get("carried_rule") or {}).get("S2_replaces_S1") \
+            or (run.get("coefficients_fitted_on_choose") or {}).get("S2") != stack["coefficients"]:
+        raise EvidenceError(f"{rel} did not carry the served S2 with these coefficients")
+    w = run.get("gear1_weight_by_activity") or {}
+    typical = ((w.get("all_cell_times") or {}).get("p50") or {}).get("gear1_weight_S2")
+    active = ((w.get("positive_cell_times") or {}).get("p90") or {}).get("gear1_weight_S2")
+    return {"section": "section 12", "decision_file": rel,
+            "dev_vs_S1": pair(dev, "S2-S1", "S1, GEAR1 with one weight"),
+            "weight_typical_cell": _finite(typical), "weight_active_cell": _finite(active)}
+
+
 def _earthquake_stack_evidence(root: Path, base_version: str, contract: dict, payload: dict, metric) -> dict:
-    """The served S1 (C0 + GEAR1): bound when the stack's build record names this file and the
-    served C0, and the evaluation's coefficients and GEAR1 hash are the stack's own."""
+    """The served stack on C0 -- S1 (C0 + GEAR1, section 10) or S2 (GEAR1 weighted by the cell's activity, section
+    12): bound when the stack's build record names this file and the served C0, and the candidate's evaluation (named
+    by the stack's provenance; a v1 stack is S1) holds the stack's own coefficients and GEAR1 hash."""
     from hazardpulse.earthquake import operational_forecast as eq
 
     path = root / EARTHQUAKE_STACK
@@ -409,25 +438,29 @@ def _earthquake_stack_evidence(root: Path, base_version: str, contract: dict, pa
     stack = json.loads(path.read_text(encoding="utf-8"))
     if stack.get("base_model_version") != base_version:
         raise EvidenceError(f"{EARTHQUAKE_STACK} stacks on {stack.get('base_model_version')!r}, not {base_version!r}")
-    e1 = _read(root, EARTHQUAKE_E1)
-    if e1 is None:
-        raise EvidenceError(f"{EARTHQUAKE_E1} missing for the served stack")
-    if (e1.get("coefficients_fitted_on_choose") or {}).get("S1") != {
-            k: stack["coefficients"][k] for k in ("a", "c", "b")} \
-            or e1.get("gear1_sha256") != ((stack.get("provenance") or {}).get("gear1") or {}).get("sha256"):
-        raise EvidenceError(f"{EARTHQUAKE_E1} does not describe the served stack's coefficients and GEAR1 map")
-    fin, dev, choose = e1["splits"]["final"], e1["splits"]["dev"], e1["splits"].get("choose") or {}
-    cand = fin["models"]["S1"]
+    name = (stack.get("provenance") or {}).get("candidate", "S1")
+    report_rel = EARTHQUAKE_STACK_REPORTS.get(name)
+    report = _read(root, report_rel) if report_rel else None
+    if report is None:
+        raise EvidenceError(f"no evaluation report for the served stack's candidate {name!r} ({report_rel!r})")
+    if (report.get("coefficients_fitted_on_choose") or {}).get(name) != stack["coefficients"] \
+            or report.get("gear1_sha256") != ((stack.get("provenance") or {}).get("gear1") or {}).get("sha256"):
+        raise EvidenceError(f"{report_rel} does not describe the served stack's coefficients and GEAR1 map")
+    fin, dev, choose = report["splits"]["final"], report["splits"]["dev"], report["splits"].get("choose") or {}
+    cand = fin["models"][name]
 
-    def pair(split, key, name):
+    def pair(split, key, label):
         p = split["paired"].get(key)
-        return None if p is None else {"name": name, **{k: {"diff": _finite(v.get("diff")), "ci": _ci(v.get("ci95"))}
-                                                         for k, v in p.items()}}
+        return None if p is None else {"name": label, **{k: {"diff": _finite(v.get("diff")), "ci": _ci(v.get("ci95"))}
+                                                          for k, v in p.items()}}
     n_issue, n_pos = int(fin["n_issue_times"]), int(fin["n_positive"])
+    activity = _earthquake_activity(root, stack, dev, pair) if name == "S2" else None
+    replaced = "S1" if name == "S2" else "C0"
+    s1_file = root / EARTHQUAKE_STACK_S1
     return {
         "hazard": "earthquake", "program": EARTHQUAKE_PROGRAM, "file": EARTHQUAKE_STACK,
-        "model_version": version, "base_model_version": base_version, "candidate": "S1",
-        "candidate_name": EARTHQUAKE_CANDIDATES["S1"],
+        "model_version": version, "base_model_version": base_version, "candidate": name,
+        "candidate_name": EARTHQUAKE_CANDIDATES[name],
         "event": contract.get("event"), "horizon_days": contract.get("horizon_days"),
         "target_magnitude_min": contract.get("target_magnitude_min"),
         "test": {
@@ -444,17 +477,22 @@ def _earthquake_stack_evidence(root: Path, base_version: str, contract: dict, pa
         "gear1": {"decided_on": f"{dev['first_issue'][:4]}-{dev['last_issue'][:4]}",
                   "fitted_on": (f"{choose['first_issue'][:4]}-{choose['last_issue'][:4]}"
                                 if choose.get("first_issue") and choose.get("last_issue") else None),
-                  "dev_vs_recalibrated": pair(dev, "S1-S0", "C0 recalibrated on the same years"),
-                  "dev_vs_C0": pair(dev, "S1-C0", "C0"),
+                  "dev_vs_recalibrated": pair(dev, f"{name}-S0", "C0 recalibrated on the same years"),
+                  "dev_vs_C0": pair(dev, f"{name}-C0", "C0"),
+                  "n_weights": len(stack["coefficients"]),
+                  "activity": activity,
                   "global_rate_per_year": _finite(((stack.get("provenance") or {}).get("gear1") or {}).get("global_total_per_year"))},
         "n_trees": payload.get("n_trees"),
         "n_inputs": len(payload.get("feature_names") or []) + 1,
-        "replaced_ig_per_target": metric(fin["models"]["C0"], "ig_per_target"),
-        "replaced_name": "C0 alone",
-        "vs": {o: v for o, v in (("A", pair(fin, "S1-A", EARTHQUAKE_CANDIDATES["A"])),
-                                 ("B", pair(fin, "S1-B", EARTHQUAKE_CANDIDATES["B"])),
-                                 ("C0", pair(fin, "S1-C0", "C0")),
-                                 ("D", pair(fin, "S1-D", EARTHQUAKE_CANDIDATES["D"]))) if v},
+        "replaced_ig_per_target": metric(fin["models"][replaced], "ig_per_target"),
+        "replaced_name": "C0 alone" if replaced == "C0" else "S1, GEAR1 with one weight",
+        "replaced_model_version": (eq.stack_model_version(s1_file) if replaced == "S1" and s1_file.exists()
+                                   else base_version),
+        "base_ig_per_target": metric(fin["models"]["C0"], "ig_per_target"),
+        "vs": {o: v for o, v in (("A", pair(fin, f"{name}-A", EARTHQUAKE_CANDIDATES["A"])),
+                                 ("B", pair(fin, f"{name}-B", EARTHQUAKE_CANDIDATES["B"])),
+                                 ("C0", pair(fin, f"{name}-C0", "C0")),
+                                 ("D", pair(fin, f"{name}-D", EARTHQUAKE_CANDIDATES["D"]))) if v},
         "grid": contract.get("grid"),
         "input_types": _earthquake_input_types(root, version, base_version, dev),
     }
@@ -540,7 +578,9 @@ def earthquake_evidence(root: Path = ROOT) -> dict | None:
     in_active = final.get("positives_in_active_cells")
     replaced = (final.get("candidates") or {}).get("D") if chosen != "D" else None
     payload = (meta.get("gbt") or {}).get("payload") or {}
-    if (root / EARTHQUAKE_STACK).exists():
+    if EARTHQUAKE_STACK is not None:
+        if not (root / EARTHQUAKE_STACK).exists():         # the scorer refuses to publish without it, too
+            raise EvidenceError(f"the served stack {EARTHQUAKE_STACK} is missing; C0 alone is not what is served")
         return _earthquake_stack_evidence(root, version, contract, payload, metric)
     return {
         "hazard": "earthquake", "program": EARTHQUAKE_PROGRAM, "file": EARTHQUAKE_SERVED,

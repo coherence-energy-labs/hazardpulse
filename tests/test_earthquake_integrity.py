@@ -546,6 +546,21 @@ def test_an_empty_catalog_publishes_nothing_and_fails_the_run(monkeypatch, fse, 
     assert not (tmp_path / "ledger.jsonl").exists()
 
 
+def test_a_named_stack_that_is_missing_publishes_nothing(monkeypatch, fse, tmp_path):
+    """The scorer used to fall back to C0 alone when the stack file was absent: a pointer moved ahead of its file
+    would have silently changed the published model. A named stack must exist; only None means C0 is served."""
+    art_path, stack_path, _ = _wire(monkeypatch, fse, tmp_path, events=_live_events())
+    monkeypatch.setattr(fse, "STACK_PATH", tmp_path / "earthquake_gear1_stack_v9.json")
+    with pytest.raises(FileNotFoundError):
+        _run(fse, tmp_path)
+    assert not (tmp_path / "ledger.jsonl").exists()
+    monkeypatch.setattr(fse, "STACK_PATH", None)                                   # C0 served, by name
+    monkeypatch.setattr(fse, "MODEL_VERSION", of.load_artifact(art_path).model_version)
+    out = _run(fse, tmp_path)
+    replay = json.loads(Path(out["replay_path"]).read_text(encoding="utf-8"))
+    assert replay["operational_model"]["model_version"] == of.load_artifact(art_path).model_version
+
+
 def test_a_failed_catalog_pull_publishes_nothing(monkeypatch, fse, tmp_path):
     _wire(monkeypatch, fse, tmp_path, events=[])
 
