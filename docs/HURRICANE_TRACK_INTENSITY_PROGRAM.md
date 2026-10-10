@@ -511,3 +511,108 @@ own registration at 98.75%.
   1. TC1 goes live and on the site (its own amendment). Its track is worth showing beside NHC's.
   2. TC2: intensity conditioned on our RI probability. Intensity is where TC1 adds nothing, and RI is where
      every consensus fails.
+
+## Amendment 7 -- R48 and TC2c+O: the bracket for the second day (2026-10-10, before any R48 or TC2c+O number exists)
+
+**Why.** TC2's bracket is only as long as the curve behind it. Amendment 2 measured both sides of that:
+- carrying the 24-h shift beyond the curve's horizon helped through 48 h and hurt from 72 h;
+- TC2b and TC2b+O fix that with a taper chosen from the data.
+
+A curve that speaks to 48 h directly lets the second day be bracketed by evidence instead.
+
+**R48: our RI model's 48-h exceedance curve.** P(V(t+48 h) - V(t) >= k) for k = 15, 20, ..., 65 kt (11 thresholds).
+- **Inputs and learner:** H8's (the RI program's v10.4 model, amendments 8-9) exactly:
+  - the same 67 inputs;
+  - the threshold as one more input, constrained to lower the probability as it rises;
+  - the same monotone constraints;
+  - `v9.GBT_PARAMS`;
+  - seeds 0-4 averaged;
+  - early stopping on the last training season, then a refit at the found rounds.
+
+  Only the label differs.
+- **Label:** best-track (this program's truth: IBTrACS USA columns for 2020-2025, NHC's operational b-decks for 2026)
+  wind at t + 48 h minus at t. A cycle without a tropical or subtropical fix at t + 48 h is not a training row, as
+  NHC does not verify it either.
+- **Rows:** the RI program's development table (`v10.DEV10`, 2020-2025), with H8's inputs as amendment 8 builds them.
+- **Out of fold for 2022-2025:** each season is forecast from earlier seasons only, as amendment 8's folds do.
+- **2026:** fitted on 2020-2025. Its artifact has v10.4's schema and input names, so the live curve is the
+  artifact applied to the input row the v10.4 shadow already records. No new live input exists.
+- **R48's own gate** (it stops the run if not met): on the out-of-fold seasons, its pooled log loss over the 11
+  thresholds must be below climatology's (each threshold's base rate on the training seasons). A curve worse than
+  climatology brackets nothing. Reported: per-threshold reliability, and log loss against climatology.
+
+**TC2c+O: TC2b+O with the second day bracketed.** Start from TC2b+O as amendments 3 and 6 define it. Then:
+1. dV48 = V_TC2b+O(48 h) - V0, with V0 the CARQ intensity at t as before.
+2. [L48, U48] is R48's median bracket, read the way amendment 2 reads the 24-h curve.
+3. s48 = clip(dV48, L48, U48) - dV48.
+4. The second-day shift enters as follows:
+   - nothing at or before 24 h, so TC2c+O equals TC2b+O there;
+   - linearly from 24 h to full at 48 h;
+   - beyond 48 h it tapers to 0 at **96 h**, times amendment 2's decay factor.
+
+   The taper's end is 48 h past the curve's horizon. That is TC2b's principle (24 h -> 72 h) applied unchanged,
+   not a new choice.
+5. Where R48's curve is missing, or v10.4's gate failed for the cycle, TC2c+O is TC2b+O.
+
+**The test.** Both seasons have already been used for intensity work, so TC2c+O must hold on **both**, as TC2b+O did.
+- **Carried iff**, in DEV 2023-2025 AND in 2026, the 48-h difference AND the mean over 24-120 h (TC2c+O minus
+  TC2b+O, intensity, AL and EP pooled, this program's verifier and truth) are both below 0 (point estimates).
+- **Controls (each stops the run):**
+  - the DEV TC2b+O numbers reproduce amendment 5's `tc2bo.json` to 1e-9;
+  - R48's inputs are H8's: the out-of-fold 24-h curves built from the same rows reproduce amendment 8's log loss to
+    1e-12;
+  - R48's own gate, above.
+- **Reported (95% storm-block):**
+  - per lead;
+  - TC2c+O against OFCL, HCCA and IVCN;
+  - the RI subsets at 24 h and at 48 h (cycles that rose >= 30 kt in 24 h; >= 50 kt in 48 h);
+  - shift statistics.
+
+**A carried TC2c+O** goes live by its own amendment: computed in the live record from TC2b+O's intensity, V0, and
+R48's curve on the v10.4 shadow's recorded inputs. It is shown in TC2b+O's place.
+
+### Amendment 7 outcome (2026-10-10): R48 has skill; TC2c+O NOT carried -- a good 48-h curve is not a good 48-h median
+
+`results/hurricane_tc2/r48_build.json`, `results/hurricane_tc2/tc2c.json`.
+
+**R48 passed its gate.**
+- 2,508 of 4,692 development cycles have a 48-h label.
+- Out-of-fold (2022-2025) log loss over its 11 thresholds is 0.270, against climatology's 0.420. It is better at every
+  threshold, from 15 kt (0.425 vs 0.667) to 65 kt (0.146 vs 0.198).
+
+**Control.** DEV TC2b+O reproduced amendment 5's 12.543423 kt.
+
+**TC2c+O minus TC2b+O.** Both seasons are worse, so **TC2c+O is not carried**.
+
+| | 48 h | 72 h | mean, 24-120 h |
+|---|---|---|---|
+| DEV | **+1.045 [+0.56, +1.64]** | +0.037 | **+0.216 [+0.098, +0.355]** |
+| 2026 | +0.260 [-0.35, +0.70] | +0.107 | +0.073 [-0.054, +0.183] |
+
+**Even in the 48-h RI subset (>= 50 kt in 48 h) it is worse:**
+- DEV: 30.8 -> 33.4 kt (OFCL 27.0);
+- 2026: 24.1 -> 24.5 kt.
+
+**The shifts.** On DEV the rule moved 485 of 1,566 cycles with a curve (255 up, 230 down), by a mean of 8.3 kt and up to
++48 kt. They were large and nearly symmetric.
+
+**Why (HYPOTHESIS, two named causes).**
+1. **R48 has no track.** Its inputs are H8's, built for the next 24 h, with nothing about where the storm will be on day
+   two. TC1+O's 48-h intensity already carries the aids' landfalls and recurvatures, and the bracket overrode them.
+2. **Survivorship.** R48 learned only from cycles still tropical at t + 48 h, then bracketed every cycle, including
+   storms about to dissipate or move inland.
+
+At 24 h neither bites, which is why TC2b and TC2b+O work there.
+
+**Killed:** "R48's median bracket improves the second day." The smallest witness is the DEV 48-h difference,
++1.045 [+0.56, +1.64].
+
+**What survives:**
+- R48 as a probability (skill over climatology at every threshold, out of fold);
+- the median bracket at 24 h, where TC2b+O stays.
+
+**Resurrect if:** a 48-h curve conditioned on the forecast track (land along TC1's path, hours over water), and
+trained with dissipation and landfall as outcomes rather than as missing rows, passes the same test on data after its
+registration.
+
+**R48 is not served or shown.** Its artifact is not committed; the build file records what it was.

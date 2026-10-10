@@ -18,10 +18,15 @@ BACKGROUND_KT = 26.7          # Kaplan and DeMaria (1995): the inland decay mode
 HALF = 0.5
 
 
+R48_THRESHOLDS_KT = tuple(range(15, 70, 5))     # amendment 7: R48's 48-h curve, 15-65 kt
+TC2C_TAPER_END_H = 96.0                          # amendment 7: 48 h past R48's horizon, TC2b's principle unchanged
+
+
 def monotone(curve: Mapping[int, float]) -> dict[int, float]:
-    """The exceedance curve made non-increasing in k (a running minimum), on the thresholds it has."""
+    """The exceedance curve made non-increasing in k (a running minimum), on the thresholds it has (any horizon's:
+    the 24-h curve's 15-45 kt, R48's 15-65 kt)."""
     out, run = {}, math.inf
-    for k in THRESHOLDS_KT:
+    for k in sorted(int(x) for x in curve):
         p = curve.get(k, curve.get(str(k)))
         if p is None or not math.isfinite(float(p)):
             continue
@@ -74,7 +79,40 @@ def project(tc1: Mapping[int, float], v0: float | None, curve: Mapping[int, floa
     dv = v24 - v0
     s = shift_24h(dv, lo, hi)
     if s == 0.0:
-        return out, {"applied": False, "why": "TC1 inside the bracket", "bracket": [lo, hi], "dv_tc1": dv}
+        return out, {"applied": False, "why": "the forecast is inside the bracket", "bracket": [lo, hi], "dv_tc1": dv}
     for lead, v in out.items():
         out[lead] = v + s * lead_factor(lead, v24, v, taper_end)
     return out, {"applied": True, "shift_24h": s, "bracket": [lo, hi], "dv_tc1": dv}
+
+
+def second_day_factor(lead: int, v48: float, v_lead: float) -> float:
+    """Amendment 7: the share of the 48-h shift applied at ``lead`` -- none to 24 h, linear to full at 48 h, then the
+    fraction of the 48-h excess over the background still held (capped at 1) times a taper to 0 at 96 h."""
+    if lead <= 24:
+        return 0.0
+    if lead <= 48:
+        return (lead - 24) / 24.0
+    den = v48 - BACKGROUND_KT
+    if den <= 0:
+        return 0.0
+    f = min(1.0, max(0.0, (v_lead - BACKGROUND_KT) / den))
+    return f * max(0.0, (TC2C_TAPER_END_H - lead) / (TC2C_TAPER_END_H - 48.0))
+
+
+def project_second_day(tc2b: Mapping[int, float], v0: float | None, curve48: Mapping[int, float] | None
+                       ) -> tuple[dict[int, float], dict[str, object]]:
+    """``(TC2c intensity by lead, what was done)``: TC2b's (or TC2b+O's) forecast with its 48-h change held to the
+    bracket R48's curve puts on the 48-h median. Unchanged without a curve, an analysis or a 48-h forecast, or when the
+    48-h change already lies inside the bracket."""
+    out = {int(k): float(v) for k, v in tc2b.items()}
+    v48 = out.get(48)
+    if curve48 is None or v0 is None or v48 is None or not math.isfinite(v0) or not math.isfinite(v48):
+        return out, {"applied": False, "why": "no 48-h curve" if curve48 is None else "no analysis or 48-h forecast"}
+    lo, hi = bracket(curve48)
+    dv = v48 - v0
+    s = shift_24h(dv, lo, hi)
+    if s == 0.0:
+        return out, {"applied": False, "why": "inside the 48-h bracket", "bracket_48h": [lo, hi], "dv48": dv}
+    for lead, v in out.items():
+        out[lead] = v + s * second_day_factor(lead, v48, v)
+    return out, {"applied": True, "shift_48h": s, "bracket_48h": [lo, hi], "dv48": dv}

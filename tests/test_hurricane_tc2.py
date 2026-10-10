@@ -57,3 +57,14 @@ def test_tc2b_tapers_the_shift_to_zero_by_72h():
     assert b[48] == pytest.approx(50.0 + 15.0 * 0.5)                          # half the shift at 48 h
     assert b[72] == pytest.approx(50.0) and b[96] == pytest.approx(50.0)      # TC1 from 72 h
     assert full[72] == pytest.approx(65.0)                                    # TC2 kept it (the falsified part)
+
+
+def test_the_second_day_rule_reproduces_amendment_7s_arithmetic():
+    """Killed (amendment 7 outcome), kept so the recorded test stays reproducible: none at 24 h, full at 48 h, half at
+    72 h, nothing from 96 h, times the decay factor."""
+    base = {24: 60.0, 48: 70.0, 72: 70.0, 96: 70.0}
+    curve48 = {15: 0.9, 20: 0.8, 25: 0.7, 30: 0.6, 35: 0.55, 40: 0.3, 45: 0.2, 50: 0.1}   # median 35-40 kt
+    out, info = tc2.project_second_day(base, 25.0, curve48)                 # base +45 kt -> clipped to +40
+    assert info["applied"] and info["shift_48h"] == pytest.approx(-5.0)
+    assert out[24] == 60.0 and out[48] == pytest.approx(65.0)
+    assert out[72] == pytest.approx(70.0 - 2.5) and out[96] == pytest.approx(70.0)
