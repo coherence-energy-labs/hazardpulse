@@ -1179,9 +1179,13 @@ def registry_simple(ev: dict) -> str:
     if eq:
         t = eq["test"]
         how = "a second look at those years" if t.get("second_read") else "scored once"
-        cards.append(('hz-eq', "Earthquake: S1 (C0 + GEAR1)" if eq.get("gear1") else "Earthquake",
+        act = (eq.get("gear1") or {}).get("activity")
+        cards.append(('hz-eq', (f"Earthquake: {_e(eq['candidate'])} (C0 + GEAR1"
+                                + (", weighted by activity)" if act else ")")) if eq.get("gear1") else "Earthquake",
                       "Combines where large earthquakes happen in the long run with how they cluster after recent "
-                      + ("ones, plus GEAR1&rsquo;s long-term rate from crustal strain. " if eq.get("gear1") else "ones. ")
+                      + ("ones, plus GEAR1&rsquo;s long-term rate from crustal strain"
+                         + (", counted most where recent earthquakes are few" if act else "") + ". "
+                         if eq.get("gear1") else "ones. ")
                       + f"On {_when(t)} ({how}), it ranked a cell that went on to have an M6+ earthquake above one "
                       f"that did not {_pct(t['auc']['value'], 0)} of the time across the globe, and "
                       f"{_pct(t['auc_active_cells']['value'], 0)} among cells with recent earthquakes, the harder question."))
