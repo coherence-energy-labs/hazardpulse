@@ -232,6 +232,75 @@ and the numbers move as the season's decks update):
 - It is not shown to beat OFCL: every interval against OFCL includes 0.
 - Its intensity forecast ties the official forecast. It adds nothing on intensity that NHC's consensus does
   not already have.
+
+## Amendment 2 -- TC2: TC1's intensity, held to our RI model's median (2026-10-10, before any TC2 number exists)
+
+**Why.** Intensity is where TC1 adds nothing, and rapid intensification is where every intensity consensus fails.
+Isaias 2026 showed both at once:
+- on 7 October our in-test RI models gave 62-68% for a 30 kt rise within 24 h, NOAA's DTOPS 15-28%, and the
+  storm rose 30-35 kt from four consecutive cycles;
+- TC1's intensity trailed NHC's: 24-h errors of 17.8 kt against NHC's official 13.3 kt.
+
+**What this is an instance of: the median of a forecast distribution under an absolute-error score.** NHC scores
+intensity by mean absolute error, and the forecast that minimizes expected absolute error is the median of the
+predictive distribution. Our RI model (v10.4, the H8 model of the RI program, amendments 8-9) issues a calibrated
+24-h exceedance curve: P(V(t+24 h) - V(t) >= k) for k = 15, 20, 25, 30, 35, 40, 45 kt. That curve brackets the median
+of the 24-h change **without anything being fitted**:
+- if P(>= k) >= 0.5, the median is at least k;
+- if P(>= k) < 0.5, the median is below k.
+
+**TC2 is TC1 projected into that bracket.** Track is TC1's, unchanged. Intensity, at each cycle t:
+1. **The curve.** v10.4's curve for the cycle, used only where its gate passes (the DSHP, IVCN and NNIC 24-h
+   forecasts all exist, `ri_v10.GATE_AIDS`). It is made non-increasing in k by a running minimum. Where there is
+   no curve, or the gate fails, TC2 is TC1.
+2. **The bracket:** L = the largest k with P(>= k) >= 0.5 (none: no lower bound); U = the smallest k with
+   P(>= k) < 0.5 (none: no upper bound).
+3. **TC1's 24-h change:** dV = V_TC1(24 h) - V0, where V0 is the CARQ intensity at t, the analysis TC1 uses.
+4. **The shift:** s = clip(dV, L, U) - dV. It is zero whenever TC1 already lies inside our bracket.
+5. **At each lead tau:**
+   - for tau <= 24 h, V_TC2 = V_TC1(tau) + s * tau / 24, so the change accrues linearly over the first day;
+   - beyond 24 h, V_TC2 = V_TC1(tau) + s * f(tau), with f(tau) = min(1, max(0, (V_TC1(tau) - 26.7) /
+     (V_TC1(24 h) - 26.7))). This is 0 if V_TC1(24 h) <= 26.7.
+
+   So the shift persists while TC1 holds the storm's strength, and decays as TC1 decays it. 26.7 kt is the
+   background intensity of Kaplan and DeMaria's (1995) inland decay model, a published constant: an extra
+   amount of wind at landfall decays the way the rest of the excess above the background does.
+6. **Nothing is fitted.** TC2 has no free parameter, so the development seasons are a clean test of it.
+
+**The curves.**
+- **DEV 2023-2025:** out of fold, from the RI program's own machinery. Each season's curve comes from H8 fitted only
+  on earlier seasons (folds 2022-2025, `scripts/hurricane_ri_g1.py`'s fold construction).
+  - **Control:** those folds' pooled 30/24 log loss must reproduce amendment 8's 0.14161766094567663 to 1e-12, or
+    the run stops.
+  - Cycles are matched by storm and synoptic time. A TC1 cycle without an H8 row is TC1.
+- **2026:** H8 fitted on 2020-2025, which is the v10.4 artifact's model.
+- **Live, if carried:** the curve the v10.4 shadow records in the cycle's own forecast record.
+
+**The test** (`scripts/hurricane_tc2.py`, the TC1 program's verifier, rules, truth and leads).
+- **Primary:** DEV 2023-2025, AL and EP pooled, intensity. TC2 against TC1 on the cases both verify (TC2 exists
+  exactly where TC1 does).
+- **Carried iff** the mean over 24-120 h of the per-lead mean absolute error difference (TC2 minus TC1) is below 0
+  AND the 24-h difference is below 0 (point estimates).
+- **Reported (95% storm-block bootstrap, 4,000 draws, seed 20261008, as in this program):**
+  - each lead, 12 h included;
+  - TC2 against OFCL, HCCA and IVCN;
+  - **the RI subset**, cycles whose best track rose >= 30 kt over the next 24 h: TC2, TC1 and OFCL at 12 and 24 h;
+  - how often the shift moves TC1 up and down, and by how much;
+  - **2026**, operational best tracks: a further read, no claim.
+
+**A carried TC2.** An amendment written before its first live forecast puts TC2's intensity in the live record
+beside TC1 and NHC's. The site's TC1 table shows it as TC2's intensity, labelled in test.
+
+**Known before the result.**
+- **v10.4 was designed with 2022-2025 in view.** Its features were chosen against those folds, so the out-of-fold
+  curves are honest per fold, but the model family is not naive about those seasons. TC2's rule itself is new and
+  has nothing fitted.
+- **The bracket only binds where the curve is decisive.** P(>= 15) is often below 0.5 for a steady storm, so U = 15
+  clips any TC1 rise above 15 kt down to 15. Upward shifts happen only when our model is at least 50% confident
+  of a >= 15 kt rise. Most cycles keep TC1's number; the effect is concentrated where TC1 and our RI model disagree.
+- **V0 is CARQ's, the label's V(t) is the best track's.** The difference is usually a few kt.
+- **Only intensity at 24 h is bracketed directly.** Longer leads carry the 24-h correction by the rule above, not
+  by a curve of their own.
 - **Next:**
   1. TC1 goes live and on the site (its own amendment). Its track is worth showing beside NHC's.
   2. TC2: intensity conditioned on our RI probability. Intensity is where TC1 adds nothing, and RI is where
