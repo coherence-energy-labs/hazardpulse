@@ -140,6 +140,7 @@ from hazardpulse.tornado.definitive_model import (  # noqa: E402
 )
 from hazardpulse.data.hrrr_availability import live_candidates as hrrr_live_candidates  # noqa: E402
 from hazardpulse.tornado import lgbm_payload as v3_payload  # noqa: E402
+from hazardpulse.tornado import t2b_shadow as t2b_recal  # noqa: E402
 from hazardpulse.tornado.v3_serving import V3Suite, storm_history as v3_storm_history  # noqa: E402
 from hazardpulse.verification import served_evidence  # noqa: E402
 try:
@@ -345,6 +346,31 @@ def stamp_receipts(scored: list[dict], issued_at: str, signer=None) -> int:
         s["receipt_sha256"] = receipt["receipt_sha256"]
         n += 1
     return n
+
+
+def attach_t2b_shadow(scored: list[dict], suite: V3Suite | None, artifact_path=None) -> dict | None:
+    """Tornado program amendment 11 (T2b): every v3 storm forecast carries the recalibrated probabilities in SHADOW
+    (``t2b_shadow``: per candidate the payload's raw margin, the served probability from it and the recalibrated
+    one, all from the record's stored inputs; ``hazardpulse.tornado.t2b_shadow``) -- recorded, never published.
+    Returns the record's descriptor (what produced the shadows), or None: no artifact, not the v3 tier, or any
+    error -- then nothing is added and the forecast is exactly what it would have been. Run after every published
+    field is final (it reads only ``v3.inputs`` and ``v3.model``, and writes only ``t2b_shadow``)."""
+    if suite is None or not suite.available or not scored:
+        return None
+    try:
+        art = t2b_recal.load(artifact_path)
+        if art is None:
+            return None
+        sh = t2b_recal.Shadow.from_suite(suite, art)
+        n = sh.attach(scored) if sh.active else 0
+        print(f"  T2b shadow: {n} of {len(scored)} storms (artifact {sh.sha256[:12]}; recorded, never published)"
+              + (f"; refused {sh.refused}" if sh.refused else ""))
+        return sh.descriptor()
+    except Exception as exc:  # never let the shadow break a live forecast
+        for s in scored:
+            s.pop(t2b_recal.SHADOW_KEY, None)
+        print(f"  T2b shadow: skipped ({type(exc).__name__}: {exc}); the forecast is unchanged")
+        return None
 
 
 def product_coherence(scored: list[dict]) -> dict:
@@ -994,12 +1020,14 @@ def write_outputs(
     data_valid_time: str | None = None,
     input_gaps: dict | None = None,
     product_coherence: dict | None = None,
+    t2b_shadow: dict | None = None,
 ) -> None:
     """Write scored results to dist/data/.
 
     ``data_valid_time``: when the ProbSevere data the forecast was made from was valid -- the 60-minute window
     runs from it, not from the issue time. ``input_gaps``: the input-format guard's record (input_guard).
-    ``product_coherence``: how often this run's nested products were clipped."""
+    ``product_coherence``: how often this run's nested products were clipped. ``t2b_shadow``: what produced the
+    storms' recalibration shadows (``attach_t2b_shadow``), recorded once per forecast."""
     forecast_id = f"to_fcst_{now.strftime('%Y%m%d_%H%M')}"
 
     # Determine scoring tier label for display
@@ -1046,6 +1074,8 @@ def write_outputs(
         output["input_gaps"] = input_gaps
     if product_coherence is not None:
         output["product_coherence"] = product_coherence
+    if t2b_shadow is not None:
+        output["t2b_shadow"] = t2b_shadow
     storms_path = DIST / "data" / "live-tornadoes.json"
     storms_path.parent.mkdir(parents=True, exist_ok=True)
     storms_path.write_text(
@@ -1095,7 +1125,7 @@ def write_outputs(
                 break
         pulse["updated_at"] = now.isoformat() + "Z"
         pulse_path.write_text(
-            json.dumps(pulse, indent=2) + "\n", encoding="utf-8"
+            json.dumps(_sanitize_for_json(pulse), indent=2, allow_nan=False) + "\n", encoding="utf-8"
         )
         print(f"  Updated {pulse_path}")
 
@@ -1418,7 +1448,7 @@ def compute_day_ahead_susceptibility(
     susc_path = DIST / "data" / "live-susceptibility.json"
     susc_path.parent.mkdir(parents=True, exist_ok=True)
     susc_path.write_text(
-        json.dumps(output, indent=2) + "\n", encoding="utf-8"
+        json.dumps(_sanitize_for_json(output), indent=2, allow_nan=False) + "\n", encoding="utf-8"
     )
     print(f"  Wrote {susc_path} ({len(top_cells)} cells)")
 
@@ -1700,6 +1730,9 @@ def main() -> None:
     # the receipts last, on the numbers as published: hashes of the model payload and of its input vector
     n_receipts = stamp_receipts(scored, issued_at, _signer)
     print(f"  Receipts: {n_receipts} of {len(scored)} storms (signed={_signer is not None})")
+    # amendment 11 (T2b): the recalibrations in shadow, after every published field is final
+    t2b_descriptor = (attach_t2b_shadow(scored, V3_SUITE, RESULTS / "models" / t2b_recal.ARTIFACT_FILE)
+                      if scoring_tier == "tier1_v3" else None)
 
     for s in scored[:10]:
         print(
@@ -1729,7 +1762,8 @@ def main() -> None:
     print("Step 6: Writing outputs...")
     write_outputs(scored, now, scoring_tier=scoring_tier, coherence_source=coherence_source,
                   data_valid_time=data_valid_time, input_gaps=gaps,
-                  product_coherence=product_coherence(scored) if scoring_tier == "tier1_v3" else None)
+                  product_coherence=product_coherence(scored) if scoring_tier == "tier1_v3" else None,
+                  t2b_shadow=t2b_descriptor)
     append_ledger(scored, now)
 
     # Step 7: render every page from the published artifacts (hazardpulse.site.build)

@@ -77,7 +77,14 @@ jobs:
         run: python scripts/score_earthquake_prospective.py --emit-calibration
 
       - name: Score tornado forecasts
+        # also keeps the T2b recalibration's prospective record (tornado program amendment 11): the v3 record is
+        # labelled once, here, and every storm forecast carrying the artifact's shadow goes to the registered rule
+        # (results/tornado_prospective/t2b_shadow.json; running record until a look, 2027-07-01 and 2028-07-01)
         run: python scripts/score_tornado_prospective.py --emit-calibration
+
+      - name: The T2b recalibration's frozen looks never change (tornado amendment 11)
+        # a look, once written, is never recomputed; this fails the job if the step above changed one
+        run: python scripts/score_tornado_t2b_prospective.py --check-frozen
 
       - name: Score hurricane forecasts
         run: python scripts/score_hurricane_prospective.py --emit-calibration
@@ -95,7 +102,7 @@ jobs:
       - name: Audit the hurricane forecast records
         run: python scripts/audit_hurricane_records.py --strict
 
-      # every tornado v3 forecast that stored its inputs recomputes exactly from them
+      # every tornado v3 forecast that stored its inputs recomputes exactly from them, and so does every T2b shadow
       - name: Audit the tornado forecast records
         run: python scripts/audit_tornado_records.py --strict
 
