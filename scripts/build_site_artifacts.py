@@ -214,6 +214,23 @@ def _read_json(path: Path, default: dict | list | None = None):
         return default.copy() if isinstance(default, dict) else list(default)
 
 
+def _hurricane_content_changed(replay_path: Path, artifact: dict) -> bool:
+    """True when an issued hurricane record exists and ``artifact`` would change what its ledger entry hashed
+    (``fetch_and_score.forecast_content``: the id, the storms, the catch-up records). Adding display fields is not
+    a content change."""
+    if not replay_path.exists():
+        return False
+    try:
+        old = json.loads(replay_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return True
+
+    def content(a):
+        return (a.get("forecast_id"), json.dumps(a.get("storms"), sort_keys=True),
+                json.dumps(a.get("shadow_catch_up"), sort_keys=True))
+    return content(old) != content(artifact)
+
+
 def _write_json(path: Path, payload: dict | list) -> None:
     """LF bytes on every platform, and an unchanged file is not rewritten. Replay and evidence
     files are hashed and signed (.gitattributes marks them -text); write_text's newline
@@ -416,7 +433,13 @@ def _ensure_live_publish_artifacts() -> tuple[dict, dict]:
             # the forecast's record and its ledger content hash, never among the published storms
             artifact["shadow_catch_up"] = storms["shadow_catch_up"]
         replay_path = REPLAY_DIR / f"{forecast_id}.json"
-        _write_json(replay_path, artifact)
+        if _hurricane_content_changed(replay_path, artifact):
+            # an issued hurricane record is in the hash-chained ledger: its content is never rewritten. On
+            # 2026-10-10 a sanitized live-storms.json still naming the 03:39Z forecast made the next run rewrite
+            # that record, and the record audit (and every verification run) failed until it was restored.
+            print(f"  WARNING: {replay_path.name} is issued and differs from live-storms.json: kept as issued")
+        else:
+            _write_json(replay_path, artifact)
         _upsert_replay_index_item(replay_index, forecast_id, replay_path)
         update_hazard("hu", forecast_id)
         stamp_hazard("hu", storms_updated)
