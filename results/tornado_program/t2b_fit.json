@@ -1,0 +1,146 @@
+{
+ "amendment": 11,
+ "program": "docs/TORNADO_MODEL_PROGRAM.md",
+ "artifact": "results/models/tornado_v3_recal_t2b.json",
+ "artifact_sha256": "ef146847cc503ce32e5ec9b9939e6f1efb189b9ccfa26ad5ac0384f7b46f079e",
+ "note": "in-sample on the fit window: descriptive, decides nothing (the rule is prospective)",
+ "window": {
+  "first_row": "2025-08-05T20:48:39Z",
+  "last_row": "2026-09-30T23:30:40Z",
+  "registered": "2025-08-05T20:48Z .. 2026-09-30 (every 30-minute slot)",
+  "days": 419
+ },
+ "n_rows": 1782183,
+ "rows_before_cut_on_2025_08_05": 3614,
+ "old_format_rows_before_cut_with_p_ps": 2255,
+ "data_sha256": "2acb938f0e499f82a43892817848c4fe2b2b6b0098df93a1e955790d1c0b0d96",
+ "code": {
+  "commit": "60825c577e1147c573b25bb72ed8a3b7e9c237b1",
+  "files_sha256": {
+   "scripts/tornado_program/t2b_recalibrate.py": "e2de150eb150a0c2f772b88a73f96f1b9da90cccbcfa89a2297d35953ab4dc5a",
+   "scripts/tornado_program/t2_decide.py": "f407af17a4281a853c77461fe1dc7bd9ed12860733bf3d97e5bb8706fd1e5ab8",
+   "scripts/score_tornado_prospective.py": "24f6b7e7989d6bbb13daaf5b567f2bd16869470fba95e09d18bf189793216c01",
+   "src/hazardpulse/tornado/definitive_model.py": "533fc4c9b97510b6652fbb50caabcff0819f0bcda0f01619ba57f30b5ff2649f",
+   "src/hazardpulse/tornado/lgbm_payload.py": "8ba5d69f2bdcf7c0c73cdbb446254fbd141d065da25f2290868f7a525216cc5f",
+   "src/hazardpulse/tornado/storm_features.py": "7afef989c77648029e409ca98cea2026ab254d176aacab3d80b9e4fc7cf71bd6",
+   "src/hazardpulse/tornado/t2b_shadow.py": "8a599845c9d5f7bf823dc185d015d9b67930dc0f2d2dbdde45109550430d47f9",
+   "src/hazardpulse/data/probsevere.py": "74dc9f7a786c7589722c5af35829ae07c8f322e08e37a50b5d4b2fc7136677b2",
+   "src/hazardpulse/verification/nws_warnings.py": "23ac516459a3726666bea7230e535b01c608ddebfd342ed7dd3481c968f2d4cb"
+  }
+ },
+ "spc_failed_convective_days": [
+  "2026-07-15"
+ ],
+ "days_dropped_unlabelable": [
+  "20260714",
+  "20260715",
+  "20260716"
+ ],
+ "days_without_probsevere": [],
+ "candidates": {
+  "p60_w": {
+   "label": "storm_60",
+   "n": 1782183,
+   "events": 1681,
+   "base_rate": 0.0009432252467900322,
+   "served": {
+    "mean_forecast": 0.0007944018628594885,
+    "mean_over_base_rate": 0.842218616987812,
+    "brier": 0.0008566441269670524,
+    "log_loss": 0.004412604982741152,
+    "auc": 0.9675450482592911
+   },
+   "recalibrated": {
+    "mean_forecast": 0.0009432252467900322,
+    "mean_over_base_rate": 1.0,
+    "brier": 0.0008514256750905115,
+    "log_loss": 0.004391599156427251,
+    "auc": 0.9675450482592911
+   },
+   "margin": {
+    "mean": -3.8789439657955302,
+    "p50": -4.161165088595569,
+    "p99": 2.108543782047582,
+    "max": 6.389678937883739
+   }
+  },
+  "p60": {
+   "label": "storm_60",
+   "n": 1782183,
+   "events": 1681,
+   "base_rate": 0.0009432252467900322,
+   "served": {
+    "mean_forecast": 0.0006615794713587904,
+    "mean_over_base_rate": 0.7014013605024527,
+    "brier": 0.0008877204853701082,
+    "log_loss": 0.0046061462814949395,
+    "auc": 0.9661801413329327
+   },
+   "recalibrated": {
+    "mean_forecast": 0.0009432252467900322,
+    "mean_over_base_rate": 1.0,
+    "brier": 0.0008744796423548476,
+    "log_loss": 0.004536458945148073,
+    "auc": 0.9661801413329327
+   },
+   "margin": {
+    "mean": -3.958770089815225,
+    "p50": -4.18288047026599,
+    "p99": 2.0036690291952826,
+    "max": 5.199611820135216
+   }
+  },
+  "p30": {
+   "label": "storm_30",
+   "n": 1782183,
+   "events": 1027,
+   "base_rate": 0.0005762595648146122,
+   "served": {
+    "mean_forecast": 0.0003799127878992338,
+    "mean_over_base_rate": 0.6592737215935932,
+    "brier": 0.0005329184467335928,
+    "log_loss": 0.0028154289578761335,
+    "auc": 0.9728322494226112
+   },
+   "recalibrated": {
+    "mean_forecast": 0.0005762595648146125,
+    "mean_over_base_rate": 1.0000000000000007,
+    "brier": 0.0005266052007082837,
+    "log_loss": 0.0027682995899042527,
+    "auc": 0.9728322494226112
+   },
+   "margin": {
+    "mean": -4.194939641226265,
+    "p50": -4.493393322781812,
+    "p99": 1.769102704584087,
+    "max": 5.955767418961774
+   }
+  },
+  "p90": {
+   "label": "storm_90",
+   "n": 1782183,
+   "events": 2130,
+   "base_rate": 0.0011951634596447166,
+   "served": {
+    "mean_forecast": 0.0009686391069724321,
+    "mean_over_base_rate": 0.8104657979255634,
+    "brier": 0.0010870500678222068,
+    "log_loss": 0.005544719665297683,
+    "auc": 0.9645355276637343
+   },
+   "recalibrated": {
+    "mean_forecast": 0.0011951634596447166,
+    "mean_over_base_rate": 1.0,
+    "brier": 0.0010745932144413538,
+    "log_loss": 0.005500473350367235,
+    "auc": 0.9645355276637343
+   },
+   "margin": {
+    "mean": -3.700123496877476,
+    "p50": -4.0185959523866535,
+    "p99": 2.226973336305553,
+    "max": 5.821544891825374
+   }
+  }
+ }
+}

@@ -483,6 +483,44 @@ the live record until SPC's final database covers the window. That is a later am
 - `hazardpulse.tornado.t2b_shadow`: the shadow; also used by the record audit.
 - `scripts/score_tornado_t2b_prospective.py`: the rule, called by the prospective tornado verifier.
 
+### The fit of amendment 11 (2026-10-10): controls passed, artifact written; nothing is decided until a look
+
+Registration: tag `tornado-amendment-11` (1a1a6f8fd). Fit: `research-tornado-t2b.yml` run 38021963652 on 60825c577.
+- **Control 1** (the store machine, `results/tornado_program/t2b_control_loyo.json`). `fit_platt` on the four saved
+  leave-one-year-out score sets (5,182,200 rows each) returned every served (a, b) **bit for bit** (difference 0.0).
+- **Control 2** (runner). 13,658 recorded live probabilities: 4,996 `p60_w`, 213 `p60`, 4,730 `p30` and 3,719 `p90`.
+  The fit's margin path gave 0 ulp on 13,455, 1 ulp on 148, 2 ulp on 55, and none beyond 4.
+- **Control 3** (runner). Amendment 10's control: all 1,430 inputs were identical, and the probabilities were within
+  4 ulp (0 ulp on 1,410, 1 on 14, 2 on 6).
+- **Data:** 1,782,183 storm observations, 2025-08-05 20:48:39Z .. 2026-09-30 23:30:40Z, 419 days.
+  - SPC's file for convective day 2026-07-15 could not be read in that run, so 2026-07-14..16 were dropped by the
+    rule (counted in the facts).
+  - The cut kept none of the 3,614 rows of 2025-08-05 before 20:48Z, of which 2,255 have `p_ps` != 0.
+  - `p_ps` and `p_vil_density` were 0.0 on every kept row.
+  - Data SHA-256 `2acb938f0e49...`.
+- **Artifact:** `results/models/tornado_v3_recal_t2b.json`, SHA-256 `ef146847cc503ce3...` (in full in
+  `results/tornado_program/t2b_fit.json`).
+
+| candidate | label | events (UTC days) | served a, b | recalibrated a, b |
+|---|---|---|---|---|
+| `p60_w` | storm_60 | 1,681 (200) | 1.00593, -6.39086 | 1.06813, -6.34561 |
+| `p60` | storm_60 | 1,681 (200) | 1.01698, -6.39741 | 1.11861, -6.22628 |
+| `p30` | storm_30 | 1,027 (196) | 1.03278, -6.88620 | 1.05461, -6.49296 |
+| `p90` | storm_90 | 2,130 (203) | 1.01241, -6.21951 | 1.11054, -6.19646 |
+
+**Descriptive, in-sample, decides nothing.** On the fit window the served mean forecasts were these multiples of the
+base rate:
+- `p60_w` 0.842x;
+- `p60` 0.701x;
+- `p30` 0.659x;
+- `p90` 0.810x.
+
+The recalibrations equal the base rate there by construction: a maximum-likelihood intercept matches the mean. The
+AUC of each pair is identical (0.96755 for `p60_w`), as the increasing map implies. Every recalibrated `a` is above
+the served one, so the new map is steeper in the margin. For `p60_w` the two maps cross at margin -0.727 (a served
+probability of 0.081%): the recalibration lowers every storm below that and raises every storm above it. The rule
+above, on forecasts made after this, is the only test.
+
 ## Final pipeline (fixed now)
 
 The configuration chosen on validation is refitted on 2020-10..2024 with the validation-
