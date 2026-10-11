@@ -35,6 +35,13 @@ day) from appearing as connections.
 | R1 | length of day, the 30-day mean before | IERS EOP C04 |
 | R2 | length of day, the change over the year before | same |
 
+**Controls of the instrument (added 2026-10-11 after the tag, still before any result).** Neither is one of the 12
+signals or in the BH family. If either fails, every result is void.
+- **P+ (positive control): M6+ within 150 km in the 30 days before.** Large earthquakes cluster after nearby
+  moderate ones, so P+ must come out with mean u above 0.5 at p < 0.01 on all events. If it does not, the design
+  cannot see a real connection.
+- **P- (negative control): a seeded random number per time.** It must not reach p < 0.01.
+
 **The statistic.** For each event and signal, u is the event value's mid-rank percentile among its own 20 controls.
 - With no connection, u is uniform and its mean is 0.5.
 - The test is z = (mean u - 0.5) / sqrt(1 / (12 n)), two-sided.
