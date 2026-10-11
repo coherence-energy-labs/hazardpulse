@@ -263,3 +263,47 @@ It runs on a runner that checks its own access first, by the same design.
 
 The thermal-anomaly claim does not appear at the epicentre in daily 2.5-degree OLR across 342 large earthquakes.
 Finer or other thermal products (land-surface temperature, hourly geostationary infrared) are not tested here.
+
+## Run 4 -- the ground itself moving: GPS before large earthquakes (registered 2026-10-11, before any run-4 result)
+
+**Why.** A fault fails when its stress meets its strength. Slow slip on the fault in the weeks before has been reported
+for some large subduction earthquakes, and continuous GPS records that motion directly.
+
+**The anecdote that prompted it** (OBSERVED, one event, two stations, chosen after the fact):
+- **Panama M7.7 (2026-10-09).** Nevada Geodetic Laboratory stations AZUE (55 km) and ACHO (68 km) both sat east of
+  their trend-plus-seasonal track in the 60 days ending at their last daily solution, about 2026-08-30.
+- **AZUE:** 5.1 mm, against 1.2-2.0 mm in the same window of 2021, 2023 and 2025.
+- **ACHO:** 6.8 mm, inside its own noisy range (7.9 and 8.5 mm in 2023 and 2024).
+
+This is the kind of single-event pattern runs 1-3 showed to mislead. Run 4 asks whether it is general.
+
+**Data.**
+- NGL daily IGS20 positions (`gps_timeseries/IGS20/tenv3/IGS20/<STA>.tenv3`) and its station list (`llh.out`).
+- For each event, the up to 5 nearest stations within 150 km of the epicentre.
+- On a runner (it downloads about 1 GB).
+
+**The station's state at time T.**
+1. Daily east and north positions in [T - 3 y, T).
+2. Steps removed: a day-to-day change larger than 5 times the median absolute daily change is taken as an
+   equipment or earthquake offset and removed.
+3. Trend plus annual and semiannual terms fitted on [T - 3 y, T - 90 d].
+4. **The index:** the horizontal length of the mean residual over the last W days before T, divided by the same
+   statistic's standard deviation over sliding W-day windows within the fit span.
+
+A station needs 80% of the days in [T - 3 y, T) to count.
+
+**Signals.**
+
+| id | signal |
+|---|---|
+| N1 | the largest index among the stations, W = 60 days |
+| N2 | the largest index among the stations, W = 14 days |
+| N3 | the median index among the stations, W = 60 days (needs 2 or more stations) |
+
+**Design.** Run 2b's (past-only controls, 6 y to 180 d before, the mainshock rule mirrored), with the same stations
+at the control times.
+- **Events:** the atlas's events from 2005 with at least one qualifying station at the event time.
+- **Valid only if** at least 10 of the event's controls also have values.
+- **Instrument controls:** P+ and P- as before.
+- **The rule:** BH at q = 0.10 on events before 2016, confirmed on 2016 onward (same sign, one-sided p < 0.05). The
+  split moves to 2016 because GPS coverage before 2005 is thin.
