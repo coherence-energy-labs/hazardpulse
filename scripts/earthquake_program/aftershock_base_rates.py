@@ -73,9 +73,31 @@ def mainshocks(ev, lo_m, hi_m, end):
         yield i
 
 
+SNAPSHOT = ROOT / "results" / "earthquake_program" / "comcat_m6_snapshot"
+
+
+def load_snapshot(folder: Path = SNAPSHOT) -> list[tuple]:
+    """The committed ComCat M6+ snapshot the 2026-10-11 rates and amendment E5's fit were computed from."""
+    rows = []
+    for p in sorted(folder.glob("m6_*.csv")):
+        for r in csv.DictReader(io.StringIO(p.read_text(encoding="utf-8"))):
+            if r.get("type") == "earthquake":
+                t = dt.datetime.fromisoformat(r["time"].replace("Z", "+00:00"))
+                rows.append((t, float(r["latitude"]), float(r["longitude"]), float(r["depth"] or 0.0), float(r["mag"]), r["id"]))
+    rows.sort()
+    if not rows or any(x[5] == y[5] for x, y in zip(rows, rows[1:])):
+        raise SystemExit(f"{folder}: empty, or a ComCat id appears twice")
+    return rows
+
+
 def main() -> int:
-    today = dt.date.today().isoformat()
-    ev = fetch(today)
+    ev = load_snapshot() if "--snapshot" in sys.argv else fetch(dt.date.today().isoformat())
+    res = compute(ev)
+    OUT.write_text(json.dumps(res, indent=1, default=str) + "\n", encoding="utf-8")
+    return 0
+
+
+def compute(ev: list[tuple]) -> dict:
     end = ev[-1][0]
     res = {"generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": FDSN,
            "events_m6": len(ev), "first": ev[0][0].isoformat(), "last": end.isoformat(),
@@ -113,8 +135,7 @@ def main() -> int:
                    for u, a, b, _, _, _ in nxt)
     res["M7.5+_with_an_M6+_in_the_cell_within_6h"] = {"n": n, "another_within_30d_from_6h": hit, "rate": hit / max(n, 1)}
     print(f"M7.5+ with an M6+ in its cell within 6 h (n={n}): yet another within 30 days from +6 h: {hit} ({hit / max(n, 1):.0%})")
-    OUT.write_text(json.dumps(res, indent=1, default=str) + "\n", encoding="utf-8")
-    return 0
+    return res
 
 
 if __name__ == "__main__":
