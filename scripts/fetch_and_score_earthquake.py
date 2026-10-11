@@ -755,6 +755,41 @@ def recent_large_earthquakes(events: list[dict], now: dt.datetime) -> list[dict]
     return sorted(out, key=lambda x: x["time"], reverse=True)
 
 
+AFTERSHOCK_E7_FIT = Path(__file__).resolve().parents[1] / "results" / "earthquake_program" / "aftershock_e7_fit.json"
+
+
+def aftershock_e7_shadow(events: list[dict], now: dt.datetime, base_grid, fit_path: Path = AFTERSHOCK_E7_FIT) -> dict | None:
+    """Amendment E7's live shadow (docs/EARTHQUAKE_FORECAST_PROGRAM.md section 15): the served forecast with the
+    aftershock rate of every shallow M6+ of the last 30 days added as an increment, P = 1 - (1 - P_S2) exp(-Lambda),
+    recorded for every cell it changes. Recorded, never published: it is judged on these records at the looks.
+    None when E7's fitted parameters are not in the repository or no shallow M6+ is recent."""
+    if not fit_path.exists():
+        return None
+    from hazardpulse.earthquake import aftershock as A
+    from hazardpulse.earthquake.prospective import parse_utc_datetime
+    params = json.loads(fit_path.read_text(encoding="utf-8"))["params"]
+    layer = A.AftershockLayer(A.Params(**params))
+    day = lambda t: t.timestamp() / 86400.0
+    start = now - dt.timedelta(days=A.WINDOW_D)
+    trig, used = [], []
+    for e in events:
+        try:
+            t = parse_utc_datetime(e["time"])
+            mag, depth = float(e["mag"]), float(e.get("depth") or 0.0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        if mag >= A.MIN_MAG and depth <= A.MAX_DEPTH_KM and start <= t < now:
+            trig.append(layer.trigger(day(t), float(e["latitude"]), float(e["longitude"]), mag))
+            used.append({"id": e.get("id", ""), "time": t.strftime("%Y-%m-%dT%H:%M:%SZ"), "mag": mag})
+    if not trig:
+        return None
+    cells = layer.increment(day(now), trig, np.asarray(base_grid, dtype=np.float64).ravel())
+    return {"amendment": "E7, docs/EARTHQUAKE_FORECAST_PROGRAM.md section 15 (shadow: recorded, not published)",
+            "params_file": "results/earthquake_program/" + fit_path.name,
+            "params_sha256_lf": eq_operational.sha256_text_file(fit_path), "params": params,
+            "triggers": used, "cells": {str(k): float(f"{p:.6g}") for k, p in cells.items()}}
+
+
 def write_replay_artifact(
     scored_cells: list[dict],
     now: dt.datetime,
@@ -767,6 +802,7 @@ def write_replay_artifact(
     probability_grid=None,
     operational_meta: dict | None = None,
     recent_large: list[dict] | None = None,
+    shadow_e7: dict | None = None,
 ) -> Path:
     """Write a frozen replay artifact for later prospective scoring.
 
@@ -834,6 +870,8 @@ def write_replay_artifact(
         artifact["operational_model"] = operational_meta
     if recent_large is not None:
         artifact["recent_large_earthquakes"] = recent_large
+    if shadow_e7 is not None:
+        artifact["shadow_aftershock_e7"] = shadow_e7
     replay_path.write_text(
         json.dumps(_make_json_serializable(artifact), indent=2) + "\n",
         encoding="utf-8",
@@ -1282,6 +1320,7 @@ def run_pipeline(
         update_index=not skip_replay_index,
         probability_grid=operational["probability"],
         recent_large=recent_large_earthquakes(history_events, now),
+        shadow_e7=aftershock_e7_shadow(history_events, now, operational["probability"]),
         operational_meta={
             "model_version": served_version,
             "artifact": "results/models/" + (STACK_PATH.name if stack is not None else OPERATIONAL_ARTIFACT_PATH.name),

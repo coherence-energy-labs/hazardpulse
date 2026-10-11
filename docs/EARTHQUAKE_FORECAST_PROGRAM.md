@@ -1008,3 +1008,36 @@ after a large earthquake: the chance of another M6+ in its cell, by elapsed time
 - **The safeguards are unchanged:** the queue rule still applies, and an unreadable feed is not evidence.
 
 The published number is still S2's until a model earns more (E7).
+
+### 15.2 E7 fitted (2026-10-11): the increment is calibrated where max(S2, AS) was not; the live shadow starts
+
+Run `research-earthquake-e5.yml` 38115494294 (phase `fit7`, 16,528 s); `results/earthquake_program/aftershock_e7_fit.json`.
+- **The record was rebuilt from the run's log.** The workflow uploaded only `aftershock_e5_*.json`, so the run's own
+  E7 file was lost; the glob is fixed in the same commit, and a missing file now fails the job.
+- **The parameters are exact:** the log printed them as JSON floats. The figures below carry the log's precision.
+
+**The fit.**
+- **Data:** 151 shallow M7+ of 2005-2017; 5,376 cell-times (562 with an M6+); 604 S2 forecasts by its live path.
+- **Parameters:** K 0.0384, alpha 0.799, p 1.199, c_t at its lower bound, d0 14.7 km. Against E5's AS (0.48, 0.77,
+  37.8 km): steeper in magnitude, a faster and more typical decay, a tighter kernel.
+
+**In-sample reliability** (chance of an M6+ in the cell within 30 days):
+
+| cells, lag | observed | S2 | E7 |
+|---|---|---|---|
+| mainshock cell, +0.5 h | 0.430 | 0.123 | 0.464 |
+| mainshock cell, +24 h | 0.305 | 0.160 | 0.299 |
+| mainshock cell, +7 d | 0.199 | 0.164 | 0.226 |
+| neighbours, +0.5 h | 0.094 | 0.035 | 0.082 |
+| neighbours, +7 d | 0.049 | 0.043 | 0.052 |
+
+The neighbour over-count that sank E5 is gone.
+
+**The time split (reported, never deciding):** fitted on 2005-2011 and read on the 66 triggers of 2012-2017, log loss
+E7 - S2 is -0.0064 [-0.0314, +0.019].
+
+**Live shadow.**
+- **What is recorded:** from this commit, every earthquake forecast issued after a shallow M6+ carries
+  `shadow_aftershock_e7`, the cells E7 changes with its chance there, the triggers, and the parameter file's hash.
+- **It is not published.**
+- **The decision** is section 15's: the looks 2027-10-01 and 2028-10-01, on records written after this commit.
