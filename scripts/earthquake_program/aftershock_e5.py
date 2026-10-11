@@ -545,11 +545,154 @@ def dev7() -> int:
     return 0
 
 
+FITTED_LAG_D = (0.5 / 24.0, 168.0 / 24.0)       # section 15.7: E7's fitting cell-times ran from +0.5 to +168 h
+LAG_TOL_D = 1e-6 / 24.0
+
+
+def fitted_domain(t: float, shallow: np.ndarray) -> set[int]:
+    """Section 15.7, E7f's domain at time t (days): the 3x3 cells around every shallow M7+ (any, as in ``FitData``) that
+    lies 0.5-168 h before t."""
+    lag = t - shallow[:, 0]
+    sel = (shallow[:, 4] >= 7.0) & (lag >= FITTED_LAG_D[0] - LAG_TOL_D) & (lag <= FITTED_LAG_D[1] + LAG_TOL_D)
+    return {c for row in shallow[sel] for c in _nbr3(int(of.cell_index(row[1], row[2])))}
+
+
+def _vs_s2(y: np.ndarray, s2: np.ndarray, p: np.ndarray, cl: np.ndarray) -> dict:
+    """Log loss of p minus S2's on part 1's cell-times, with read7's clustered bootstrap (same seed and draws)."""
+    ll = lambda q: -(y * np.log(q) + (1 - y) * np.log(1 - q))
+    d = ll(np.clip(p, 1e-12, 1 - 1e-12)) - ll(np.clip(s2, 1e-12, 1 - 1e-12))
+    K = int(cl.max()) + 1
+    per = np.array([d[cl == j].sum() for j in range(K)])
+    cnt = np.array([(cl == j).sum() for j in range(K)])
+    rng = np.random.default_rng(BOOT_SEED)
+    boot = [per[pk].sum() / cnt[pk].sum() for pk in (rng.integers(0, K, K) for _ in range(N_BOOT))]
+    return {"mean": float(d.mean()), "ci95_cluster_by_mainshock": [float(x) for x in np.percentile(boot, [2.5, 97.5])]}
+
+
+def diag7() -> int:
+    """Section 15.7 (reported, never deciding): E7c (Lambda from shallow M7+ only) and E7f (E7 only on its fitted domain)
+    beside E7, on part 1's held-out cell-times and on DEV and FINAL. Controls (each stops the run): E7 reproduces
+    ``aftershock_e7_heldout.json`` and ``aftershock_e7_dev.json`` to 1e-12; every part-1 cell-time is in E7f's domain.
+    The domain's boundaries are tested in ``tests/test_earthquake_e5.py``."""
+    import aftershock_base_rates as abr
+    import gear1_e4 as e4
+    import gear1_stack as gs
+    from hazardpulse.earthquake import aftershock as A
+    layer, params = _e7_layer()
+    ev = _snapshot_m6()
+    shallow = ev[(ev[:, 3] <= A.MAX_DEPTH_KM) & (ev[:, 4] >= A.MIN_MAG)]
+    held = json.loads((C.RESULTS / "aftershock_e7_heldout.json").read_text(encoding="utf-8"))
+    dev_e7 = json.loads((C.RESULTS / "aftershock_e7_dev.json").read_text(encoding="utf-8"))
+    if held["params"] != params or dev_e7["params"] != params:
+        raise SystemExit("control failed: the recorded E7 reads used other parameters than aftershock_e7_fit.json")
+
+    # 1. part 1's held-out cell-times (read7's rows and order)
+    rows = json.loads((C.RESULTS / "aftershock_e5_test.json").read_text(encoding="utf-8"))["rows"]
+    snap = abr.load_snapshot()
+    main_idx = [i for i in abr.mainshocks(snap, 7.0, 10.0, snap[-1][0]) if snap[i][0] >= TEST_START]
+    p7, p7c, k = [], [], 0
+    for n, i in enumerate(main_idx):
+        t_k = _days(snap[i][0])
+        home = int(of.cell_index(snap[i][1], snap[i][2]))
+        for lag in LAGS_H:
+            t = t_k + lag / 24.0
+            prior = shallow[(shallow[:, 0] < t) & (shallow[:, 0] >= t - A.WINDOW_D)]
+            trig = [layer.trigger(*row[[0, 1, 2, 4]]) for row in prior]
+            trig_c = [tr for tr, row in zip(trig, prior) if row[4] >= 7.0]
+            dom = fitted_domain(t, shallow)
+            for cell in _nbr3(home):
+                r = rows[k]
+                if (r["mainshock"], r["lag"], r["home"]) != (n, lag, cell == home):
+                    raise SystemExit(f"control failed: row {k} is {r['mainshock'], r['lag'], r['home']}")
+                if cell not in dom:
+                    raise SystemExit(f"control failed: part-1 row {k} (lag {lag} h) is outside E7f's domain")
+                p7.append(1.0 - (1.0 - r["p_S2"]) * math.exp(-layer.rate(cell, t, trig)))
+                p7c.append(1.0 - (1.0 - r["p_S2"]) * math.exp(-layer.rate(cell, t, trig_c)))
+                k += 1
+    if k != len(rows) or len(held["p_E7"]) != k:
+        raise SystemExit(f"control failed: {k} cell-times rebuilt, {len(rows)} recorded")
+    worst = float(np.max(np.abs(np.array(p7) - np.array(held["p_E7"]))))
+    if worst > 1e-12:
+        raise SystemExit(f"control failed: E7's part-1 values differ from aftershock_e7_heldout.json by {worst:.3g}")
+    y = np.array([r["y"] for r in rows], float)
+    s2 = np.array([r["p_S2"] for r in rows])
+    cl = np.array([r["mainshock"] for r in rows])
+    homev = np.array([r["home"] for r in rows])
+    lagv = np.array([r["lag"] for r in rows])
+    e7, e7c = np.array(p7), np.array(p7c)
+    part1 = {"n_mainshocks": int(cl.max()) + 1, "n_cell_times": k, "E7f_equals_E7": True,
+             "logloss_minus_S2": {"E7": _vs_s2(y, s2, e7, cl), "E7c": _vs_s2(y, s2, e7c, cl)},
+             "reliability": {f"{nm} +{lag:g} h": {"n": int((sel & (lagv == lag)).sum()),
+                                                  "observed": float(y[sel & (lagv == lag)].mean()),
+                                                  "S2": float(s2[sel & (lagv == lag)].mean()),
+                                                  "E7": float(e7[sel & (lagv == lag)].mean()),
+                                                  "E7c": float(e7c[sel & (lagv == lag)].mean())}
+                             for nm, sel in (("mainshock cell", homev), ("neighbour cells", ~homev)) for lag in LAGS_H}}
+    print(f"part 1 controls passed ({k} cell-times; E7 reproduces to {worst:.1e}; all in E7f's domain)")
+    for nm, v in part1["logloss_minus_S2"].items():
+        print(f"  part 1 log loss {nm} - S2: {v['mean']:+.4f} {[round(x, 4) for x in v['ci95_cluster_by_mainshock']]}")
+    for kk, v in part1["reliability"].items():
+        print(f"  {kk}: observed {v['observed']:.3f}, S2 {v['S2']:.3f}, E7 {v['E7']:.3f}, E7c {v['E7c']:.3f}")
+
+    # 2. DEV and FINAL at the weekly issue times (dev7's grids)
+    co2 = json.loads((C.RESULTS / "gear1_e4.json").read_text(encoding="utf-8"))["coefficients_fitted_on_choose"]["S2"]
+    th2 = np.array([co2["a"], co2["c"], co2["b"], co2["d"]])
+    g = gs.gear1_log_map(json.loads((C.RESULTS / "gear1_cells.json").read_text(encoding="utf-8"))["cells_per_year"])
+    p0 = float(json.loads((C.RESULTS / "fit_ab.json").read_text(encoding="utf-8"))["fit"]["p0"])
+    events = C.load_events(4.5)
+    out = {}
+    for split in ("dev", "final"):
+        issue = C.split_issue_times(split)
+        Y = C.binary_targets(events, issue)
+        S2 = e4.predict_s2(th2, gs.logit(C.load_pred("C0", split)), g)
+        grids = {nm: S2.copy() for nm in ("E7", "E7c", "E7f")}
+        changed = {nm: 0 for nm in grids}
+        for k, ti in enumerate(issue.astype(float) / DAY):
+            prior = shallow[(shallow[:, 0] < ti) & (shallow[:, 0] >= ti - A.WINDOW_D)]
+            if not len(prior):
+                continue
+            trig = [layer.trigger(*row[[0, 1, 2, 4]]) for row in prior]
+            inc = layer.increment(ti, trig, S2[k])
+            trig_c = [tr for tr, row in zip(trig, prior) if row[4] >= 7.0]
+            inc_c = layer.increment(ti, trig_c, S2[k]) if trig_c else {}
+            dom = fitted_domain(ti, shallow)
+            inc_f = {c: p for c, p in inc.items() if c in dom}
+            for nm, d in (("E7", inc), ("E7c", inc_c), ("E7f", inc_f)):
+                for c, p in d.items():
+                    grids[nm][k, c] = p
+                changed[nm] += len(d)
+        sc = C.SplitScorer(issue, Y, p0=p0)
+        st2 = sc.stats(S2)
+        out[split] = {"role": "reported (section 15.7)", "cells_changed": changed}
+        for nm, G in grids.items():
+            pair = sc.paired(sc.stats(G), st2)
+            out[split][f"{nm}-S2"] = pair
+            ig = pair["ig_per_target"]
+            print(f"{split}: IG {nm} - S2 {ig['diff']:+.5f} {[round(x, 5) for x in ig['ci95']]}; cells changed {changed[nm]}")
+        rec, got = dev_e7[split]["E7-S2"]["ig_per_target"], out[split]["E7-S2"]["ig_per_target"]
+        gap = max(abs(rec["diff"] - got["diff"]), *(abs(a - b) for a, b in zip(rec["ci95"], got["ci95"])))
+        if gap > 1e-12 or changed["E7"] != dev_e7[split]["cells_changed"]:
+            raise SystemExit(f"control failed: E7 on {split} differs from aftershock_e7_dev.json by {gap:.3g} "
+                             f"({changed['E7']} vs {dev_e7[split]['cells_changed']} cells changed)")
+    e7_dev = out["dev"]["E7-S2"]["ig_per_target"]["diff"]
+    supported = all(out["dev"][f"{nm}-S2"]["ig_per_target"]["diff"] >= e7_dev for nm in ("E7c", "E7f"))
+    falsified = all(out["dev"][f"{nm}-S2"]["ig_per_target"]["diff"] < e7_dev for nm in ("E7c", "E7f"))
+    res = {"program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md section 15.7 (diagnostics, reported, never deciding)",
+           "prereg_tag": "prereg-earthquake-e7-diag", "params": params,
+           "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+           "controls": {"E7_part1_reproduces": True, "E7_dev_final_reproduce": True, "part1_in_E7f_domain": True},
+           "part1": part1, **out,
+           "root_prediction": "supported" if supported else ("falsified" if falsified else "mixed")}
+    C.write_json("aftershock_e7_diag.json", res)
+    print(f"15.4's root (E7c and E7f at or above E7 on DEV): {res['root_prediction']}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=("diagnose", "fit", "test", "fit7", "read7", "dev7"))
+    ap.add_argument("phase", choices=("diagnose", "fit", "test", "fit7", "read7", "dev7", "diag7"))
     return {"diagnose": diagnose, "fit": fit, "test": test, "fit7": fit7, "read7": read7,
-            "dev7": dev7}[ap.parse_args(argv).phase]()
+            "dev7": dev7, "diag7": diag7}[ap.parse_args(argv).phase]()
 
 
 if __name__ == "__main__":

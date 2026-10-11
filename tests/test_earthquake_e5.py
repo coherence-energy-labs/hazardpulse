@@ -49,3 +49,22 @@ def test_the_outcome_is_an_m6_in_the_same_cell_within_30_days_after_issue():
     assert not e5.outcome(raw, cell, t0 + 6 * 3600)             # after it, nothing else within 30 days
     assert e5.outcome(raw, cell, t0 + 20 * DAY)                 # the +40 d M6.5 is within 30 days of a +20 d issue
     assert not e5.outcome(raw, int(e5.of.cell_index(30.0, 140.0)), t0)
+
+
+def test_e7f_domain_is_the_3x3_around_a_shallow_m7_from_half_an_hour_to_a_week_after():
+    """Section 15.7: E7f applies E7 only where it was fitted -- the 3x3 cells around a shallow M7+, 0.5-168 h after."""
+    e5 = _e5()
+    t0 = 20000.0                                               # days
+    m77 = (t0, 7.587, -80.769, 12.6, 7.7)
+    m66 = (t0 + 0.1, -30.0, -70.0, 10.0, 6.6)                  # an M6.6 elsewhere never opens the domain
+    shallow = np.array([m77, m66])
+    home = int(e5.of.cell_index(7.587, -80.769))
+    nine = set(e5._nbr3(home))
+    assert len(nine) == 9 and home in nine
+    for lag_h in (0.5, 6.0, 24.0, 168.0):                      # the four fitted lags, both edges included
+        assert e5.fitted_domain(t0 + lag_h / 24.0, shallow) == nine, lag_h
+    for lag_h in (0.0, 0.25, 169.0, 30 * 24.0):                # before half an hour, or after a week: outside
+        assert e5.fitted_domain(t0 + lag_h / 24.0, shallow) == set(), lag_h
+    far = int(e5.of.cell_index(7.587 + 4.0, -80.769))          # two cells north: not in the 3x3
+    assert far not in e5.fitted_domain(t0 + 1.0, shallow)
+    assert e5.fitted_domain(t0 + 0.1 + 1.0, np.array([m66])) == set()
