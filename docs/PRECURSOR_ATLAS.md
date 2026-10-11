@@ -307,3 +307,30 @@ at the control times.
 - **Instrument controls:** P+ and P- as before.
 - **The rule:** BH at q = 0.10 on events before 2016, confirmed on 2016 onward (same sign, one-sided p < 0.05). The
   split moves to 2016 because GPS coverage before 2005 is thin.
+
+## Run 4 outcome (2026-10-11): VOID -- too few earthquakes with GPS to see even the known connection
+
+Run `research-precursor-gps.yml` 38109332603; `results/precursor_atlas/atlas_4.json`.
+- **The run:** every NGL download succeeded (the first run, 38108488945, crashed on a dropped connection; PR #60
+  added retries).
+- **The events:** 61 earthquakes from 2005 had a qualifying station within 150 km at the event (23 before 2016, 38
+  from 2016), with 4.3 stations each on average. They span Chile, Japan, Mexico, Indonesia, Turkey, New Zealand and
+  more.
+
+**The instrument fails, so every run-4 result is void, as registered.**
+- **P+:** mean u 0.584, but p 0.024, not below 0.01. With 61 events the design cannot show even the connection
+  this program already uses.
+- **P-:** 0.465, p 0.34.
+
+**For the record only (void, not evidence either way):**
+- N1 (the largest 60-day index) 0.473;
+- N2 (14-day) 0.482;
+- N3 (the median, 24 events) 0.460.
+
+None leans toward a precursor.
+
+**What would decide it:** more events at the same quality.
+- The 80% three-year coverage rule and the 150 km radius left 61 of 241 eligible events.
+- A run 4b must be registered before it runs, with its radius, coverage and the event count it needs. To give P+
+  power at p < 0.01, that count is about 150 or more.
+- Hours-scale slip needs NGL's 5-minute kinematic series, a separate and larger run.
