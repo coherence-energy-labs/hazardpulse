@@ -118,3 +118,31 @@ length of day 0.512.
 - satellite surface change (InSAR, coastlines).
 
 They need larger downloads on a runner, and each is tested by this same protocol and controls.
+
+## Run 2 -- the texture of seismicity before large earthquakes (registered 2026-10-11, before any run-2 result)
+
+**Why.** Run 1 tested forcings from outside the fault: tides, the Sun, the planet's spin, volcanoes, distant
+earthquakes. None connected. A fault fails when its own stress meets its strength, so run 2 looks at what the rocks
+around it record. Seismicity has a shape -- a size mix, quiet spells, acceleration, deeper activity -- that run 1's
+counts of large events ignore.
+
+**Data.** ComCat M4.5+, 1984-today, fetched by year into `.cache/precursor/`.
+
+**Design.** Run 1's, unchanged: the same 386 events, the same 20 same-place controls each within +-3 y, the same
+statistic, P+ and P- as instrument controls, BH at q = 0.10 on 1990-2009, and confirmation on 2010-2026 (same sign,
+one-sided p < 0.05).
+
+**The 10 signals.** At the epicentre, from events before the time; shallow (<= 70 km) unless stated.
+
+| id | signal |
+|---|---|
+| F1 | M4.5+ within 100 km, 7 days before |
+| F2 | M4.5+ within 100 km, 30 days before |
+| F3 | M4.5+ within 200 km, 365 days before |
+| B1 | minus the b-value (Aki-Utsu, Mc 4.5) of M4.5+ within 200 km over the 3 years before (needs 30 events) |
+| B2 | minus the change in b: the 3 years before, against the 3-10 years before (each needs 30 events) |
+| Z1 | quiescence or activation: the M4.5+ rate within 200 km in the year before, over the mean yearly rate of the 5 years before that (each count + 0.5) |
+| A1 | acceleration: seismic moment of M4.5+ within 200 km in the year before, over the mean yearly moment of the 10 years before |
+| D1 | deeper activity: M4.5+ at 70-300 km within 300 km, the year before over the mean yearly rate of the 5 years before |
+| M1 | the largest magnitude within 200 km in the 365 days before (4.4 if none) |
+| L1 | days since the last M6.5+ within 150 km, capped at 10 years. A high u means "due" (renewal); a low u means "soon after" (clustering) |
