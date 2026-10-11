@@ -985,3 +985,12 @@ yet earned; the gap is.
 state the empirical chance of another M6+ nearby from `aftershock_base_rates.json`, with its interval and its
 definition. Such a panel is bound to that file by the same evidence rules as every published number, and it leaves
 the published forecast unchanged.
+
+### 15.1 Amendment before any E7 number (2026-10-11): the fitting years follow S2's valid inputs
+
+S2's live path reads M2.5+ counts over 5-year windows, and the program's audited M2.5+ files start in 2000 (section
+3; that is why FIT starts in 2005). An S2 forecast before 2005 would be computed on missing data. So:
+- **The fitting cell-times** are those of the shallow M7+ of 2005-01-01 .. 2017-11-30, not 1990.
+- **The reported time-split check** fits 2005-2011 and reads 2012-2017.
+
+Nothing else changes, and no E7 number exists yet.
