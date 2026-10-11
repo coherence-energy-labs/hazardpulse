@@ -1,6 +1,111 @@
 {
-  "generated_at": "2026-10-11T05:45:10Z",
+  "generated_at": "2026-10-11T10:15:16Z",
   "envelopes": [
+    {
+      "provenance_id": "prov_to_fcst_20261011_1013",
+      "forecast_id": "to_fcst_20261011_1013",
+      "hazard": "tornado",
+      "model_version": "tornado_v3-05a06c843c87",
+      "input_hash": "sha256:859741b2d061930550ea8215aea2b433a8e75f6fcced1667047364b083b02c27",
+      "output_hash": "sha256:ca6d510dae009971cbff0063e393451fd3c99f66c783f66c7913edaee73ba36c",
+      "signed_at": "2026-10-11T10:13:46Z",
+      "sources": [
+        "ProbSevere storm objects",
+        "published live tornado snapshot",
+        "HRRR analysis"
+      ],
+      "transforms": [
+        "probsevere_ingest",
+        "coherence_scoring",
+        "storm_ranking",
+        "publish_artifact"
+      ],
+      "replay_artifact": "/data/replay/to_fcst_20261011_1013.json"
+    },
+    {
+      "provenance_id": "prov_hu_fcst_20261011_0936",
+      "forecast_id": "hu_fcst_20261011_0936",
+      "hazard": "hurricane",
+      "model_version": "hurricane_ri_v8_3",
+      "input_hash": "sha256:6982064f3fd7de0ebd6ebb2ec74d06dff9ba22bc64e15a22f4c4b20c75a6139d",
+      "output_hash": "sha256:4fb25528a472b110c8feab23ee90ba8fdbb01195dfd1b272ecf362a767e6f562",
+      "signed_at": "2026-10-11T09:36:25Z",
+      "sources": [
+        "ATCF advisories",
+        "NOAA tropical cyclone feed",
+        "published live storm snapshot"
+      ],
+      "transforms": [
+        "advisory_ingest",
+        "feature_build",
+        "ri_scoring",
+        "calibration",
+        "publish_artifact"
+      ],
+      "replay_artifact": "/data/replay/hu_fcst_20261011_0936.json"
+    },
+    {
+      "provenance_id": "prov_to_fcst_20261011_0927",
+      "forecast_id": "to_fcst_20261011_0927",
+      "hazard": "tornado",
+      "model_version": "tornado_v3-05a06c843c87",
+      "input_hash": "sha256:8c68d95fe8b7cb4fe0d548fc1d1e57646d85673930ad1cf2d94d572e02759a33",
+      "output_hash": "sha256:3efe4ec2dbc436a1b25d07c47dcb5df596556ccb79e56a451e14af531bfb751b",
+      "signed_at": "2026-10-11T09:27:00Z",
+      "sources": [
+        "ProbSevere storm objects",
+        "published live tornado snapshot",
+        "HRRR analysis"
+      ],
+      "transforms": [
+        "probsevere_ingest",
+        "coherence_scoring",
+        "storm_ranking",
+        "publish_artifact"
+      ],
+      "replay_artifact": "/data/replay/to_fcst_20261011_0927.json"
+    },
+    {
+      "provenance_id": "prov_to_fcst_20261011_0725",
+      "forecast_id": "to_fcst_20261011_0725",
+      "hazard": "tornado",
+      "model_version": "tornado_v3-05a06c843c87",
+      "input_hash": "sha256:ba16307fbad0bd5ecaa4966b17eb6da0bde7b9f1ac65b9e8fceebe69a0ae76bd",
+      "output_hash": "sha256:558549ca3975f8ec44e7645008279bb50d3d59a021298a7acc0ee3003d7528be",
+      "signed_at": "2026-10-11T07:25:45Z",
+      "sources": [
+        "ProbSevere storm objects",
+        "published live tornado snapshot",
+        "HRRR analysis"
+      ],
+      "transforms": [
+        "probsevere_ingest",
+        "coherence_scoring",
+        "storm_ranking",
+        "publish_artifact"
+      ],
+      "replay_artifact": "/data/replay/to_fcst_20261011_0725.json"
+    },
+    {
+      "provenance_id": "prov_eq_fcst_20261011_0600",
+      "forecast_id": "eq_fcst_20261011_0600",
+      "hazard": "earthquake",
+      "model_version": "eq_operational_S2_gear1_v2-ecb87f020f99",
+      "input_hash": "sha256:c3c93e90ece7d077c1227d43b7f9e3b3c92406791fdfa44a397f85fe53d73356",
+      "output_hash": "sha256:9a0adedc22ffa2834d3460c70587a72c792b62845d7aefbc75aef368d54a7ad6",
+      "signed_at": "2026-10-11T06:00:00Z",
+      "sources": [
+        "USGS FDSNWS"
+      ],
+      "transforms": [
+        "catalog_ingest",
+        "grid_binning",
+        "coherence_feature_extraction",
+        "singularity_scoring",
+        "publish_artifact"
+      ],
+      "replay_artifact": "/data/replay/eq_fcst_20261011_0600.json"
+    },
     {
       "provenance_id": "prov_to_fcst_20261011_0524",
       "forecast_id": "to_fcst_20261011_0524",
