@@ -183,3 +183,46 @@ instrument controls.
 - **One data rule, added before running 2b.** Past-only controls reach back to 1985, so a signal whose history would
   start before the catalog's (1984-01-01) is missing for events and controls alike. The years each needs: B1 3, B2
   10, Z1 6, D1 6, A1 11, L1 10. Run 1's signals need at most a year. Run 2 as registered stays as it ran.
+
+## Run 2b outcome (2026-10-11, decides): the region wakes up before many large earthquakes
+
+`results/precursor_atlas/atlas_1b.json`, `atlas_2b.json`. The instrument passes: P+ at mean u 0.575 (p 3e-7), P- at
+0.505 and 0.524.
+
+**Confirmed: discovered on 1990-2009 and confirmed on 2010-2026, with past-only controls.**
+
+| signal | mean u | probability gain, top fifth | p |
+|---|---|---|---|
+| A1, moment in the last year over the decade before (200 km) | **0.640** | **2.28** | 4e-17 |
+| M1, the largest magnitude within 200 km in the year before | 0.628 | 2.01 | 4e-18 |
+| F3, M4.5+ within 200 km in the year before | 0.622 | 1.88 | 8e-17 |
+| F2, M4.5+ within 100 km in the 30 days before | 0.617 | 1.61 | 2e-15 |
+| F1, M4.5+ within 100 km in the 7 days before | 0.614 | 1.37 | 9e-15 |
+| B2, the b-value falling (3 years against the 3-10 before) | 0.577 | 1.83 | 6e-4 (n 167) |
+| Z1, the rate in the last year over the 5 before | 0.568 | 1.84 | 1e-5 |
+| Q2 (run 1), M6+ within 500 km in the year before | 0.557 | 1.18 | ~1e-4 |
+
+46% of large mainshocks fell in the top fifth of their own region's recent moment history, where 20% would fall by
+chance.
+
+**Killed by 2b.**
+- **L1 ("due" after a long quiet):** 0.508. Run 2's 0.623 was the flaw: later controls saw the event as their last
+  M6.5+.
+- **Sunspots and geomagnetic activity** are discovered with opposite signs in the two halves (sunspots 0.372, then
+  0.605). That is a solar-cycle artifact of past-only controls, and the confirmation rule refuses it.
+- **Every other run-1 signal** (tides, perigee, distant and global large earthquakes, eruptions, the length of day):
+  no connection.
+
+**Panama was the other kind of earthquake:** A1 0.25, Z1 0.10, M1 0.30. Its region was quieter than its own past, so
+these signals would have lowered its chance.
+
+**Beyond what the served model reads (diagnostic, conditional matched-set logistic;
+`scripts/research/precursor_conditional.py`, `results/precursor_atlas/conditional_2b.json`).**
+- The served C0 already reads counts (7 d, 30 d, 365 d, 5 y), the largest recent magnitude and the b-value level.
+- **Next to those, A1 keeps a clear coefficient:** +0.61 per s.d., z +2.9 (311 matched sets). A1 and Z1 together add
+  a likelihood ratio of 59.6 on 2 df to F1, F3 and M1.
+- **Part of that is the 5-year activity level, which C0 already has as a count.** The moment weighting, A1, is the
+  part C0 does not hold in any form.
+- **B2 adds nothing clear** next to them (z +1.3, n 176).
+- This is a diagnostic chosen after seeing run 2b. Whether A1 improves the forecast is decided by an earthquake-program
+  amendment on its own data.

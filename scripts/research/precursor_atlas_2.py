@@ -131,6 +131,9 @@ def main() -> int:
         cs = [tex.all(c, la, lo, float(rng.random())) for c in a1.controls(q6, i, k)]
         rec = {"t": (a1.EPOCH + dt.timedelta(days=float(t))).isoformat()[:19], "lat": float(la), "lon": float(lo),
                "mag": float(q6[i, 4]), "n_controls": len(cs), "u": {}, "top": {}}
+        if "--dump" in sys.argv:          # the raw values, for the matched (conditional) analysis
+            rec["raw_event"] = {s: ev[s] for s in SIGNALS}
+            rec["raw_controls"] = [{s: c[s] for s in SIGNALS} for c in cs]
         for s in (*SIGNALS, "P+", "P-"):
             cv = [c[s] for c in cs]
             rec["u"][s] = a1.percentile(ev[s], cv)
@@ -159,6 +162,10 @@ def main() -> int:
            "instrument_controls_pass": bool(ctrl_ok), "names": NAMES, "all": res_all, "discover_1990_2009": res_d,
            "confirm_2010_2026": res_c, "verdict": verdict, "panama_2026_10_09": panama}
     OUT.parent.mkdir(parents=True, exist_ok=True)
+    if "--dump" in sys.argv:                  # raw values only: the registered result file is not rewritten
+        OUT.with_name(OUT.stem + "_raw.json").write_text(json.dumps({"rows": rows}) + "\n", encoding="utf-8")
+        print(f"raw values written to {OUT.stem}_raw.json")
+        return 0
     OUT.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
     print(f"M4.5+ events {len(cat)}; mainshocks {len(rows)} (discover {len(disc)}, confirm {len(conf)})")
     print(f"INSTRUMENT: P+ mean u {res_all['P+']['mean_u']:.3f} p {res_all['P+']['p_two_sided']:.1e}; P- mean u "
