@@ -994,3 +994,17 @@ S2's live path reads M2.5+ counts over 5-year windows, and the program's audited
 - **The reported time-split check** fits 2005-2011 and reads 2012-2017.
 
 Nothing else changes, and no E7 number exists yet.
+
+### 13.5 Amendment (2026-10-11): E5b ships with the history panel, before any carried model
+
+Section 13.2 held E5b (a forecast issued as soon as a shallow M6.5+ is reported) back until a carried S2+AS, because
+S2 alone would publish its too-low number faster. Since PR #64 the earthquake page also shows the measured history
+after a large earthquake: the chance of another M6+ in its cell, by elapsed time, with its interval
+(`aftershock_base_rates.json`).
+- **The panel is written only when a forecast runs.** A run issued within minutes of the earthquake puts that
+  history on the page within minutes, instead of up to 6 hours later.
+- **So E5b now helps with no model change.** `scripts/ci/schedule.py` makes the earthquake forecast due as soon as
+  USGS's real-time feed (`4.5_day.geojson`) shows a shallow M6.5+ newer than the last run's start.
+- **The safeguards are unchanged:** the queue rule still applies, and an unreadable feed is not evidence.
+
+The published number is still S2's until a model earns more (E7).
