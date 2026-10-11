@@ -248,6 +248,9 @@ def allowed_numbers(root: Path = ROOT) -> set[str]:
     _walk({k: v for k, v in art.items() if k != "members"}, out)
     for rel in (se.HURRICANE_J1_RESULTS, SCOPE):
         _walk(_json(rel, root), out)
+    # the live record the card's "live so far" line reads (its first in-scope cycles matured 2026-10-11)
+    if (root / se.HURRICANE_J1_PROSPECTIVE).exists():
+        _walk(_json(se.HURRICANE_J1_PROSPECTIVE, root), out)
     _walk(_json(se.HURRICANE_V82_SERVED, root).get("selected_features"), out)
     _walk(se._script_constants(root, se.HURRICANE_J1_SCORER, ("LOOKS", "LEVEL")), out)
     passage = se.program_passage(root, se.HURRICANE_V9_PROGRAM, se.J1_FRAGILITY_LEAD) or {}
