@@ -731,3 +731,144 @@ the program data.
   (`hazardpulse.earthquake.served`).
 - **S1's file stays in the repository,** so every forecast issued under `eq_operational_S1_gear1_v1-d409c534bb4c`
   can still be recomputed.
+
+## 13. The hours after a large earthquake: what the forecast misses, and amendment E5 (registered 2026-10-11, before any E5 number)
+
+### 13.1 Finding (2026-10-11): after the Panama M7.7 the published chance was about 8 times too low
+
+**The event.** M7.7 at 2026-10-09 17:56 UTC, 7.59 N 80.77 W, 12 km deep (ComCat `us6000u18k`, PAGER red). It was
+followed in the same 2-degree cell by an M6.6 (20:25 UTC) and an M6.0 (10-10 04:14 UTC).
+
+**Before it (MEASURED):**
+- **Our forecast.** `eq_fcst_20261009_1200` (S1) gave the cell **0.24%** for an M6+ in 30 days: rank 787 of 11,700,
+  177 times the median cell.
+- **The long-term rate.** The cell's own history agrees: 2 M6+ in ComCat from 1973 (1990 and 1995, both about 130 km
+  west of the epicentre), a naive 0.31% per 30 days.
+- **The catalog we read.** ComCat holds no M4.5+ within 250 km in the 30 days before.
+- **The dense regional catalog.** Panama's IGC network, through EMSC, holds 6 events of M2.5+ within 50 km in the
+  final 30 days. That is ordinary: 19 of the 57 earlier 30-day windows since 2022 held as many or more.
+- **So no seismicity-based input carried a warning for this event.** The ETAS-class floor for it is about its
+  long-term rate (DERIVED).
+
+**After it (MEASURED; `scripts/earthquake_program/aftershock_base_rates.py`,
+`results/earthquake_program/aftershock_base_rates.json`).** ComCat M6+, 1990-2026. The outcome is an M6+ in the
+mainshock's own 2-degree cell within 30 days of a forecast issued at the given lag:
+
+| shallow mainshock | +0.5 h | +6 h | +24 h | +7 d |
+|---|---|---|---|---|
+| M7.0-7.4 (n = 245) | 33% [28, 39] | 26% [20, 31] | 22% [17, 27] | 15% [10, 19] |
+| M7.5+ (n = 140) | **51% [43, 60]** | 45% [37, 53] | 37% [29, 45] | 24% [17, 31] |
+
+After an M7.5+ whose cell already had an M6+ within 6 h (n = 43), 67% had yet another M6+ there within 30 days.
+
+**What we published:**
+
+| forecast | the cell's chance | its state then |
+|---|---|---|
+| 2026-10-09 18:00 (written 18:13 UTC) | **6.0%** | the M7.7 known, no aftershocks yet |
+| 2026-10-10 00:00 | 26% | after the M6.6 |
+| 2026-10-10 06:00 | 21.5% | |
+| 2026-10-10 11:00 (S2) | 19.7% | |
+| 2026-10-11 00:00 (S2) | 17.3% | |
+
+Against the base rates this is about 8x low at first (6% vs 51%) and 2.6x low after the M6.6 (26% vs 67%).
+
+**Why (HYPOTHESIS, from the trajectory).** The forecast rose with the number of recent events in the cell (22 by
+00:00), not with the mainshock's magnitude. Its evaluation could not see the problem:
+- the program scores weekly issue times averaged over 1.79 million cell-times;
+- the hours after the roughly 10 large mainshocks a year are a vanishing share of that average.
+
+### 13.2 Amendment E5 -- an aftershock layer that knows the mainshock, and forecasts issued when it happens
+
+**AS, the aftershock layer.** For cell c at issue time t:
+
+    P_AS(c, t) = 1 - exp(-Lambda),
+    Lambda = sum over every shallow (<= 70 km) M6+ event k in the 30 days before t:
+             K 10^(alpha (M_k - 7)) [Omega(t - t_k + 30 d) - Omega(t - t_k)] S_k(c)
+
+- **Omega:** the Omori-Utsu integral with parameters p and c_t.
+- **S_k(c):** the fraction of an isotropic kernel centred on event k that falls in cell c. The kernel's density is
+  proportional to (1 + r^2 / d_k^2)^-1.5, with d_k = d0 10^(0.5 (M_k - 7)).
+- **The six parameters** (K, alpha, p, c_t, d0, and the minimum magnitude, fixed at 6.0) are fitted by maximum
+  Bernoulli likelihood on ComCat 1990-2017.
+- **The fitting cell-times:** for every shallow M6.5+ event, its cell and the 8 around it, at issue lags 0.5, 6, 24
+  and 168 h. The outcome is an M6+ in the cell within the 30 days after issue.
+- It reads the ComCat catalog only, as the live scorer already fetches it.
+
+**S2+AS, the candidate:** `P = max(P_S2, P_AS)`.
+- Nothing is fitted in the combination. The better-informed estimate wins: AS where a large event has just
+  happened, and S2 everywhere else.
+- AS is zero where no M6+ occurred within the last 30 days nearby, so S2+AS equals S2 on most cells.
+
+**D, the diagnostic** (reported, run first, never decides):
+- the served S2 by its live code path (frozen catalog plus the simulated live fetch, `build_artifact._simulated_live`);
+- at the same lags after every shallow M7+ mainshock of 2021-2025, in the mainshock's own cell;
+- mean forecast against the observed rate.
+- **Prediction:** at +0.5 h S2's mean is below one third of the observed rate. That would make Panama typical, not
+  an accident of the live catalog's lag.
+
+**The test (decides), held out: mainshocks of 2018-2025** (shallow M7+; their cells and the 8 around each; lags 0.5,
+6, 24 and 168 h).
+- **Carried iff both hold:**
+  1. the 95% interval of log loss(S2+AS) - log loss(S2) on these cell-times lies below 0, with bootstrap resamples
+     clustered by mainshock;
+  2. S2+AS is non-inferior on the program's DEV over all cell-times: IG(S2+AS) - IG(S2) has its 95% month-block
+     lower end at or above -0.005 nats per target (section 11's margin).
+- **Reported:**
+  - reliability in the held-out slice (mean forecast against observed rate, by lag and magnitude class);
+  - the same on FINAL;
+  - the fitted parameters;
+  - the Panama sequence replayed.
+- **Controls (each stops the run):**
+  - the base rates reproduce `aftershock_base_rates.json` from the same catalog;
+  - S2's live path reproduces the evaluated S2 at three FINAL issue times to 1e-9 (section 12.2's parity).
+
+**E5b, issued when it happens.**
+- **The change:** the live scorer issues an extra forecast as soon as ComCat reports a shallow M6.5+ event, not
+  waiting for the next 6-hour slot. The scheduler polls ComCat's real-time feed.
+- **Why it is separate:** it changes timing, not the model, so it is engineering, judged by the delay from origin
+  time to a published forecast.
+- **When it ships:** only with a carried S2+AS. S2 alone would publish 6% faster, which helps no one.
+
+**A carried S2+AS** is served by its own amendment, as S2 was (section 12.2): parity, evidence, registry, pages. On
+the site, the hours after a large earthquake will say plainly that more large shocks are likely nearby and that
+official guidance comes first.
+
+## 14. Amendment E6 -- the region waking up: seismic moment over the decade (registered 2026-10-11, before any E6 number)
+
+**Why.** The precursor atlas (`docs/PRECURSOR_ATLAS.md`, run 2b) tested 22 Earth-system and seismicity signals against
+same-place past controls for 386 shallow M7+ mainshocks.
+- **Confirmed out of sample:** the region's seismic activation in the year before -- counts, the largest event,
+  moment, rate, b-value.
+- **A1** (moment in the year before, over the mean yearly moment of the decade before) is the strongest: mean u 0.640,
+  probability gain 2.28 in the top fifth.
+- **It is the one the served model does not read in any form.** C0 has counts, the largest recent magnitude and the
+  b-value level. In a matched conditional fit, A1 keeps z +2.9 next to the count analogues.
+
+**Candidate S3.** `logit p = a + c z + b g + d z g + e h`, with:
+- z and g as S2's;
+- `h = log10((M0_1y + 1e15) / (M0_10y / 10 + 1e15))`.
+
+The moments M0 (N m, `10^(1.5 M + 9.1)`) come from shallow (<= 70 km) M4.5+ program-catalog events in the cell's 3x3
+neighbourhood:
+- M0_1y covers [t - 365 d, t);
+- M0_10y covers [t - 11 y, t - 1 y);
+- the neighbourhood is C0's own footprint, wrapping in longitude.
+
+All five coefficients are fitted on CHOOSE by maximum Bernoulli likelihood, starting from S2's with e = 0.
+
+**Control (it stops the run).** S2 refitted by the same code reproduces section 12.1's coefficients within 1e-5 and
+its DEV information gain within 1e-6.
+
+**Rule (superiority, on DEV, as E1's and E4's).** S3 replaces S2 iff the 95% month-block interval of
+IG(S3) - IG(S2) on DEV lies entirely above 0. FINAL is a declared second read.
+
+**Prediction:** e > 0.
+
+**Disclosure.** DEV has decided E1, E3 and E4; this is its fourth decision. The signal was found on the atlas's
+events, which overlap these years. FINAL and the prospective record are the independent checks.
+
+**A carried S3** is served by its own amendment, as S2 was. h is a 1-year and 11-year moment sum the live scorer can
+compute from the catalog it already fetches (M4.5+ from its frozen catalog plus the live tail).
+
+**Run.** `python scripts/earthquake_program/gear1_e6.py` (workflow `research-earthquake-e6.yml`).
