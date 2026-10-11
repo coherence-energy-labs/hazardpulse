@@ -146,3 +146,37 @@ one-sided p < 0.05).
 | D1 | deeper activity: M4.5+ at 70-300 km within 300 km, the year before over the mean yearly rate of the 5 years before |
 | M1 | the largest magnitude within 200 km in the 365 days before (4.4 if none) |
 | L1 | days since the last M6.5+ within 150 km, capped at 10 years. A high u means "due" (renewal); a low u means "soon after" (clustering) |
+
+## Run 2 outcome as registered, and the flaw found in reading it (2026-10-11)
+
+**As registered** (`results/precursor_atlas/atlas_2.json`): the instrument passes, with P+ at mean u 0.567 and P- at
+0.524 (p 0.10).
+
+**Five signals are discovered on 1990-2009 and confirmed on 2010-2026:**
+
+| signal | mean u | p |
+|---|---|---|
+| A1, moment in the last year over the decade before | 0.628 | 4e-18 |
+| L1, days since the last M6.5+ | 0.623 | 6e-17 |
+| F1, M4.5+ within 100 km in 7 days | 0.601 | 6e-12 |
+| Z1, the rate in the last year over the 5 before | 0.585 | 6e-9 |
+| F2, M4.5+ within 100 km in 30 days | 0.581 | 4e-8 |
+
+F3, B1, B2, D1 and M1 show no connection.
+
+**The flaw.** Half of each event's controls fall after it (t + 180 d to t + 3 y). For every signal built from past
+seismicity, those controls see the event itself and its aftershock sequence as their own recent history.
+- **L1** is biased toward the event: a later control's "last M6.5+" is the event itself, so its time since is short.
+  L1's result may be this flaw alone.
+- **A1, Z1, F1, F2, F3, M1, B1 and B2** are biased against the event, because later controls carry its aftershocks.
+  A positive result for these survives the flaw.
+- **Run 1's Q1, Q2 and Q3** were biased the same way, against the event.
+
+## Run 2b -- past-only controls (registered 2026-10-11, before any run-2b result)
+
+Runs 1 and 2 are re-run with one change to the controls. Everything else is unchanged: signals, statistic, rule,
+instrument controls.
+- **Draws:** 20 per event from [t - 6 y, t - 180 d].
+- **Screen 1 (the mainshock rule, mirrored):** no M7+ within 150 km in the 30 days before the draw.
+- **Screen 2 (unchanged):** no M7+ within 500 km in the 30 days after it.
+- **Which result decides:** run 2b's. Run 2's numbers stay in the record as the flawed design's.
