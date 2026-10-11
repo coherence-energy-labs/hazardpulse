@@ -226,3 +226,29 @@ these signals would have lowered its chance.
 - **B2 adds nothing clear** next to them (z +1.3, n 176).
 - This is a diagnostic chosen after seeing run 2b. Whether A1 improves the forecast is decided by an earthquake-program
   amendment on its own data.
+
+## Run 3 -- the ground signalling the sky: heat radiated before large earthquakes (registered 2026-10-11, before any run-3 result)
+
+**Why.** A family of published claims ("lithosphere-atmosphere-ionosphere coupling") holds that the crust signals the
+atmosphere before a large earthquake. The best-known measurements are:
+- thermal anomalies, as outgoing longwave radiation (OLR) over the epicentre;
+- ionospheric electron content.
+
+hazardpulse's research page tests space-weather versions of this; run 3 tests the surface one.
+
+**Data.** NOAA's interpolated daily OLR, 2.5 x 2.5 degrees, 1974 onward (`olr.day.mean.nc`, NOAA PSL). The value is
+the grid point nearest the epicentre. Events after the file's last day have no value.
+
+**Design.** Run 2b's: the same events, past-only controls (6 y to 180 d before, the mainshock rule mirrored), the
+statistic, P+ and P- as instrument controls, BH at q = 0.10 on 1990-2009, and confirmation on 2010-onward (same
+sign, one-sided p < 0.05).
+
+**Signals.**
+
+| id | signal |
+|---|---|
+| O1 | the largest daily OLR over the 7 days before, minus the median of the 30 days before that window (a short-term thermal anomaly) |
+| O2 | the mean OLR of the 7 days before, minus the same calendar days' mean over the 5 years before (an anomaly against season) |
+
+**Ionospheric electron content is run 3b.** Its archives (CODE, IGS mirrors) did not answer from the local machine.
+It runs on a runner that checks its own access first, by the same design.
