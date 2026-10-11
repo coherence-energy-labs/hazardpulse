@@ -919,3 +919,69 @@ Panama's 6% was the rule, not an accident of the live catalog.
 - Panama replayed: 39.7% at 18:13, where 6.0% was published.
 
 The held-out test (2018 onward) decides.
+
+### 13.4 Outcome of the test (2026-10-11): max(S2, AS) NOT carried -- right in the epicentre cell, double-counted around it
+
+Run `research-earthquake-e5.yml` 38108342867 (phase `test`); `results/earthquake_program/aftershock_e5_test.json`.
+- **Controls passed:** the base rates reproduce exactly from the committed snapshot; S2's live path matches its
+  evaluated grid to 5.6e-17.
+- **Sample:** 88 held-out shallow M7+ mainshocks (2018-01 .. 2026-09); 3,120 cell-times.
+
+**The rule fails on both parts.**
+1. Log loss of max(S2, AS) - S2: **-0.0056 [-0.0229, +0.0104]**, clustered by mainshock. The interval includes 0.
+2. DEV information gain of max(S2, AS) - S2: **-0.0197 [-0.0386, +0.0019]**. The lower end is below the -0.005
+   margin.
+
+**Killed:** "max(S2, AS), as registered, improves the forecast." The witnesses are the two intervals above.
+
+**Reliability, held out** (chance of an M6+ in the cell within 30 days):
+
+| cells, lag | observed | S2 | max(S2, AS) |
+|---|---|---|---|
+| mainshock's cell, +0.5 h | 0.364 | 0.103 | **0.339** |
+| mainshock's cell, +6 h | 0.284 | 0.124 | 0.315 |
+| mainshock's cell, +24 h | 0.250 | 0.135 | 0.293 |
+| mainshock's cell, +7 d | 0.170 | 0.127 | 0.216 |
+| 8 neighbours, +0.5 h | 0.040 | 0.024 | 0.062 |
+| 8 neighbours, +7 d | 0.019 | 0.026 | 0.041 |
+
+**Where it gains and where it loses** (descriptive, chosen after the result, so it carries nothing):
+- **Mainshock cells:** log loss 0.608 -> 0.508 (-0.100 [-0.200, -0.008], 352 cell-times).
+- **Neighbour cells:** 0.110 -> 0.116 (+0.006, 2,768 cell-times). The neighbours outnumber the mainshock cells 8 to
+  1, so they swamp the gain.
+
+**The root, named.** AS was fitted without a background term, so it absorbed the background rate. `max(S2, AS)` then
+counts background twice: once in S2 and once in AS. In the mainshock's own cell the triggered rate dwarfs the
+background, so the double count hardly matters there. In the neighbours it is most of AS, and it shows as 0.062
+against 0.040.
+
+**What survives (MEASURED, no model):** the served S2 says about a third of the observed chance in the mainshock's
+cell for the first day after a large earthquake. That is 0.103 against 0.364 here, and 0.116 against 0.386 in
+diagnostic D. With 88 mainshocks a binomial check of S2's calibration in that slice is overwhelming. The fix is not
+yet earned; the gap is.
+
+## 15. Amendment E7 -- the aftershock increment over the served forecast (registered 2026-10-11, before any E7 number)
+
+**The change, at the root found in 13.4.** AS becomes an increment over S2 instead of a rival to it:
+
+    P = 1 - (1 - P_S2) exp(-Lambda)
+
+- Lambda is section 13.2's form.
+- **Its five parameters are fitted with P_S2 as the offset:** S2's forecast is the background, and Lambda adds only
+  what S2 lacks.
+- **Fitting cell-times:** every shallow M7+ (not M6.5+, to bound the runner's live-path calls) of 1990-2017, with its
+  cell and the 8 around it, at the four lags. S2 is computed there by its live path.
+
+**The decision is prospective.** The 2018-2026 mainshocks decided E5, so they cannot decide E7.
+- **The record:** E7 runs in live shadow on every new shallow M6.5+, recorded at each issue in the 30 days after it.
+- **Looks:** 2027-10-01 and 2028-10-01.
+- **Carried iff both hold:**
+  1. on mainshock cells, the observed rate lies inside E7's 95% calibration interval and outside S2's;
+  2. the log loss of E7 minus S2 over all recorded cell-times is below 0.
+- **Reported in the meantime:** the in-sample fit and a time-split check within 1990-2017 (fit 1990-2005, read
+  2006-2017). Neither decides.
+
+**Meanwhile, the measured base rates may be shown as history, not as a forecast.** After a shallow M7+, the site may
+state the empirical chance of another M6+ nearby from `aftershock_base_rates.json`, with its interval and its
+definition. Such a panel is bound to that file by the same evidence rules as every published number, and it leaves
+the published forecast unchanged.
