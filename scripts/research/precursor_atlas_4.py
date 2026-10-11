@@ -13,6 +13,7 @@ W = 60 / 14 days; N3: the median for W = 60 (two or more stations). Run 2b's pas
 from __future__ import annotations
 
 import datetime as dt
+import http.client
 import json
 import math
 import sys
@@ -42,21 +43,30 @@ YEAR = 365.25
 GPS_DIR = a1.CACHE / "ngl"
 
 
+FAILED: list[str] = []                               # downloads that never succeeded: reported, never silent
+
+
 def fetch(url: str, path: Path) -> Path | None:
+    """The file at ``url``, cached. A 404 is remembered as absent. Any transient failure (a dropped connection, a
+    timeout, a 5xx) is retried with backoff; one that never succeeds is listed in FAILED and the caller skips it."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.stat().st_size > 0:
         return path
-    for attempt in range(3):
+    for attempt in range(6):
+        time.sleep(0.3)                                 # polite pacing between requests
         try:
             with urllib.request.urlopen(url, timeout=300) as r:
-                path.write_bytes(r.read())
+                data = r.read()
+            path.write_bytes(data)
             return path
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 path.write_bytes(b"")                 # remembered as absent
                 return None
-        except (urllib.error.URLError, TimeoutError):
-            time.sleep(5 * (attempt + 1))
+            time.sleep(5 * 2 ** attempt)
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException, OSError):
+            time.sleep(5 * 2 ** attempt)
+    FAILED.append(url)
     return None
 
 
@@ -185,11 +195,12 @@ def main() -> int:
                       "confirmed_2016_on": bool(j in discovered and same and c_["p_one_sided_same_sign"] < 0.05)}
     out = {"protocol": "docs/PRECURSOR_ATLAS.md (run 4)", "prereg_tag": "prereg-precursor-atlas-4",
            "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-           "n_events": len(rows), "n_discover": len(disc), "n_confirm": len(conf),
+           "n_events": len(rows), "n_discover": len(disc), "n_confirm": len(conf), "downloads_failed": FAILED,
            "instrument_controls_pass": ctrl_ok, "names": NAMES, "all": res_all, "discover_before_2016": res_d,
            "confirm_2016_on": res_c, "verdict": verdict, "events": rows}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
+    print(f"downloads that never succeeded: {len(FAILED)}")
     print(f"events with GPS {len(rows)} (before 2016 {len(disc)}, from 2016 {len(conf)}); INSTRUMENT "
           f"{'PASS' if ctrl_ok else 'FAIL'} (P+ {res_all['P+'].get('mean_u')}, P- p {res_all['P-'].get('p_two_sided')})")
     for s in SIGNALS:
