@@ -139,7 +139,9 @@ def _after_large(d: SiteData) -> str:
     if not quakes or not hist or issued is None or not dom:
         return ""
     grid = [float(x) for x in str(replay.get("probability_grid") or "").split(",") if x]
-    items = []
+    in_test = (d.evidence or {}).get("earthquake_aftershock_in_test")
+    shadow = (replay.get("shadow_aftershock_e7") or {}).get("cells") or {} if in_test else {}
+    items, shown = [], []
     for q in quakes[:3]:
         t = fmt.parse_time(q.get("time"))
         mag = float(q.get("mag") or 0.0)
@@ -156,6 +158,7 @@ def _after_large(d: SiteData) -> str:
         col = int((float(q["longitude"]) - float(dom["lon_min"])) / float(dom["dlon"]))
         k = row * int(dom["n_lon"]) + col
         ours = grid[k] if 0 <= row < int(dom["n_lat"]) and 0 <= col < int(dom["n_lon"]) and k < len(grid) else None
+        shown.append(k)
         ago = (f"{fmt.num(hours, 0)} hours" if hours < 48 else f"{fmt.num(hours / 24.0, 0)} days")
         label = f"M{cls['mag_min']:.1f} or more" if cls["mag_below"] is None else f"M{cls['mag_min']:.1f}&ndash;{cls['mag_below'] - 0.1:.1f}"
         items.append(
@@ -167,13 +170,22 @@ def _after_large(d: SiteData) -> str:
             f"<strong>{fmt.pct(r['rate'], 0)}</strong> of cases, counting from {LAG_WORDS[lag]} "
             f"(95% interval {fmt.pct(r['ci'][0], 0)}&ndash;{fmt.pct(r['ci'][1], 0)}; {fmt.num(cls['n'], 0)} earthquakes)."
             + (f" This forecast gives that cell <strong>{fmt.pct(ours, 1)}</strong> for the next 30 days." if ours is not None else "")
+            + (f" Our aftershock model in test gives it <strong>{fmt.pct(shadow[str(k)], 1)}</strong> (not the "
+               "published number)." if str(k) in shadow else "")
             + "</p></li>")
     if not items:
         return ""
-    foot = ("<p class=\"section-foot\">This is the historical record, not a forecast for this earthquake. Our model is "
-            "known to give too low a chance in the first days after a large earthquake (earthquake program section 13); "
-            "a correction is being tested on new earthquakes before it can change the published number. Large "
-            "aftershocks can be as damaging as the first earthquake: follow your local authorities.</p>")
+    test_note = (
+        f"The aftershock model in test was checked on {fmt.num(in_test['n_mainshocks'], 0)} large earthquakes it was not "
+        f"fitted on: a day after each, it gave the epicentre&rsquo;s cell {fmt.pct(in_test['day_after']['E7'], 0)} where "
+        f"{fmt.pct(in_test['day_after']['observed'], 0)} had another M6+ (the published model: "
+        f"{fmt.pct(in_test['day_after']['S2'], 0)}). It is not yet the published number because it has not passed our "
+        "check that it leaves ordinary forecasts no worse (earthquake program section 15). "
+        if any(str(k) in shadow for k in shown) else "")
+    foot = ("<p class=\"section-foot\">This is the historical record, not a forecast for this earthquake. Our published "
+            "model is known to give too low a chance in the first days after a large earthquake (earthquake program "
+            "section 13). " + test_note + "Large aftershocks can be as damaging as the first earthquake: follow your "
+            "local authorities.</p>")
     return common.section("after-large", "After a large earthquake", f'<ul class="rows">{"".join(items)}</ul>{foot}',
                           intro="A large earthquake is often followed by more large earthquakes nearby. Here is how "
                                 "often that has happened.")

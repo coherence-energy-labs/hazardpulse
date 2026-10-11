@@ -62,3 +62,19 @@ def test_the_shadow_is_the_served_forecast_plus_the_aftershock_increment(fse, tm
     assert cells[home] == pytest.approx(want, rel=1e-5)
     assert all(v >= base[k] - 1e-12 for k, v in cells.items())   # an increment never lowers the served number
     json.dumps(rec, allow_nan=False)                              # strict JSON, as every published record
+
+
+def test_e7c_counts_only_the_m7s_it_was_fitted_on(fse, tmp_path):
+    """Section 15.6: the same increment, triggered only by shallow M7+; an M6.6 aftershock alone records nothing."""
+    base = np.full(of.N_CELLS, 1e-4)
+    m66 = dict(PANAMA, time="2026-10-09T18:05:00Z", mag=6.6, id="m66", latitude=9.9, longitude=-77.1)
+    assert fse.aftershock_e7_shadow([m66], NOW, base, fit_path=_fit(tmp_path), min_mag=7.0) is None
+    e7 = fse.aftershock_e7_shadow([PANAMA, m66], NOW, base, fit_path=_fit(tmp_path))
+    e7c = fse.aftershock_e7_shadow([PANAMA, m66], NOW, base, fit_path=_fit(tmp_path), min_mag=7.0)
+    assert [t["id"] for t in e7["triggers"]] == ["us6000u18k", "m66"] and e7["min_mag"] == A.MIN_MAG
+    assert [t["id"] for t in e7c["triggers"]] == ["us6000u18k"] and e7c["min_mag"] == 7.0
+    assert "E7c" in e7c["amendment"] and "15.6" in e7c["amendment"] and "not published" in e7c["amendment"]
+    alone = fse.aftershock_e7_shadow([PANAMA], NOW, base, fit_path=_fit(tmp_path))
+    assert e7c["cells"] == alone["cells"]                         # the M6.6 contributes nothing to E7c
+    m66_cell = str(int(of.cell_index(9.9, -77.1)))
+    assert e7["cells"][m66_cell] > e7c["cells"].get(m66_cell, 1e-4)
