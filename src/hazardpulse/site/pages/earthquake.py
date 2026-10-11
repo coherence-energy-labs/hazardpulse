@@ -170,10 +170,17 @@ def _after_large(d: SiteData) -> str:
             + "</p></li>")
     if not items:
         return ""
-    foot = ("<p class=\"section-foot\">This is the historical record, not a forecast for this earthquake. Our model is "
-            "known to give too low a chance in the first days after a large earthquake (earthquake program section 13); "
-            "a correction is being tested on new earthquakes before it can change the published number. Large "
-            "aftershocks can be as damaging as the first earthquake: follow your local authorities.</p>")
+    served = (d.evidence or {}).get("earthquake_aftershock_served")
+    model_note = (
+        "The published chance includes an aftershock term (earthquake program section 15.3): on "
+        f"{fmt.num(served['n_mainshocks'], 0)} large earthquakes it was not fitted on, it gave the epicentre&rsquo;s "
+        f"cell {fmt.pct((served['mainshock_cell_day'].get('24') or {}).get('E7'), 0)} a day after where "
+        f"{fmt.pct((served['mainshock_cell_day'].get('24') or {}).get('observed'), 0)} happened. "
+        if served else
+        "Our model is known to give too low a chance in the first days after a large earthquake (earthquake program "
+        "section 13); a correction is being tested on new earthquakes before it can change the published number. ")
+    foot = ("<p class=\"section-foot\">This is the historical record, not a forecast for this earthquake. " + model_note
+            + "Large aftershocks can be as damaging as the first earthquake: follow your local authorities.</p>")
     return common.section("after-large", "After a large earthquake", f'<ul class="rows">{"".join(items)}</ul>{foot}',
                           intro="A large earthquake is often followed by more large earthquakes nearby. Here is how "
                                 "often that has happened.")

@@ -1666,6 +1666,39 @@ def _jtwc_research_rows(root: Path) -> list[dict]:
     return out
 
 
+AFTERSHOCK_E7_HELDOUT = "results/earthquake_program/aftershock_e7_heldout.json"
+AFTERSHOCK_E7_DEV = "results/earthquake_program/aftershock_e7_dev.json"
+
+
+def earthquake_aftershock_served(root: Path = ROOT) -> dict | None:
+    """The aftershock increment, when it is part of the published number (amendment E7b, section 15.3): bound only
+    when both registered parts passed with the served file's own parameters. None when it is not served."""
+    from hazardpulse.earthquake import operational_forecast as eq
+    from hazardpulse.earthquake.served import SERVED_AFTERSHOCK_RELPATH
+    if not SERVED_AFTERSHOCK_RELPATH:
+        return None
+    path = root / SERVED_AFTERSHOCK_RELPATH
+    if not path.exists():
+        raise EvidenceError(f"the served aftershock increment {SERVED_AFTERSHOCK_RELPATH} is missing")
+    params = (_read(root, SERVED_AFTERSHOCK_RELPATH) or {}).get("params")
+    held, dev = _read(root, AFTERSHOCK_E7_HELDOUT), _read(root, AFTERSHOCK_E7_DEV)
+    if held is None or dev is None:
+        raise EvidenceError("the aftershock increment is served without both of E7b's results")
+    if held.get("params") != params or dev.get("params") != params:
+        raise EvidenceError("E7b's results were computed with other parameters than the served file's")
+    part1 = held.get("logloss_E7_minus_S2") or {}
+    if not part1.get("passes") or not dev.get("part2_passes"):
+        raise EvidenceError("the aftershock increment is served although E7b's rule did not carry it")
+    rel = held.get("reliability") or {}
+    return {"file": SERVED_AFTERSHOCK_RELPATH, "program": EARTHQUAKE_PROGRAM, "program_section": "section 15.3",
+            "model": f"eq_aftershock_e7-{eq.sha256_text_file(path)[:12]}", "params": params,
+            "heldout_logloss_diff": _finite(part1.get("mean")), "heldout_ci": _ci(part1.get("ci95_cluster_by_mainshock")),
+            "n_mainshocks": int(held.get("n_mainshocks") or 0),
+            "mainshock_cell_day": {k: rel.get(f"mainshock cell +{k} h") for k in ("0.5", "24")},
+            "dev_ig_diff": _finite(((dev.get("dev") or {}).get("E7-S2") or {}).get("ig_per_target", {}).get("diff")),
+            "dev_ig_ci": _ci(((dev.get("dev") or {}).get("E7-S2") or {}).get("ig_per_target", {}).get("ci95"))}
+
+
 AFTERSHOCK_BASE_RATES = "results/earthquake_program/aftershock_base_rates.json"
 AFTERSHOCK_CLASSES = (("M7-7.5", 7.0, 7.5), ("M7.5+", 7.5, None))
 
@@ -1703,7 +1736,8 @@ def all_evidence(root: Path = ROOT, errors: list[str] | None = None) -> dict[str
     out: dict[str, Any] = {}
     for name, fn in (("tornado", tornado_evidence), ("earthquake", earthquake_evidence),
                      ("hurricane", hurricane_evidence), ("research", research_record),
-                     ("earthquake_aftershock", earthquake_aftershock_history)):
+                     ("earthquake_aftershock", earthquake_aftershock_history),
+                     ("earthquake_aftershock_served", earthquake_aftershock_served)):
         try:
             out[name] = fn(root)
         except EvidenceError as exc:
