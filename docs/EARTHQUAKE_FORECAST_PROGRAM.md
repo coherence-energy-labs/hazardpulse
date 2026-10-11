@@ -833,3 +833,42 @@ Against the base rates this is about 8x low at first (6% vs 51%) and 2.6x low af
 **A carried S2+AS** is served by its own amendment, as S2 was (section 12.2): parity, evidence, registry, pages. On
 the site, the hours after a large earthquake will say plainly that more large shocks are likely nearby and that
 official guidance comes first.
+
+## 14. Amendment E6 -- the region waking up: seismic moment over the decade (registered 2026-10-11, before any E6 number)
+
+**Why.** The precursor atlas (`docs/PRECURSOR_ATLAS.md`, run 2b) tested 22 Earth-system and seismicity signals against
+same-place past controls for 386 shallow M7+ mainshocks.
+- **Confirmed out of sample:** the region's seismic activation in the year before -- counts, the largest event,
+  moment, rate, b-value.
+- **A1** (moment in the year before, over the mean yearly moment of the decade before) is the strongest: mean u 0.640,
+  probability gain 2.28 in the top fifth.
+- **It is the one the served model does not read in any form.** C0 has counts, the largest recent magnitude and the
+  b-value level. In a matched conditional fit, A1 keeps z +2.9 next to the count analogues.
+
+**Candidate S3.** `logit p = a + c z + b g + d z g + e h`, with:
+- z and g as S2's;
+- `h = log10((M0_1y + 1e15) / (M0_10y / 10 + 1e15))`.
+
+The moments M0 (N m, `10^(1.5 M + 9.1)`) come from shallow (<= 70 km) M4.5+ program-catalog events in the cell's 3x3
+neighbourhood:
+- M0_1y covers [t - 365 d, t);
+- M0_10y covers [t - 11 y, t - 1 y);
+- the neighbourhood is C0's own footprint, wrapping in longitude.
+
+All five coefficients are fitted on CHOOSE by maximum Bernoulli likelihood, starting from S2's with e = 0.
+
+**Control (it stops the run).** S2 refitted by the same code reproduces section 12.1's coefficients within 1e-5 and
+its DEV information gain within 1e-6.
+
+**Rule (superiority, on DEV, as E1's and E4's).** S3 replaces S2 iff the 95% month-block interval of
+IG(S3) - IG(S2) on DEV lies entirely above 0. FINAL is a declared second read.
+
+**Prediction:** e > 0.
+
+**Disclosure.** DEV has decided E1, E3 and E4; this is its fourth decision. The signal was found on the atlas's
+events, which overlap these years. FINAL and the prospective record are the independent checks.
+
+**A carried S3** is served by its own amendment, as S2 was. h is a 1-year and 11-year moment sum the live scorer can
+compute from the catalog it already fetches (M4.5+ from its frozen catalog plus the live tail).
+
+**Run.** `python scripts/earthquake_program/gear1_e6.py` (workflow `research-earthquake-e6.yml`).
