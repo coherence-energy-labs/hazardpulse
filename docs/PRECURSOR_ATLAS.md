@@ -180,3 +180,6 @@ instrument controls.
 - **Screen 1 (the mainshock rule, mirrored):** no M7+ within 150 km in the 30 days before the draw.
 - **Screen 2 (unchanged):** no M7+ within 500 km in the 30 days after it.
 - **Which result decides:** run 2b's. Run 2's numbers stay in the record as the flawed design's.
+- **One data rule, added before running 2b.** Past-only controls reach back to 1985, so a signal whose history would
+  start before the catalog's (1984-01-01) is missing for events and controls alike. The years each needs: B1 3, B2
+  10, Z1 6, D1 6, A1 11, L1 10. Run 1's signals need at most a year. Run 2 as registered stays as it ran.

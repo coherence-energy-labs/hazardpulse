@@ -23,7 +23,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import precursor_atlas as a1  # noqa: E402
 
-OUT = a1.ROOT / "results" / "precursor_atlas" / "atlas_2.json"
+OUT = a1.ROOT / "results" / "precursor_atlas" / ("atlas_2b.json" if a1.PAST_ONLY else "atlas_2.json")
 SIGNALS = ("F1", "F2", "F3", "B1", "B2", "Z1", "A1", "D1", "M1", "L1")
 NAMES = {"F1": "M4.5+ within 100 km, 7 days before", "F2": "M4.5+ within 100 km, 30 days before",
          "F3": "M4.5+ within 200 km, 365 days before", "B1": "low b-value, 3 years before (200 km)",
@@ -32,6 +32,9 @@ NAMES = {"F1": "M4.5+ within 100 km, 7 days before", "F2": "M4.5+ within 100 km,
          "M1": "largest magnitude within 200 km, 365 days", "L1": "days since the last M6.5+ within 150 km (high = 'due')",
          "P+": "POSITIVE CONTROL: M6+ within 150 km, 30 days before", "P-": "NEGATIVE CONTROL: random noise"}
 YEAR = 365.25
+CATALOG_START = a1.days(dt.datetime(1984, 1, 1, tzinfo=dt.timezone.utc))
+# years of history each signal reads (run 2b leaves a value missing when that history starts before the catalog)
+HISTORY_Y = {"B1": 3.0, "B2": 10.0, "Z1": 6.0, "D1": 6.0, "A1": 11.0, "L1": 10.0}
 
 
 def load_m45() -> np.ndarray:
@@ -93,7 +96,7 @@ class Texture:
         prior = prior[(prior[:, 4] >= 6.5) & (prior[:, 3] <= 70.0)]
         near = prior[a1.km_to(lat, lon, prior[:, 1], prior[:, 2]) <= 150.0] if len(prior) else prior
         since = min(t - near[-1, 0], 10 * YEAR) if len(near) else 10 * YEAR
-        return {
+        out = {
             "F1": float(len(self.near(t, lat, lon, t - 7, t, 100.0))),
             "F2": float(len(self.near(t, lat, lon, t - 30, t, 100.0))),
             "F3": float(len(yr)),
@@ -107,6 +110,11 @@ class Texture:
             "P+": a1.Signals.count_quakes(self._s1, t, lat, lon, 30.0, 0.0, 150.0, 6.0),
             "P-": noise,
         }
+        if a1.PAST_ONLY:                 # run 2b: a value whose history starts before the catalog's is missing
+            for s, years in HISTORY_Y.items():
+                if t - years * YEAR < CATALOG_START:
+                    out[s] = math.nan
+        return out
 
 
 def main() -> int:

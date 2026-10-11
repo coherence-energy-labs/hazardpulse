@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "earthquake_program"))
 import aftershock_base_rates as abr  # noqa: E402
 
 CACHE = ROOT / ".cache" / "precursor"
-OUT = ROOT / "results" / "precursor_atlas" / "atlas.json"
+OUT = ROOT / "results" / "precursor_atlas" / ("atlas_1b.json" if "--past-only" in sys.argv else "atlas.json")
 EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
 N_CTRL, HALF_WINDOW_D, EXCLUDE_D, SEED = 20, 3 * 365.25, 180.0, 20261011
 EVENT_START, EVENT_END = dt.datetime(1990, 1, 1, tzinfo=dt.timezone.utc), dt.datetime(2026, 10, 9, 18, tzinfo=dt.timezone.utc)
@@ -249,19 +249,29 @@ def mainshocks(q):
     return out
 
 
+PAST_ONLY = "--past-only" in sys.argv          # run 2b: controls only before the event (docs/PRECURSOR_ATLAS.md)
+PAST_SPAN_D = 6 * 365.25
+
+
 def controls(q, i, k):
+    """Run 1/2: 20 draws in [t - 3 y, t + 3 y] off +-180 d. Run 2b (``--past-only``): 20 draws in [t - 6 y, t - 180 d],
+    each also refused when an M7+ lies within 150 km in the 30 days before it (the mainshock rule, mirrored). Both
+    refuse a draw followed by an M7+ within 500 km within 30 days."""
     t, la, lo = q[i, 0], q[i, 1], q[i, 2]
-    rng = np.random.default_rng(SEED + k)
+    rng = np.random.default_rng(SEED + k + (50_000_000 if PAST_ONLY else 0))
     last = q[-1, 0] - 31.0
     big = q[(q[:, 4] >= 7.0)]
     big = big[km_to(la, lo, big[:, 1], big[:, 2]) <= 500.0]
+    close = big[km_to(la, lo, big[:, 1], big[:, 2]) <= 150.0]
     out, tries = [], 0
     while len(out) < N_CTRL and tries < 5000:
         tries += 1
-        c = t + rng.uniform(-HALF_WINDOW_D, HALF_WINDOW_D)
+        c = t - rng.uniform(EXCLUDE_D, PAST_SPAN_D) if PAST_ONLY else t + rng.uniform(-HALF_WINDOW_D, HALF_WINDOW_D)
         if abs(c - t) < EXCLUDE_D or c > last or c < days(dt.datetime(1985, 1, 1, tzinfo=dt.timezone.utc)):
             continue
         if ((big[:, 0] > c) & (big[:, 0] <= c + 30.0)).any():
+            continue
+        if PAST_ONLY and ((close[:, 0] < c) & (close[:, 0] >= c - 30.0)).any():
             continue
         out.append(c)
     return out
