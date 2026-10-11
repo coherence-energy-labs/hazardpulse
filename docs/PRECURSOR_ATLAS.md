@@ -226,3 +226,40 @@ these signals would have lowered its chance.
 - **B2 adds nothing clear** next to them (z +1.3, n 176).
 - This is a diagnostic chosen after seeing run 2b. Whether A1 improves the forecast is decided by an earthquake-program
   amendment on its own data.
+
+## Run 3 -- the ground signalling the sky: heat radiated before large earthquakes (registered 2026-10-11, before any run-3 result)
+
+**Why.** A family of published claims ("lithosphere-atmosphere-ionosphere coupling") holds that the crust signals the
+atmosphere before a large earthquake. The best-known measurements are:
+- thermal anomalies, as outgoing longwave radiation (OLR) over the epicentre;
+- ionospheric electron content.
+
+hazardpulse's research page tests space-weather versions of this; run 3 tests the surface one.
+
+**Data.** NOAA's interpolated daily OLR, 2.5 x 2.5 degrees, 1974 onward (`olr.day.mean.nc`, NOAA PSL). The value is
+the grid point nearest the epicentre. Events after the file's last day have no value.
+
+**Design.** Run 2b's: the same events, past-only controls (6 y to 180 d before, the mainshock rule mirrored), the
+statistic, P+ and P- as instrument controls, BH at q = 0.10 on 1990-2009, and confirmation on 2010-onward (same
+sign, one-sided p < 0.05).
+
+**Signals.**
+
+| id | signal |
+|---|---|
+| O1 | the largest daily OLR over the 7 days before, minus the median of the 30 days before that window (a short-term thermal anomaly) |
+| O2 | the mean OLR of the 7 days before, minus the same calendar days' mean over the 5 years before (an anomaly against season) |
+
+**Ionospheric electron content is run 3b.** Its archives (CODE, IGS mirrors) did not answer from the local machine.
+It runs on a runner that checks its own access first, by the same design.
+
+## Run 3 outcome (2026-10-11): no thermal precursor
+
+`results/precursor_atlas/atlas_3.json`. NOAA's OLR file ends 2022-12-31, so 342 of the 386 events have values.
+- **The instrument passes:** P+ 0.575 (p 3e-7), P- 0.529 (p 0.05).
+- **O1, the OLR spike over the 7 days before:** mean u 0.512, p 0.44 (1990-2009 0.511; 2010-2022 0.513). No
+  connection.
+- **O2, OLR against the same days of the 5 years before:** 0.500, p 0.98. No connection.
+
+The thermal-anomaly claim does not appear at the epicentre in daily 2.5-degree OLR across 342 large earthquakes.
+Finer or other thermal products (land-surface temperature, hourly geostationary infrared) are not tested here.
