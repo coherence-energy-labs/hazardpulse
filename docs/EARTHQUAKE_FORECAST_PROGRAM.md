@@ -1041,3 +1041,41 @@ E7 - S2 is -0.0064 [-0.0314, +0.019].
   `shadow_aftershock_e7`, the cells E7 changes with its chance there, the triggers, and the parameter file's hash.
 - **It is not published.**
 - **The decision** is section 15's: the looks 2027-10-01 and 2028-10-01, on records written after this commit.
+
+### 15.3 Amendment E7b -- an earlier decision, on the held-out years, with its weakness stated (registered 2026-10-11, before any E7 number on 2018-2026)
+
+**Why.**
+- Section 15 decides E7 on new earthquakes only, at 2027-10-01. Meanwhile the published forecast is measured 3-4x low
+  in the first day after every large earthquake (13.3).
+- Josh (2026-10-11): "push this hard and get this truly worked out and incorporated".
+- The years E5 was tested on, 2018-2026, are the only held-out large earthquakes there are.
+
+**The weakness, stated before any number.** E7's parameters were fitted on 2005-2017 only, but its form -- an
+increment over S2 rather than max(S2, AS) -- was chosen after seeing how E5 failed on 2018-2026. So a pass here is
+weaker evidence than a prospective pass. That is why the prospective looks stay and can revoke it.
+
+**The test, on exactly E5's held-out cell-times.** The 88 shallow M7+ mainshocks of 2018-01 .. 2026-09, each with its
+cell and the 8 around it, at +0.5, 6, 24 and 168 h: 3,120 cell-times.
+- **S2's values** are the ones E5's test recorded through S2's live path (`aftershock_e5_test.json`).
+- **E7 at each cell-time** is 1 - (1 - P_S2) exp(-Lambda), with section 15.2's parameters. Lambda comes from the
+  committed ComCat snapshot's shallow M6+ of the 30 days before.
+
+**E7 replaces S2 as the published number iff both hold:**
+1. log loss E7 - S2 on these cell-times has its 95% interval (bootstrap clustered by mainshock, 10,000 resamples,
+   seed 20261011) entirely below 0;
+2. on the program's DEV, every cell-time at the weekly issue times, IG(E7) - IG(S2) has its 95% month-block lower
+   end at or above -0.005 nats per target (section 11's margin).
+
+**Reported, not deciding:**
+- reliability by lag, for mainshock and neighbour cells;
+- the same on FINAL;
+- the Panama sequence.
+
+**Revocation, binding.** At each prospective look (2027-10-01, 2028-10-01), on the live records written after this
+registration: if E7's log loss is worse than S2's with a 95% interval entirely above 0, S2 is served again.
+
+**Serving a carried E7** follows section 12.2's path:
+- parity of formula and live path;
+- one served-model pointer;
+- evidence and registry bound to these results;
+- the after-large-earthquake panel keeps showing the measured history beside it.
