@@ -424,10 +424,132 @@ def fit7() -> int:
     return 0
 
 
+def _e7_layer():
+    from hazardpulse.earthquake import aftershock as A
+    p = json.loads((C.RESULTS / "aftershock_e7_fit.json").read_text(encoding="utf-8"))["params"]
+    return A.AftershockLayer(A.Params(**p)), p
+
+
+def read7() -> int:
+    """Section 15.3, part 1: E7 on exactly E5's held-out cell-times. S2's values are E5's recorded ones; E7 adds the
+    increment from the committed snapshot. Controls (each stops the run): the cell-times rebuild in E5's order, with
+    E5's mainshock, lag and home flag at every row, and each outcome recomputed from the snapshot equals E5's."""
+    import aftershock_base_rates as abr
+    from hazardpulse.earthquake import aftershock as A
+    e5 = json.loads((C.RESULTS / "aftershock_e5_test.json").read_text(encoding="utf-8"))
+    rows = e5["rows"]
+    layer, params = _e7_layer()
+    ev = _snapshot_m6()
+    shallow = ev[(ev[:, 3] <= A.MAX_DEPTH_KM) & (ev[:, 4] >= A.MIN_MAG)]
+    all_cells = of.cell_index(ev[:, 1], ev[:, 2])
+    snap = abr.load_snapshot()
+    main_idx = [i for i in abr.mainshocks(snap, 7.0, 10.0, snap[-1][0]) if snap[i][0] >= TEST_START]
+    if len(main_idx) != e5["n_mainshocks"]:
+        raise SystemExit(f"control failed: {len(main_idx)} mainshocks rebuilt, E5 tested {e5['n_mainshocks']}")
+    k, p7, cells_of = 0, [], []
+    for n, i in enumerate(main_idx):
+        t_k = _days(snap[i][0])
+        home = int(of.cell_index(snap[i][1], snap[i][2]))
+        for lag in LAGS_H:
+            t = t_k + lag / 24.0
+            trig = [layer.trigger(*row[[0, 1, 2, 4]]) for row in shallow[(shallow[:, 0] < t) & (shallow[:, 0] >= t - A.WINDOW_D)]]
+            win = (ev[:, 0] > t) & (ev[:, 0] <= t + A.WINDOW_D) & (ev[:, 4] >= 6.0)
+            for cell in _nbr3(home):
+                r = rows[k]
+                if (r["mainshock"], r["lag"], r["home"]) != (n, lag, cell == home):
+                    raise SystemExit(f"control failed: row {k} is {r['mainshock'], r['lag'], r['home']}, rebuilt "
+                                     f"{n, lag, cell == home}")
+                if bool(np.any(all_cells[win] == cell)) != bool(r["y"]):
+                    raise SystemExit(f"control failed: row {k}'s outcome does not recompute")
+                lam = layer.rate(cell, t, trig)
+                p7.append(1.0 - (1.0 - r["p_S2"]) * math.exp(-lam))
+                cells_of.append(cell)
+                k += 1
+    if k != len(rows):
+        raise SystemExit(f"control failed: {k} cell-times rebuilt, E5 recorded {len(rows)}")
+    y = np.array([r["y"] for r in rows], float)
+    s2 = np.clip(np.array([r["p_S2"] for r in rows]), 1e-12, 1 - 1e-12)
+    e7 = np.clip(np.array(p7), 1e-12, 1 - 1e-12)
+    ll = lambda p: -(y * np.log(p) + (1 - y) * np.log(1 - p))
+    d = ll(e7) - ll(s2)
+    cl = np.array([r["mainshock"] for r in rows])
+    K = int(cl.max()) + 1
+    per = np.array([d[cl == j].sum() for j in range(K)])
+    cnt = np.array([(cl == j).sum() for j in range(K)])
+    rng = np.random.default_rng(BOOT_SEED)
+    boot = [per[pk].sum() / cnt[pk].sum() for pk in (rng.integers(0, K, K) for _ in range(N_BOOT))]
+    lo95, hi95 = (float(x) for x in np.percentile(boot, [2.5, 97.5]))
+    home = np.array([r["home"] for r in rows])
+    lagv = np.array([r["lag"] for r in rows])
+    rel = {f"{nm} +{lag:g} h": {"n": int((sel & (lagv == lag)).sum()), "observed": float(y[sel & (lagv == lag)].mean()),
+                                "S2": float(s2[sel & (lagv == lag)].mean()), "E7": float(e7[sel & (lagv == lag)].mean())}
+           for nm, sel in (("mainshock cell", home), ("neighbour cells", ~home)) for lag in LAGS_H}
+    part1 = hi95 < 0
+    res = {"program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md section 15.3 (amendment E7b, part 1)",
+           "prereg_tag": "prereg-earthquake-e7b", "params": params,
+           "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+           "controls": {"rows_rebuilt_in_order": True, "outcomes_recompute": True},
+           "n_mainshocks": K, "n_cell_times": len(rows),
+           "logloss_E7_minus_S2": {"mean": float(d.mean()), "ci95_cluster_by_mainshock": [lo95, hi95], "passes": part1},
+           "by_cells": {nm: {"E7": float(ll(e7)[sel].mean()), "S2": float(ll(s2)[sel].mean())}
+                        for nm, sel in (("mainshock", home), ("neighbours", ~home))},
+           "reliability": rel, "p_E7": [float(x) for x in p7]}
+    C.write_json("aftershock_e7_heldout.json", res)
+    print(f"controls passed (3,120 rows rebuilt in order; outcomes recompute); {K} mainshocks")
+    print(f"PART 1 log loss E7 - S2: {d.mean():+.4f} [{lo95:+.4f}, {hi95:+.4f}] -> {'passes' if part1 else 'fails'}")
+    for kk, v in rel.items():
+        print(f"  {kk}: n {v['n']}, observed {v['observed']:.3f}, S2 {v['S2']:.3f}, E7 {v['E7']:.3f}")
+    return 0
+
+
+def dev7() -> int:
+    """Section 15.3, part 2: E7 against S2 over every DEV cell-time at the weekly issue times (month-block IG), and the
+    same on FINAL as a second read. S2 from C0's cached forecasts and section 12.1's coefficients."""
+    import gear1_e4 as e4
+    import gear1_stack as gs
+    from hazardpulse.earthquake import aftershock as A
+    layer, params = _e7_layer()
+    ev = _snapshot_m6()
+    shallow = ev[(ev[:, 3] <= A.MAX_DEPTH_KM) & (ev[:, 4] >= A.MIN_MAG)]
+    co2 = json.loads((C.RESULTS / "gear1_e4.json").read_text(encoding="utf-8"))["coefficients_fitted_on_choose"]["S2"]
+    th2 = np.array([co2["a"], co2["c"], co2["b"], co2["d"]])
+    g = gs.gear1_log_map(json.loads((C.RESULTS / "gear1_cells.json").read_text(encoding="utf-8"))["cells_per_year"])
+    p0 = float(json.loads((C.RESULTS / "fit_ab.json").read_text(encoding="utf-8"))["fit"]["p0"])
+    events = C.load_events(4.5)
+    out = {}
+    for split in ("dev", "final"):
+        issue = C.split_issue_times(split)
+        Y = C.binary_targets(events, issue)
+        S2 = e4.predict_s2(th2, gs.logit(C.load_pred("C0", split)), g)
+        E7 = S2.copy()
+        changed = 0
+        for k, ti in enumerate(issue.astype(float) / DAY):
+            trig = [layer.trigger(*row[[0, 1, 2, 4]]) for row in shallow[(shallow[:, 0] < ti) & (shallow[:, 0] >= ti - A.WINDOW_D)]]
+            if trig:
+                for c, p in layer.increment(ti, trig, S2[k]).items():
+                    E7[k, c] = p
+                    changed += 1
+        sc = C.SplitScorer(issue, Y, p0=p0)
+        st2, st7 = sc.stats(S2), sc.stats(E7)
+        pair = sc.paired(st7, st2)
+        out[split] = {"role": "decides (part 2)" if split == "dev" else "declared second read", "cells_changed": changed,
+                      "S2": sc.summary(st2), "E7": sc.summary(st7), "E7-S2": pair}
+        ig = pair["ig_per_target"]
+        print(f"{split}: IG E7 - S2 {ig['diff']:+.5f} {[round(x, 5) for x in ig['ci95']]}; cells changed {changed}")
+    lo = out["dev"]["E7-S2"]["ig_per_target"]["ci95"][0]
+    out.update({"program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md section 15.3 (amendment E7b, part 2)",
+                "prereg_tag": "prereg-earthquake-e7b", "params": params, "margin": -0.005, "part2_passes": bool(lo >= -0.005),
+                "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
+    C.write_json("aftershock_e7_dev.json", out)
+    print(f"PART 2 (DEV non-inferiority at -0.005): {'passes' if lo >= -0.005 else 'fails'}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=("diagnose", "fit", "test", "fit7"))
-    return {"diagnose": diagnose, "fit": fit, "test": test, "fit7": fit7}[ap.parse_args(argv).phase]()
+    ap.add_argument("phase", choices=("diagnose", "fit", "test", "fit7", "read7", "dev7"))
+    return {"diagnose": diagnose, "fit": fit, "test": test, "fit7": fit7, "read7": read7,
+            "dev7": dev7}[ap.parse_args(argv).phase]()
 
 
 if __name__ == "__main__":
