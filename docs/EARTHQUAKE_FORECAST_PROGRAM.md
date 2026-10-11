@@ -872,3 +872,26 @@ events, which overlap these years. FINAL and the prospective record are the inde
 compute from the catalog it already fetches (M4.5+ from its frozen catalog plus the live tail).
 
 **Run.** `python scripts/earthquake_program/gear1_e6.py` (workflow `research-earthquake-e6.yml`).
+
+### 14.1 Outcome (2026-10-11): S3 NOT carried -- the forecast already holds what the moment signal knows
+
+Run `research-earthquake-e6.yml` 38104855564 (tag `prereg-earthquake-e6`); `results/earthquake_program/gear1_e6.json`.
+- **Control passed:** S2 refitted reproduced section 12.1.
+- **The prediction held:** e = +0.109 > 0, so a region's moment over the decade raises the chance.
+- **The gain is too small to show:**
+
+| | S3 - S2 (nats per target) |
+|---|---|
+| DEV (decides) | +0.0069 [-0.0052, +0.0178] |
+| FINAL (2nd read) | -0.0036 [-0.0117, +0.0048] |
+
+**Killed:** "the atlas's strongest precursor improves the served forecast." The witness is the DEV interval
+[-0.0052, +0.0178].
+
+**What survives:**
+- the precursor itself, confirmed against same-place past controls (atlas run 2b; mean u 0.640);
+- the reading that the served C0 already carries nearly all of it through counts, the largest recent magnitude and
+  its clustering rate.
+
+The atlas compares each place with its own past, while the forecast compares every place with every other. A
+connection strong in the first can be nearly spent in the second.
