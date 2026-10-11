@@ -8,3 +8,6 @@ served. A path that names a missing file is an error everywhere: it never falls 
 from __future__ import annotations
 
 SERVED_STACK_RELPATH: str | None = "results/models/earthquake_gear1_stack_v2.json"   # S2, section 12.2
+# The aftershock increment over the stack (amendment E7b, section 15.3): its fitted parameters, or None when the stack
+# alone is published. A named file that is missing is an error, as for the stack.
+SERVED_AFTERSHOCK_RELPATH: str | None = None

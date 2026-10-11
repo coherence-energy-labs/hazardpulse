@@ -562,6 +562,42 @@ def test_a_named_stack_that_is_missing_publishes_nothing(monkeypatch, fse, tmp_p
     assert replay["operational_model"]["model_version"] == of.load_artifact(art_path).model_version
 
 
+def test_the_aftershock_increment_when_served_is_the_published_number_and_is_bound(monkeypatch, fse, tmp_path):
+    """Amendment E7b (section 15.3): with the increment served, the published grid is S2 with the aftershock term in
+    each cell it changes, the version and the served digest name its parameter file, both arms are recorded per
+    changed cell, and the receipts still verify. A named increment that is missing publishes nothing."""
+    art_path, stack_path, stack_version = _wire(monkeypatch, fse, tmp_path, events=[])
+    fit = tmp_path / "aftershock_e7_fit.json"
+    fit.write_text(json.dumps({"params": {"K": 0.0384, "alpha": 0.799, "p": 1.199, "c_t": 0.0001, "d0": 14.7}}),
+                   encoding="utf-8")
+    big = {"time": _stamp(ISSUE.timestamp() - 3 * 3600), "latitude": 38.1, "longitude": 142.2, "depth": 15.0, "mag": 7.6,
+           "id": "big"}
+    events = sorted(_live_events() + [big], key=lambda e: e["time"])
+    monkeypatch.setattr(fse, "fetch_usgs_catalog", lambda days, end_time: list(events))
+    monkeypatch.setattr(fse, "AFTERSHOCK_PATH", fit)
+    version = stack_version + "+" + fse.aftershock_model_name(fit)
+    monkeypatch.setattr(fse, "MODEL_VERSION", version)
+    out = _run(fse, tmp_path)
+    replay = json.loads(Path(out["replay_path"]).read_text(encoding="utf-8"))
+    meta = replay["operational_model"]
+    assert replay["model_version"] == meta["model_version"] == version
+    home = int(of.cell_index(38.1, 142.2))
+    s2_home, pub_home = meta["aftershock"]["cells"][str(home)]
+    grid = np.array([float(v) for v in replay["probability_grid"].split(",")])
+    assert grid[home] == pub_home > s2_home                               # the published number carries the increment
+    assert all(grid[int(k)] == p for k, (_s2, p) in meta["aftershock"]["cells"].items())
+    art, stack = of.load_artifact(art_path), of.load_stack(stack_path, of.load_artifact(art_path))
+    text = (f"{of.SERVED_DIGEST_SCHEMA}\nbase {art.sha256}\nstack {stack.sha256}\n"
+            f"aftershock {of.sha256_text_file(fit)}\n")
+    assert meta["served_sha256"] == hashlib.sha256(text.encode("ascii")).hexdigest()
+    assert "shadow_aftershock_e7" not in replay                          # served: both arms are in the record
+    assert replay["active_cells"] and all(verify_forecast_receipt(c["receipt"]) for c in replay["active_cells"])
+    assert any(c["row"] * of.N_LON + c["col"] == home for c in replay["active_cells"])   # the raised cell is listed
+    fit.unlink()                                                          # a named increment that is missing
+    with pytest.raises(RuntimeError, match="aftershock increment"):
+        _run(fse, tmp_path)
+
+
 def test_a_failed_catalog_pull_publishes_nothing(monkeypatch, fse, tmp_path):
     _wire(monkeypatch, fse, tmp_path, events=[])
 

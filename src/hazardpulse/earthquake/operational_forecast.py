@@ -705,7 +705,7 @@ class LoadedStack:
 SERVED_DIGEST_SCHEMA = "hazardpulse/earthquake-served-digest/v1"
 
 
-def served_sha256(art: LoadedArtifact, stack: LoadedStack | None = None) -> str:
+def served_sha256(art: LoadedArtifact, stack: LoadedStack | None = None, aftershock_sha256: str | None = None) -> str:
     """The digest of EVERYTHING that computes the published probability.
 
     Without a stack it is the artifact's own ``sha256``. With the S1 stack (amendment E1) the
@@ -716,14 +716,19 @@ def served_sha256(art: LoadedArtifact, stack: LoadedStack | None = None) -> str:
         sha256( "hazardpulse/earthquake-served-digest/v1\\nbase <base sha256>\\nstack <stack sha256>\\n" )
 
     over the two CRLF-normalised file digests: anyone holding both files recomputes it with
-    ``sha256_text_file``.
+    ``sha256_text_file``. With the aftershock increment served (amendment E7b, section 15.3) its parameter file's
+    digest is a third line, ``aftershock <sha256>``; without it the digest is unchanged.
     """
     if stack is None:
+        if aftershock_sha256:
+            raise OperationalArtifactError("an aftershock increment is served only on a stack")
         return art.sha256
     if not stack.sha256 or stack.base_model_version != art.model_version:
         raise OperationalArtifactError(
             f"stack {stack.model_version!r} is not bound to the served base {art.model_version!r}")
     text = f"{SERVED_DIGEST_SCHEMA}\nbase {art.sha256}\nstack {stack.sha256}\n"
+    if aftershock_sha256:
+        text += f"aftershock {aftershock_sha256}\n"
     return hashlib.sha256(text.encode("ascii")).hexdigest()
 
 

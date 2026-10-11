@@ -97,18 +97,44 @@ OPERATIONAL_ARTIFACT_PATH = (
 # A named stack that is missing stops the run: it never falls back to publishing C0 alone.
 STACK_PATH = (Path(__file__).resolve().parents[1] / _served_stack.SERVED_STACK_RELPATH
               if _served_stack.SERVED_STACK_RELPATH else None)
+# The aftershock increment over the stack (amendment E7b, section 15.3), when served: its fitted parameters.
+AFTERSHOCK_PATH = (Path(__file__).resolve().parents[1] / _served_stack.SERVED_AFTERSHOCK_RELPATH
+                   if _served_stack.SERVED_AFTERSHOCK_RELPATH else None)
 # Cells listed on the page / in the replay beyond the active ones: the highest-probability
 # cells of the full grid, so a high forecast is never hidden for lack of recent M2.5+ events.
 TOP_PROBABILITY_CELLS = 25
 
 
+def aftershock_model_name(path: Path) -> str:
+    return f"eq_aftershock_e7-{eq_operational.sha256_text_file(path)[:12]}"
+
+
 def _served_model_version() -> str:
     try:
         if STACK_PATH is not None:                # a named stack that is missing raises: never C0's version
-            return eq_operational.stack_model_version(STACK_PATH)
+            version = eq_operational.stack_model_version(STACK_PATH)
+            if AFTERSHOCK_PATH is not None:       # a named increment that is missing raises too
+                version += "+" + aftershock_model_name(AFTERSHOCK_PATH)
+            return version
         return eq_operational.artifact_model_version(OPERATIONAL_ARTIFACT_PATH)
     except Exception:  # missing at import time; run_pipeline refuses to publish without it
         return "eq_operational_unavailable"
+
+
+def apply_aftershock(probability, events: list[dict], now: dt.datetime, path: Path) -> tuple[np.ndarray, dict]:
+    """The published grid with the aftershock increment of every shallow M6+ of the last 30 days applied (amendment
+    E7b): P = 1 - (1 - P_S2) exp(-Lambda) in each cell it changes. Returns the grid and the record of both arms per
+    changed cell ([S2, published]), which the prospective looks compare."""
+    grid = np.asarray(probability, dtype=np.float64).ravel().copy()
+    rec = aftershock_e7_shadow(events, now, grid, fit_path=path)
+    meta = {"model": aftershock_model_name(path), "params_file": "results/earthquake_program/" + path.name,
+            "params_sha256_lf": eq_operational.sha256_text_file(path), "triggers": [], "cells": {}}
+    if rec is not None:
+        meta["triggers"] = rec["triggers"]
+        for k, p in rec["cells"].items():
+            meta["cells"][k] = [float(f"{grid[int(k)]:.6g}"), p]
+            grid[int(k)] = p
+    return grid, meta
 
 
 MODEL_VERSION = _served_model_version()
@@ -1239,12 +1265,22 @@ def run_pipeline(
     artifact = eq_operational.load_artifact(OPERATIONAL_ARTIFACT_PATH)
     stack = eq_operational.load_stack(STACK_PATH, artifact) if STACK_PATH is not None else None   # missing: raises
     served_version = stack.model_version if stack is not None else artifact.model_version
+    if AFTERSHOCK_PATH is not None:                # a named increment that is missing raises: never S2 under its name
+        if stack is None or not AFTERSHOCK_PATH.exists():
+            raise RuntimeError(f"the served aftershock increment {AFTERSHOCK_PATH} is missing or has no stack")
+        served_version += "+" + aftershock_model_name(AFTERSHOCK_PATH)
     if served_version != MODEL_VERSION:
         raise RuntimeError(f"the served earthquake model changed while running: {served_version} != {MODEL_VERSION}")
     if stack is not None:
         operational = eq_operational.forecast_with_stack(artifact, stack, history_events, now)
     else:
         operational = eq_operational.forecast_from_artifact(artifact, history_events, now)
+    aftershock_meta = None
+    if AFTERSHOCK_PATH is not None:                # amendment E7b: the increment is part of the published number
+        operational["probability"], aftershock_meta = apply_aftershock(
+            operational["probability"], history_events, now, AFTERSHOCK_PATH)
+        print(f"  aftershock increment ({aftershock_meta['model']}): {len(aftershock_meta['cells'])} cells raised by "
+              f"{len(aftershock_meta['triggers'])} shallow M6+ of the last 30 days")
     print(
         f"  {served_version} (base {artifact.model_version}): {operational['n_input_events']} M5+ inputs since "
         f"{eq_operational.CATALOG_START[:10]}; expected cells with an M6+ (sum of P) "
@@ -1276,7 +1312,8 @@ def run_pipeline(
         bound = _forecaster.model_version if _forecaster is not None else "none"
         print(f"  Trust layer: calibrator bound to {bound}, not the served {MODEL_VERSION}; not applied "
               "(the operational model is calibrated by its own likelihood fit)")
-    served_digest = eq_operational.served_sha256(artifact, stack)
+    served_digest = eq_operational.served_sha256(
+        artifact, stack, aftershock_sha256=aftershock_meta["params_sha256_lf"] if aftershock_meta else None)
 
     deep_eq_scorer_st = load_deep_eq_shortterm_model()  # short-term local watch (2nd field)
     deep_eq_scorer_op = load_deep_eq_operational_model()  # M5+/100 km research field (3rd)
@@ -1320,7 +1357,8 @@ def run_pipeline(
         update_index=not skip_replay_index,
         probability_grid=operational["probability"],
         recent_large=recent_large_earthquakes(history_events, now),
-        shadow_e7=aftershock_e7_shadow(history_events, now, operational["probability"]),
+        # served, the increment's record carries both arms ([S2, published]); otherwise E7 runs as a shadow
+        shadow_e7=None if aftershock_meta is not None else aftershock_e7_shadow(history_events, now, operational["probability"]),
         operational_meta={
             "model_version": served_version,
             "artifact": "results/models/" + (STACK_PATH.name if stack is not None else OPERATIONAL_ARTIFACT_PATH.name),
@@ -1333,7 +1371,10 @@ def run_pipeline(
             "served_sha256": served_digest,
             "served_sha256_recipe": (
                 f"sha256('{eq_operational.SERVED_DIGEST_SCHEMA}' LF 'base ' artifact_sha256_lf LF "
-                "'stack ' stack_sha256_lf LF)" if stack is not None else "artifact_sha256_lf"),
+                "'stack ' stack_sha256_lf LF" + (" 'aftershock ' aftershock_sha256_lf LF" if aftershock_meta else "")
+                + ")" if stack is not None else "artifact_sha256_lf"),
+            **({"aftershock_sha256_lf": aftershock_meta["params_sha256_lf"], "aftershock": aftershock_meta}
+               if aftershock_meta is not None else {}),
             **({"calibrator_model_version": calibrator.model_version,
                 "receipt_model_sha256": receipt_model_sha256(served_digest, calibrator)}
                if calibrator is not None else {}),
