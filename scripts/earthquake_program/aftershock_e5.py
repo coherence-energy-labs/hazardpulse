@@ -226,10 +226,123 @@ def fit() -> int:
     return 0
 
 
+TEST_START = dt.datetime(2018, 1, 1, tzinfo=dt.timezone.utc)
+N_BOOT, BOOT_SEED = 10_000, 20261011
+
+
+def _snapshot_m6() -> np.ndarray:
+    import aftershock_base_rates as abr
+    return np.array([(_days(t), la, lo, de, m) for t, la, lo, de, m, _ in abr.load_snapshot()])
+
+
+def test() -> int:
+    """Section 13.2's test, held out: max(S2, AS) against S2 after every shallow M7+ mainshock of 2018 onward (their
+    cells and the 8 around each, at 0.5, 6, 24 and 168 h), and non-inferiority over all DEV cell-times."""
+    import aftershock_base_rates as abr
+    import gear1_e4 as e4
+    import gear1_stack as gs
+    from hazardpulse.earthquake import aftershock as A
+    # control 1: the base rates reproduce from the committed catalog snapshot
+    committed = json.loads((C.RESULTS / "aftershock_base_rates.json").read_text(encoding="utf-8"))
+    again = abr.compute(abr.load_snapshot())
+    if again["classes"] != committed["classes"]:
+        raise SystemExit("control failed: the base rates do not reproduce from the committed snapshot")
+    # control 2: the served S2's live path reproduces its evaluated grid at three FINAL issue times
+    base = of.load_artifact(BASE)
+    stack = of.load_stack(C.REPO / served.SERVED_STACK_RELPATH, base)
+    raw25 = C.load_raw("program_catalog_m25.npz")
+    e4rep = json.loads((C.RESULTS / "gear1_e4.json").read_text(encoding="utf-8"))
+    co2 = e4rep["coefficients_fitted_on_choose"]["S2"]
+    th2 = np.array([co2["a"], co2["c"], co2["b"], co2["d"]])
+    g = gs.gear1_log_map(json.loads((C.RESULTS / "gear1_cells.json").read_text(encoding="utf-8"))["cells_per_year"])
+    fin = C.split_issue_times("final")
+    want = e4.predict_s2(th2, gs.logit(C.load_pred("C0", "final")), g)
+    worst = max(float(np.max(np.abs(of.forecast_with_stack(base, stack, ba._simulated_live(raw25, float(fin[k])),
+                                                                  float(fin[k]))["probability"] - want[k])))
+                for k in (0, len(fin) // 2, len(fin) - 1))
+    if worst > 1e-9:
+        raise SystemExit(f"control failed: S2's live path is {worst:.1e} from its evaluated grid")
+    fitp = json.loads((C.RESULTS / "aftershock_e5_fit.json").read_text(encoding="utf-8"))["params"]
+    layer = A.AftershockLayer(A.Params(**fitp))
+    ev = _snapshot_m6()
+    shallow = ev[(ev[:, 3] <= A.MAX_DEPTH_KM) & (ev[:, 4] >= A.MIN_MAG)]
+    all_cells = of.cell_index(ev[:, 1], ev[:, 2])
+    snap = abr.load_snapshot()
+    main_idx = [i for i in abr.mainshocks(snap, 7.0, 10.0, snap[-1][0]) if snap[i][0] >= TEST_START]
+    print(f"controls passed (base rates exact; S2 live parity {worst:.1e}); {len(main_idx)} held-out mainshocks from 2018")
+    rows = []
+    for n, i in enumerate(main_idx):
+        t_k = _days(snap[i][0])
+        la, lo, m = snap[i][1], snap[i][2], snap[i][4]
+        home = int(of.cell_index(la, lo))
+        for lag in LAGS_H:
+            t = t_k + lag / 24.0
+            s2 = of.forecast_with_stack(base, stack, ba._simulated_live(raw25, t * DAY), t * DAY)["probability"]
+            trig = [layer.trigger(*row[[0, 1, 2, 4]]) for row in shallow[(shallow[:, 0] < t) & (shallow[:, 0] >= t - A.WINDOW_D)]]
+            win = (ev[:, 0] > t) & (ev[:, 0] <= t + A.WINDOW_D) & (ev[:, 4] >= 6.0)
+            for cell in _nbr3(home):
+                p_as = layer.probability(cell, t, trig)
+                rows.append({"mainshock": n, "mag": m, "lag": lag, "home": cell == home, "p_S2": float(s2[cell]),
+                             "p_AS": p_as, "y": bool(np.any(all_cells[win] == cell))})
+        first = next(r for r in rows if r["mainshock"] == n and r["home"] and r["lag"] == 0.5)
+        print(f"  [{n + 1}/{len(main_idx)}] {snap[i][0].isoformat()[:16]} M{m:.1f}: home cell at +0.5 h "
+              f"S2 {first['p_S2']:.3f}, AS {first['p_AS']:.3f}, outcome {int(first['y'])}")
+    y = np.array([r["y"] for r in rows], float)
+    p_s2 = np.clip(np.array([r["p_S2"] for r in rows]), 1e-12, 1 - 1e-12)
+    p_mx = np.clip(np.maximum(p_s2, np.array([r["p_AS"] for r in rows])), 1e-12, 1 - 1e-12)
+    ll = lambda p: -(y * np.log(p) + (1 - y) * np.log(1 - p))
+    d = ll(p_mx) - ll(p_s2)
+    clusters = np.array([r["mainshock"] for r in rows])
+    per = np.array([d[clusters == k].sum() for k in range(len(main_idx))])
+    cnt = np.array([(clusters == k).sum() for k in range(len(main_idx))])
+    rng = np.random.default_rng(BOOT_SEED)
+    boot = []
+    for _ in range(N_BOOT):
+        pick = rng.integers(0, len(main_idx), len(main_idx))
+        boot.append(per[pick].sum() / cnt[pick].sum())
+    lo95, hi95 = (float(x) for x in np.percentile(boot, [2.5, 97.5]))
+    part1 = hi95 < 0
+    rel = {}
+    for lag in LAGS_H:
+        for nm, sel in (("home", np.array([r["home"] for r in rows])), ("neighbours", ~np.array([r["home"] for r in rows]))):
+            s = sel & (np.array([r["lag"] for r in rows]) == lag)
+            rel[f"{nm} +{lag:g} h"] = {"n": int(s.sum()), "observed": float(y[s].mean()), "mean_S2": float(p_s2[s].mean()),
+                                        "mean_S2+AS": float(p_mx[s].mean())}
+    # part 2: non-inferiority over every DEV cell-time (weekly issue times, month blocks)
+    dev = C.split_issue_times("dev")
+    Y = C.binary_targets(C.load_events(4.5), dev)
+    S2dev = e4.predict_s2(th2, gs.logit(C.load_pred("C0", "dev")), g)
+    MX = S2dev.copy()
+    for k, ti in enumerate(dev.astype(float) / DAY):
+        trig = [layer.trigger(*row[[0, 1, 2, 4]]) for row in shallow[(shallow[:, 0] < ti) & (shallow[:, 0] >= ti - A.WINDOW_D)]]
+        if trig:
+            MX[k] = np.maximum(MX[k], layer.grid(ti, trig))
+    p0 = float(json.loads((C.RESULTS / "fit_ab.json").read_text(encoding="utf-8"))["fit"]["p0"])
+    sc = C.SplitScorer(dev, Y, p0=p0)
+    pair = sc.paired(sc.stats(MX), sc.stats(S2dev))["ig_per_target"]
+    part2 = pair["ci95"][0] >= -0.005
+    carried = bool(part1 and part2)
+    res = {"program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md section 13.2 (amendment E5, the test)",
+           "prereg_tag": "prereg-earthquake-e5", "served": stack.model_version, "as_params": fitp,
+           "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+           "controls": {"base_rates_reproduce": True, "s2_live_parity_max_abs": worst},
+           "n_mainshocks": len(main_idx), "n_cell_times": len(rows),
+           "part1_logloss_S2+AS_minus_S2": {"mean": float(d.mean()), "ci95_cluster_by_mainshock": [lo95, hi95], "passes": part1},
+           "part2_dev_ig_S2+AS_minus_S2": {"diff": pair["diff"], "ci95": pair["ci95"], "margin": -0.005, "passes": part2},
+           "carried": carried, "reliability_held_out": rel, "rows": rows}
+    C.write_json("aftershock_e5_test.json", res)
+    print(f"PART 1 log loss (S2+AS) - S2: {d.mean():+.4f} [{lo95:+.4f}, {hi95:+.4f}] -> {'passes' if part1 else 'fails'}")
+    print(f"PART 2 DEV IG (S2+AS) - S2: {pair['diff']:+.5f} {[round(x, 5) for x in pair['ci95']]} -> {'passes' if part2 else 'fails'}")
+    for k, v in rel.items():
+        print(f"  {k}: n {v['n']}, observed {v['observed']:.3f}, S2 {v['mean_S2']:.3f}, S2+AS {v['mean_S2+AS']:.3f}")
+    print(f"CARRIED: {carried}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=("diagnose", "fit"))
-    return {"diagnose": diagnose, "fit": fit}[ap.parse_args(argv).phase]()
+    ap.add_argument("phase", choices=("diagnose", "fit", "test"))
+    return {"diagnose": diagnose, "fit": fit, "test": test}[ap.parse_args(argv).phase]()
 
 
 if __name__ == "__main__":
