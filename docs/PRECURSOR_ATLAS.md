@@ -252,3 +252,14 @@ sign, one-sided p < 0.05).
 
 **Ionospheric electron content is run 3b.** Its archives (CODE, IGS mirrors) did not answer from the local machine.
 It runs on a runner that checks its own access first, by the same design.
+
+## Run 3 outcome (2026-10-11): no thermal precursor
+
+`results/precursor_atlas/atlas_3.json`. NOAA's OLR file ends 2022-12-31, so 342 of the 386 events have values.
+- **The instrument passes:** P+ 0.575 (p 3e-7), P- 0.529 (p 0.05).
+- **O1, the OLR spike over the 7 days before:** mean u 0.512, p 0.44 (1990-2009 0.511; 2010-2022 0.513). No
+  connection.
+- **O2, OLR against the same days of the 5 years before:** 0.500, p 0.98. No connection.
+
+The thermal-anomaly claim does not appear at the epicentre in daily 2.5-degree OLR across 342 large earthquakes.
+Finer or other thermal products (land-surface temperature, hourly geostationary infrared) are not tested here.
