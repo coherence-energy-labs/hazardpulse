@@ -128,6 +128,21 @@ class AftershockLayer:
     def probability(self, cell: int, t: float, triggers: Iterable[Trigger]) -> float:
         return 1.0 - math.exp(-self.rate(cell, t, triggers))
 
+    def increment(self, t: float, triggers: list[Trigger], base: np.ndarray, floor: float = 1e-6) -> dict[int, float]:
+        """Amendment E7 (section 15): the served forecast ``base`` (one value per cell) with the aftershock rate added
+        as an increment, P = 1 - (1 - base) exp(-Lambda), for every cell where Lambda exceeds ``floor``."""
+        out: dict[int, float] = {}
+        cells = set()
+        for k in triggers:
+            if 0.0 <= t - k.t < WINDOW_D and k.mag >= MIN_MAG:
+                for table in k.table:
+                    cells.update(table.keys())
+        for c in sorted(cells):
+            lam = self.rate(c, t, triggers)
+            if lam > floor:
+                out[c] = 1.0 - (1.0 - float(base[c])) * math.exp(-lam)
+        return out
+
     def grid(self, t: float, triggers: list[Trigger]) -> np.ndarray:
         """P_AS for every cell of the grid at t (zero where no recent shallow M6+ reaches)."""
         out = np.zeros(of.N_CELLS)
