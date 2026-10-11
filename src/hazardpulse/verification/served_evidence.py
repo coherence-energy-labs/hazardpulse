@@ -1666,13 +1666,44 @@ def _jtwc_research_rows(root: Path) -> list[dict]:
     return out
 
 
+AFTERSHOCK_BASE_RATES = "results/earthquake_program/aftershock_base_rates.json"
+AFTERSHOCK_CLASSES = (("M7-7.5", 7.0, 7.5), ("M7.5+", 7.5, None))
+
+
+def earthquake_aftershock_history(root: Path = ROOT) -> dict | None:
+    """The measured record after large earthquakes (earthquake program section 13.1): for each magnitude class and
+    lag, how often another M6+ struck the mainshock's 2-degree cell within 30 days. History, not a model: it is shown
+    beside the published forecast after a large earthquake, never instead of it."""
+    d = _read(root, AFTERSHOCK_BASE_RATES)
+    if d is None:
+        return None
+    classes = {}
+    for name, lo, hi in AFTERSHOCK_CLASSES:
+        c = (d.get("classes") or {}).get(name)
+        if not c or int(c.get("n_mainshocks") or 0) < 30:
+            raise EvidenceError(f"{AFTERSHOCK_BASE_RATES}: class {name} is missing or has under 30 mainshocks")
+        lags = {}
+        for lag, v in (c.get("by_lag_h") or {}).items():
+            rate, ci = _finite(v.get("rate")), _ci(v.get("ci95"))
+            if rate is None or not 0.0 <= rate <= 1.0 or ci is None or not ci[0] <= rate <= ci[1]:
+                raise EvidenceError(f"{AFTERSHOCK_BASE_RATES}: class {name} lag {lag} h is not a rate with its interval")
+            lags[float(lag)] = {"rate": rate, "ci": ci, "hits": int(v.get("hits") or 0)}
+        if not lags:
+            raise EvidenceError(f"{AFTERSHOCK_BASE_RATES}: class {name} has no lags")
+        classes[name] = {"mag_min": lo, "mag_below": hi, "n": int(c["n_mainshocks"]), "by_lag_h": lags}
+    return {"file": AFTERSHOCK_BASE_RATES, "program": EARTHQUAKE_PROGRAM, "program_section": "section 13",
+            "first_year": str(d.get("first") or "")[:4], "events_m6": int(d.get("events_m6") or 0),
+            "definition": d.get("definition") or {}, "classes": classes}
+
+
 def all_evidence(root: Path = ROOT, errors: list[str] | None = None) -> dict[str, Any]:
     """Every hazard's evidence, and the research record. A hazard whose results contradict its served artifact is
     ``None`` (the pages then say no result is bound) and its reason is appended to ``errors`` -- one bad file must
     not stop the live scorers publishing forecasts; the tests call each hazard directly, so CI still fails on it."""
     out: dict[str, Any] = {}
     for name, fn in (("tornado", tornado_evidence), ("earthquake", earthquake_evidence),
-                     ("hurricane", hurricane_evidence), ("research", research_record)):
+                     ("hurricane", hurricane_evidence), ("research", research_record),
+                     ("earthquake_aftershock", earthquake_aftershock_history)):
         try:
             out[name] = fn(root)
         except EvidenceError as exc:

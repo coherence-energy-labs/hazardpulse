@@ -123,6 +123,62 @@ def _model_box(d: SiteData) -> str:
     return common.facts(rows)
 
 
+AFTER_LAGS_H = (0.5, 6.0, 24.0, 168.0)
+LAG_WORDS = {0.5: "half an hour after it", 6.0: "six hours after it", 24.0: "a day after it", 168.0: "a week after it"}
+
+
+def _after_large(d: SiteData) -> str:
+    """After a large earthquake: what history says followed such earthquakes, beside this forecast's own number for
+    that cell (earthquake program section 13). History, not a forecast; shown only while a shallow M7+ of the last 30
+    days is in the forecast record and the measured rates are bound."""
+    replay = d.earthquake
+    quakes = replay.get("recent_large_earthquakes") or []
+    hist = (d.evidence or {}).get("earthquake_aftershock")
+    issued = fmt.parse_time(replay.get("issued_at"))
+    dom = replay.get("forecast_domain") or {}
+    if not quakes or not hist or issued is None or not dom:
+        return ""
+    grid = [float(x) for x in str(replay.get("probability_grid") or "").split(",") if x]
+    items = []
+    for q in quakes[:3]:
+        t = fmt.parse_time(q.get("time"))
+        mag = float(q.get("mag") or 0.0)
+        cls = next((c for c in hist["classes"].values()
+                    if mag >= c["mag_min"] and (c["mag_below"] is None or mag < c["mag_below"])), None)
+        if t is None or cls is None:
+            continue
+        hours = max((issued - t).total_seconds() / 3600.0, 0.0)
+        lag = max([g for g in AFTER_LAGS_H if g <= max(hours, AFTER_LAGS_H[0])])
+        r = cls["by_lag_h"].get(lag)
+        if r is None:
+            continue
+        row = int((float(q["latitude"]) - float(dom["lat_min"])) / float(dom["dlat"]))
+        col = int((float(q["longitude"]) - float(dom["lon_min"])) / float(dom["dlon"]))
+        k = row * int(dom["n_lon"]) + col
+        ours = grid[k] if 0 <= row < int(dom["n_lat"]) and 0 <= col < int(dom["n_lon"]) and k < len(grid) else None
+        ago = (f"{fmt.num(hours, 0)} hours" if hours < 48 else f"{fmt.num(hours / 24.0, 0)} days")
+        label = f"M{cls['mag_min']:.1f} or more" if cls["mag_below"] is None else f"M{cls['mag_min']:.1f}&ndash;{cls['mag_below'] - 0.1:.1f}"
+        items.append(
+            f"<li><p><strong>M{fmt.num(mag, 1)}</strong>, {fmt.num(q.get('depth_km'), 0)} km deep, "
+            f"{esc(fe_region(float(q['latitude']), float(q['longitude'])))} &mdash; {fmt.time_tag(q.get('time'))} "
+            f"({ago} before this forecast).</p>"
+            f"<p>In the world&rsquo;s record since {esc(hist['first_year'])}, after shallow earthquakes of {label}, "
+            f"another M6+ struck the same 2&deg; cell within the next 30 days in "
+            f"<strong>{fmt.pct(r['rate'], 0)}</strong> of cases, counting from {LAG_WORDS[lag]} "
+            f"(95% interval {fmt.pct(r['ci'][0], 0)}&ndash;{fmt.pct(r['ci'][1], 0)}; {fmt.num(cls['n'], 0)} earthquakes)."
+            + (f" This forecast gives that cell <strong>{fmt.pct(ours, 1)}</strong> for the next 30 days." if ours is not None else "")
+            + "</p></li>")
+    if not items:
+        return ""
+    foot = ("<p class=\"section-foot\">This is the historical record, not a forecast for this earthquake. Our model is "
+            "known to give too low a chance in the first days after a large earthquake (earthquake program section 13); "
+            "a correction is being tested on new earthquakes before it can change the published number. Large "
+            "aftershocks can be as damaging as the first earthquake: follow your local authorities.</p>")
+    return common.section("after-large", "After a large earthquake", f'<ul class="rows">{"".join(items)}</ul>{foot}',
+                          intro="A large earthquake is often followed by more large earthquakes nearby. Here is how "
+                                "often that has happened.")
+
+
 def _pct_ci(m: dict) -> str:
     ci = m.get("ci") or [None, None]
     return (f"{fmt.pct(m.get('value'), 1)} (95% interval {fmt.pct(ci[0], 1)}&ndash;{fmt.pct(ci[1], 1)})"
@@ -168,6 +224,7 @@ def page(d: SiteData) -> str:
                f'<a href="/data/replay/{esc(replay.get("forecast_id"))}.json">{esc(replay.get("forecast_id"))}.json</a> '
                "(the <code>probability_grid</code> field, row by row from the south-west corner).</p>")
     body = (common.section("map", "Map", notices + themap)
+            + _after_large(d)
             + common.section("cells", "Cells with the highest chance", listing,
                              intro=f"The {min(N_LISTED, len(cells))} cells with the highest 30-day chance. Open a row "
                                    "for the cell, its recent earthquakes and one input of the forecast.")
