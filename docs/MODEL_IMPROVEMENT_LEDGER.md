@@ -264,6 +264,16 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
      - E5b: a forecast issued as soon as an M6.5+ is reported.
    - **Why first:** it is the one place where the published number is measurably far from the truth, and the
      hours after a large quake are when people decide whether to go back inside.
+   - **DONE 2026-10-11 -- diagnostic D held, the fix as registered did not carry** (sections 13.3-13.4).
+     - **D, across 57 mainshocks of 2021-2025:** S2 gave 0.116 at +0.5 h where 0.386 happened, and 0.143 vs 0.588
+       for M7.5+.
+     - **The test, max(S2, AS) on 88 held-out mainshocks:** log loss -0.0056 [-0.0229, +0.0104]; DEV -0.0197
+       [-0.0386, +0.0019]. Killed.
+     - **AS is right in the epicentre cell** (0.339 vs 0.364 observed). It double-counts background in the 8
+       neighbours, because it was fitted without a background term.
+   - **E7 (section 15, tag `prereg-earthquake-e7`):** AS as an increment over S2, fitted with S2 as the offset.
+     Decided prospectively (looks 2027-10-01, 2028-10-01) on new mainshocks. Meanwhile the measured base rates may
+     be shown as history, bound to their file.
 
 1. **E1. DONE (2026-10-03): S1 = C0 + GEAR1 is served** (`docs/EARTHQUAKE_FORECAST_PROGRAM.md`
    section 10).
@@ -523,6 +533,8 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
 | GEAR1 as a better long-term earthquake map than ours | AG - A_ch: DEV -0.21 [-0.33, -0.08], FINAL -0.31 [-0.41, -0.21] nats per target | GEAR1 as an added term (S1, served) |
 | Repair the 2025 format change by mapping the new `ProbSevere` into old `PS` | training store: `p_ps == p_ps_severe` on 25.9% of rows, corr 0.83; `p_ps` = 0 on 32% where `p_ps_severe` never is | T2's evaluation and refit |
 | Repair the format change with the trees' missing-value branch (T2 option b) | every split on `p_ps` / `p_vil_density` has missing type None (671 of them in +W): NaN reads as 0.0, so (b) returns the served probabilities on every row | (d): a model that never reads the two inputs |
+| A magnitude-aware aftershock layer served as max(S2, AS) improves the forecast after large earthquakes (E5, section 13.4) | 88 held-out mainshocks: log loss -0.0056 [-0.0229, +0.0104]; DEV -0.0197 [-0.0386, +0.0019]; neighbour cells 0.062 vs 0.040 observed | AS in the mainshock's own cell (0.339 vs 0.364 observed; S2 0.103); the increment over S2 (E7, prospective) |
+| Earth-system forcings show up before large earthquakes: tides, perigee, sunspots, geomagnetic storms, length of day, eruptions, distant large earthquakes, OLR (precursor atlas runs 1, 1b, 3) | 386 shallow M7+ mainshocks against same-place controls: none discovered and confirmed; spring tide u 0.492, eruptions 0.483, OLR 0.512 | the region's own seismic activation (run 2b, confirmed); GPS undecided (run 4 void, 61 events) |
 | The atlas's strongest precursor -- a region's seismic moment of the last year over its decade -- improves the served earthquake forecast (E6, section 14) | DEV S3 - S2 +0.0069 [-0.0052, +0.0178] nats per target; FINAL -0.0036; the coefficient is positive (e +0.109) | the precursor itself (atlas run 2b, mean u 0.640 against same-place past controls); the served C0 already carries it through counts, largest magnitude and clustering |
 | The Panama M7.7 (2026-10-09) was preceded by foreshock activity that a denser catalog would have caught | Panama's own network (IGC, via EMSC): 6 events of M2.5+ within 50 km in the final 30 days, while 19 of the 57 earlier 30-day windows since 2022 held as many or more | denser regional catalogs may still help where a real swarm precedes a mainshock; not for this event |
 | A better long-term map would have flagged the Panama cell before its M7.7 | the cell's ComCat history from 1973 gives 0.31% per 30 days for an M6+; we published 0.24% (rank 787 of 11,700) | the long-term rate was right: the epicentral area had been quiet. For this event, no seismicity input could have exceeded about its long-term rate (DERIVED for the ETAS class) |
