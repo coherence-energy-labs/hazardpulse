@@ -136,7 +136,11 @@ def test_the_shared_queue_is_never_overfilled():
 def _run_main(monkeypatch, queue, argv=()):
     """main() with every scorer and the monitor due, the queue as given; returns the workflows dispatched."""
     dispatched = []
+    # every live input is fixed: the committed live-pulse.json moves with the bots (a 5%+ tornado forecast made the
+    # tornado scorer jump the queue in CI, 2026-10-11), and the USGS feed is the network
     monkeypatch.setattr(schedule, "nws_tornado_warnings", lambda: 0)
+    monkeypatch.setattr(schedule, "tornado_elevated", lambda pulse, nws: (False, "fixed for the test"))
+    monkeypatch.setattr(schedule, "usgs_large_quakes", lambda: None)
     monkeypatch.setattr(schedule, "run_state", lambda wf, exclude_run_id=None: (None, False))
     monkeypatch.setattr(schedule, "monitor_state", lambda wf: (None, False))
     monkeypatch.setattr(schedule, "queue_state", lambda exclude_run_id=None: queue)
