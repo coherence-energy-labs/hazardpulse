@@ -1666,6 +1666,31 @@ def _jtwc_research_rows(root: Path) -> list[dict]:
     return out
 
 
+AFTERSHOCK_E7_FIT = "results/earthquake_program/aftershock_e7_fit.json"
+AFTERSHOCK_E7_HELDOUT = "results/earthquake_program/aftershock_e7_heldout.json"
+
+
+def earthquake_aftershock_in_test(root: Path = ROOT) -> dict | None:
+    """E7, the aftershock model in test (earthquake program sections 15.4-15.5): shown beside the published number
+    after a large earthquake, never instead of it. Bound to its held-out read (E7b part 1), which must have passed with
+    the fitted file's own parameters."""
+    fit, held = _read(root, AFTERSHOCK_E7_FIT), _read(root, AFTERSHOCK_E7_HELDOUT)
+    if fit is None or held is None:
+        return None
+    if held.get("params") != fit.get("params"):
+        raise EvidenceError(f"{AFTERSHOCK_E7_HELDOUT} was computed with other parameters than {AFTERSHOCK_E7_FIT}")
+    part1 = held.get("logloss_E7_minus_S2") or {}
+    if not part1.get("passes"):
+        return None
+    day = (held.get("reliability") or {}).get("mainshock cell +24 h") or {}
+    if not all(_finite(day.get(k)) is not None for k in ("observed", "S2", "E7")):
+        raise EvidenceError(f"{AFTERSHOCK_E7_HELDOUT} has no mainshock-cell day-after reliability")
+    return {"file": AFTERSHOCK_E7_HELDOUT, "program": EARTHQUAKE_PROGRAM, "program_section": "sections 15.3-15.5",
+            "n_mainshocks": int(held.get("n_mainshocks") or 0), "logloss_diff": _finite(part1.get("mean")),
+            "logloss_ci": _ci(part1.get("ci95_cluster_by_mainshock")),
+            "day_after": {k: _finite(day.get(k)) for k in ("observed", "S2", "E7")}}
+
+
 AFTERSHOCK_BASE_RATES = "results/earthquake_program/aftershock_base_rates.json"
 AFTERSHOCK_CLASSES = (("M7-7.5", 7.0, 7.5), ("M7.5+", 7.5, None))
 
@@ -1703,7 +1728,8 @@ def all_evidence(root: Path = ROOT, errors: list[str] | None = None) -> dict[str
     out: dict[str, Any] = {}
     for name, fn in (("tornado", tornado_evidence), ("earthquake", earthquake_evidence),
                      ("hurricane", hurricane_evidence), ("research", research_record),
-                     ("earthquake_aftershock", earthquake_aftershock_history)):
+                     ("earthquake_aftershock", earthquake_aftershock_history),
+                     ("earthquake_aftershock_in_test", earthquake_aftershock_in_test)):
         try:
             out[name] = fn(root)
         except EvidenceError as exc:

@@ -79,6 +79,64 @@ def test_no_panel_without_a_large_earthquake_or_without_the_measured_rates():
                                       {"earthquake_aftershock": hist})) == ""
 
 
+PANAMA_CELL = str(int((7.587 + 60) / 2) * 180 + int((-80.769 + 180) / 2))
+
+
+def test_the_aftershock_model_in_test_is_shown_beside_the_published_number_never_instead():
+    """Section 15.5: E7's live shadow for the quake's cell, labelled as in test, with its held-out read bound."""
+    hist, held = se.earthquake_aftershock_history(), se.earthquake_aftershock_in_test()
+    assert held is not None and held["n_mainshocks"] == 88
+    q = {"time": "2026-10-09T17:56:06Z", "latitude": 7.587, "longitude": -80.769, "depth_km": 12.6, "mag": 7.7}
+    replay = dict(_replay([q]), shadow_aftershock_e7={"cells": {PANAMA_CELL: 0.346}})
+    html = earthquake._after_large(_D(replay, {"earthquake_aftershock": hist, "earthquake_aftershock_in_test": held}))
+    assert "<strong>17.3%</strong>" in html                              # the published number stays
+    assert "in test gives it <strong>34.6%</strong> (not the published number)" in html
+    assert "checked on 88 large earthquakes it was not fitted on" in html
+    assert fmt.pct(held["day_after"]["E7"], 0) in html and fmt.pct(held["day_after"]["S2"], 0) in html
+    # without the shadow, or without the bound held-out read, nothing of the model in test is said
+    for r, ev in ((_replay([q]), {"earthquake_aftershock": hist, "earthquake_aftershock_in_test": held}),
+                  (replay, {"earthquake_aftershock": hist, "earthquake_aftershock_in_test": None}),
+                  (dict(_replay([q]), shadow_aftershock_e7={"cells": {"0": 0.5}}),
+                   {"earthquake_aftershock": hist, "earthquake_aftershock_in_test": held})):
+        plain = earthquake._after_large(_D(r, ev))
+        assert "<strong>17.3%</strong>" in plain and "in test" not in plain and "fitted on" not in plain
+
+
+def _copy_e7(tmp_path, mutate=None):
+    for rel in (se.AFTERSHOCK_E7_FIT, se.AFTERSHOCK_E7_HELDOUT):
+        d = json.loads((ROOT / rel).read_text(encoding="utf-8"))
+        if mutate:
+            mutate(rel, d)
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(json.dumps(d), encoding="utf-8")
+
+
+def test_the_in_test_read_is_bound_to_the_fitted_parameters_and_to_its_pass(tmp_path):
+    assert se.earthquake_aftershock_in_test(tmp_path) is None                       # no files: nothing shown
+    _copy_e7(tmp_path)
+    assert se.earthquake_aftershock_in_test(tmp_path) == se.earthquake_aftershock_in_test()
+
+    def other_params(rel, d):
+        if rel == se.AFTERSHOCK_E7_HELDOUT:
+            d["params"]["K"] *= 1.01
+    _copy_e7(tmp_path, other_params)
+    with pytest.raises(se.EvidenceError):
+        se.earthquake_aftershock_in_test(tmp_path)
+
+    def failed(rel, d):
+        if rel == se.AFTERSHOCK_E7_HELDOUT:
+            d["logloss_E7_minus_S2"]["passes"] = False
+    _copy_e7(tmp_path, failed)
+    assert se.earthquake_aftershock_in_test(tmp_path) is None                       # a failed part 1 is never shown
+
+    def no_day_after(rel, d):
+        if rel == se.AFTERSHOCK_E7_HELDOUT:
+            del d["reliability"]["mainshock cell +24 h"]
+    _copy_e7(tmp_path, no_day_after)
+    with pytest.raises(se.EvidenceError):
+        se.earthquake_aftershock_in_test(tmp_path)
+
+
 def test_a_malformed_rates_file_is_refused(tmp_path):
     d = json.loads((ROOT / se.AFTERSHOCK_BASE_RATES).read_text(encoding="utf-8"))
     d["classes"]["M7.5+"]["by_lag_h"]["0.5"]["rate"] = 1.7
