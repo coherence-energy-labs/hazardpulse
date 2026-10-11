@@ -66,6 +66,11 @@ HURRICANE_DELAY = dt.timedelta(hours=3, minutes=30)
 EARTHQUAKE_SLOT = dt.timedelta(hours=6)
 VERIFICATION_EVERY = dt.timedelta(hours=4)
 NWS_TORNADO_WARNINGS = "https://api.weather.gov/alerts/active?event=Tornado%20Warning"
+# earthquake program section 13.2, E5b: a shallow M6.5+ since the last run makes the earthquake forecast due at
+# once -- in the first hours after a large earthquake the chance of another nearby is at its highest, and a
+# 6-hour slot can leave it stale for most of them
+USGS_FEED = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson"
+LARGE_QUAKE_MAG, LARGE_QUAKE_DEPTH_KM = 6.5, 70.0
 USER_AGENT = "HazardPulse scheduler (+https://hazardpulse.com; josh@coherenceenergylabs.com)"
 
 WORKFLOWS = {
@@ -97,10 +102,12 @@ def _floor(t: dt.datetime, step: dt.timedelta) -> dt.datetime:
 
 
 def decide(hazard: str, now: dt.datetime, last_success: dt.datetime | None, in_flight: bool,
-           elevated: bool = False) -> Decision:
+           elevated: bool = False, large_quakes: list[tuple[dt.datetime, float, str]] | None = None) -> Decision:
     """Whether `hazard`'s scorer should be dispatched now. Pure: every input is an argument.
 
     last_success is when the scorer's last successful run STARTED (None: never, or not in the history).
+    large_quakes: (origin time, magnitude, place) of the shallow M6.5+ earthquakes in USGS's feed (None: the feed
+    could not be read, which is not evidence that none happened).
     """
     if in_flight:
         return Decision(hazard, False, "a run is already queued or running")
@@ -121,6 +128,11 @@ def decide(hazard: str, now: dt.datetime, last_success: dt.datetime | None, in_f
             return Decision(hazard, True, f"cycle {cycle:%d %H}Z not yet served (serving from {serve_from:%H:%M}Z)")
         return Decision(hazard, False, f"cycle {cycle:%d %H}Z already served")
     if hazard == "earthquake":
+        newer = sorted((q for q in large_quakes or [] if q[0] > last_success), key=lambda q: q[0])
+        if newer:
+            t, m, place = newer[-1]
+            return Decision(hazard, True, f"M{m:.1f} at {t:%d %H:%M}Z ({place}) since the last run: the hours after a "
+                                          "large earthquake")
         slot = _floor(now, EARTHQUAKE_SLOT)
         if last_success + TOLERANCE < slot:
             return Decision(hazard, True, f"slot {slot:%d %H}Z not yet run")
@@ -266,7 +278,33 @@ def nws_tornado_warnings() -> int | None:
         return None
 
 
-def gate(hazard: str, now: dt.datetime, elevated: bool) -> bool:
+def large_quakes(feed: dict | None) -> list[tuple[dt.datetime, float, str]] | None:
+    """The shallow M6.5+ earthquakes in a USGS GeoJSON feed; None when there is no feed to read."""
+    if not isinstance(feed, dict):
+        return None
+    out = []
+    for f in feed.get("features") or []:
+        p, g = f.get("properties") or {}, (f.get("geometry") or {}).get("coordinates") or []
+        try:
+            mag, depth, ms = float(p.get("mag")), float(g[2]), int(p.get("time"))
+        except (TypeError, ValueError, IndexError):
+            continue
+        if mag >= LARGE_QUAKE_MAG and depth <= LARGE_QUAKE_DEPTH_KM:
+            out.append((dt.datetime.fromtimestamp(ms / 1000.0, UTC), mag, str(p.get("place") or "")))
+    return out
+
+
+def usgs_large_quakes() -> list[tuple[dt.datetime, float, str]] | None:
+    req = urllib.request.Request(USGS_FEED, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return large_quakes(json.load(r))
+    except Exception as exc:                              # unreachable is not "none happened"
+        print(f"  USGS feed unreachable: {exc}", file=sys.stderr)
+        return None
+
+
+def gate(hazard: str, now: dt.datetime, elevated: bool, quakes: list | None = None) -> bool:
     """A scorer's own gate (its cron-triggered `due` job): run only if due, never doubling a run already
     queued or running. If GitHub's run history cannot be read, run: a duplicate costs a commit, a skip
     costs a forecast."""
@@ -277,7 +315,7 @@ def gate(hazard: str, now: dt.datetime, elevated: bool) -> bool:
     except Exception as exc:
         print(f"  {hazard}: run history unreadable ({exc}); running")
         return True
-    d = decide(hazard, now, last, in_flight, elevated=elevated)
+    d = decide(hazard, now, last, in_flight, elevated=elevated, large_quakes=quakes)
     if d.due:
         try:
             running, waiting = queue_state(exclude_run_id=int(me) if me else None)
@@ -305,9 +343,12 @@ def main(argv: list[str] | None = None) -> int:
     needs_risk = args.hazard in (None, "tornado")
     elevated, why = tornado_elevated(pulse, nws_tornado_warnings()) if needs_risk else (False, "not needed")
     print(f"{now:%Y-%m-%d %H:%MZ}  tornado risk: {'ELEVATED' if elevated else 'quiet'} ({why})")
+    quakes = usgs_large_quakes() if args.hazard in (None, "earthquake") else None
+    if quakes:
+        print("  shallow M6.5+ in the last day: " + "; ".join(f"M{m:.1f} {t:%d %H:%MZ} {p}" for t, m, p in quakes))
     if args.hazard:
         import os
-        run = gate(args.hazard, now, elevated)
+        run = gate(args.hazard, now, elevated, quakes)
         out = os.environ.get("GITHUB_OUTPUT")
         if out:
             with open(out, "a", encoding="utf-8") as fh:
@@ -322,7 +363,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {hazard:12s} UNKNOWN  could not read the run history: {exc}")
             failed = True
             continue
-        d = decide(hazard, now, last, in_flight, elevated=elevated)
+        d = decide(hazard, now, last, in_flight, elevated=elevated, large_quakes=quakes)
         # what the decision rested on, so a wrong one can be traced (2026-10-05 03:32Z: earthquake was
         # dispatched as "slot not yet run" although a run had succeeded at 02:04Z; not reproducible locally)
         seen = f"last scoring run {last:%d %H:%MZ}" if last else "no scoring run on record"

@@ -65,6 +65,36 @@ def test_earthquake_once_per_six_hour_slot():
     assert due("earthquake", "2026-10-05 12:01", "2026-10-05 06:20")
 
 
+def test_a_large_earthquake_since_the_last_run_makes_the_forecast_due_at_once():
+    """Earthquake program section 13.2, E5b: after the Panama M7.7 (2026-10-09 17:56Z) the forecast should not wait
+    for the next 6-hour slot."""
+    t = lambda s: dt.datetime.fromisoformat(s).replace(tzinfo=dt.timezone.utc)
+    panama = [(t("2026-10-09 17:56"), 7.7, "12 km WSW of Pitaloza Arriba, Panama")]
+    # 17:58: the 12Z slot has run (12:20), so only the earthquake can make the forecast due
+    d = schedule.decide("earthquake", t("2026-10-09 17:58"), t("2026-10-09 12:20"), False, large_quakes=panama)
+    assert d.due and "M7.7" in d.reason
+    assert not schedule.decide("earthquake", t("2026-10-09 17:58"), t("2026-10-09 12:20"), False, large_quakes=[]).due
+    # once a run has started after it, the quake no longer triggers; the slot rule applies again
+    assert not schedule.decide("earthquake", t("2026-10-09 18:40"), t("2026-10-09 18:15"), False, large_quakes=panama).due
+    # an unreadable feed is not evidence: the slot rule alone decides
+    assert not schedule.decide("earthquake", t("2026-10-09 17:58"), t("2026-10-09 12:20"), False, large_quakes=None).due
+    # a run already queued or running is never doubled
+    assert not schedule.decide("earthquake", t("2026-10-09 17:58"), t("2026-10-09 12:20"), True, large_quakes=panama).due
+
+
+def test_the_usgs_feed_keeps_only_shallow_m65s():
+    ms = int(dt.datetime(2026, 10, 9, 17, 56, tzinfo=dt.timezone.utc).timestamp() * 1000)
+    feed = {"features": [
+        {"properties": {"mag": 7.7, "time": ms, "place": "Panama"}, "geometry": {"coordinates": [-80.8, 7.6, 12.6]}},
+        {"properties": {"mag": 6.6, "time": ms, "place": "deep"}, "geometry": {"coordinates": [140.0, 30.0, 400.0]}},
+        {"properties": {"mag": 6.4, "time": ms, "place": "small"}, "geometry": {"coordinates": [0.0, 0.0, 10.0]}},
+        {"properties": {"mag": None, "time": ms}, "geometry": {"coordinates": [0.0, 0.0, 10.0]}}]}
+    got = schedule.large_quakes(feed)
+    assert [(m, p) for _, m, p in got] == [(7.7, "Panama")]
+    assert got[0][0] == dt.datetime(2026, 10, 9, 17, 56, tzinfo=dt.timezone.utc)
+    assert schedule.large_quakes(None) is None
+
+
 def test_main_runs_are_filtered_by_their_own_branch_never_by_githubs_query():
     """`gh run list --branch main` returned nothing after 2026-09-23 while today's runs all said main."""
     runs = [{"databaseId": 1, "headBranch": "main"}, {"databaseId": 2, "headBranch": "audit/x"},
