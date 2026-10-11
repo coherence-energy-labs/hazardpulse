@@ -895,3 +895,27 @@ Run `research-earthquake-e6.yml` 38104855564 (tag `prereg-earthquake-e6`); `resu
 
 The atlas compares each place with its own past, while the forecast compares every place with every other. A
 connection strong in the first can be nearly spent in the second.
+
+### 13.3 Diagnostic D (2026-10-11): Panama was typical -- the served forecast says a third of what happens
+
+Run `research-earthquake-e5.yml` 38105779915 (phase `diagnose`); `results/earthquake_program/aftershock_e5_diagnostic.json`.
+The served S2, by its live code path, was read in the mainshock's own cell after each of the 57 shallow M7+
+mainshocks of 2021-2025.
+
+| | +0.5 h | +6 h | +24 h | +7 d |
+|---|---|---|---|---|
+| M7.5+ (n 17): S2's mean / observed | 0.143 / **0.588** | 0.183 / **0.588** | 0.216 / **0.588** | 0.216 / 0.353 |
+| M7.0-7.4 (n 40): S2's mean / observed | 0.105 / **0.300** | 0.124 / 0.250 | 0.132 / 0.175 | 0.126 / 0.125 |
+| all M7+ (n 57): S2's mean / observed | 0.116 / **0.386** | 0.141 / 0.351 | 0.157 / 0.298 | 0.152 / 0.193 |
+
+**The registered prediction holds:** at +0.5 h, S2's mean (0.116) is below a third of the observed rate (0.386). The
+forecast is 3-4 times too low in the first day after a large earthquake and catches up only after about a week.
+Panama's 6% was the rule, not an accident of the live catalog.
+
+**AS, fitted on 1990-2017** (`aftershock_e5_fit.json`):
+- parameters: K 0.079, alpha 0.48, p 0.77, c_t at its lower bound, d0 38 km;
+- in-sample trigger-cell reliability at +0.5 h: 0.308 against 0.305 observed;
+- in-sample weaknesses: too high at +7 d (0.188 against 0.150), too low after M7.5+ (0.402 against 0.554);
+- Panama replayed: 39.7% at 18:13, where 6.0% was published.
+
+The held-out test (2018 onward) decides.
