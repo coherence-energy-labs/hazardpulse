@@ -732,6 +732,29 @@ def write_outputs(
         print(f"  Updated {pulse_path}")
 
 
+LARGE_QUAKE_MAG, LARGE_QUAKE_DEPTH_KM, LARGE_QUAKE_DAYS = 7.0, 70.0, 30
+
+
+def recent_large_earthquakes(events: list[dict], now: dt.datetime) -> list[dict]:
+    """Every shallow (<= 70 km) M7+ earthquake of the 30 days before ``now``, newest first, as the catalog gives it.
+    The earthquake page shows, beside the published forecast, what history says follows such an earthquake
+    (docs/EARTHQUAKE_FORECAST_PROGRAM.md section 13)."""
+    from hazardpulse.earthquake.prospective import format_utc_z, parse_utc_datetime
+    start = now - dt.timedelta(days=LARGE_QUAKE_DAYS)
+    out = []
+    for e in events:
+        try:
+            t = parse_utc_datetime(e["time"])
+            mag, depth = float(e["mag"]), float(e.get("depth") or 0.0)
+        except (KeyError, TypeError, ValueError):
+            continue
+        if mag >= LARGE_QUAKE_MAG and depth <= LARGE_QUAKE_DEPTH_KM and start <= t < now:
+            out.append({"id": e.get("id", ""), "time": format_utc_z(t), "latitude": float(e["latitude"]),
+                        "longitude": float(e["longitude"]), "depth_km": depth, "mag": mag,
+                        "place": e.get("place", "")})
+    return sorted(out, key=lambda x: x["time"], reverse=True)
+
+
 def write_replay_artifact(
     scored_cells: list[dict],
     now: dt.datetime,
@@ -743,6 +766,7 @@ def write_replay_artifact(
     update_index: bool = True,
     probability_grid=None,
     operational_meta: dict | None = None,
+    recent_large: list[dict] | None = None,
 ) -> Path:
     """Write a frozen replay artifact for later prospective scoring.
 
@@ -808,6 +832,8 @@ def write_replay_artifact(
     artifact["forecast_domain"]["grid_order"] = "row_major_lat_then_lon"
     if operational_meta:
         artifact["operational_model"] = operational_meta
+    if recent_large is not None:
+        artifact["recent_large_earthquakes"] = recent_large
     replay_path.write_text(
         json.dumps(_make_json_serializable(artifact), indent=2) + "\n",
         encoding="utf-8",
@@ -1255,6 +1281,7 @@ def run_pipeline(
         replay_dir=replay_dir,
         update_index=not skip_replay_index,
         probability_grid=operational["probability"],
+        recent_large=recent_large_earthquakes(history_events, now),
         operational_meta={
             "model_version": served_version,
             "artifact": "results/models/" + (STACK_PATH.name if stack is not None else OPERATIONAL_ARTIFACT_PATH.name),
