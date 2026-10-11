@@ -1079,3 +1079,64 @@ registration: if E7's log loss is worse than S2's with a 95% interval entirely a
 - one served-model pointer;
 - evidence and registry bound to these results;
 - the after-large-earthquake panel keeps showing the measured history beside it.
+
+### 15.4 Outcome of E7b (2026-10-11): NOT carried -- part 1 passed, part 2 missed its margin by 0.00017
+
+**Part 1 passed** (`aftershock_e7_heldout.json`). Log loss E7 - S2 on E5's 88 held-out mainshocks was **-0.0144
+[-0.0290, -0.0010]**.
+- **Mainshock cell, observed / S2 / E7:**
+
+  | +0.5 h | +6 h | +24 h | +7 d |
+  |---|---|---|---|
+  | 0.364 / 0.103 / 0.408 | 0.284 / 0.124 / 0.299 | 0.250 / 0.135 / **0.252** | 0.170 / 0.127 / 0.179 |
+
+- **Neighbour cells:** 0.040 / 0.024 / 0.056 at +0.5 h, and 0.019 / 0.026 / 0.031 at +7 d.
+
+**Part 2 failed** (run `research-earthquake-e5.yml` 38155935762, phase `dev7`; `aftershock_e7_dev.json`).
+- **DEV:** IG E7 - S2 **+0.00054 [-0.00517, +0.00732]**. The lower end is below the -0.005 margin by 0.00017.
+- **FINAL (second read):** +0.00181 [-0.00589, +0.01088].
+- E7 changed 67,611 DEV cell-times and 99,457 FINAL ones.
+
+**By the rule written before the result, E7 is not the published number.** S2 stays published, and the "close
+enough" reading is refused.
+
+**The root, named (DERIVED from the design; the number that would test it is not computed here).**
+- E7's parameters were fitted on cell-times around M7+ earthquakes (section 15.1), where S2 is 3-4x low.
+- Its Lambda, as registered, sums every shallow M6+ of the 30 days before. So E7 also raised the many cell-times
+  around M6.0-6.9 earthquakes.
+- Those are common, so the trees behind S2 were trained on many of them and already calibrated there. The increment
+  double-counts them.
+- That is a small, widespread cost. It is also what the weekly DEV issue times mostly sample, since they rarely fall
+  in the first hours after an M7+.
+
+**Killed:** "E7, applied after every shallow M6+, is non-inferior over all cell-times." The witness is the DEV lower
+end of -0.00517.
+
+**What survives:**
+- E7 in the hours and days after an M7+ (part 1);
+- E7c, below.
+
+### 15.5 Amendment (2026-10-11): E7 shown, labelled as in test, after a large earthquake
+
+**What changes.** The after-large-earthquake panel (section 13.5, PR #64) adds, for each large earthquake's cell, the
+chance E7's live shadow (`shadow_aftershock_e7`) gives it. It is labelled as a model in test and not the published
+number, with part 1's held-out result beside it.
+
+**What does not change:** the published forecast, its scoring, and section 15's prospective looks.
+
+**Why it is shown although not carried.**
+- In the first days after an M7+, part 1 found E7 calibrated on earthquakes it was not fitted on, where S2 is 3-4x
+  low. That is the slice where people decide what to do.
+- Part 2's miss is about the weeks after M6s, which the panel does not cover.
+- The panel shows E7 only for the M7+ earthquakes it lists.
+
+### 15.6 Amendment E7c -- the increment only after the earthquakes it was fitted on (registered 2026-10-11, before any E7c number)
+
+E7c is E7 with Lambda summing only shallow **M7+** earthquakes of the 30 days before (MIN_MAG 7.0). The parameters
+are section 15.2's, unchanged; this is the population they were fitted on.
+
+**It is decided prospectively**, by section 15's rule, on live records written after this registration, at
+2027-10-01 and 2028-10-01. The live shadow records E7c beside E7 from this commit.
+
+**A carried E7c** replaces S2 as the published number through the serving path built for E7 (behind
+`SERVED_AFTERSHOCK_RELPATH`, branch `research/e7-serve`), with its minimum magnitude set to 7.0.
