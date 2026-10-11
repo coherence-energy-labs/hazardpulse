@@ -288,6 +288,16 @@ Wrangler step as the other scorers (`earthquake-score.yml`, `verification-score.
    - **E7c (section 15.6, tag `prereg-earthquake-e7c`):** E7 triggered by shallow M7+ only, with the same parameters.
      Its shadow (`shadow_aftershock_e7c`) is recorded in every forecast from this change. It is decided
      prospectively at section 15's looks.
+   - **15.7-15.8, diagnostics (tag `prereg-earthquake-e7-diag`; reported, never deciding): the named root is
+     supported.**
+     - **DEV IG minus S2:** E7 +0.00054 [-0.00517, +0.00732]; E7c **+0.00201 [-0.00166, +0.00641]**; E7f (E7 only
+       0.5-168 h after an M7+, in its 3x3) +0.00158 [-0.00092, +0.00569].
+     - **E7c on the 88 held-out mainshocks:** -0.0133 [-0.0271, -0.0007]. A day after, in the epicentre's cell, 0.240
+       against 0.250 observed.
+     - Nothing is published: E7c was defined after E7b's DEV was read. E7f qualified as a candidate but was not
+       added, since E7c is above it on DEV and FINAL.
+     - **The prospective decision is data-limited (DERIVED):** about 0.24 nats per new M7+ mainshock, so about 12
+       mainshocks, about a year.
 
 1. **E1. DONE (2026-10-03): S1 = C0 + GEAR1 is served** (`docs/EARTHQUAKE_FORECAST_PROGRAM.md`
    section 10).

@@ -1182,3 +1182,62 @@ is the number this run exists to give.
   a prospective candidate in a further amendment, with its live shadow.
 - At the looks, two or more prospective candidates are each judged at a Bonferroni-adjusted level (97.5% intervals
   for two).
+
+### 15.8 Outcome of 15.7 (2026-10-11): the root is supported; E7c costs little where it matters; nothing published
+
+Run `research-earthquake-e5.yml` 38157700019 (phase `diag7`, branch `research/e7-diag` at the tag
+`prereg-earthquake-e7-diag`); `results/earthquake_program/aftershock_e7_diag.json`.
+
+**Every control held:**
+- E7's part-1 values reproduced `aftershock_e7_heldout.json` to 1.1e-16.
+- E7's DEV and FINAL reads reproduced `aftershock_e7_dev.json`, interval ends and cell counts included.
+- All 3,120 part-1 cell-times fell in E7f's domain.
+
+**DEV and FINAL, IG minus S2 per target** (month-block 95% interval; cell-times changed):
+
+| | DEV | FINAL |
+|---|---|---|
+| E7 | +0.00054 [-0.00517, +0.00732]; 67,611 | +0.00181 [-0.00589, +0.01088]; 99,457 |
+| E7c | **+0.00201 [-0.00166, +0.00641]**; 30,637 | +0.00346 [-0.00230, +0.01124]; 57,212 |
+| E7f | +0.00158 [-0.00092, +0.00569]; 168 | -0.00021 [-0.00284, +0.00245]; 303 |
+
+**15.4's root is supported, as predicted.** Both variants are above E7 on DEV.
+- What this rests on: point estimates whose intervals overlap widely. It is support, not proof.
+- What it does show: E7's DEV interval was widest where it changed the most cell-times, and removing the terms where it
+  was not fitted moved the lower end from -0.00517 to -0.00166 (E7c) and -0.00092 (E7f).
+
+**Part 1, E7c on the 88 held-out mainshocks:** log loss minus S2 **-0.0133 [-0.0271, -0.0007]**, against E7's -0.0144.
+
+| mainshock cell | +0.5 h | +6 h | +24 h | +7 d |
+|---|---|---|---|---|
+| observed | 0.364 | 0.284 | 0.250 | 0.170 |
+| S2 (published) | 0.103 | 0.124 | 0.135 | 0.127 |
+| E7 | 0.408 | 0.299 | 0.252 | 0.179 |
+| E7c | 0.400 | 0.288 | 0.240 | 0.173 |
+
+Dropping the M6.0-6.9 terms costs E7c about 0.01 in the slice that matters. The neighbour cells barely move.
+
+**What follows, by the rule fixed in 15.7:**
+- **Nothing is published.** Had E7c been E7b's candidate, it would have carried on both parts (part 1 interval below
+  0; DEV lower end -0.00166, above the -0.005 margin). It was defined after E7b's part 2 was read, so that reading is
+  refused. E7c stays the prospective candidate of 15.6, recorded live since 2026-10-11 17:00 UTC.
+- **E7f is not added**, although 15.7's rule allows it (part 1 equals E7's; DEV +0.00158 is above E7's).
+  - E7c is above E7f on both DEV and FINAL.
+  - E7f changed only 168 DEV cell-times, so weekly issue times cannot judge it.
+  - A single candidate keeps the looks at 95%, not 97.5%.
+
+**Live, the forecast of 2026-10-11 17:00 UTC, Panama's cell (47 h after the M7.7):**
+- published S2 17.3%;
+- E7 33.5% (shown as in test, section 15.5);
+- E7c 30.6%;
+- history 37% [29-45%].
+
+**How soon the prospective decision can come (DERIVED, rough).** Each new shallow M7+ mainshock is one independent
+unit: the forecasts around one sequence share its outcome. Take part 1's +0.5 h epicentre-cell rates (observed 0.364,
+E7c 0.400, S2 0.103):
+- Their expected log-likelihood ratio is about 0.24 nats per mainshock.
+- A decision at 5% needs about ln 20 = 3.0 nats: about 12 mainshocks.
+- At 2018-2026's rate (88 in 8.75 years, about 10 a year), that is about a year.
+
+So the 2027-10-01 look is near the floor the earthquake rate allows. A sequential (anytime-valid) rule would not
+decide much sooner on average, and is not adopted.
