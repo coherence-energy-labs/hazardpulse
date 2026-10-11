@@ -134,30 +134,35 @@ class FitData:
     """Section 13.2's fitting cell-times: every shallow M6.5+ trigger of 1990-2017, its cell and the 8 around it, at
     lags 0.5, 6, 24 and 168 h; each with its outcome and every shallow M6+ of the 30 days before it."""
 
-    def __init__(self, ev: np.ndarray, t0: float, t1: float, layer):
+    def __init__(self, ev: np.ndarray, t0: float, t1: float, layer, trig_min: float = 6.5, s2_of=None):
+        """``trig_min``: the triggers' minimum magnitude (E5: 6.5; E7: 7.0). ``s2_of``: for E7, a callable giving S2's
+        grid at a time in days; its value in each cell-time becomes that cell-time's offset (background)."""
         from hazardpulse.earthquake import aftershock as A
         self.grid_log = np.log(A.D_GRID_KM)
         shallow = ev[(ev[:, 3] <= A.MAX_DEPTH_KM) & (ev[:, 4] >= A.MIN_MAG)]
         all_cells = of.cell_index(ev[:, 1], ev[:, 2])
-        trig = shallow[(shallow[:, 4] >= 6.5) & (shallow[:, 0] >= t0) & (shallow[:, 0] <= t1)]
-        y, ct_cell, ct_lag, ct_trig_mag, ct_home = [], [], [], [], []
+        trig = shallow[(shallow[:, 4] >= trig_min) & (shallow[:, 0] >= t0) & (shallow[:, 0] <= t1)]
+        y, ct_cell, ct_lag, ct_trig_mag, ct_home, ct_trig, ct_t, offset = [], [], [], [], [], [], [], []
         contrib_ct, contrib_mag, contrib_dt, contrib_F = [], [], [], []
-        for tk, la, lo, _, mk in trig:
+        for n_trig, (tk, la, lo, _, mk) in enumerate(trig):
             home = int(of.cell_index(la, lo))
             for lag in LAGS_H:
                 t = tk + lag / 24.0
                 prior = shallow[(shallow[:, 0] < t) & (shallow[:, 0] >= t - A.WINDOW_D)]
                 win = (ev[:, 0] > t) & (ev[:, 0] <= t + A.WINDOW_D) & (ev[:, 4] >= 6.0)
+                s2 = s2_of(t) if s2_of is not None else None
                 for cell in _nbr3(home):
                     i = len(y)
                     y.append(bool(np.any(all_cells[win] == cell)))
                     ct_cell.append(cell), ct_lag.append(lag), ct_trig_mag.append(mk), ct_home.append(cell == home)
+                    ct_trig.append(n_trig), ct_t.append(t), offset.append(float(s2[cell]) if s2 is not None else 0.0)
                     for tj, laj, loj, _, mj in prior:
                         table = layer.trigger(tj, laj, loj, mj).table
                         contrib_ct.append(i), contrib_mag.append(mj), contrib_dt.append(t - tj)
                         contrib_F.append([d.get(cell, 0.0) for d in table])
         self.y = np.array(y, float)
         self.lag, self.trig_mag, self.home = np.array(ct_lag), np.array(ct_trig_mag), np.array(ct_home)
+        self.trig, self.t, self.offset = np.array(ct_trig), np.array(ct_t), np.array(offset)
         self.ci, self.mag = np.array(contrib_ct), np.array(contrib_mag)
         self.dt, self.F = np.array(contrib_dt), np.array(contrib_F)
 
@@ -170,11 +175,12 @@ class FitData:
         frac = (1 - w) * self.F[np.arange(len(j)), j] + w * self.F[np.arange(len(j)), j + 1]
         dom = A.omori_integral(self.dt + A.WINDOW_D, p, c_t) - A.omori_integral(self.dt, p, c_t)
         lam = np.bincount(self.ci, weights=K * 10.0 ** (alpha * (self.mag - 7.0)) * dom * frac, minlength=len(self.y))
-        return 1.0 - np.exp(-lam)
+        return 1.0 - (1.0 - self.offset) * np.exp(-lam)       # E5: no offset (0); E7: S2 as the background
 
-    def nll(self, theta: np.ndarray) -> float:
+    def nll(self, theta: np.ndarray, sel: np.ndarray | None = None) -> float:
         p = np.clip(self.probs(theta), 1e-12, 1 - 1e-12)
-        return float(-np.sum(self.y * np.log(p) + (1 - self.y) * np.log(1 - p)))
+        ll = self.y * np.log(p) + (1 - self.y) * np.log(1 - p)
+        return float(-np.sum(ll if sel is None else ll[sel]))
 
 
 def fit() -> int:
@@ -339,10 +345,89 @@ def test() -> int:
     return 0
 
 
+E7_START = dt.datetime(2005, 1, 1, tzinfo=dt.timezone.utc)        # section 15.1: S2's inputs are valid from 2005
+E7_SPLIT = dt.datetime(2012, 1, 1, tzinfo=dt.timezone.utc)
+
+
+def fit7() -> int:
+    """Amendment E7 (section 15): Lambda fitted as an increment over S2, P = 1 - (1 - P_S2) exp(-Lambda), on the cell-times
+    of every shallow M7+ of 2005-2017, S2 by its live path. Reported, never deciding: in-sample reliability against S2,
+    and a time split (fit 2005-2011, read 2012-2017)."""
+    from scipy import optimize
+    from hazardpulse.earthquake import aftershock as A
+    base = of.load_artifact(BASE)
+    stack = of.load_stack(C.REPO / served.SERVED_STACK_RELPATH, base)
+    raw25 = C.load_raw("program_catalog_m25.npz")
+    grids: dict[float, np.ndarray] = {}
+
+    def s2_of(t_days: float) -> np.ndarray:
+        if t_days not in grids:
+            ts = t_days * DAY
+            grids[t_days] = of.forecast_with_stack(base, stack, ba._simulated_live(raw25, ts), ts)["probability"]
+        return grids[t_days]
+
+    ev = _snapshot_m6()
+    e5 = json.loads((C.RESULTS / "aftershock_e5_fit.json").read_text(encoding="utf-8"))["params"]
+    layer = A.AftershockLayer(A.Params(**e5))
+    t_start = time.time()
+    data = FitData(ev, _days(E7_START), _days(FIT_END), layer, trig_min=7.0, s2_of=s2_of)
+    print(f"cell-times {len(data.y)} ({int(data.y.sum())} with an M6+), triggers {data.trig.max() + 1}, "
+          f"S2 forecasts {len(grids)} ({time.time() - t_start:.0f} s)")
+    x0 = np.array([math.log(e5["K"]), e5["alpha"], e5["p"], math.log(e5["c_t"]), math.log(e5["d0"])])
+    bounds = [(math.log(1e-4), math.log(1e3)), (0.3, 2.5), (0.7, 2.0), (math.log(1e-4), math.log(2.0)), (math.log(5.0), math.log(800.0))]
+
+    def fit_on(sel):
+        r = optimize.minimize(lambda th: data.nll(th, sel), x0, method="L-BFGS-B", bounds=bounds)
+        if not r.success:
+            raise SystemExit(f"E7 fit did not converge: {r.message}")
+        return r.x
+    th = fit_on(None)
+    params = A.Params(K=math.exp(th[0]), alpha=float(th[1]), p=float(th[2]), c_t=math.exp(th[3]), d0=math.exp(th[4]))
+    s2 = np.clip(data.offset, 1e-12, 1 - 1e-12)
+    pr = np.clip(data.probs(th), 1e-12, 1 - 1e-12)
+    rel = {}
+    for name, sel in (("mainshock cell", data.home), ("neighbour cells", ~data.home)):
+        for lag in LAGS_H:
+            s = sel & (data.lag == lag)
+            rel[f"{name}, +{lag:g} h"] = {"n": int(s.sum()), "observed": float(data.y[s].mean()),
+                                          "S2": float(s2[s].mean()), "E7": float(pr[s].mean())}
+    ll = lambda p, s: -(data.y[s] * np.log(p[s]) + (1 - data.y[s]) * np.log(1 - p[s]))
+    # the time split: fit on triggers before 2012, read those from 2012
+    early = data.t < _days(E7_SPLIT)
+    th_e = fit_on(early)
+    pe = np.clip(data.probs(th_e), 1e-12, 1 - 1e-12)
+    late = ~early
+    d = ll(pe, late) - ll(s2, late)
+    trig_late = data.trig[late]
+    ks = np.unique(trig_late)
+    per = np.array([d[trig_late == k].sum() for k in ks])
+    cnt = np.array([(trig_late == k).sum() for k in ks])
+    rng = np.random.default_rng(BOOT_SEED)
+    boot = [per[p].sum() / cnt[p].sum() for p in (rng.integers(0, len(ks), len(ks)) for _ in range(N_BOOT))]
+    split = {"fit_on": "2005-2011", "read_on": "2012-2017", "n_triggers_read": int(len(ks)),
+             "logloss_E7_minus_S2": float(d.mean()), "ci95": [float(x) for x in np.percentile(boot, [2.5, 97.5])],
+             "reliability_read": {f"{nm} +{lag:g} h": {"observed": float(data.y[late & s & (data.lag == lag)].mean()),
+                                                       "S2": float(s2[late & s & (data.lag == lag)].mean()),
+                                                       "E7": float(pe[late & s & (data.lag == lag)].mean())}
+                                  for nm, s in (("mainshock cell", data.home), ("neighbours", ~data.home)) for lag in LAGS_H}}
+    res = {"program": "docs/EARTHQUAKE_FORECAST_PROGRAM.md section 15 (amendment E7, the increment over S2)",
+           "prereg_tag": "prereg-earthquake-e7", "served": stack.model_version,
+           "generated_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+           "params": params.as_dict(), "n_cell_times": int(len(data.y)), "n_with_m6": int(data.y.sum()),
+           "in_sample_reliability": rel, "time_split_reported": split}
+    C.write_json("aftershock_e7_fit.json", res)
+    print("E7 params", json.dumps(params.as_dict()))
+    for k, v in rel.items():
+        print(f"  {k}: n {v['n']}, observed {v['observed']:.3f}, S2 {v['S2']:.3f}, E7 {v['E7']:.3f}")
+    print(f"time split (reported): log loss E7 - S2 on 2012-2017 {split['logloss_E7_minus_S2']:+.4f} "
+          f"{[round(x, 4) for x in split['ci95']]} ({split['n_triggers_read']} triggers)")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("phase", choices=("diagnose", "fit", "test"))
-    return {"diagnose": diagnose, "fit": fit, "test": test}[ap.parse_args(argv).phase]()
+    ap.add_argument("phase", choices=("diagnose", "fit", "test", "fit7"))
+    return {"diagnose": diagnose, "fit": fit, "test": test, "fit7": fit7}[ap.parse_args(argv).phase]()
 
 
 if __name__ == "__main__":
