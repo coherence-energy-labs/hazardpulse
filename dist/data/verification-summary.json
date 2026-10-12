@@ -1,16 +1,16 @@
 {
-  "generated_at": "2026-10-12T07:58:48Z",
-  "score_as_of": "2026-10-12T07:57:47Z",
+  "generated_at": "2026-10-12T09:41:57Z",
+  "score_as_of": "2026-10-12T09:40:39Z",
   "system": {
-    "frozen_forecasts": 2724,
-    "matured_forecasts": 2575,
+    "frozen_forecasts": 2725,
+    "matured_forecasts": 2577,
     "scored_forecasts": 2569,
-    "matured_unscored_backlog": 6,
+    "matured_unscored_backlog": 8,
     "raw_chain_rows": 2704,
     "hash_chain_mismatches": 0,
     "exact_model_benchmarks": 3,
     "alerts": [
-      "6 matured forecast windows are waiting for scoring."
+      "8 matured forecast windows are waiting for scoring."
     ],
     "rollup_violations": [],
     "ledger_violations": []
@@ -87,32 +87,32 @@
     {
       "key": "hu",
       "hazard": "hurricane",
-      "model_version": "hurricane_ri_v8_3",
+      "model_version": "hurricane_ri_stack_v1-35938d6c09b7",
       "verification_status": "prospective_scored",
       "status_badge": "Scored",
       "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 101 storm forecasts scored against NHC best track; 20 rapid-intensification events observed.",
       "metric_source": "retrospective_holdout_exact_model",
       "metric_source_label": "Exact-model retrospective benchmark is available.",
-      "auc": null,
-      "brier": null,
-      "brier_skill_score": null,
-      "homepage_line": "88 matured forecasts scored",
+      "auc": 0.9284,
+      "brier": 0.04691,
+      "brier_skill_score": 0.3109,
+      "homepage_line": "AUC 0.928 retrospective holdout",
       "forecast_storage": {
-        "n_replay_artifacts": 97,
-        "n_matured_forecasts": 93,
+        "n_replay_artifacts": 98,
+        "n_matured_forecasts": 94,
         "n_scored_forecasts": 88,
-        "n_backlog": 5,
+        "n_backlog": 6,
         "first_issued_at": "2026-03-13T03:00:00Z",
-        "last_issued_at": "2026-10-12T03:36:12Z",
-        "last_forecast_id": "hu_fcst_20261012_0336",
-        "latest_replay_artifact": "/data/replay/hu_fcst_20261012_0336.json",
+        "last_issued_at": "2026-10-12T09:40:39Z",
+        "last_forecast_id": "hu_fcst_20261012_0940",
+        "latest_replay_artifact": "/data/replay/hu_fcst_20261012_0940.json",
         "forecast_horizon": "24 hours",
-        "next_mature_at": "2026-10-12T09:36:25Z"
+        "next_mature_at": "2026-10-12T15:39:53Z"
       },
       "ledger": {
         "supported": true,
         "path": "/data/hurricane-ledger.jsonl",
-        "n_rows": 38,
+        "n_rows": 39,
         "prev_hash_mismatches": 0,
         "since": "2026-10-03 (earlier hurricane forecasts are kept as replay files, unchained)"
       },
@@ -171,15 +171,18 @@
       },
       "exact_model_benchmark": {
         "availability": "exact_model_benchmark",
-        "label": "Retrospective benchmark available for the current live model version.",
-        "model_version": "hurricane_ri_v8_3",
-        "source_updated_at": null,
-        "auc": null,
-        "auc_ci95": null,
-        "brier": null,
-        "brier_skill_score": null,
-        "reliability_slope": null,
-        "n_cases": null
+        "label": "Pre-registered program: candidate A chosen on 2020-2024 by forward chaining, then scored once on the 2025 season (601 NHC-basin cycles, 44 rapid-intensification events, intervals by storm).",
+        "model_version": "hurricane_ri_stack_v1-35938d6c09b7",
+        "source_updated_at": "2026-10-02T17:53:11Z",
+        "auc": 0.9284,
+        "auc_ci95": [
+          0.89,
+          0.9659
+        ],
+        "brier": 0.04691,
+        "brier_skill_score": 0.3109,
+        "reliability_slope": 1.308,
+        "n_cases": 601
       },
       "related_benchmark": null,
       "recommended_action": "Keep scoring matured hurricane forecasts against NHC best track; live AUC stays undefined until at least one rapid-intensification event is observed, so promotion decisions still rest on the retrospective benchmark."
@@ -207,15 +210,15 @@
       "homepage_line": "AUC 0.970 pre-registered 2025 test \u00b7 live BSS 0.10",
       "forecast_storage": {
         "n_replay_artifacts": 1866,
-        "n_matured_forecasts": 1841,
+        "n_matured_forecasts": 1842,
         "n_scored_forecasts": 1840,
-        "n_backlog": 1,
+        "n_backlog": 2,
         "first_issued_at": "2026-03-13T03:00:00Z",
         "last_issued_at": "2026-10-12T07:57:47Z",
         "last_forecast_id": "to_fcst_20261012_0757",
         "latest_replay_artifact": "/data/replay/to_fcst_20261012_0757.json",
         "forecast_horizon": "24 hours",
-        "next_mature_at": "2026-10-12T09:27:00Z"
+        "next_mature_at": "2026-10-12T10:13:46Z"
       },
       "ledger": {
         "supported": true,
