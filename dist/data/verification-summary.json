@@ -1,17 +1,16 @@
 {
-  "generated_at": "2026-10-16T09:39:35Z",
-  "score_as_of": "2026-10-16T09:37:38Z",
+  "generated_at": "2026-10-16T10:25:40Z",
+  "score_as_of": "2026-10-16T10:24:12Z",
   "system": {
-    "frozen_forecasts": 2814,
-    "matured_forecasts": 2675,
+    "frozen_forecasts": 2815,
+    "matured_forecasts": 2676,
     "scored_forecasts": 2670,
-    "matured_unscored_backlog": 5,
-    "raw_chain_rows": 2777,
+    "matured_unscored_backlog": 6,
+    "raw_chain_rows": 2778,
     "hash_chain_mismatches": 0,
-    "exact_model_benchmarks": 2,
+    "exact_model_benchmarks": 3,
     "alerts": [
-      "5 matured forecast windows are waiting for scoring.",
-      "Hurricane: no exact benchmark is attached to the current live model version."
+      "6 matured forecast windows are waiting for scoring."
     ],
     "rollup_violations": [],
     "ledger_violations": []
@@ -92,8 +91,8 @@
       "verification_status": "prospective_scored",
       "status_badge": "Scored",
       "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 145 storm forecasts scored against NHC best track; 20 rapid-intensification events observed.",
-      "metric_source": "unverified_live_model",
-      "metric_source_label": "No exact-model benchmark is available in this repo.",
+      "metric_source": "retrospective_holdout_exact_model",
+      "metric_source_label": "Exact-model retrospective benchmark is available.",
       "auc": null,
       "brier": null,
       "brier_skill_score": null,
@@ -180,7 +179,18 @@
         "total_storms_scored": 145,
         "total_ri_events": 20
       },
-      "exact_model_benchmark": null,
+      "exact_model_benchmark": {
+        "availability": "exact_model_benchmark",
+        "label": "Retrospective benchmark available for the current live model version.",
+        "model_version": "hurricane_ri_v8_3",
+        "source_updated_at": null,
+        "auc": null,
+        "auc_ci95": null,
+        "brier": null,
+        "brier_skill_score": null,
+        "reliability_slope": null,
+        "n_cases": null
+      },
       "related_benchmark": null,
       "recommended_action": "Keep scoring matured hurricane forecasts against NHC best track; live AUC stays undefined until at least one rapid-intensification event is observed, so promotion decisions still rest on the retrospective benchmark."
     },
@@ -206,23 +216,23 @@
       },
       "homepage_line": "AUC 0.970 pre-registered 2025 test \u00b7 live BSS 0.14",
       "forecast_storage": {
-        "n_replay_artifacts": 1923,
-        "n_matured_forecasts": 1909,
+        "n_replay_artifacts": 1924,
+        "n_matured_forecasts": 1910,
         "n_scored_forecasts": 1909,
-        "n_backlog": 0,
+        "n_backlog": 1,
         "first_issued_at": "2026-03-13T03:00:00Z",
-        "last_issued_at": "2026-10-16T08:22:56Z",
-        "last_forecast_id": "to_fcst_20261016_0822",
-        "latest_replay_artifact": "/data/replay/to_fcst_20261016_0822.json",
+        "last_issued_at": "2026-10-16T10:24:12Z",
+        "last_forecast_id": "to_fcst_20261016_1024",
+        "latest_replay_artifact": "/data/replay/to_fcst_20261016_1024.json",
         "forecast_horizon": "24 hours",
-        "next_mature_at": "2026-10-16T09:44:51Z"
+        "next_mature_at": "2026-10-16T11:46:19Z"
       },
       "ledger": {
         "supported": true,
         "path": "/data/tornado-ledger.jsonl",
-        "n_rows": 1989,
+        "n_rows": 1990,
         "prev_hash_mismatches": 0,
-        "content_hash_verified": 1819,
+        "content_hash_verified": 1820,
         "content_hash_verified_without_forecast_id": 170,
         "content_hash_legacy_note": "170 rows (2026-03-22T04:11:35.843464Z to 2026-04-13T02:14:12.996567Z) were hashed before forecast_id was added to them; each verifies with forecast_id removed",
         "content_hash_mismatches": 0,
