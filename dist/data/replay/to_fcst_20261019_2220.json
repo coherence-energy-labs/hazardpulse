@@ -1,0 +1,5853 @@
+{
+  "forecast_id": "to_fcst_20261019_2220",
+  "hazard": "tornado",
+  "issued_at": "2026-10-19T22:20:05Z",
+  "model_version": "tornado_v3-05a06c843c87",
+  "forecast_horizon_hours": 24,
+  "scoring_tier": "tier1_v3",
+  "scoring_tier_label": "v3 storm model (LightGBM on ProbSevere storm attributes, NWS warning state)",
+  "coherence_source": "hrrr",
+  "n_active_storms": 14,
+  "top_probability": 0.122,
+  "source_artifacts": [
+    "/data/live-tornadoes.json",
+    "/data/tornado-storms.geojson"
+  ],
+  "storms": [
+    {
+      "storm_id": "1210470",
+      "lat": 32.4385,
+      "lon": -109.7331,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.122,
+      "risk_band": "low",
+      "ps_tor": 10.0,
+      "ps": 0.0,
+      "mucape": 840.0,
+      "ebshear": 39.0,
+      "srh01": 73.0,
+      "maxllaz": 0.011,
+      "mesh": 1.63,
+      "flash_rate": 17.0,
+      "top_features": [
+        {
+          "name": "NOAA ProbTor",
+          "value": 10.0,
+          "log_odds": 1.86
+        },
+        {
+          "name": "NOAA ProbWind",
+          "value": 46.0,
+          "log_odds": 0.4348
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.3829
+        },
+        {
+          "name": "ProbSevere composite",
+          "value": 80.0,
+          "log_odds": 0.3579
+        },
+        {
+          "name": "storm size",
+          "value": 200.0,
+          "log_odds": -0.287
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 0.033259221115841966,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 1.1579034328460693,
+        "grad_tau": 0.09657888859510422,
+        "torsion": -0.007831920869648457,
+        "alignment": -3.8922178745269775,
+        "S_field": 0.6237884759902954,
+        "Gamma_field": 0.5740571618080139,
+        "S_over_Gamma": 1.0866312980651855,
+        "Da": 35.06881332397461,
+        "E_coh": 0.43287190794944763,
+        "singularity_count": 2.0,
+        "singularity_conditions_met": 2,
+        "singularity_detail": {
+          "s_over_gamma": true,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 5,
+      "confidence_lo": 0.1,
+      "confidence_hi": 0.125,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 0.033259221115841966,
+        "probability_30min": 0.01654292891206095,
+        "probability_90min": 0.03923086914019493,
+        "probability_ef2plus_60min": 0.004535310520496104,
+        "probability_band_60min": [
+          0.0243011,
+          0.0317131
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [],
+        "drivers": [
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 10.0,
+            "log_odds": 1.86
+          },
+          {
+            "input": "p_ps_wind",
+            "label": "NOAA ProbWind",
+            "value": 46.0,
+            "log_odds": 0.4348
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.3829
+          },
+          {
+            "input": "p_ps_severe",
+            "label": "ProbSevere composite",
+            "value": 80.0,
+            "log_odds": 0.3579
+          },
+          {
+            "input": "p_size",
+            "label": "storm size",
+            "value": 200.0,
+            "log_odds": -0.287
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "2c2f18d22138a54804b0a3c6df1199804491afe37f17229626ac8197d3f4f529",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 10.0,
+          "p_ps_hail": 80.0,
+          "p_ps_wind": 46.0,
+          "p_ps_severe": 80.0,
+          "p_mucape": 840.0,
+          "p_mlcape": 704.0,
+          "p_mlcin": -6.0,
+          "p_ebshear": 39.0,
+          "p_srh01": 73.0,
+          "p_mesh": 1.6299999952316284,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 17.0,
+          "p_flash_density": 0.44999998807907104,
+          "p_maxllaz": 0.010999999940395355,
+          "p_p98llaz": 0.007000000216066837,
+          "p_p98mlaz": 0.00800000037997961,
+          "p_lja": 2.0,
+          "p_size": 200.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 1.100000023841858,
+          "p_cape_m10m30": 364.0,
+          "p_meanwind_1_3kmagl": 24.0,
+          "p_wetbulb_0c_hgt": 7.400000095367432,
+          "p_avg_beam_hgt": 4.940000057220459,
+          "p_maxrc_emiss": 0.30000001192092896,
+          "p_maxrc_icecf": null,
+          "e_age_min": 120.0,
+          "e_n_steps": 5.0,
+          "e_rot_sustained_min": 150.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": -0.003000000026077032,
+          "e_maxllaz_max": 0.014000000432133675,
+          "e_maxllaz_mean": 0.008200000040233135,
+          "e_maxllaz_slope": 0.002199999988079071,
+          "e_p98llaz_delta": 0.0,
+          "e_p98llaz_max": 0.007000000216066837,
+          "e_p98llaz_mean": 0.00559999980032444,
+          "e_p98llaz_slope": 0.0007999999797903001,
+          "e_ps_tor_delta": 1.0,
+          "e_ps_tor_max": 10.0,
+          "e_ps_tor_mean": 4.400000095367432,
+          "e_ps_tor_slope": 2.5999999046325684,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": 0.2800000011920929,
+          "e_mesh_max": 1.6299999952316284,
+          "e_mesh_mean": 0.8700000047683716,
+          "e_mesh_slope": 0.3440000116825104,
+          "e_flash_rate_delta": -13.0,
+          "e_flash_rate_max": 30.0,
+          "e_flash_rate_mean": 10.199999809265137,
+          "e_flash_rate_slope": 6.099999904632568,
+          "e_size_delta": -47.0,
+          "e_size_max": 247.0,
+          "e_size_mean": 149.8000030517578,
+          "e_size_slope": 49.400001525878906,
+          "h80_hrrr_cape": 520.0,
+          "h80_hrrr_cin": -64.1341781616211,
+          "h80_hrrr_srh01": 133.39999389648438,
+          "h80_hrrr_srh03": 285.8999938964844,
+          "h80_hrrr_shear06": 20.461063385009766,
+          "h80_hrrr_shear01": 4.3885602951049805,
+          "h80_hrrr_pwat": 21.129440307617188,
+          "h80_hrrr_t2m": 293.5306091308594,
+          "h80_hrrr_td2m": 285.7766418457031,
+          "h80_hrrr_refc": -10.0,
+          "h80_hrrr_stp": 0.28568917512893677,
+          "h80_hrrr_srh05_est": 73.3699951171875,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -109.74,
+              32.51
+            ],
+            [
+              -109.72,
+              32.51
+            ],
+            [
+              -109.67,
+              32.48
+            ],
+            [
+              -109.66,
+              32.46
+            ],
+            [
+              -109.66,
+              32.42
+            ],
+            [
+              -109.67,
+              32.4
+            ],
+            [
+              -109.71,
+              32.36
+            ],
+            [
+              -109.76,
+              32.35
+            ],
+            [
+              -109.8,
+              32.38
+            ],
+            [
+              -109.81,
+              32.4
+            ],
+            [
+              -109.81,
+              32.43
+            ],
+            [
+              -109.78,
+              32.49
+            ],
+            [
+              -109.74,
+              32.51
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 0.033259221115841966,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "2c2f18d22138a54804b0a3c6df1199804491afe37f17229626ac8197d3f4f529",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 0.033259221115841966,
+        "probability": 0.122,
+        "confidence_lo": 0.1,
+        "confidence_hi": 0.125,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "57a68b1b00da55e9a5059fcc5ef21772ca12065efa55aa7caf7e17ecb4e05025",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "200c66475dd297770e5ae43ac5adb59c9e756747170fb62d2c02d35ed8b5b38e0020ff62de140e26fc09b5a63266e08bb40df4265305f076456bb2700e08b60d"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "57a68b1b00da55e9a5059fcc5ef21772ca12065efa55aa7caf7e17ecb4e05025",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 0.041585217439407345,
+        "p60_w": {
+          "margin": 3.00345356537522,
+          "served": 0.033259221115841966,
+          "recal": 0.041585217439407345
+        },
+        "p60": {
+          "margin": 3.1141035354981708,
+          "served": 0.03803626499934244,
+          "recal": 0.06049279035388295
+        },
+        "p30": {
+          "margin": 2.712174091388279,
+          "served": 0.01654292891206095,
+          "recal": 0.02576405250563798
+        },
+        "p90": {
+          "margin": 2.9842053166684686,
+          "served": 0.03923086914019493,
+          "recal": 0.05303222053513561
+        }
+      }
+    },
+    {
+      "storm_id": "1210509",
+      "lat": 32.1985,
+      "lon": -108.5223,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.1,
+      "risk_band": "low",
+      "ps_tor": 4.0,
+      "ps": 0.0,
+      "mucape": 866.0,
+      "ebshear": 42.0,
+      "srh01": 46.0,
+      "maxllaz": 0.008,
+      "mesh": 1.5,
+      "flash_rate": 24.0,
+      "top_features": [
+        {
+          "name": "NOAA ProbTor",
+          "value": 4.0,
+          "log_odds": 1.5317
+        },
+        {
+          "name": "NOAA ProbWind",
+          "value": 46.0,
+          "log_odds": 0.4272
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.4126
+        },
+        {
+          "name": "ProbSevere composite",
+          "value": 80.0,
+          "log_odds": 0.3453
+        },
+        {
+          "name": "storm size",
+          "value": 200.0,
+          "log_odds": -0.2878
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 0.016969995501277018,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 1.1731469631195068,
+        "grad_tau": 0.08679009974002838,
+        "torsion": 0.009270680136978626,
+        "alignment": -5.51326322555542,
+        "S_field": 0.47506284713745117,
+        "Gamma_field": 0.41912731528282166,
+        "S_over_Gamma": 1.1334571838378906,
+        "Da": 25.52394676208496,
+        "E_coh": 0.4164523780345917,
+        "singularity_count": 2.0,
+        "singularity_conditions_met": 2,
+        "singularity_detail": {
+          "s_over_gamma": true,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 3,
+      "confidence_lo": 0.0732,
+      "confidence_hi": 0.1029,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 0.016969995501277018,
+        "probability_30min": 0.008044732708736088,
+        "probability_90min": 0.02128506419015141,
+        "probability_ef2plus_60min": 0.0010046277292981576,
+        "probability_band_60min": [
+          0.0131397,
+          0.01560802
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [],
+        "drivers": [
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 4.0,
+            "log_odds": 1.5317
+          },
+          {
+            "input": "p_ps_wind",
+            "label": "NOAA ProbWind",
+            "value": 46.0,
+            "log_odds": 0.4272
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.4126
+          },
+          {
+            "input": "p_ps_severe",
+            "label": "ProbSevere composite",
+            "value": 80.0,
+            "log_odds": 0.3453
+          },
+          {
+            "input": "p_size",
+            "label": "storm size",
+            "value": 200.0,
+            "log_odds": -0.2878
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "4f9919c68a54bbe95926723bc500e976b98ea73269ea1cec432990cf1d4d4a48",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 4.0,
+          "p_ps_hail": 72.0,
+          "p_ps_wind": 46.0,
+          "p_ps_severe": 80.0,
+          "p_mucape": 866.0,
+          "p_mlcape": 733.0,
+          "p_mlcin": -13.0,
+          "p_ebshear": 42.0,
+          "p_srh01": 46.0,
+          "p_mesh": 1.5,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 24.0,
+          "p_flash_density": 0.49000000953674316,
+          "p_maxllaz": 0.00800000037997961,
+          "p_p98llaz": 0.007000000216066837,
+          "p_p98mlaz": 0.007000000216066837,
+          "p_lja": 0.699999988079071,
+          "p_size": 200.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 1.100000023841858,
+          "p_cape_m10m30": 424.0,
+          "p_meanwind_1_3kmagl": 23.0,
+          "p_wetbulb_0c_hgt": 8.300000190734863,
+          "p_avg_beam_hgt": 11.850000381469727,
+          "p_maxrc_emiss": 1.7000000476837158,
+          "p_maxrc_icecf": null,
+          "e_age_min": 60.0,
+          "e_n_steps": 3.0,
+          "e_rot_sustained_min": 90.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.0020000000949949026,
+          "e_maxllaz_max": 0.00800000037997961,
+          "e_maxllaz_mean": 0.007000000216066837,
+          "e_maxllaz_slope": 0.0005000000237487257,
+          "e_p98llaz_delta": 0.0010000000474974513,
+          "e_p98llaz_max": 0.007000000216066837,
+          "e_p98llaz_mean": 0.006666666828095913,
+          "e_p98llaz_slope": 1.4681993685648977e-18,
+          "e_ps_tor_delta": 2.0,
+          "e_ps_tor_max": 4.0,
+          "e_ps_tor_mean": 3.0,
+          "e_ps_tor_slope": 0.5,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": 0.28999999165534973,
+          "e_mesh_max": 1.5,
+          "e_mesh_mean": 1.3766666650772095,
+          "e_mesh_slope": 0.03999999910593033,
+          "e_flash_rate_delta": 15.0,
+          "e_flash_rate_max": 24.0,
+          "e_flash_rate_mean": 13.0,
+          "e_flash_rate_slope": 9.0,
+          "e_size_delta": -14.0,
+          "e_size_max": 214.0,
+          "e_size_mean": 160.3333282470703,
+          "e_size_slope": 66.5,
+          "h80_hrrr_cape": 380.0,
+          "h80_hrrr_cin": -41.993751525878906,
+          "h80_hrrr_srh01": 98.4000015258789,
+          "h80_hrrr_srh03": 167.5,
+          "h80_hrrr_shear06": 17.1828556060791,
+          "h80_hrrr_shear01": 6.125950813293457,
+          "h80_hrrr_pwat": 22.138202667236328,
+          "h80_hrrr_t2m": 291.089599609375,
+          "h80_hrrr_td2m": 286.6527099609375,
+          "h80_hrrr_refc": -10.0,
+          "h80_hrrr_stp": 0.14277808368206024,
+          "h80_hrrr_srh05_est": 63.959999084472656,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -108.52,
+              32.26
+            ],
+            [
+              -108.49,
+              32.26
+            ],
+            [
+              -108.47,
+              32.25
+            ],
+            [
+              -108.45,
+              32.23
+            ],
+            [
+              -108.44,
+              32.19
+            ],
+            [
+              -108.45,
+              32.17
+            ],
+            [
+              -108.52,
+              32.11
+            ],
+            [
+              -108.58,
+              32.11
+            ],
+            [
+              -108.6,
+              32.13
+            ],
+            [
+              -108.61,
+              32.17
+            ],
+            [
+              -108.6,
+              32.19
+            ],
+            [
+              -108.54,
+              32.25
+            ],
+            [
+              -108.52,
+              32.26
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 0.016969995501277018,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "4f9919c68a54bbe95926723bc500e976b98ea73269ea1cec432990cf1d4d4a48",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 0.016969995501277018,
+        "probability": 0.1,
+        "confidence_lo": 0.0732,
+        "confidence_hi": 0.1029,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "45eebf777e2b419c2faaf19be85ae9b53ec34200d45125e4f7b0deca14f525fe",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "19b55f5ffa2b6f3b89e1ae46a6b8fdcaad3c7ffc7a958a50b5157d34e53a88003595bd6692c5ccaa23badc7db43411c5d835c5af0562d0f965f894415e6cab07"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "45eebf777e2b419c2faaf19be85ae9b53ec34200d45125e4f7b0deca14f525fe",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 0.02043676054653735,
+        "p60_w": {
+          "margin": 2.317922898028983,
+          "served": 0.016969995501277018,
+          "recal": 0.02043676054653735
+        },
+        "p60": {
+          "margin": 2.2841612380119614,
+          "served": 0.01671701380208214,
+          "recal": 0.02481426676443427
+        },
+        "p30": {
+          "margin": 2.0057856665016494,
+          "served": 0.008044732708736088,
+          "recal": 0.012399309099557694
+        },
+        "p90": {
+          "margin": 2.3619629496043895,
+          "served": 0.02128506419015141,
+          "recal": 0.02729459422254391
+        }
+      }
+    },
+    {
+      "storm_id": "1210468",
+      "lat": 31.8708,
+      "lon": -109.1669,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0843,
+      "risk_band": "low",
+      "ps_tor": 3.0,
+      "ps": 0.0,
+      "mucape": 961.0,
+      "ebshear": 29.0,
+      "srh01": 66.0,
+      "maxllaz": 0.006,
+      "mesh": 1.52,
+      "flash_rate": 14.0,
+      "top_features": [
+        {
+          "name": "NOAA ProbTor",
+          "value": 3.0,
+          "log_odds": 1.3446
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.4608
+        },
+        {
+          "name": "ProbSevere composite",
+          "value": 64.0,
+          "log_odds": 0.3917
+        },
+        {
+          "name": "NOAA ProbWind",
+          "value": 26.0,
+          "log_odds": 0.3397
+        },
+        {
+          "name": "storm size",
+          "value": 203.0,
+          "log_odds": -0.2451
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 0.011687390462409197,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 1.2720768451690674,
+        "grad_tau": 0.06642558425664902,
+        "torsion": -0.007291678339242935,
+        "alignment": -5.117196083068848,
+        "S_field": 0.8101037740707397,
+        "Gamma_field": 0.39338624477386475,
+        "S_over_Gamma": 2.0593087673187256,
+        "Da": 23.277484893798828,
+        "E_coh": 0.5797874331474304,
+        "singularity_count": 2.0,
+        "singularity_conditions_met": 2,
+        "singularity_detail": {
+          "s_over_gamma": true,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 5,
+      "confidence_lo": 0.0732,
+      "confidence_hi": 0.0854,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 0.011687390462409197,
+        "probability_30min": 0.005458156879285303,
+        "probability_90min": 0.015251240451615031,
+        "probability_ef2plus_60min": 0.0008817729320059928,
+        "probability_band_60min": [
+          0.00948335,
+          0.01141079
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [],
+        "drivers": [
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 3.0,
+            "log_odds": 1.3446
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.4608
+          },
+          {
+            "input": "p_ps_severe",
+            "label": "ProbSevere composite",
+            "value": 64.0,
+            "log_odds": 0.3917
+          },
+          {
+            "input": "p_ps_wind",
+            "label": "NOAA ProbWind",
+            "value": 26.0,
+            "log_odds": 0.3397
+          },
+          {
+            "input": "p_size",
+            "label": "storm size",
+            "value": 203.0,
+            "log_odds": -0.2451
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "3065991733e58d4b871b2dc926ef32c09c8c721003ba5657281657944da33dc0",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 3.0,
+          "p_ps_hail": 63.0,
+          "p_ps_wind": 26.0,
+          "p_ps_severe": 64.0,
+          "p_mucape": 961.0,
+          "p_mlcape": 754.0,
+          "p_mlcin": -5.0,
+          "p_ebshear": 29.0,
+          "p_srh01": 66.0,
+          "p_mesh": 1.5199999809265137,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 14.0,
+          "p_flash_density": 0.5400000214576721,
+          "p_maxllaz": 0.006000000052154064,
+          "p_p98llaz": 0.004999999888241291,
+          "p_p98mlaz": 0.004999999888241291,
+          "p_lja": -1.0,
+          "p_size": 203.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 1.0,
+          "p_cape_m10m30": 451.0,
+          "p_meanwind_1_3kmagl": 24.0,
+          "p_wetbulb_0c_hgt": 7.300000190734863,
+          "p_avg_beam_hgt": 8.260000228881836,
+          "p_maxrc_emiss": 0.0,
+          "p_maxrc_icecf": null,
+          "e_age_min": 120.0,
+          "e_n_steps": 5.0,
+          "e_rot_sustained_min": 150.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.0,
+          "e_maxllaz_max": 0.006000000052154064,
+          "e_maxllaz_mean": 0.00559999980032444,
+          "e_maxllaz_slope": 0.0003000000142492354,
+          "e_p98llaz_delta": 0.0010000000474974513,
+          "e_p98llaz_max": 0.006000000052154064,
+          "e_p98llaz_mean": 0.004999999888241291,
+          "e_p98llaz_slope": -9.999999747378752e-05,
+          "e_ps_tor_delta": 1.0,
+          "e_ps_tor_max": 3.0,
+          "e_ps_tor_mean": 2.0,
+          "e_ps_tor_slope": 0.5,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": 0.07999999821186066,
+          "e_mesh_max": 1.5199999809265137,
+          "e_mesh_mean": 0.9440000057220459,
+          "e_mesh_slope": 0.35899999737739563,
+          "e_flash_rate_delta": -8.0,
+          "e_flash_rate_max": 22.0,
+          "e_flash_rate_mean": 9.800000190734863,
+          "e_flash_rate_slope": 4.199999809265137,
+          "e_size_delta": -12.0,
+          "e_size_max": 244.0,
+          "e_size_mean": 196.39999389648438,
+          "e_size_slope": 15.5,
+          "h80_hrrr_cape": 920.0,
+          "h80_hrrr_cin": -28.22347068786621,
+          "h80_hrrr_srh01": 136.8000030517578,
+          "h80_hrrr_srh03": 279.70001220703125,
+          "h80_hrrr_shear06": 18.112972259521484,
+          "h80_hrrr_shear01": 5.8066253662109375,
+          "h80_hrrr_pwat": 20.62308692932129,
+          "h80_hrrr_t2m": 293.5931091308594,
+          "h80_hrrr_td2m": 285.9229431152344,
+          "h80_hrrr_refc": -10.0,
+          "h80_hrrr_stp": 0.5065836310386658,
+          "h80_hrrr_srh05_est": 75.24000549316406,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -109.17,
+              31.94
+            ],
+            [
+              -109.14,
+              31.94
+            ],
+            [
+              -109.1,
+              31.92
+            ],
+            [
+              -109.08,
+              31.89
+            ],
+            [
+              -109.09,
+              31.83
+            ],
+            [
+              -109.14,
+              31.79
+            ],
+            [
+              -109.19,
+              31.79
+            ],
+            [
+              -109.21,
+              31.81
+            ],
+            [
+              -109.22,
+              31.81
+            ],
+            [
+              -109.24,
+              31.84
+            ],
+            [
+              -109.23,
+              31.89
+            ],
+            [
+              -109.19,
+              31.93
+            ],
+            [
+              -109.17,
+              31.94
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 0.011687390462409197,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "3065991733e58d4b871b2dc926ef32c09c8c721003ba5657281657944da33dc0",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 0.011687390462409197,
+        "probability": 0.0843,
+        "confidence_lo": 0.0732,
+        "confidence_hi": 0.0854,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "c6e1b918ada9bd76ba753746139ef91e8b06d9a266b49aeb8dd24065926a610b",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "4103ffa7414a15e8365fa5754bcf44b8e1684c16fffbe844aade44be07fcf2882e9b24434679f44378690622cdeaecfff61fb0a0783fa1559d6b71d3d8f99b0e"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "c6e1b918ada9bd76ba753746139ef91e8b06d9a266b49aeb8dd24065926a610b",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 0.013769159328482314,
+        "p60_w": {
+          "margin": 1.941856516206609,
+          "served": 0.011687390462409197,
+          "recal": 0.013769159328482314
+        },
+        "p60": {
+          "margin": 2.071631528380947,
+          "served": 0.013511532449883866,
+          "recal": 0.019667080006571875
+        },
+        "p30": {
+          "margin": 1.6276704751109843,
+          "served": 0.005458156879285303,
+          "recal": 0.00835585509626057
+        },
+        "p90": {
+          "margin": 2.026633591238558,
+          "served": 0.015251240451615031,
+          "recal": 0.01896914080104956
+        }
+      }
+    },
+    {
+      "storm_id": "1210569",
+      "lat": 31.825,
+      "lon": -109.881,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0226,
+      "risk_band": "minimal",
+      "ps_tor": 2.0,
+      "ps": 0.0,
+      "mucape": 1144.0,
+      "ebshear": 36.0,
+      "srh01": 61.0,
+      "maxllaz": 0.005,
+      "mesh": 1.1,
+      "flash_rate": 8.0,
+      "top_features": [
+        {
+          "name": "NOAA ProbTor",
+          "value": 2.0,
+          "log_odds": 1.1251
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.4337
+        },
+        {
+          "name": "storm motion (east)",
+          "value": 0.0,
+          "log_odds": 0.3855
+        },
+        {
+          "name": "NOAA ProbWind",
+          "value": 31.0,
+          "log_odds": 0.3586
+        },
+        {
+          "name": "wet-bulb zero height",
+          "value": 7.6,
+          "log_odds": 0.1701
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 0.00769321877127289,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 1.2720768451690674,
+        "grad_tau": 0.06642558425664902,
+        "torsion": -0.007291678339242935,
+        "alignment": -5.117196083068848,
+        "S_field": 0.8101037740707397,
+        "Gamma_field": 0.39338624477386475,
+        "S_over_Gamma": 2.0593087673187256,
+        "Da": 23.277484893798828,
+        "E_coh": 0.5797874331474304,
+        "singularity_count": 2.0,
+        "singularity_conditions_met": 2,
+        "singularity_detail": {
+          "s_over_gamma": true,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 1,
+      "confidence_lo": 0.0057,
+      "confidence_hi": 0.023,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 0.00769321877127289,
+        "probability_30min": 0.003178225510544378,
+        "probability_90min": 0.013009840056733989,
+        "probability_ef2plus_60min": 0.0009842261099542791,
+        "probability_band_60min": [
+          0.0075084,
+          0.00780401
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [],
+        "drivers": [
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 2.0,
+            "log_odds": 1.1251
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.4337
+          },
+          {
+            "input": "p_motion_east",
+            "label": "storm motion (east)",
+            "value": 0.0,
+            "log_odds": 0.3855
+          },
+          {
+            "input": "p_ps_wind",
+            "label": "NOAA ProbWind",
+            "value": 31.0,
+            "log_odds": 0.3586
+          },
+          {
+            "input": "p_wetbulb_0c_hgt",
+            "label": "wet-bulb zero height",
+            "value": 7.599999904632568,
+            "log_odds": 0.1701
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "1595359957b011de919a0a79580fb227e2830f7ffe538049d2366adc4aa8c846",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 2.0,
+          "p_ps_hail": 52.0,
+          "p_ps_wind": 31.0,
+          "p_ps_severe": 55.0,
+          "p_mucape": 1144.0,
+          "p_mlcape": 903.0,
+          "p_mlcin": -6.0,
+          "p_ebshear": 36.0,
+          "p_srh01": 61.0,
+          "p_mesh": 1.100000023841858,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 8.0,
+          "p_flash_density": 0.2199999988079071,
+          "p_maxllaz": 0.004999999888241291,
+          "p_p98llaz": 0.004000000189989805,
+          "p_p98mlaz": 0.004000000189989805,
+          "p_lja": 0.0,
+          "p_size": 67.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 1.0,
+          "p_cape_m10m30": 457.0,
+          "p_meanwind_1_3kmagl": 24.0,
+          "p_wetbulb_0c_hgt": 7.599999904632568,
+          "p_avg_beam_hgt": 3.0899999141693115,
+          "p_maxrc_emiss": 0.0,
+          "p_maxrc_icecf": null,
+          "e_age_min": 0.0,
+          "e_n_steps": 1.0,
+          "e_rot_sustained_min": 30.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.0,
+          "e_maxllaz_max": 0.004999999888241291,
+          "e_maxllaz_mean": 0.004999999888241291,
+          "e_maxllaz_slope": 0.0,
+          "e_p98llaz_delta": 0.0,
+          "e_p98llaz_max": 0.004000000189989805,
+          "e_p98llaz_mean": 0.004000000189989805,
+          "e_p98llaz_slope": 0.0,
+          "e_ps_tor_delta": 0.0,
+          "e_ps_tor_max": 2.0,
+          "e_ps_tor_mean": 2.0,
+          "e_ps_tor_slope": 0.0,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": 0.0,
+          "e_mesh_max": 1.100000023841858,
+          "e_mesh_mean": 1.100000023841858,
+          "e_mesh_slope": 0.0,
+          "e_flash_rate_delta": 0.0,
+          "e_flash_rate_max": 8.0,
+          "e_flash_rate_mean": 8.0,
+          "e_flash_rate_slope": 0.0,
+          "e_size_delta": 0.0,
+          "e_size_max": 67.0,
+          "e_size_mean": 67.0,
+          "e_size_slope": 0.0,
+          "h80_hrrr_cape": 920.0,
+          "h80_hrrr_cin": -28.22347068786621,
+          "h80_hrrr_srh01": 136.8000030517578,
+          "h80_hrrr_srh03": 279.70001220703125,
+          "h80_hrrr_shear06": 18.112972259521484,
+          "h80_hrrr_shear01": 5.8066253662109375,
+          "h80_hrrr_pwat": 20.62308692932129,
+          "h80_hrrr_t2m": 293.5931091308594,
+          "h80_hrrr_td2m": 285.9229431152344,
+          "h80_hrrr_refc": -10.0,
+          "h80_hrrr_stp": 0.5065836310386658,
+          "h80_hrrr_srh05_est": 75.24000549316406,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -109.88,
+              31.86
+            ],
+            [
+              -109.86,
+              31.86
+            ],
+            [
+              -109.84,
+              31.84
+            ],
+            [
+              -109.84,
+              31.79
+            ],
+            [
+              -109.86,
+              31.78
+            ],
+            [
+              -109.91,
+              31.78
+            ],
+            [
+              -109.92,
+              31.8
+            ],
+            [
+              -109.92,
+              31.84
+            ],
+            [
+              -109.9,
+              31.84
+            ],
+            [
+              -109.88,
+              31.86
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 0.00769321877127289,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "1595359957b011de919a0a79580fb227e2830f7ffe538049d2366adc4aa8c846",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 0.00769321877127289,
+        "probability": 0.0226,
+        "confidence_lo": 0.0057,
+        "confidence_hi": 0.023,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "64f926b5f12c486609024f55b4bc395b75504b256b8d71f767c226012a2b726e",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "781a6c0b1c1799d2e8ae9380ab3942681bdd9c4c9070277ad32d8b9bcda0d2020e3d251ae8a8cccc6bbd0f4b5fab78f935fb22067863bc2ae341375cb5615e0d"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "64f926b5f12c486609024f55b4bc395b75504b256b8d71f767c226012a2b726e",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 0.008838408407501547,
+        "p60_w": {
+          "margin": 1.5221400734789237,
+          "served": 0.00769321877127289,
+          "recal": 0.008838408407501547
+        },
+        "p60": {
+          "margin": 1.4714784405163153,
+          "served": 0.007384569462071109,
+          "recal": 0.010147982830153538
+        },
+        "p30": {
+          "margin": 1.1018305795190462,
+          "served": 0.003178225510544378,
+          "recal": 0.004816124801821683
+        },
+        "p90": {
+          "margin": 1.8673815860817409,
+          "served": 0.013009840056733989,
+          "recal": 0.015943270821344523
+        }
+      }
+    },
+    {
+      "storm_id": "1210510",
+      "lat": 31.6733,
+      "lon": -109.465,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0181,
+      "risk_band": "minimal",
+      "ps_tor": 3.0,
+      "ps": 0.0,
+      "mucape": 1114.0,
+      "ebshear": 31.0,
+      "srh01": 103.0,
+      "maxllaz": 0.005,
+      "mesh": 0.97,
+      "flash_rate": 1.0,
+      "top_features": [
+        {
+          "name": "NOAA ProbTor",
+          "value": 3.0,
+          "log_odds": 1.458
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.4722
+        },
+        {
+          "name": "storm motion (east)",
+          "value": 0.0,
+          "log_odds": 0.396
+        },
+        {
+          "name": "wet-bulb zero height",
+          "value": 7.4,
+          "log_odds": 0.2104
+        },
+        {
+          "name": "storm motion (south)",
+          "value": -1.0,
+          "log_odds": -0.1624
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 0.007157666614732821,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 1.2720768451690674,
+        "grad_tau": 0.06642558425664902,
+        "torsion": -0.007291678339242935,
+        "alignment": -5.117196083068848,
+        "S_field": 0.8101037740707397,
+        "Gamma_field": 0.39338624477386475,
+        "S_over_Gamma": 2.0593087673187256,
+        "Da": 23.277484893798828,
+        "E_coh": 0.5797874331474304,
+        "singularity_count": 2.0,
+        "singularity_conditions_met": 2,
+        "singularity_detail": {
+          "s_over_gamma": true,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 3,
+      "confidence_lo": 0.0057,
+      "confidence_hi": 0.0183,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 0.007157666614732821,
+        "probability_30min": 0.0023155223476899584,
+        "probability_90min": 0.008443644268685739,
+        "probability_ef2plus_60min": 0.0009415831397081559,
+        "probability_band_60min": [
+          0.00632224,
+          0.00760719
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [],
+        "drivers": [
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 3.0,
+            "log_odds": 1.458
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.4722
+          },
+          {
+            "input": "p_motion_east",
+            "label": "storm motion (east)",
+            "value": 0.0,
+            "log_odds": 0.396
+          },
+          {
+            "input": "p_wetbulb_0c_hgt",
+            "label": "wet-bulb zero height",
+            "value": 7.400000095367432,
+            "log_odds": 0.2104
+          },
+          {
+            "input": "p_motion_south",
+            "label": "storm motion (south)",
+            "value": -1.0,
+            "log_odds": -0.1624
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "9e3c21091cdb0d5524f1773a3dce9d5fd596ab54a98aa939ec0e3a7311810739",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 3.0,
+          "p_ps_hail": 28.0,
+          "p_ps_wind": 4.0,
+          "p_ps_severe": 28.0,
+          "p_mucape": 1114.0,
+          "p_mlcape": 897.0,
+          "p_mlcin": -7.0,
+          "p_ebshear": 31.0,
+          "p_srh01": 103.0,
+          "p_mesh": 0.9700000286102295,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 1.0,
+          "p_flash_density": 0.11999999731779099,
+          "p_maxllaz": 0.004999999888241291,
+          "p_p98llaz": 0.004999999888241291,
+          "p_p98mlaz": 0.004999999888241291,
+          "p_lja": 0.0,
+          "p_size": 82.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 1.100000023841858,
+          "p_cape_m10m30": 504.0,
+          "p_meanwind_1_3kmagl": 26.0,
+          "p_wetbulb_0c_hgt": 7.400000095367432,
+          "p_avg_beam_hgt": 6.03000020980835,
+          "p_maxrc_emiss": 0.0,
+          "p_maxrc_icecf": null,
+          "e_age_min": 60.0,
+          "e_n_steps": 3.0,
+          "e_rot_sustained_min": 60.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.003000000026077032,
+          "e_maxllaz_max": 0.004999999888241291,
+          "e_maxllaz_mean": 0.003666666569188237,
+          "e_maxllaz_slope": 0.0005000000237487257,
+          "e_p98llaz_delta": 0.0020000000949949026,
+          "e_p98llaz_max": 0.004999999888241291,
+          "e_p98llaz_mean": 0.003666666569188237,
+          "e_p98llaz_slope": 0.0010000000474974513,
+          "e_ps_tor_delta": 2.0,
+          "e_ps_tor_max": 3.0,
+          "e_ps_tor_mean": 1.6666666269302368,
+          "e_ps_tor_slope": 1.0,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": -0.8799999952316284,
+          "e_mesh_max": 1.850000023841858,
+          "e_mesh_mean": 1.090000033378601,
+          "e_mesh_slope": 0.25999999046325684,
+          "e_flash_rate_delta": -6.0,
+          "e_flash_rate_max": 7.0,
+          "e_flash_rate_mean": 4.333333492279053,
+          "e_flash_rate_slope": -2.0,
+          "e_size_delta": 13.0,
+          "e_size_max": 82.0,
+          "e_size_mean": 69.33333587646484,
+          "e_size_slope": 12.5,
+          "h80_hrrr_cape": 920.0,
+          "h80_hrrr_cin": -28.22347068786621,
+          "h80_hrrr_srh01": 136.8000030517578,
+          "h80_hrrr_srh03": 279.70001220703125,
+          "h80_hrrr_shear06": 18.112972259521484,
+          "h80_hrrr_shear01": 5.8066253662109375,
+          "h80_hrrr_pwat": 20.62308692932129,
+          "h80_hrrr_t2m": 293.5931091308594,
+          "h80_hrrr_td2m": 285.9229431152344,
+          "h80_hrrr_refc": -10.0,
+          "h80_hrrr_stp": 0.5065836310386658,
+          "h80_hrrr_srh05_est": 75.24000549316406,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -109.48,
+              31.71
+            ],
+            [
+              -109.47,
+              31.7
+            ],
+            [
+              -109.43,
+              31.7
+            ],
+            [
+              -109.41,
+              31.68
+            ],
+            [
+              -109.41,
+              31.64
+            ],
+            [
+              -109.43,
+              31.62
+            ],
+            [
+              -109.48,
+              31.62
+            ],
+            [
+              -109.5,
+              31.64
+            ],
+            [
+              -109.51,
+              31.67
+            ],
+            [
+              -109.5,
+              31.69
+            ],
+            [
+              -109.48,
+              31.7
+            ],
+            [
+              -109.48,
+              31.71
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 0.007157666614732821,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "9e3c21091cdb0d5524f1773a3dce9d5fd596ab54a98aa939ec0e3a7311810739",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 0.007157666614732821,
+        "probability": 0.0181,
+        "confidence_lo": 0.0057,
+        "confidence_hi": 0.0183,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "caedcad2473f2b15a452cadd385ad69172004f49cc2f2547c209958ca9aeb5a6",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "61c8f7c3dd47cd19ed95d51ecfef2bf3001e93d672daba80c0d80287e4c3207d18dbc29779c0b82391ea3144e10cbcc3d10cd5243bb8e75668673754531a0802"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "caedcad2473f2b15a452cadd385ad69172004f49cc2f2547c209958ca9aeb5a6",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 0.00818721448035493,
+        "p60_w": {
+          "margin": 1.4498736841864905,
+          "served": 0.007157666614732821,
+          "recal": 0.00818721448035493
+        },
+        "p60": {
+          "margin": 1.318555592959065,
+          "served": 0.006327704720071593,
+          "recal": 0.008566090721862317
+        },
+        "p30": {
+          "margin": 0.7943573488741753,
+          "served": 0.0023155223476899584,
+          "recal": 0.003486993521118432
+        },
+        "p90": {
+          "margin": 1.4358295614886427,
+          "served": 0.008443644268685739,
+          "recal": 0.009933059906825395
+        }
+      }
+    },
+    {
+      "storm_id": "1210558",
+      "lat": 32.1487,
+      "lon": -110.0312,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0142,
+      "risk_band": "minimal",
+      "ps_tor": 2.0,
+      "ps": 0.0,
+      "mucape": 839.0,
+      "ebshear": 36.0,
+      "srh01": 47.0,
+      "maxllaz": 0.006,
+      "mesh": 0.92,
+      "flash_rate": 9.0,
+      "top_features": [
+        {
+          "name": "NOAA ProbTor",
+          "value": 2.0,
+          "log_odds": 1.1227
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.5049
+        },
+        {
+          "name": "NOAA ProbWind",
+          "value": 27.0,
+          "log_odds": 0.3442
+        },
+        {
+          "name": "storm motion (east)",
+          "value": 0.0,
+          "log_odds": 0.3095
+        },
+        {
+          "name": "ProbSevere composite",
+          "value": 47.0,
+          "log_odds": 0.1501
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 0.006457802694014801,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 1.2023184299468994,
+        "grad_tau": 0.11624313145875931,
+        "torsion": -0.022881891578435898,
+        "alignment": 2.2053494453430176,
+        "S_field": 0.534338653087616,
+        "Gamma_field": 0.38452333211898804,
+        "S_over_Gamma": 1.3896130323410034,
+        "Da": 22.768115997314453,
+        "E_coh": 0.4643498659133911,
+        "singularity_count": 3.0,
+        "singularity_conditions_met": 3,
+        "singularity_detail": {
+          "s_over_gamma": true,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": true,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 2,
+      "confidence_lo": 0.0057,
+      "confidence_hi": 0.0143,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 0.006457802694014801,
+        "probability_30min": 0.0031749780596715465,
+        "probability_90min": 0.011521172570579805,
+        "probability_ef2plus_60min": 0.0004402126664428002,
+        "probability_band_60min": [
+          0.00540096,
+          0.00642102
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [],
+        "drivers": [
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 2.0,
+            "log_odds": 1.1227
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.5049
+          },
+          {
+            "input": "p_ps_wind",
+            "label": "NOAA ProbWind",
+            "value": 27.0,
+            "log_odds": 0.3442
+          },
+          {
+            "input": "p_motion_east",
+            "label": "storm motion (east)",
+            "value": 0.0,
+            "log_odds": 0.3095
+          },
+          {
+            "input": "p_ps_severe",
+            "label": "ProbSevere composite",
+            "value": 47.0,
+            "log_odds": 0.1501
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "a00c2f3876ae44698064073eeaad3ccd5db108a16632022919c37ccf04308d15",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 2.0,
+          "p_ps_hail": 47.0,
+          "p_ps_wind": 27.0,
+          "p_ps_severe": 47.0,
+          "p_mucape": 839.0,
+          "p_mlcape": 715.0,
+          "p_mlcin": -6.0,
+          "p_ebshear": 36.0,
+          "p_srh01": 47.0,
+          "p_mesh": 0.9200000166893005,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 9.0,
+          "p_flash_density": 0.3100000023841858,
+          "p_maxllaz": 0.006000000052154064,
+          "p_p98llaz": 0.006000000052154064,
+          "p_p98mlaz": 0.008999999612569809,
+          "p_lja": 0.0,
+          "p_size": 51.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 1.0,
+          "p_cape_m10m30": 361.0,
+          "p_meanwind_1_3kmagl": 25.0,
+          "p_wetbulb_0c_hgt": 8.100000381469727,
+          "p_avg_beam_hgt": 2.5299999713897705,
+          "p_maxrc_emiss": 0.0,
+          "p_maxrc_icecf": null,
+          "e_age_min": 30.0,
+          "e_n_steps": 2.0,
+          "e_rot_sustained_min": 30.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.004000000189989805,
+          "e_maxllaz_max": 0.006000000052154064,
+          "e_maxllaz_mean": 0.004000000189989805,
+          "e_maxllaz_slope": 0.004000000189989805,
+          "e_p98llaz_delta": 0.004000000189989805,
+          "e_p98llaz_max": 0.006000000052154064,
+          "e_p98llaz_mean": 0.004000000189989805,
+          "e_p98llaz_slope": 0.004000000189989805,
+          "e_ps_tor_delta": 1.0,
+          "e_ps_tor_max": 2.0,
+          "e_ps_tor_mean": 1.5,
+          "e_ps_tor_slope": 1.0,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": 0.23999999463558197,
+          "e_mesh_max": 0.9200000166893005,
+          "e_mesh_mean": 0.800000011920929,
+          "e_mesh_slope": 0.23999999463558197,
+          "e_flash_rate_delta": 8.0,
+          "e_flash_rate_max": 9.0,
+          "e_flash_rate_mean": 5.0,
+          "e_flash_rate_slope": 8.0,
+          "e_size_delta": 10.0,
+          "e_size_max": 51.0,
+          "e_size_mean": 46.0,
+          "e_size_slope": 10.0,
+          "h80_hrrr_cape": 470.0,
+          "h80_hrrr_cin": -22.958698272705078,
+          "h80_hrrr_srh01": 104.5,
+          "h80_hrrr_srh03": 227.0,
+          "h80_hrrr_shear06": 17.823583602905273,
+          "h80_hrrr_shear01": 5.392685890197754,
+          "h80_hrrr_pwat": 19.007080078125,
+          "h80_hrrr_t2m": 295.0557861328125,
+          "h80_hrrr_td2m": 286.0760498046875,
+          "h80_hrrr_refc": -10.0,
+          "h80_hrrr_stp": 0.17071044445037842,
+          "h80_hrrr_srh05_est": 57.47500228881836,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -110.04,
+              32.18
+            ],
+            [
+              -110.01,
+              32.18
+            ],
+            [
+              -109.99,
+              32.15
+            ],
+            [
+              -110.01,
+              32.11
+            ],
+            [
+              -110.04,
+              32.11
+            ],
+            [
+              -110.06,
+              32.12
+            ],
+            [
+              -110.06,
+              32.16
+            ],
+            [
+              -110.04,
+              32.18
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 0.006457802694014801,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "a00c2f3876ae44698064073eeaad3ccd5db108a16632022919c37ccf04308d15",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 0.006457802694014801,
+        "probability": 0.0142,
+        "confidence_lo": 0.0057,
+        "confidence_hi": 0.0143,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "0105b6af72c0b6ec3cbd3ce4d172b0186eac45400f17ce1af66a848205da7d7c",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "f149c88ab1517cb0ce4c272921b13e269c0510a4549ddcea507f7b94e885cddafc3ec0feeeed0618f34c4118e8a8feb7ac0e2dc6fb6df4c540bf33f89e5af301"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "0105b6af72c0b6ec3cbd3ce4d172b0186eac45400f17ce1af66a848205da7d7c",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 0.0073406052189966785,
+        "p60_w": {
+          "margin": 1.3468846257148723,
+          "served": 0.006457802694014801,
+          "recal": 0.0073406052189966785
+        },
+        "p60": {
+          "margin": 1.7818642808909457,
+          "served": 0.010097735289090814,
+          "recal": 0.014300158789560844
+        },
+        "p30": {
+          "margin": 1.1008375709784668,
+          "served": 0.0031749780596715465,
+          "recal": 0.004811108071095471
+        },
+        "p90": {
+          "margin": 1.7458629517665376,
+          "served": 0.011521172570579805,
+          "recal": 0.013958656595618981
+        }
+      }
+    },
+    {
+      "storm_id": "1210553",
+      "lat": 32.6271,
+      "lon": -110.2348,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0072,
+      "risk_band": "minimal",
+      "ps_tor": 1.0,
+      "ps": 0.0,
+      "mucape": 599.0,
+      "ebshear": 33.0,
+      "srh01": 41.0,
+      "maxllaz": 0.01,
+      "mesh": 0.41,
+      "flash_rate": 3.0,
+      "top_features": [
+        {
+          "name": "NOAA ProbTor",
+          "value": 1.0,
+          "log_odds": 0.6962
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.5889
+        },
+        {
+          "name": "NOAA ProbWind",
+          "value": 17.0,
+          "log_odds": 0.3262
+        },
+        {
+          "name": "storm motion (east)",
+          "value": 0.0,
+          "log_odds": 0.2949
+        },
+        {
+          "name": "mixed-layer CAPE",
+          "value": 467.0,
+          "log_odds": -0.242
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 0.004110805607500694,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 1.1604931354522705,
+        "grad_tau": 0.09719157963991165,
+        "torsion": -0.016553666442632675,
+        "alignment": -0.15661048889160156,
+        "S_field": 0.7399739027023315,
+        "Gamma_field": 0.44698071479797363,
+        "S_over_Gamma": 1.655493974685669,
+        "Da": 27.165727615356445,
+        "E_coh": 0.3632323145866394,
+        "singularity_count": 2.0,
+        "singularity_conditions_met": 2,
+        "singularity_detail": {
+          "s_over_gamma": true,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 2,
+      "confidence_lo": 0.0057,
+      "confidence_hi": 0.0072,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 0.004110805607500694,
+        "probability_30min": 0.0018783970079413912,
+        "probability_90min": 0.00488909056325821,
+        "probability_ef2plus_60min": 4.314339855562827e-05,
+        "probability_band_60min": [
+          0.00402598,
+          0.00405068
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [],
+        "drivers": [
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 1.0,
+            "log_odds": 0.6962
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.5889
+          },
+          {
+            "input": "p_ps_wind",
+            "label": "NOAA ProbWind",
+            "value": 17.0,
+            "log_odds": 0.3262
+          },
+          {
+            "input": "p_motion_east",
+            "label": "storm motion (east)",
+            "value": 0.0,
+            "log_odds": 0.2949
+          },
+          {
+            "input": "p_mlcape",
+            "label": "mixed-layer CAPE",
+            "value": 467.0,
+            "log_odds": -0.242
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "630f4ba1ae30c369369947cd518472f118a74f3c9fee35493fca408517c6de09",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 1.0,
+          "p_ps_hail": 5.0,
+          "p_ps_wind": 17.0,
+          "p_ps_severe": 17.0,
+          "p_mucape": 599.0,
+          "p_mlcape": 467.0,
+          "p_mlcin": -5.0,
+          "p_ebshear": 33.0,
+          "p_srh01": 41.0,
+          "p_mesh": 0.4099999964237213,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 3.0,
+          "p_flash_density": 0.23000000417232513,
+          "p_maxllaz": 0.009999999776482582,
+          "p_p98llaz": 0.007000000216066837,
+          "p_p98mlaz": 0.004999999888241291,
+          "p_lja": 0.0,
+          "p_size": 335.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 0.8999999761581421,
+          "p_cape_m10m30": 242.0,
+          "p_meanwind_1_3kmagl": 20.0,
+          "p_wetbulb_0c_hgt": 7.0,
+          "p_avg_beam_hgt": 3.509999990463257,
+          "p_maxrc_emiss": 0.30000001192092896,
+          "p_maxrc_icecf": null,
+          "e_age_min": 30.0,
+          "e_n_steps": 2.0,
+          "e_rot_sustained_min": 60.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.0010000000474974513,
+          "e_maxllaz_max": 0.009999999776482582,
+          "e_maxllaz_mean": 0.009499999694526196,
+          "e_maxllaz_slope": 0.0010000000474974513,
+          "e_p98llaz_delta": 0.0010000000474974513,
+          "e_p98llaz_max": 0.007000000216066837,
+          "e_p98llaz_mean": 0.006500000134110451,
+          "e_p98llaz_slope": 0.0010000000474974513,
+          "e_ps_tor_delta": -1.0,
+          "e_ps_tor_max": 2.0,
+          "e_ps_tor_mean": 1.5,
+          "e_ps_tor_slope": -1.0,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": -0.49000000953674316,
+          "e_mesh_max": 0.8999999761581421,
+          "e_mesh_mean": 0.6549999713897705,
+          "e_mesh_slope": -0.49000000953674316,
+          "e_flash_rate_delta": -5.0,
+          "e_flash_rate_max": 8.0,
+          "e_flash_rate_mean": 5.5,
+          "e_flash_rate_slope": -5.0,
+          "e_size_delta": 52.0,
+          "e_size_max": 335.0,
+          "e_size_mean": 309.0,
+          "e_size_slope": 52.0,
+          "h80_hrrr_cape": 430.0,
+          "h80_hrrr_cin": -35.06297302246094,
+          "h80_hrrr_srh01": 159.0,
+          "h80_hrrr_srh03": 280.20001220703125,
+          "h80_hrrr_shear06": 19.266258239746094,
+          "h80_hrrr_shear01": 4.260878562927246,
+          "h80_hrrr_pwat": 18.585018157958984,
+          "h80_hrrr_t2m": 294.5402526855469,
+          "h80_hrrr_td2m": 285.4153137207031,
+          "h80_hrrr_refc": 52.9375,
+          "h80_hrrr_stp": 0.251557320356369,
+          "h80_hrrr_srh05_est": 87.45000457763672,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -110.11,
+              32.74
+            ],
+            [
+              -110.09,
+              32.72
+            ],
+            [
+              -110.09,
+              32.69
+            ],
+            [
+              -110.14,
+              32.64
+            ],
+            [
+              -110.17,
+              32.64
+            ],
+            [
+              -110.21,
+              32.61
+            ],
+            [
+              -110.21,
+              32.59
+            ],
+            [
+              -110.22,
+              32.58
+            ],
+            [
+              -110.23,
+              32.54
+            ],
+            [
+              -110.29,
+              32.51
+            ],
+            [
+              -110.34,
+              32.51
+            ],
+            [
+              -110.36,
+              32.53
+            ],
+            [
+              -110.36,
+              32.56
+            ],
+            [
+              -110.37,
+              32.57
+            ],
+            [
+              -110.33,
+              32.62
+            ],
+            [
+              -110.33,
+              32.63
+            ],
+            [
+              -110.3,
+              32.66
+            ],
+            [
+              -110.28,
+              32.66
+            ],
+            [
+              -110.23,
+              32.71
+            ],
+            [
+              -110.16,
+              32.72
+            ],
+            [
+              -110.11,
+              32.74
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 0.004110805607500694,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "630f4ba1ae30c369369947cd518472f118a74f3c9fee35493fca408517c6de09",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 0.004110805607500694,
+        "probability": 0.0072,
+        "confidence_lo": 0.0057,
+        "confidence_hi": 0.0072,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "a261baac06a83e406442b55c276a8bd8f47a91f322d875ce0ea925ab68bd8a45",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "424c8aaf113ee038451cf53c69d50f7b7deb3fd7f9e0db474b4526c9dcad320ea777547419c4e7a24284935d2fb2e6ea005aa286967c46ef15405c29f8d56e02"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "a261baac06a83e406442b55c276a8bd8f47a91f322d875ce0ea925ab68bd8a45",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 0.0045454586082585725,
+        "p60_w": {
+          "margin": 0.8955306861033702,
+          "served": 0.004110805607500694,
+          "recal": 0.0045454586082585725
+        },
+        "p60": {
+          "margin": 0.8010092193527644,
+          "served": 0.0037479050377057614,
+          "recal": 0.004819418388162359
+        },
+        "p30": {
+          "margin": 0.5913574981134397,
+          "served": 0.0018783970079413912,
+          "recal": 0.002816870317929432
+        },
+        "p90": {
+          "margin": 0.8925852782130038,
+          "served": 0.00488909056325821,
+          "recal": 0.0054579975079434035
+        }
+      }
+    },
+    {
+      "storm_id": "1210555",
+      "lat": 33.3762,
+      "lon": -109.0075,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0072,
+      "risk_band": "minimal",
+      "ps_tor": 1.0,
+      "ps": 0.0,
+      "mucape": 654.0,
+      "ebshear": 23.0,
+      "srh01": 34.0,
+      "maxllaz": 0.003,
+      "mesh": 1.18,
+      "flash_rate": 7.0,
+      "top_features": [
+        {
+          "name": "NOAA ProbTor",
+          "value": 1.0,
+          "log_odds": 0.8639
+        },
+        {
+          "name": "wet-bulb zero height",
+          "value": 5.8,
+          "log_odds": 0.6452
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.4974
+        },
+        {
+          "name": "storm motion (east)",
+          "value": 0.0,
+          "log_odds": 0.426
+        },
+        {
+          "name": "mixed-layer CAPE",
+          "value": 456.0,
+          "log_odds": -0.4158
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 0.002470343696402051,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 1.1521152257919312,
+        "grad_tau": 0.0587882399559021,
+        "torsion": -0.00764482794329524,
+        "alignment": -3.06972599029541,
+        "S_field": 0.6272253394126892,
+        "Gamma_field": 0.34010130167007446,
+        "S_over_Gamma": 1.8442308902740479,
+        "Da": 20.047441482543945,
+        "E_coh": 0.39868900179862976,
+        "singularity_count": 2.0,
+        "singularity_conditions_met": 2,
+        "singularity_detail": {
+          "s_over_gamma": true,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 2,
+      "confidence_lo": 0.0057,
+      "confidence_hi": 0.0072,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 0.002470343696402051,
+        "probability_30min": 0.0010310294103309983,
+        "probability_90min": 0.003462207751700905,
+        "probability_ef2plus_60min": 1.4687400721484053e-05,
+        "probability_band_60min": [
+          0.00200883,
+          0.00237107
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [],
+        "drivers": [
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 1.0,
+            "log_odds": 0.8639
+          },
+          {
+            "input": "p_wetbulb_0c_hgt",
+            "label": "wet-bulb zero height",
+            "value": 5.800000190734863,
+            "log_odds": 0.6452
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.4974
+          },
+          {
+            "input": "p_motion_east",
+            "label": "storm motion (east)",
+            "value": 0.0,
+            "log_odds": 0.426
+          },
+          {
+            "input": "p_mlcape",
+            "label": "mixed-layer CAPE",
+            "value": 456.0,
+            "log_odds": -0.4158
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "55a0767b5302357746696bd3c3ebac4b64f16c06259403b0b4b65c37479b4579",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 1.0,
+          "p_ps_hail": 12.0,
+          "p_ps_wind": 3.0,
+          "p_ps_severe": 12.0,
+          "p_mucape": 654.0,
+          "p_mlcape": 456.0,
+          "p_mlcin": -7.0,
+          "p_ebshear": 23.0,
+          "p_srh01": 34.0,
+          "p_mesh": 1.1799999475479126,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 7.0,
+          "p_flash_density": 0.5799999833106995,
+          "p_maxllaz": 0.003000000026077032,
+          "p_p98llaz": 0.003000000026077032,
+          "p_p98mlaz": 0.003000000026077032,
+          "p_lja": 0.0,
+          "p_size": 54.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 0.800000011920929,
+          "p_cape_m10m30": 287.0,
+          "p_meanwind_1_3kmagl": 22.0,
+          "p_wetbulb_0c_hgt": 5.800000190734863,
+          "p_avg_beam_hgt": 15.569999694824219,
+          "p_maxrc_emiss": 0.0,
+          "p_maxrc_icecf": null,
+          "e_age_min": 30.0,
+          "e_n_steps": 2.0,
+          "e_rot_sustained_min": 0.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.0010000000474974513,
+          "e_maxllaz_max": 0.003000000026077032,
+          "e_maxllaz_mean": 0.0024999999441206455,
+          "e_maxllaz_slope": 0.0010000000474974513,
+          "e_p98llaz_delta": 0.0010000000474974513,
+          "e_p98llaz_max": 0.003000000026077032,
+          "e_p98llaz_mean": 0.0024999999441206455,
+          "e_p98llaz_slope": 0.0010000000474974513,
+          "e_ps_tor_delta": 1.0,
+          "e_ps_tor_max": 1.0,
+          "e_ps_tor_mean": 0.5,
+          "e_ps_tor_slope": 1.0,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": 0.6899999976158142,
+          "e_mesh_max": 1.1799999475479126,
+          "e_mesh_mean": 0.8349999785423279,
+          "e_mesh_slope": 0.6899999976158142,
+          "e_flash_rate_delta": -5.0,
+          "e_flash_rate_max": 12.0,
+          "e_flash_rate_mean": 9.5,
+          "e_flash_rate_slope": -5.0,
+          "e_size_delta": -12.0,
+          "e_size_max": 66.0,
+          "e_size_mean": 60.0,
+          "e_size_slope": -12.0,
+          "h80_hrrr_cape": 410.0,
+          "h80_hrrr_cin": -18.298336029052734,
+          "h80_hrrr_srh01": 109.30000305175781,
+          "h80_hrrr_srh03": 215.60000610351562,
+          "h80_hrrr_shear06": 20.80003547668457,
+          "h80_hrrr_shear01": 4.471267223358154,
+          "h80_hrrr_pwat": 15.423955917358398,
+          "h80_hrrr_t2m": 288.8209533691406,
+          "h80_hrrr_td2m": 281.42523193359375,
+          "h80_hrrr_refc": 36.75,
+          "h80_hrrr_stp": 0.20713599026203156,
+          "h80_hrrr_srh05_est": 60.1150016784668,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -109.02,
+              33.41
+            ],
+            [
+              -108.99,
+              33.41
+            ],
+            [
+              -108.98,
+              33.4
+            ],
+            [
+              -108.98,
+              33.35
+            ],
+            [
+              -109.0,
+              33.33
+            ],
+            [
+              -109.02,
+              33.33
+            ],
+            [
+              -109.05,
+              33.37
+            ],
+            [
+              -109.02,
+              33.41
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 0.002470343696402051,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "55a0767b5302357746696bd3c3ebac4b64f16c06259403b0b4b65c37479b4579",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 0.002470343696402051,
+        "probability": 0.0072,
+        "confidence_lo": 0.0057,
+        "confidence_hi": 0.0072,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "0b103efb602758575a282e2446f1567a2e217cb77744a90819b09c184a495b4f",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "750121dcbc79a7767f3dfc662e2cca6b2c7fb6154398b7c251642cb85c0f3d807d15f0eef1af65e377a225ed9b506d3bf9f2a700a828e228618662647ea04d0a"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "0b103efb602758575a282e2446f1567a2e217cb77744a90819b09c184a495b4f",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 0.0026472835062315973,
+        "p60_w": {
+          "margin": 0.3876338878996668,
+          "served": 0.002470343696402051,
+          "recal": 0.0026472835062315973
+        },
+        "p60": {
+          "margin": 0.3720910810507461,
+          "served": 0.002426190711036661,
+          "recal": 0.0029882903654011657
+        },
+        "p30": {
+          "margin": 0.00971524376850801,
+          "served": 0.0010310294103309983,
+          "recal": 0.0015273176052129273
+        },
+        "p90": {
+          "margin": 0.5503004253920639,
+          "served": 0.003462207751700905,
+          "recal": 0.003738510203489632
+        }
+      }
+    },
+    {
+      "storm_id": "1210557",
+      "lat": 33.4133,
+      "lon": -107.4444,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0044,
+      "risk_band": "minimal",
+      "ps_tor": 1.0,
+      "ps": 0.0,
+      "mucape": 709.0,
+      "ebshear": 32.0,
+      "srh01": 51.0,
+      "maxllaz": 0.004,
+      "mesh": 0.14,
+      "flash_rate": 0.0,
+      "top_features": [
+        {
+          "name": "NOAA ProbTor",
+          "value": 1.0,
+          "log_odds": 0.9975
+        },
+        {
+          "name": "storm motion (east)",
+          "value": 0.0,
+          "log_odds": 0.5021
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.4912
+        },
+        {
+          "name": "NOAA ProbWind",
+          "value": 1.0,
+          "log_odds": -0.4048
+        },
+        {
+          "name": "mixed-layer CIN",
+          "value": -13.0,
+          "log_odds": -0.3573
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 0.0010742967749722753,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 1.122934103012085,
+        "grad_tau": 0.06659802049398422,
+        "torsion": 1.2165904081484769e-05,
+        "alignment": -4.838693141937256,
+        "S_field": 0.523164689540863,
+        "Gamma_field": 0.3269888758659363,
+        "S_over_Gamma": 1.5999464988708496,
+        "Da": 19.34731674194336,
+        "E_coh": 0.29051095247268677,
+        "singularity_count": 2.0,
+        "singularity_conditions_met": 2,
+        "singularity_detail": {
+          "s_over_gamma": true,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 2,
+      "confidence_lo": 0.0,
+      "confidence_hi": 0.0044,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 0.0010742967749722753,
+        "probability_30min": 0.00013059120097522105,
+        "probability_90min": 0.0012098285394735984,
+        "probability_ef2plus_60min": 2.931294089447561e-06,
+        "probability_band_60min": [
+          0.00118558,
+          0.00119793
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [],
+        "drivers": [
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 1.0,
+            "log_odds": 0.9975
+          },
+          {
+            "input": "p_motion_east",
+            "label": "storm motion (east)",
+            "value": 0.0,
+            "log_odds": 0.5021
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.4912
+          },
+          {
+            "input": "p_ps_wind",
+            "label": "NOAA ProbWind",
+            "value": 1.0,
+            "log_odds": -0.4048
+          },
+          {
+            "input": "p_mlcin",
+            "label": "mixed-layer CIN",
+            "value": -13.0,
+            "log_odds": -0.3573
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "96d0ecc882dd0f53351842d9b7240aecba5eeee6b1cc5a37fa64d9c28c7af94a",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 1.0,
+          "p_ps_hail": 1.0,
+          "p_ps_wind": 1.0,
+          "p_ps_severe": 2.0,
+          "p_mucape": 709.0,
+          "p_mlcape": 569.0,
+          "p_mlcin": -13.0,
+          "p_ebshear": 32.0,
+          "p_srh01": 51.0,
+          "p_mesh": 0.14000000059604645,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 0.0,
+          "p_flash_density": 0.029999999329447746,
+          "p_maxllaz": 0.004000000189989805,
+          "p_p98llaz": 0.004000000189989805,
+          "p_p98mlaz": 0.004000000189989805,
+          "p_lja": 0.0,
+          "p_size": 56.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 0.8999999761581421,
+          "p_cape_m10m30": 323.0,
+          "p_meanwind_1_3kmagl": 22.0,
+          "p_wetbulb_0c_hgt": 6.699999809265137,
+          "p_avg_beam_hgt": 7.340000152587891,
+          "p_maxrc_emiss": 0.0,
+          "p_maxrc_icecf": null,
+          "e_age_min": 30.0,
+          "e_n_steps": 2.0,
+          "e_rot_sustained_min": 30.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.0020000000949949026,
+          "e_maxllaz_max": 0.004000000189989805,
+          "e_maxllaz_mean": 0.003000000026077032,
+          "e_maxllaz_slope": 0.0020000000949949026,
+          "e_p98llaz_delta": 0.0010000000474974513,
+          "e_p98llaz_max": 0.004000000189989805,
+          "e_p98llaz_mean": 0.0035000001080334187,
+          "e_p98llaz_slope": 0.0010000000474974513,
+          "e_ps_tor_delta": 1.0,
+          "e_ps_tor_max": 1.0,
+          "e_ps_tor_mean": 0.5,
+          "e_ps_tor_slope": 1.0,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": -0.07999999821186066,
+          "e_mesh_max": 0.2199999988079071,
+          "e_mesh_mean": 0.18000000715255737,
+          "e_mesh_slope": -0.07999999821186066,
+          "e_flash_rate_delta": 0.0,
+          "e_flash_rate_max": 0.0,
+          "e_flash_rate_mean": 0.0,
+          "e_flash_rate_slope": 0.0,
+          "e_size_delta": -21.0,
+          "e_size_max": 77.0,
+          "e_size_mean": 66.5,
+          "e_size_slope": -21.0,
+          "h80_hrrr_cape": 260.0,
+          "h80_hrrr_cin": -17.761783599853516,
+          "h80_hrrr_srh01": 111.0,
+          "h80_hrrr_srh03": 196.1999969482422,
+          "h80_hrrr_shear06": 19.583084106445312,
+          "h80_hrrr_shear01": 4.838695526123047,
+          "h80_hrrr_pwat": 17.328638076782227,
+          "h80_hrrr_t2m": 289.0543212890625,
+          "h80_hrrr_td2m": 282.4408264160156,
+          "h80_hrrr_refc": 28.0,
+          "h80_hrrr_stp": 0.12559284269809723,
+          "h80_hrrr_srh05_est": 61.05000305175781,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -107.46,
+              33.45
+            ],
+            [
+              -107.42,
+              33.45
+            ],
+            [
+              -107.42,
+              33.43
+            ],
+            [
+              -107.4,
+              33.4
+            ],
+            [
+              -107.43,
+              33.37
+            ],
+            [
+              -107.47,
+              33.37
+            ],
+            [
+              -107.48,
+              33.38
+            ],
+            [
+              -107.46,
+              33.42
+            ],
+            [
+              -107.46,
+              33.45
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 0.0010742967749722753,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "96d0ecc882dd0f53351842d9b7240aecba5eeee6b1cc5a37fa64d9c28c7af94a",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 0.0010742967749722753,
+        "probability": 0.0044,
+        "confidence_lo": 0.0,
+        "confidence_hi": 0.0044,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "86f012d42e43f03bfd31c9dd2dfba406835aaf64f022ac29a16cbca0263edd9e",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "d70d2bfaf2388539bec9eb15e0cf2ac872b69db89b3e34b7d7aab52ca0c083557e61fd7d5f651104527d2ce3b50b5be2ac43727a34a6ea5c4511cee760334605"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "86f012d42e43f03bfd31c9dd2dfba406835aaf64f022ac29a16cbca0263edd9e",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 0.0010935454622079943,
+        "p60_w": {
+          "margin": -0.44154029904255254,
+          "served": 0.0010742967749722753,
+          "recal": 0.0010935454622079943
+        },
+        "p60": {
+          "margin": -0.7933163015827068,
+          "served": 0.0007429061307451323,
+          "recal": 0.0008132227103166004
+        },
+        "p30": {
+          "margin": -1.9918128661312986,
+          "served": 0.00013059120097522105,
+          "recal": 0.00018526359637082625
+        },
+        "p90": {
+          "margin": -0.4904687913835114,
+          "served": 0.0012098285394735984,
+          "recal": 0.0011799035008142492
+        }
+      }
+    },
+    {
+      "storm_id": "1210571",
+      "lat": 32.98,
+      "lon": -109.594,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0026,
+      "risk_band": "minimal",
+      "ps_tor": 0.0,
+      "ps": 0.0,
+      "mucape": 760.0,
+      "ebshear": 35.0,
+      "srh01": 43.0,
+      "maxllaz": 0.005,
+      "mesh": 0.14,
+      "flash_rate": 0.0,
+      "top_features": [
+        {
+          "name": "NOAA ProbTor",
+          "value": 0.0,
+          "log_odds": -1.1421
+        },
+        {
+          "name": "NOAA ProbWind",
+          "value": 1.0,
+          "log_odds": -0.4575
+        },
+        {
+          "name": "storm motion (east)",
+          "value": 0.0,
+          "log_odds": 0.3907
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.3224
+        },
+        {
+          "name": "low-level rotation (98th pct)",
+          "value": 0.005,
+          "log_odds": 0.2799
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 0.0007949431379393108,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 1.0789591073989868,
+        "grad_tau": 0.08238803595304489,
+        "torsion": -0.009030379354953766,
+        "alignment": -1.7501072883605957,
+        "S_field": 0.4038432538509369,
+        "Gamma_field": 0.45689940452575684,
+        "S_over_Gamma": 0.8838778138160706,
+        "Da": 27.831682205200195,
+        "E_coh": 0.18413981795310974,
+        "singularity_count": 1.0,
+        "singularity_conditions_met": 1,
+        "singularity_detail": {
+          "s_over_gamma": false,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 1,
+      "confidence_lo": 0.0,
+      "confidence_hi": 0.0026,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 0.0007949431379393108,
+        "probability_30min": 0.00013298228105270208,
+        "probability_90min": 0.0007949431379393108,
+        "probability_ef2plus_60min": 1.9977693912758013e-06,
+        "probability_band_60min": [
+          0.00071629,
+          0.00088915
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [
+          "p90"
+        ],
+        "drivers": [
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 0.0,
+            "log_odds": -1.1421
+          },
+          {
+            "input": "p_ps_wind",
+            "label": "NOAA ProbWind",
+            "value": 1.0,
+            "log_odds": -0.4575
+          },
+          {
+            "input": "p_motion_east",
+            "label": "storm motion (east)",
+            "value": 0.0,
+            "log_odds": 0.3907
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.3224
+          },
+          {
+            "input": "p_p98llaz",
+            "label": "low-level rotation (98th pct)",
+            "value": 0.004999999888241291,
+            "log_odds": 0.2799
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "72a62c3c433f9c10ad5c2b066f0b7bf98fab95549020b77d2c4876327e7d993b",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 0.0,
+          "p_ps_hail": 1.0,
+          "p_ps_wind": 1.0,
+          "p_ps_severe": 2.0,
+          "p_mucape": 760.0,
+          "p_mlcape": 585.0,
+          "p_mlcin": -7.0,
+          "p_ebshear": 35.0,
+          "p_srh01": 43.0,
+          "p_mesh": 0.14000000059604645,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 0.0,
+          "p_flash_density": 0.09000000357627869,
+          "p_maxllaz": 0.004999999888241291,
+          "p_p98llaz": 0.004999999888241291,
+          "p_p98mlaz": 0.004999999888241291,
+          "p_lja": 0.0,
+          "p_size": 49.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 0.8999999761581421,
+          "p_cape_m10m30": 333.0,
+          "p_meanwind_1_3kmagl": 19.0,
+          "p_wetbulb_0c_hgt": 7.300000190734863,
+          "p_avg_beam_hgt": 8.510000228881836,
+          "p_maxrc_emiss": 0.0,
+          "p_maxrc_icecf": null,
+          "e_age_min": 0.0,
+          "e_n_steps": 1.0,
+          "e_rot_sustained_min": 30.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.0,
+          "e_maxllaz_max": 0.004999999888241291,
+          "e_maxllaz_mean": 0.004999999888241291,
+          "e_maxllaz_slope": 0.0,
+          "e_p98llaz_delta": 0.0,
+          "e_p98llaz_max": 0.004999999888241291,
+          "e_p98llaz_mean": 0.004999999888241291,
+          "e_p98llaz_slope": 0.0,
+          "e_ps_tor_delta": 0.0,
+          "e_ps_tor_max": 0.0,
+          "e_ps_tor_mean": 0.0,
+          "e_ps_tor_slope": 0.0,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": 0.0,
+          "e_mesh_max": 0.14000000059604645,
+          "e_mesh_mean": 0.14000000059604645,
+          "e_mesh_slope": 0.0,
+          "e_flash_rate_delta": 0.0,
+          "e_flash_rate_max": 0.0,
+          "e_flash_rate_mean": 0.0,
+          "e_flash_rate_slope": 0.0,
+          "e_size_delta": 0.0,
+          "e_size_max": 49.0,
+          "e_size_mean": 49.0,
+          "e_size_slope": 0.0,
+          "h80_hrrr_cape": 150.0,
+          "h80_hrrr_cin": -38.0114631652832,
+          "h80_hrrr_srh01": 104.5,
+          "h80_hrrr_srh03": 241.89999389648438,
+          "h80_hrrr_shear06": 21.511655807495117,
+          "h80_hrrr_shear01": 3.2513935565948486,
+          "h80_hrrr_pwat": 16.339147567749023,
+          "h80_hrrr_t2m": 291.401611328125,
+          "h80_hrrr_td2m": 282.6384582519531,
+          "h80_hrrr_refc": -10.0,
+          "h80_hrrr_stp": 0.06778416037559509,
+          "h80_hrrr_srh05_est": 57.47500228881836,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -109.62,
+              33.01
+            ],
+            [
+              -109.58,
+              33.0
+            ],
+            [
+              -109.57,
+              32.99
+            ],
+            [
+              -109.57,
+              32.97
+            ],
+            [
+              -109.55,
+              32.95
+            ],
+            [
+              -109.56,
+              32.94
+            ],
+            [
+              -109.62,
+              32.94
+            ],
+            [
+              -109.62,
+              32.99
+            ],
+            [
+              -109.63,
+              33.0
+            ],
+            [
+              -109.62,
+              33.01
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 0.0007949431379393108,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "72a62c3c433f9c10ad5c2b066f0b7bf98fab95549020b77d2c4876327e7d993b",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 0.0007949431379393108,
+        "probability": 0.0026,
+        "confidence_lo": 0.0,
+        "confidence_hi": 0.0026,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "8e4bd06d429f7d4b47bfc872f2d2def100f7eaf083bce7e66b37a80490ced105",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "0afd3dd9c4432fede0443dca8dd6c452ac6ce4b328a568f2eda845f0fc1c703bf8e57fd8184ac20449b5d4f6072820019ef71179983dfefaea94151112bd190a"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "8e4bd06d429f7d4b47bfc872f2d2def100f7eaf083bce7e66b37a80490ced105",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 0.0007942596333525145,
+        "p60_w": {
+          "margin": -0.741194540281739,
+          "served": 0.0007949431379393108,
+          "recal": 0.0007942596333525145
+        },
+        "p60": {
+          "margin": -0.972829756206612,
+          "served": 0.0006190167884211925,
+          "recal": 0.0006653733145386233
+        },
+        "p30": {
+          "margin": -1.9742424151549938,
+          "served": 0.00013298228105270208,
+          "recal": 0.00018872787578935854
+        },
+        "p90": {
+          "margin": -0.9405379729394427,
+          "served": 0.0007674106898514012,
+          "recal": 0.0007161078494583068
+        }
+      }
+    },
+    {
+      "storm_id": "1210565",
+      "lat": 38.1157,
+      "lon": -108.5743,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0004,
+      "risk_band": "minimal",
+      "ps_tor": 0.0,
+      "ps": 0.0,
+      "mucape": 332.0,
+      "ebshear": 19.0,
+      "srh01": 19.0,
+      "maxllaz": 0.004,
+      "mesh": 0.17,
+      "flash_rate": 3.0,
+      "top_features": [
+        {
+          "name": "NOAA ProbTor",
+          "value": 0.0,
+          "log_odds": -1.1279
+        },
+        {
+          "name": "mixed-layer CAPE",
+          "value": 240.0,
+          "log_odds": -0.7676
+        },
+        {
+          "name": "wet-bulb zero height",
+          "value": 5.0,
+          "log_odds": 0.7672
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.6031
+        },
+        {
+          "name": "1-3 km mean wind",
+          "value": 15.0,
+          "log_odds": -0.5184
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 0.00010097184825934358,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 0.7309520840644836,
+        "grad_tau": 0.008770334534347057,
+        "torsion": -0.0020212943200021982,
+        "alignment": -2.4203429222106934,
+        "S_field": 0.23414602875709534,
+        "Gamma_field": 0.2906196415424347,
+        "S_over_Gamma": 0.8056786060333252,
+        "Da": 17.911577224731445,
+        "E_coh": 0.3872966468334198,
+        "singularity_count": 1.0,
+        "singularity_conditions_met": 1,
+        "singularity_detail": {
+          "s_over_gamma": false,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 2,
+      "confidence_lo": 0.0,
+      "confidence_hi": 0.0004,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 0.00010097184825934358,
+        "probability_30min": 6.464149222124772e-05,
+        "probability_90min": 0.0001296672639262673,
+        "probability_ef2plus_60min": 7.152873680651351e-07,
+        "probability_band_60min": [
+          9.88e-05,
+          0.00014371
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [],
+        "drivers": [
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 0.0,
+            "log_odds": -1.1279
+          },
+          {
+            "input": "p_mlcape",
+            "label": "mixed-layer CAPE",
+            "value": 240.0,
+            "log_odds": -0.7676
+          },
+          {
+            "input": "p_wetbulb_0c_hgt",
+            "label": "wet-bulb zero height",
+            "value": 5.0,
+            "log_odds": 0.7672
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.6031
+          },
+          {
+            "input": "p_meanwind_1_3kmagl",
+            "label": "1-3 km mean wind",
+            "value": 15.0,
+            "log_odds": -0.5184
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "1f6443ce9c6cd1deb45bfd5fbdd933276249b7d13ba490332ff54274503ac49a",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 0.0,
+          "p_ps_hail": 0.0,
+          "p_ps_wind": 0.0,
+          "p_ps_severe": 0.0,
+          "p_mucape": 332.0,
+          "p_mlcape": 240.0,
+          "p_mlcin": -6.0,
+          "p_ebshear": 19.0,
+          "p_srh01": 19.0,
+          "p_mesh": 0.17000000178813934,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 3.0,
+          "p_flash_density": 0.14000000059604645,
+          "p_maxllaz": 0.004000000189989805,
+          "p_p98llaz": 0.003000000026077032,
+          "p_p98mlaz": 0.003000000026077032,
+          "p_lja": 0.0,
+          "p_size": 53.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 0.6000000238418579,
+          "p_cape_m10m30": 0.0,
+          "p_meanwind_1_3kmagl": 15.0,
+          "p_wetbulb_0c_hgt": 5.0,
+          "p_avg_beam_hgt": 4.690000057220459,
+          "p_maxrc_emiss": 0.4000000059604645,
+          "p_maxrc_icecf": null,
+          "e_age_min": 30.0,
+          "e_n_steps": 2.0,
+          "e_rot_sustained_min": 30.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.0010000000474974513,
+          "e_maxllaz_max": 0.004000000189989805,
+          "e_maxllaz_mean": 0.0035000001080334187,
+          "e_maxllaz_slope": 0.0010000000474974513,
+          "e_p98llaz_delta": 0.0,
+          "e_p98llaz_max": 0.003000000026077032,
+          "e_p98llaz_mean": 0.003000000026077032,
+          "e_p98llaz_slope": 0.0,
+          "e_ps_tor_delta": 0.0,
+          "e_ps_tor_max": 0.0,
+          "e_ps_tor_mean": 0.0,
+          "e_ps_tor_slope": 0.0,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": -0.009999999776482582,
+          "e_mesh_max": 0.18000000715255737,
+          "e_mesh_mean": 0.17499999701976776,
+          "e_mesh_slope": -0.009999999776482582,
+          "e_flash_rate_delta": 2.0,
+          "e_flash_rate_max": 3.0,
+          "e_flash_rate_mean": 2.0,
+          "e_flash_rate_slope": 2.0,
+          "e_size_delta": -12.0,
+          "e_size_max": 65.0,
+          "e_size_mean": 59.0,
+          "e_size_slope": -12.0,
+          "h80_hrrr_cape": 140.0,
+          "h80_hrrr_cin": -15.835841178894043,
+          "h80_hrrr_srh01": 61.400001525878906,
+          "h80_hrrr_srh03": 46.79999923706055,
+          "h80_hrrr_shear06": 1.4080942869186401,
+          "h80_hrrr_shear01": 6.249454498291016,
+          "h80_hrrr_pwat": 15.234391212463379,
+          "h80_hrrr_t2m": 284.6488342285156,
+          "h80_hrrr_td2m": 280.0408020019531,
+          "h80_hrrr_refc": 24.3125,
+          "h80_hrrr_stp": 0.0,
+          "h80_hrrr_srh05_est": 39.90999984741211,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -108.6,
+              38.15
+            ],
+            [
+              -108.55,
+              38.15
+            ],
+            [
+              -108.53,
+              38.11
+            ],
+            [
+              -108.55,
+              38.08
+            ],
+            [
+              -108.59,
+              38.08
+            ],
+            [
+              -108.6,
+              38.09
+            ],
+            [
+              -108.6,
+              38.15
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 0.00010097184825934358,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "1f6443ce9c6cd1deb45bfd5fbdd933276249b7d13ba490332ff54274503ac49a",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 0.00010097184825934358,
+        "probability": 0.0004,
+        "confidence_lo": 0.0,
+        "confidence_hi": 0.0004,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "61132a3d8616665d77b84083c81adba97cf716a5205ab6ba7456dd879a6b9b5d",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "5d48cdc7a57c347eeda500d4053735e143d11cc8f0eca28b325ee846d51cd3b35474c6d24281191adee8c3208f48cb3707a97d2c0fb9ffc8f1bb0f565d754d06"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "61132a3d8616665d77b84083c81adba97cf716a5205ab6ba7456dd879a6b9b5d",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 8.879743828725352e-05,
+        "p60_w": {
+          "margin": -2.793153651433379,
+          "served": 0.00010097184825934358,
+          "recal": 8.879743828725352e-05
+        },
+        "p60": {
+          "margin": -2.7684503901005644,
+          "served": 9.973779949904588e-05,
+          "recal": 8.932967064043846e-05
+        },
+        "p30": {
+          "margin": -2.6727710189358316,
+          "served": 6.464149222124772e-05,
+          "recal": 9.03534509651447e-05
+        },
+        "p90": {
+          "margin": -2.6974229849314657,
+          "served": 0.0001296672639262673,
+          "recal": 0.00010183441812666146
+        }
+      }
+    },
+    {
+      "storm_id": "1210525",
+      "lat": 35.1962,
+      "lon": -110.8125,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0002,
+      "risk_band": "minimal",
+      "ps_tor": 0.0,
+      "ps": 0.0,
+      "mucape": 222.0,
+      "ebshear": 13.0,
+      "srh01": 15.0,
+      "maxllaz": 0.005,
+      "mesh": 0.09,
+      "flash_rate": 1.0,
+      "top_features": [
+        {
+          "name": "mixed-layer CAPE",
+          "value": 152.0,
+          "log_odds": -1.5632
+        },
+        {
+          "name": "NOAA ProbTor",
+          "value": 0.0,
+          "log_odds": -1.1357
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.6461
+        },
+        {
+          "name": "effective bulk shear",
+          "value": 13.0,
+          "log_odds": -0.5867
+        },
+        {
+          "name": "low-level rotation (98th pct)",
+          "value": 0.006,
+          "log_odds": 0.5233
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 2.1404870801721208e-05,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 0.8450956344604492,
+        "grad_tau": 0.08548664301633835,
+        "torsion": -0.01506450492888689,
+        "alignment": -0.32669925689697266,
+        "S_field": 0.3232186436653137,
+        "Gamma_field": 0.3618340492248535,
+        "S_over_Gamma": 0.8932786583900452,
+        "Da": 22.786022186279297,
+        "E_coh": 0.3937866985797882,
+        "singularity_count": 1.0,
+        "singularity_conditions_met": 1,
+        "singularity_detail": {
+          "s_over_gamma": false,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 3,
+      "confidence_lo": 0.0,
+      "confidence_hi": 0.0002,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 2.1404870801721208e-05,
+        "probability_30min": 2.1404870801721208e-05,
+        "probability_90min": 3.524276551459422e-05,
+        "probability_ef2plus_60min": 3.95271466518305e-07,
+        "probability_band_60min": [
+          2.823e-05,
+          3.471e-05
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [
+          "p30"
+        ],
+        "drivers": [
+          {
+            "input": "p_mlcape",
+            "label": "mixed-layer CAPE",
+            "value": 152.0,
+            "log_odds": -1.5632
+          },
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 0.0,
+            "log_odds": -1.1357
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.6461
+          },
+          {
+            "input": "p_ebshear",
+            "label": "effective bulk shear",
+            "value": 13.0,
+            "log_odds": -0.5867
+          },
+          {
+            "input": "p_p98llaz",
+            "label": "low-level rotation (98th pct)",
+            "value": 0.006000000052154064,
+            "log_odds": 0.5233
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "8e40f361219620e81d484c4fde9506c8e735a4dc174332f957a2a430e4b66962",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 0.0,
+          "p_ps_hail": 0.0,
+          "p_ps_wind": 0.0,
+          "p_ps_severe": 0.0,
+          "p_mucape": 222.0,
+          "p_mlcape": 152.0,
+          "p_mlcin": -16.0,
+          "p_ebshear": 13.0,
+          "p_srh01": 15.0,
+          "p_mesh": 0.09000000357627869,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 1.0,
+          "p_flash_density": 0.09000000357627869,
+          "p_maxllaz": 0.004999999888241291,
+          "p_p98llaz": 0.006000000052154064,
+          "p_p98mlaz": 0.004000000189989805,
+          "p_lja": 0.0,
+          "p_size": 78.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 0.699999988079071,
+          "p_cape_m10m30": 0.0,
+          "p_meanwind_1_3kmagl": 13.0,
+          "p_wetbulb_0c_hgt": 6.099999904632568,
+          "p_avg_beam_hgt": 2.9100000858306885,
+          "p_maxrc_emiss": 0.0,
+          "p_maxrc_icecf": null,
+          "e_age_min": 60.0,
+          "e_n_steps": 3.0,
+          "e_rot_sustained_min": 60.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.0010000000474974513,
+          "e_maxllaz_max": 0.004999999888241291,
+          "e_maxllaz_mean": 0.003666666569188237,
+          "e_maxllaz_slope": 0.001500000013038516,
+          "e_p98llaz_delta": 0.0010000000474974513,
+          "e_p98llaz_max": 0.006000000052154064,
+          "e_p98llaz_mean": 0.004333333112299442,
+          "e_p98llaz_slope": 0.0020000000949949026,
+          "e_ps_tor_delta": 0.0,
+          "e_ps_tor_max": 0.0,
+          "e_ps_tor_mean": 0.0,
+          "e_ps_tor_slope": 0.0,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": -0.2199999988079071,
+          "e_mesh_max": 0.3100000023841858,
+          "e_mesh_mean": 0.2199999988079071,
+          "e_mesh_slope": -0.08500000089406967,
+          "e_flash_rate_delta": 0.0,
+          "e_flash_rate_max": 1.0,
+          "e_flash_rate_mean": 0.6666666865348816,
+          "e_flash_rate_slope": 0.5,
+          "e_size_delta": -5.0,
+          "e_size_max": 83.0,
+          "e_size_mean": 69.33333587646484,
+          "e_size_slope": 15.5,
+          "h80_hrrr_cape": 250.0,
+          "h80_hrrr_cin": -24.61892318725586,
+          "h80_hrrr_srh01": 72.19999694824219,
+          "h80_hrrr_srh03": 119.0999984741211,
+          "h80_hrrr_shear06": 11.239829063415527,
+          "h80_hrrr_shear01": 4.417611122131348,
+          "h80_hrrr_pwat": 14.78843879699707,
+          "h80_hrrr_t2m": 288.9348449707031,
+          "h80_hrrr_td2m": 282.2793884277344,
+          "h80_hrrr_refc": -10.0,
+          "h80_hrrr_stp": 0.0,
+          "h80_hrrr_srh05_est": 39.709999084472656,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -110.83,
+              35.23
+            ],
+            [
+              -110.79,
+              35.23
+            ],
+            [
+              -110.78,
+              35.22
+            ],
+            [
+              -110.77,
+              35.18
+            ],
+            [
+              -110.8,
+              35.14
+            ],
+            [
+              -110.85,
+              35.13
+            ],
+            [
+              -110.85,
+              35.21
+            ],
+            [
+              -110.83,
+              35.23
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 2.1404870801721208e-05,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "8e40f361219620e81d484c4fde9506c8e735a4dc174332f957a2a430e4b66962",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 2.1404870801721208e-05,
+        "probability": 0.0002,
+        "confidence_lo": 0.0,
+        "confidence_hi": 0.0002,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "3567966d8b305de26c572851cfdb7f5ff5abdc0df26f67211d7c864d92cba619",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "1564a6d145733f41092802d8c5d654da051539857cb34fc7d957d6fda19c24a81a1e30584623bb03ce6a059d5551637edb33fe0a8aa1a0d8a063c2a791d1ea09"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "3567966d8b305de26c572851cfdb7f5ff5abdc0df26f67211d7c864d92cba619",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 1.7102107905740373e-05,
+        "p60_w": {
+          "margin": -4.335314539855396,
+          "served": 2.1404870801721208e-05,
+          "recal": 1.7102107905740373e-05
+        },
+        "p60": {
+          "margin": -4.649670187177362,
+          "served": 1.4723872367368074e-05,
+          "recal": 1.089244709597789e-05
+        },
+        "p30": {
+          "margin": -3.686520405813497,
+          "served": 2.268982011281528e-05,
+          "recal": 3.102142740962067e-05
+        },
+        "p90": {
+          "margin": -3.98425878957154,
+          "served": 3.524276551459422e-05,
+          "recal": 2.4394031623488584e-05
+        }
+      }
+    },
+    {
+      "storm_id": "1210581",
+      "lat": 37.9918,
+      "lon": -108.2736,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0002,
+      "risk_band": "minimal",
+      "ps_tor": 0.0,
+      "ps": 0.0,
+      "mucape": 236.0,
+      "ebshear": 10.0,
+      "srh01": 19.0,
+      "maxllaz": 0.003,
+      "mesh": 0.34,
+      "flash_rate": 0.0,
+      "top_features": [
+        {
+          "name": "mixed-layer CAPE",
+          "value": 149.0,
+          "log_odds": -1.5323
+        },
+        {
+          "name": "NOAA ProbTor",
+          "value": 0.0,
+          "log_odds": -1.1303
+        },
+        {
+          "name": "effective bulk shear",
+          "value": 10.0,
+          "log_odds": -0.6947
+        },
+        {
+          "name": "storm motion (east)",
+          "value": 0.0,
+          "log_odds": 0.4856
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.4607
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 1.8963427568479257e-05,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 0.7309520840644836,
+        "grad_tau": 0.008770334534347057,
+        "torsion": -0.0020212943200021982,
+        "alignment": -2.4203429222106934,
+        "S_field": 0.23414602875709534,
+        "Gamma_field": 0.2906196415424347,
+        "S_over_Gamma": 0.8056786060333252,
+        "Da": 17.911577224731445,
+        "E_coh": 0.3872966468334198,
+        "singularity_count": 1.0,
+        "singularity_conditions_met": 1,
+        "singularity_detail": {
+          "s_over_gamma": false,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 1,
+      "confidence_lo": 0.0,
+      "confidence_hi": 0.0002,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 1.8963427568479257e-05,
+        "probability_30min": 1.8963427568479257e-05,
+        "probability_90min": 1.8963427568479257e-05,
+        "probability_ef2plus_60min": 2.683883972670788e-07,
+        "probability_band_60min": [
+          1.675e-05,
+          2.823e-05
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [
+          "p30",
+          "p90"
+        ],
+        "drivers": [
+          {
+            "input": "p_mlcape",
+            "label": "mixed-layer CAPE",
+            "value": 149.0,
+            "log_odds": -1.5323
+          },
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 0.0,
+            "log_odds": -1.1303
+          },
+          {
+            "input": "p_ebshear",
+            "label": "effective bulk shear",
+            "value": 10.0,
+            "log_odds": -0.6947
+          },
+          {
+            "input": "p_motion_east",
+            "label": "storm motion (east)",
+            "value": 0.0,
+            "log_odds": 0.4856
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.4607
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "2903be65cb5e3068a661818663b89f7d80f3acabfea071ad030139a99db9fb4c",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 0.0,
+          "p_ps_hail": 0.0,
+          "p_ps_wind": 0.0,
+          "p_ps_severe": 0.0,
+          "p_mucape": 236.0,
+          "p_mlcape": 149.0,
+          "p_mlcin": -4.0,
+          "p_ebshear": 10.0,
+          "p_srh01": 19.0,
+          "p_mesh": 0.3400000035762787,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 0.0,
+          "p_flash_density": 0.029999999329447746,
+          "p_maxllaz": 0.003000000026077032,
+          "p_p98llaz": 0.003000000026077032,
+          "p_p98mlaz": 0.0020000000949949026,
+          "p_lja": 0.0,
+          "p_size": 80.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 0.5,
+          "p_cape_m10m30": 0.0,
+          "p_meanwind_1_3kmagl": 16.0,
+          "p_wetbulb_0c_hgt": 3.4000000953674316,
+          "p_avg_beam_hgt": 5.110000133514404,
+          "p_maxrc_emiss": 0.0,
+          "p_maxrc_icecf": null,
+          "e_age_min": 0.0,
+          "e_n_steps": 1.0,
+          "e_rot_sustained_min": 0.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.0,
+          "e_maxllaz_max": 0.003000000026077032,
+          "e_maxllaz_mean": 0.003000000026077032,
+          "e_maxllaz_slope": 0.0,
+          "e_p98llaz_delta": 0.0,
+          "e_p98llaz_max": 0.003000000026077032,
+          "e_p98llaz_mean": 0.003000000026077032,
+          "e_p98llaz_slope": 0.0,
+          "e_ps_tor_delta": 0.0,
+          "e_ps_tor_max": 0.0,
+          "e_ps_tor_mean": 0.0,
+          "e_ps_tor_slope": 0.0,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": 0.0,
+          "e_mesh_max": 0.3400000035762787,
+          "e_mesh_mean": 0.3400000035762787,
+          "e_mesh_slope": 0.0,
+          "e_flash_rate_delta": 0.0,
+          "e_flash_rate_max": 0.0,
+          "e_flash_rate_mean": 0.0,
+          "e_flash_rate_slope": 0.0,
+          "e_size_delta": 0.0,
+          "e_size_max": 80.0,
+          "e_size_mean": 80.0,
+          "e_size_slope": 0.0,
+          "h80_hrrr_cape": 140.0,
+          "h80_hrrr_cin": -15.835841178894043,
+          "h80_hrrr_srh01": 61.400001525878906,
+          "h80_hrrr_srh03": 46.79999923706055,
+          "h80_hrrr_shear06": 1.4080942869186401,
+          "h80_hrrr_shear01": 6.249454498291016,
+          "h80_hrrr_pwat": 15.234391212463379,
+          "h80_hrrr_t2m": 284.6488342285156,
+          "h80_hrrr_td2m": 280.0408020019531,
+          "h80_hrrr_refc": 24.3125,
+          "h80_hrrr_stp": 0.0,
+          "h80_hrrr_srh05_est": 39.90999984741211,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -108.29,
+              38.04
+            ],
+            [
+              -108.24,
+              38.04
+            ],
+            [
+              -108.23,
+              38.03
+            ],
+            [
+              -108.23,
+              37.97
+            ],
+            [
+              -108.24,
+              37.96
+            ],
+            [
+              -108.27,
+              37.96
+            ],
+            [
+              -108.28,
+              37.95
+            ],
+            [
+              -108.32,
+              37.95
+            ],
+            [
+              -108.31,
+              37.97
+            ],
+            [
+              -108.31,
+              38.0
+            ],
+            [
+              -108.29,
+              38.04
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 1.8963427568479257e-05,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "2903be65cb5e3068a661818663b89f7d80f3acabfea071ad030139a99db9fb4c",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 1.8963427568479257e-05,
+        "probability": 0.0002,
+        "confidence_lo": 0.0,
+        "confidence_hi": 0.0002,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "f5031973efb92c2d91c94b2a3d4d9de660f45238b6b0288340b7ca244c9a14fa",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "e710504f4f9d9761573aaf7f0d93ec5b283fa2bfcfb0a73855ebd09d58527a5427082ea05cef7d533ad0254ad4b1844a0415d50851bb24cf07a2b17af494740b"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "f5031973efb92c2d91c94b2a3d4d9de660f45238b6b0288340b7ca244c9a14fa",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 1.50383910685271e-05,
+        "p60_w": {
+          "margin": -4.455709524315571,
+          "served": 1.8963427568479257e-05,
+          "recal": 1.50383910685271e-05
+        },
+        "p60": {
+          "margin": -4.900641653247849,
+          "served": 1.1407156739506156e-05,
+          "recal": 8.226282950047546e-06
+        },
+        "p30": {
+          "margin": -3.75148992845323,
+          "served": 2.1217334063837327e-05,
+          "recal": 2.8967158129067433e-05
+        },
+        "p90": {
+          "margin": -4.985780940571864,
+          "served": 1.2785751592608031e-05,
+          "recal": 8.021464342880407e-06
+        }
+      }
+    },
+    {
+      "storm_id": "1210580",
+      "lat": 34.9537,
+      "lon": -106.0625,
+      "motion_east": 0.0,
+      "motion_south": -1.0,
+      "valid_time": "20261019_221635 UTC",
+      "tornado_probability": 0.0001,
+      "risk_band": "minimal",
+      "ps_tor": 0.0,
+      "ps": 0.0,
+      "mucape": 209.0,
+      "ebshear": 8.0,
+      "srh01": 21.0,
+      "maxllaz": 0.003,
+      "mesh": 0.16,
+      "flash_rate": 1.0,
+      "top_features": [
+        {
+          "name": "mixed-layer CAPE",
+          "value": 132.0,
+          "log_odds": -1.4874
+        },
+        {
+          "name": "NOAA ProbTor",
+          "value": 0.0,
+          "log_odds": -1.1214
+        },
+        {
+          "name": "effective bulk shear",
+          "value": 8.0,
+          "log_odds": -0.7532
+        },
+        {
+          "name": "VIL density",
+          "value": 0.0,
+          "log_odds": -0.6261
+        },
+        {
+          "name": "NOAA ProbWind",
+          "value": 1.0,
+          "log_odds": -0.4525
+        }
+      ],
+      "model_scores": {
+        "v3_p60": 1.4578383608022138e-05,
+        "calibrated": true,
+        "model": "v3_w"
+      },
+      "coherence_score": 0.0,
+      "coherence_diagnostics": {
+        "tau": 0.9169391989707947,
+        "grad_tau": 0.07456517964601517,
+        "torsion": 0.007425240706652403,
+        "alignment": -1.6957391500473022,
+        "S_field": 0.3267330229282379,
+        "Gamma_field": 0.3252701759338379,
+        "S_over_Gamma": 1.0044972896575928,
+        "Da": 19.36360740661621,
+        "E_coh": 0.09397416561841965,
+        "singularity_count": 2.0,
+        "singularity_conditions_met": 2,
+        "singularity_detail": {
+          "s_over_gamma": true,
+          "high_gradient": false,
+          "high_torsion": false,
+          "positive_alignment": false,
+          "high_damkohler": true
+        }
+      },
+      "scoring_tier": "tier1_v3",
+      "coherence_source": "hrrr",
+      "model_version": "tornado_v3-05a06c843c87",
+      "track_length": 1,
+      "confidence_lo": 0.0,
+      "confidence_hi": 0.0001,
+      "v3": {
+        "event": "a tornado report within 10 km of this storm's tracked radar polygon",
+        "probability_60min": 1.4578383608022138e-05,
+        "probability_30min": 7.73562748560725e-06,
+        "probability_90min": 1.4578383608022138e-05,
+        "probability_ef2plus_60min": 2.5331292477914823e-07,
+        "probability_band_60min": [
+          1.675e-05,
+          1.976e-05
+        ],
+        "probability_band_60min_kind": "Venn-Abers pair (not a coverage interval)",
+        "model": "v3_w",
+        "nws_warning": {
+          "active": false,
+          "minutes_since_issue": null
+        },
+        "nws_feed_error": null,
+        "hrrr_analysis": null,
+        "coherence_clipped": [
+          "p90"
+        ],
+        "drivers": [
+          {
+            "input": "p_mlcape",
+            "label": "mixed-layer CAPE",
+            "value": 132.0,
+            "log_odds": -1.4874
+          },
+          {
+            "input": "p_ps_tor",
+            "label": "NOAA ProbTor",
+            "value": 0.0,
+            "log_odds": -1.1214
+          },
+          {
+            "input": "p_ebshear",
+            "label": "effective bulk shear",
+            "value": 8.0,
+            "log_odds": -0.7532
+          },
+          {
+            "input": "p_vil_density",
+            "label": "VIL density",
+            "value": 0.0,
+            "log_odds": -0.6261
+          },
+          {
+            "input": "p_ps_wind",
+            "label": "NOAA ProbWind",
+            "value": 1.0,
+            "log_odds": -0.4525
+          }
+        ],
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba",
+        "input_sha256": "2ad57faa3022e1579b048eed4829231ab3b232c3755b6e7d9e05a0e7dc2059ef",
+        "inputs": {
+          "p_ps": 0.0,
+          "p_ps_tor": 0.0,
+          "p_ps_hail": 0.0,
+          "p_ps_wind": 1.0,
+          "p_ps_severe": 1.0,
+          "p_mucape": 209.0,
+          "p_mlcape": 132.0,
+          "p_mlcin": -10.0,
+          "p_ebshear": 8.0,
+          "p_srh01": 21.0,
+          "p_mesh": 0.1599999964237213,
+          "p_vil_density": 0.0,
+          "p_flash_rate": 1.0,
+          "p_flash_density": 0.029999999329447746,
+          "p_maxllaz": 0.003000000026077032,
+          "p_p98llaz": 0.003000000026077032,
+          "p_p98mlaz": 0.0020000000949949026,
+          "p_lja": 0.0,
+          "p_size": 77.0,
+          "p_motion_east": 0.0,
+          "p_motion_south": -1.0,
+          "p_pwat": 0.800000011920929,
+          "p_cape_m10m30": 0.0,
+          "p_meanwind_1_3kmagl": 17.0,
+          "p_wetbulb_0c_hgt": 6.199999809265137,
+          "p_avg_beam_hgt": 3.2200000286102295,
+          "p_maxrc_emiss": 0.0,
+          "p_maxrc_icecf": null,
+          "e_age_min": 0.0,
+          "e_n_steps": 1.0,
+          "e_rot_sustained_min": 0.0,
+          "e_motion_speed": 1.0,
+          "e_motion_dir_deg": 0.0,
+          "e_maxllaz_delta": 0.0,
+          "e_maxllaz_max": 0.003000000026077032,
+          "e_maxllaz_mean": 0.003000000026077032,
+          "e_maxllaz_slope": 0.0,
+          "e_p98llaz_delta": 0.0,
+          "e_p98llaz_max": 0.003000000026077032,
+          "e_p98llaz_mean": 0.003000000026077032,
+          "e_p98llaz_slope": 0.0,
+          "e_ps_tor_delta": 0.0,
+          "e_ps_tor_max": 0.0,
+          "e_ps_tor_mean": 0.0,
+          "e_ps_tor_slope": 0.0,
+          "e_ps_delta": 0.0,
+          "e_ps_max": 0.0,
+          "e_ps_mean": 0.0,
+          "e_ps_slope": 0.0,
+          "e_mesh_delta": 0.0,
+          "e_mesh_max": 0.1599999964237213,
+          "e_mesh_mean": 0.1599999964237213,
+          "e_mesh_slope": 0.0,
+          "e_flash_rate_delta": 0.0,
+          "e_flash_rate_max": 1.0,
+          "e_flash_rate_mean": 1.0,
+          "e_flash_rate_slope": 0.0,
+          "e_size_delta": 0.0,
+          "e_size_max": 77.0,
+          "e_size_mean": 77.0,
+          "e_size_slope": 0.0,
+          "h80_hrrr_cape": 70.0,
+          "h80_hrrr_cin": -2.719480514526367,
+          "h80_hrrr_srh01": 53.20000076293945,
+          "h80_hrrr_srh03": 132.60000610351562,
+          "h80_hrrr_shear06": 20.378345489501953,
+          "h80_hrrr_shear01": 3.012176752090454,
+          "h80_hrrr_pwat": 17.961071014404297,
+          "h80_hrrr_t2m": 290.40875244140625,
+          "h80_hrrr_td2m": 278.2832946777344,
+          "h80_hrrr_refc": 19.5625,
+          "h80_hrrr_stp": 0.008167637512087822,
+          "h80_hrrr_srh05_est": 23.940000534057617,
+          "c80_tau": null,
+          "c80_grad_tau": null,
+          "c80_torsion": null,
+          "c80_alignment": null,
+          "c80_S_over_Gamma": null,
+          "c80_Da": null,
+          "c80_tau_x_maxllaz": null,
+          "c80_alignment_x_cape": null,
+          "c80_torsion_x_srh": null,
+          "c80_singularity_count": null,
+          "h9_mlcape_at": null,
+          "h9_mlcape_max27": null,
+          "h9_mlcape_mean27": null,
+          "h9_mlcape_max63": null,
+          "h9_mucape_at": null,
+          "h9_mucape_max27": null,
+          "h9_mucape_mean27": null,
+          "h9_mucape_max63": null,
+          "h9_mlcin_at": null,
+          "h9_mlcin_max27": null,
+          "h9_mlcin_mean27": null,
+          "h9_mlcin_max63": null,
+          "h9_srh_01_at": null,
+          "h9_srh_01_max27": null,
+          "h9_srh_01_mean27": null,
+          "h9_srh_01_max63": null,
+          "h9_srh_03_at": null,
+          "h9_srh_03_max27": null,
+          "h9_srh_03_mean27": null,
+          "h9_srh_03_max63": null,
+          "h9_refc_at": null,
+          "h9_refc_max27": null,
+          "h9_refc_mean27": null,
+          "h9_refc_max63": null,
+          "h9_pwat_at": null,
+          "h9_pwat_max27": null,
+          "h9_pwat_mean27": null,
+          "h9_pwat_max63": null,
+          "h9_td_dep_at": null,
+          "h9_td_dep_max27": null,
+          "h9_td_dep_mean27": null,
+          "h9_td_dep_max63": null,
+          "h9_shear_06_at": null,
+          "h9_shear_06_max27": null,
+          "h9_shear_06_mean27": null,
+          "h9_shear_06_max63": null,
+          "h9_shear_01_at": null,
+          "h9_shear_01_max27": null,
+          "h9_shear_01_mean27": null,
+          "h9_shear_01_max63": null,
+          "h9_storm_speed_at": null,
+          "h9_storm_speed_max27": null,
+          "h9_storm_speed_mean27": null,
+          "h9_storm_speed_max63": null,
+          "h9_stp_at": null,
+          "h9_stp_max27": null,
+          "h9_stp_mean27": null,
+          "h9_stp_max63": null,
+          "h9_shear01_streamwise": null,
+          "h9_shear06_storm_angle": null,
+          "c9_pde_9km_tau": null,
+          "c9_pde_9km_grad": null,
+          "c9_pde_9km_align": null,
+          "c9_pde_9km_torsion": null,
+          "c9_pde_27km_tau": null,
+          "c9_pde_27km_grad": null,
+          "c9_pde_27km_align": null,
+          "c9_pde_27km_torsion": null,
+          "c9_pde_81km_tau": null,
+          "c9_pde_81km_grad": null,
+          "c9_pde_81km_align": null,
+          "c9_pde_81km_torsion": null,
+          "c9_gauss_9km_tau": null,
+          "c9_gauss_9km_grad": null,
+          "c9_gauss_9km_align": null,
+          "c9_gauss_9km_torsion": null,
+          "c9_gauss_27km_tau": null,
+          "c9_gauss_27km_grad": null,
+          "c9_gauss_27km_align": null,
+          "c9_gauss_27km_torsion": null,
+          "c9_gauss_81km_tau": null,
+          "c9_gauss_81km_grad": null,
+          "c9_gauss_81km_align": null,
+          "c9_gauss_81km_torsion": null,
+          "c9_S_over_Gamma": null,
+          "c9_tau27_max27": null,
+          "w_tor_warning_active": 0.0,
+          "w_minutes_since_issue": null
+        }
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -106.07,
+              34.99
+            ],
+            [
+              -106.02,
+              34.99
+            ],
+            [
+              -106.02,
+              34.96
+            ],
+            [
+              -106.03,
+              34.94
+            ],
+            [
+              -106.07,
+              34.9
+            ],
+            [
+              -106.11,
+              34.9
+            ],
+            [
+              -106.11,
+              34.96
+            ],
+            [
+              -106.07,
+              34.99
+            ]
+          ]
+        ]
+      },
+      "raw_probability": 1.4578383608022138e-05,
+      "uncertainty_class": "tight",
+      "abstained": false,
+      "abstain_reason": null,
+      "gateway_mode": "NORMAL",
+      "calibrated": true,
+      "receipt": {
+        "spec": "hazardpulse/forecast/v1",
+        "model_version": "tornado_v3-05a06c843c87",
+        "model_sha256": "9fb5d0ca2375b9905f10dc0168972f82882bbda44ad92962879802e455728596",
+        "input_sha256": "2ad57faa3022e1579b048eed4829231ab3b232c3755b6e7d9e05a0e7dc2059ef",
+        "issued_at": "2026-10-19T22:20:05Z",
+        "raw_probability": 1.4578383608022138e-05,
+        "probability": 0.0001,
+        "confidence_lo": 0.0,
+        "confidence_hi": 0.0001,
+        "uncertainty_class": "tight",
+        "ood_score": null,
+        "ood_flag": false,
+        "abstained": false,
+        "abstain_reason": null,
+        "gateway_mode": "NORMAL",
+        "coverage_target": 0.9,
+        "receipt_sha256": "66121774ed1c9b11ebe04a6d97c636dcc9bec3b92d6b5cd8cecc73a6e5e49bf8",
+        "signature": {
+          "alg": "ed25519",
+          "sig": "eaec110e7247b638852176e712c081e4a2e5ed0f3d4a2c35a0ffd39dd536c4b6ad6983b35c329c7f3136f2bcf7134dd7e85a99a912e149215aa72fd13998c00b"
+        },
+        "binds": {
+          "model_sha256": "sha256 of the canonical JSON {model_sha256, calibrator_sha256}",
+          "input_sha256": "sha256 of the canonical JSON {input: value} over the payload's feature_names (v3_serving.input_digest of v3.inputs)"
+        }
+      },
+      "receipt_sha256": "66121774ed1c9b11ebe04a6d97c636dcc9bec3b92d6b5cd8cecc73a6e5e49bf8",
+      "calibrator_sha256": "341abae8c33e6de24aaa3f7884bc2dc446679414ade9bd764aef2cb5b72ace55",
+      "t2b_shadow": {
+        "probability_60min": 1.137447735702606e-05,
+        "p60_w": {
+          "margin": -4.7171365728786405,
+          "served": 1.4578383608022138e-05,
+          "recal": 1.137447735702606e-05
+        },
+        "p60": {
+          "margin": -5.237072948433771,
+          "served": 8.101918937301056e-06,
+          "recal": 5.64631433986797e-06
+        },
+        "p30": {
+          "margin": -4.728458355928864,
+          "served": 7.73562748560725e-06,
+          "recal": 1.0338352633326109e-05
+        },
+        "p90": {
+          "margin": -5.054959039340097,
+          "served": 1.1920929531326689e-05,
+          "recal": 7.4282945699261795e-06
+        }
+      }
+    }
+  ],
+  "disclaimer": "Independent hazard intelligence platform. Always follow official NWS/USGS guidance.",
+  "updated_at": "2026-10-19T22:20:05.500692Z",
+  "recent_predictions": [
+    {
+      "timestamp": "2026-10-19T21:52:20.342081Z",
+      "n_storms": 17,
+      "max_prob": 0.122,
+      "hash": "a0b5d24b6efbcc3d..."
+    },
+    {
+      "timestamp": "2026-10-19T21:23:54.691195Z",
+      "n_storms": 15,
+      "max_prob": 0.0797,
+      "hash": "84d69ec7cb6478be..."
+    },
+    {
+      "timestamp": "2026-10-19T19:22:15.266663Z",
+      "n_storms": 6,
+      "max_prob": 0.0002,
+      "hash": "d72434df6c99580a..."
+    },
+    {
+      "timestamp": "2026-10-19T17:17:51.916815Z",
+      "n_storms": 2,
+      "max_prob": 0.0002,
+      "hash": "ba83fbeadc133ecd..."
+    },
+    {
+      "timestamp": "2026-10-19T15:22:22.085790Z",
+      "n_storms": 0,
+      "max_prob": 0.0,
+      "hash": "becd85991cadbd94..."
+    },
+    {
+      "timestamp": "2026-10-19T13:20:34.834043Z",
+      "n_storms": 3,
+      "max_prob": 0.0003,
+      "hash": "9a207d88710e91d3..."
+    },
+    {
+      "timestamp": "2026-10-19T11:19:16.425354Z",
+      "n_storms": 4,
+      "max_prob": 0.0001,
+      "hash": "493bd47b09de8e22..."
+    },
+    {
+      "timestamp": "2026-10-19T09:22:38.386688Z",
+      "n_storms": 4,
+      "max_prob": 2e-05,
+      "hash": "f1d33b1e5ea15709..."
+    },
+    {
+      "timestamp": "2026-10-19T07:20:47.921292Z",
+      "n_storms": 2,
+      "max_prob": 0.0003,
+      "hash": "1f0cfa791a661a04..."
+    },
+    {
+      "timestamp": "2026-10-19T05:19:17.773061Z",
+      "n_storms": 1,
+      "max_prob": 0.0001,
+      "hash": "160b48426b70df42..."
+    }
+  ],
+  "data_valid_time": "2026-10-19T22:16:35Z",
+  "input_age_at_issue_min": 3.5,
+  "input_gaps": {
+    "census": "newest file",
+    "feed_valid_time": "20261019_221635 UTC",
+    "n_objects": 14,
+    "n_feed_attributes": 48,
+    "absent": [
+      {
+        "input": "p_ps",
+        "label": "ProbSevere severe probability",
+        "source": [
+          "PS"
+        ],
+        "fed": "zero",
+        "model_splits": 196
+      },
+      {
+        "input": "p_vil_density",
+        "label": "VIL density",
+        "source": [
+          "VIL_DENSITY",
+          "VILD"
+        ],
+        "fed": "zero",
+        "model_splits": 486
+      },
+      {
+        "input": "p_maxrc_icecf",
+        "label": "satellite glaciation rate",
+        "source": [
+          "MAXRC_ICECF"
+        ],
+        "fed": "missing",
+        "model_splits": 0
+      }
+    ],
+    "partial": [],
+    "changed_format": [
+      {
+        "input": "p_avg_beam_hgt",
+        "label": "radar beam height",
+        "source": [
+          "AVG_BEAM_HGT"
+        ],
+        "fed": "the bare number",
+        "model_splits": 0,
+        "documented_format": "'4.09 kft / 1.25 km'",
+        "n_objects_not_in_format": 14
+      },
+      {
+        "input": "p_maxrc_emiss",
+        "label": "satellite cloud-top growth",
+        "source": [
+          "MAXRC_EMISS"
+        ],
+        "fed": "the bare number",
+        "model_splits": 0,
+        "documented_format": "'2251Z 1.5%/min (weak)'",
+        "n_objects_not_in_format": 14
+      }
+    ]
+  },
+  "product_coherence": {
+    "rule": "p30 <= p60 <= p90 and p_ef2 <= p60; a product outside its nesting is clipped to p60",
+    "n_storms_with_products": 14,
+    "clipped": {
+      "p30": 2,
+      "p90": 3,
+      "p_ef2": 0
+    },
+    "clipped_rate": {
+      "p30": 0.1429,
+      "p90": 0.2143,
+      "p_ef2": 0.0
+    }
+  },
+  "t2b_shadow": {
+    "status": "ok",
+    "program": "docs/TORNADO_MODEL_PROGRAM.md amendment 11",
+    "published": false,
+    "artifact": "results/models/tornado_v3_recal_t2b.json",
+    "artifact_sha256": "ef146847cc503ce32e5ec9b9939e6f1efb189b9ccfa26ad5ac0384f7b46f079e",
+    "candidates": {
+      "p30": {
+        "a": 1.0546101322649928,
+        "b": -6.4929595908093924,
+        "served_a": 1.0327819630637114,
+        "served_b": -6.886199715574037,
+        "payload": "tornado_v3_w_30.json",
+        "payload_sha256": "c45167a49056eb64fe01c1eecfb8acd8e35f2cae95d9e4f84a01913782864676"
+      },
+      "p60": {
+        "a": 1.1186053395021356,
+        "b": -6.226284145081627,
+        "served_a": 1.0169782457791356,
+        "served_b": -6.397412256436702,
+        "payload": "tornado_v3.json",
+        "payload_sha256": "9005905f08b71b640a8e9dfe143be93e9ecee2606740c9a361f6c1999f75ac79"
+      },
+      "p60_w": {
+        "a": 1.0681296534661402,
+        "b": -6.345613713334546,
+        "served_a": 1.0059279986219851,
+        "served_b": -6.390856370704651,
+        "payload": "tornado_v3_w.json",
+        "payload_sha256": "05a06c843c87c99e10e95bfea8f7d542b9d9e5ec14151cfe4dc1252715b3a4ba"
+      },
+      "p90": {
+        "a": 1.1105434631672604,
+        "b": -6.196455112526138,
+        "served_a": 1.012410296694961,
+        "served_b": -6.219510416751649,
+        "payload": "tornado_v3_w_90.json",
+        "payload_sha256": "58208efc4bb403bb62f6fe630581588c1342eeaf0ccde867c180bafbadca74fa"
+      }
+    }
+  }
+}
