@@ -1,51 +1,51 @@
 {
   "key": "hu",
   "hazard": "hurricane",
-  "model_version": "hurricane_ri_v8_3",
+  "model_version": "hurricane_ri_stack_v1-35938d6c09b7",
   "verification_status": "prospective_scored",
   "status_badge": "Scored",
-  "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 319 storm forecasts scored against NHC best track; 42 rapid-intensification events observed.",
+  "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 320 storm forecasts scored against NHC best track; 42 rapid-intensification events observed.",
   "metric_source": "retrospective_holdout_exact_model",
   "metric_source_label": "Exact-model retrospective benchmark is available.",
-  "auc": null,
-  "brier": null,
-  "brier_skill_score": null,
-  "homepage_line": "183 matured forecasts scored",
+  "auc": 0.9284,
+  "brier": 0.04691,
+  "brier_skill_score": 0.3109,
+  "homepage_line": "AUC 0.928 retrospective holdout",
   "forecast_storage": {
-    "n_replay_artifacts": 191,
-    "n_matured_forecasts": 187,
-    "n_scored_forecasts": 183,
+    "n_replay_artifacts": 192,
+    "n_matured_forecasts": 188,
+    "n_scored_forecasts": 184,
     "n_backlog": 4,
     "first_issued_at": "2026-03-13T03:00:00Z",
-    "last_issued_at": "2026-11-04T15:34:20Z",
-    "last_forecast_id": "hu_fcst_20261104_1534",
-    "latest_replay_artifact": "/data/replay/hu_fcst_20261104_1534.json",
+    "last_issued_at": "2026-11-04T21:40:36Z",
+    "last_forecast_id": "hu_fcst_20261104_2140",
+    "latest_replay_artifact": "/data/replay/hu_fcst_20261104_2140.json",
     "forecast_horizon": "24 hours",
-    "next_mature_at": "2026-11-04T21:38:28Z"
+    "next_mature_at": "2026-11-05T03:34:39Z"
   },
   "ledger": {
     "supported": true,
     "path": "/data/hurricane-ledger.jsonl",
-    "n_rows": 132,
+    "n_rows": 133,
     "prev_hash_mismatches": 0,
     "since": "2026-10-03 (earlier hurricane forecasts are kept as replay files, unchained)"
   },
   "prospective": {
     "summary_path": "results/hurricane_prospective/prospective_summary.json",
     "status": "ok",
-    "scored_as_of": "2026-11-04T19:04:27Z",
-    "n_scored_forecasts": 183,
+    "scored_as_of": "2026-11-05T00:50:54Z",
+    "n_scored_forecasts": 184,
     "stale": false,
     "message": null,
     "unit": "storm-cycle: one scored record per storm and synoptic time t, the first made at or after t + 3 h 30 min (docs/HURRICANE_RI_V9_PROGRAM.md amendment 7, rule 1)",
     "pooled": {
-      "n_storm_cycles": 319,
+      "n_storm_cycles": 320,
       "n_events": 42,
       "n_storms": 23,
-      "brier": 0.081614,
-      "mean_forecast": 0.103291,
-      "observed_rate": 0.131661,
-      "auc": 0.875537,
+      "brier": 0.081359,
+      "mean_forecast": 0.103007,
+      "observed_rate": 0.13125,
+      "auc": 0.875985,
       "auc_withheld": null
     },
     "by_model_version": {
@@ -70,13 +70,13 @@
         "auc_withheld": "the cycles span 2 storms (< 5)"
       },
       "hurricane_ri_v8_3": {
-        "n_storm_cycles": 130,
+        "n_storm_cycles": 131,
         "n_events": 14,
         "n_storms": 13,
-        "brier": 0.070235,
-        "mean_forecast": 0.110624,
-        "observed_rate": 0.107692,
-        "auc": 0.841133,
+        "brier": 0.0697,
+        "mean_forecast": 0.109876,
+        "observed_rate": 0.10687,
+        "auc": 0.842491,
         "auc_withheld": null
       },
       "jtwc_warning_ingest": {
@@ -90,20 +90,23 @@
         "auc_withheld": "only one outcome occurred: a ranking score is undefined"
       }
     },
-    "total_storms_scored": 319,
+    "total_storms_scored": 320,
     "total_ri_events": 42
   },
   "exact_model_benchmark": {
     "availability": "exact_model_benchmark",
-    "label": "Retrospective benchmark available for the current live model version.",
-    "model_version": "hurricane_ri_v8_3",
-    "source_updated_at": null,
-    "auc": null,
-    "auc_ci95": null,
-    "brier": null,
-    "brier_skill_score": null,
-    "reliability_slope": null,
-    "n_cases": null
+    "label": "Pre-registered program: candidate A chosen on 2020-2024 by forward chaining, then scored once on the 2025 season (601 NHC-basin cycles, 44 rapid-intensification events, intervals by storm).",
+    "model_version": "hurricane_ri_stack_v1-35938d6c09b7",
+    "source_updated_at": "2026-10-02T17:53:11Z",
+    "auc": 0.9284,
+    "auc_ci95": [
+      0.89,
+      0.9659
+    ],
+    "brier": 0.04691,
+    "brier_skill_score": 0.3109,
+    "reliability_slope": 1.308,
+    "n_cases": 601
   },
   "related_benchmark": null,
   "recommended_action": "Keep scoring matured hurricane forecasts against NHC best track; live AUC stays undefined until at least one rapid-intensification event is observed, so promotion decisions still rest on the retrospective benchmark."
