@@ -4,18 +4,18 @@
   "model_version": "hurricane_ri_v8_3",
   "verification_status": "prospective_scored",
   "status_badge": "Scored",
-  "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 341 storm forecasts scored against NHC best track; 44 rapid-intensification events observed.",
-  "metric_source": "unverified_live_model",
-  "metric_source_label": "No exact-model benchmark is available in this repo.",
+  "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 343 storm forecasts scored against NHC best track; 45 rapid-intensification events observed.",
+  "metric_source": "retrospective_holdout_exact_model",
+  "metric_source_label": "Exact-model retrospective benchmark is available.",
   "auc": null,
   "brier": null,
   "brier_skill_score": null,
-  "homepage_line": "200 matured forecasts scored",
+  "homepage_line": "201 matured forecasts scored",
   "forecast_storage": {
     "n_replay_artifacts": 209,
     "n_matured_forecasts": 204,
-    "n_scored_forecasts": 200,
-    "n_backlog": 4,
+    "n_scored_forecasts": 201,
+    "n_backlog": 3,
     "first_issued_at": "2026-03-13T03:00:00Z",
     "last_issued_at": "2026-11-09T03:33:18Z",
     "last_forecast_id": "hu_fcst_20261109_0333",
@@ -33,30 +33,30 @@
   "prospective": {
     "summary_path": "results/hurricane_prospective/prospective_summary.json",
     "status": "ok",
-    "scored_as_of": "2026-11-08T23:52:30Z",
-    "n_scored_forecasts": 200,
+    "scored_as_of": "2026-11-09T04:32:26Z",
+    "n_scored_forecasts": 201,
     "stale": false,
     "message": null,
     "unit": "storm-cycle: one scored record per storm and synoptic time t, the first made at or after t + 3 h 30 min (docs/HURRICANE_RI_V9_PROGRAM.md amendment 7, rule 1)",
     "pooled": {
-      "n_storm_cycles": 341,
-      "n_events": 44,
+      "n_storm_cycles": 343,
+      "n_events": 45,
       "n_storms": 28,
-      "brier": 0.081731,
-      "mean_forecast": 0.099686,
-      "observed_rate": 0.129032,
-      "auc": 0.870523,
+      "brier": 0.083698,
+      "mean_forecast": 0.09969,
+      "observed_rate": 0.131195,
+      "auc": 0.868121,
       "auc_withheld": null
     },
     "by_model_version": {
       "hurricane_ri_stack_v1-35938d6c09b7": {
-        "n_storm_cycles": 162,
+        "n_storm_cycles": 163,
         "n_events": 22,
         "n_storms": 16,
-        "brier": 0.06943,
-        "mean_forecast": 0.092531,
-        "observed_rate": 0.135802,
-        "auc": 0.941071,
+        "brier": 0.069079,
+        "mean_forecast": 0.092638,
+        "observed_rate": 0.134969,
+        "auc": 0.940683,
         "auc_withheld": null
       },
       "hurricane_ri_v8_2": {
@@ -70,13 +70,13 @@
         "auc_withheld": "the cycles span 2 storms (< 5)"
       },
       "hurricane_ri_v8_3": {
-        "n_storm_cycles": 141,
-        "n_events": 16,
+        "n_storm_cycles": 142,
+        "n_events": 17,
         "n_storms": 15,
-        "brier": 0.077336,
-        "mean_forecast": 0.105349,
-        "observed_rate": 0.113475,
-        "auc": 0.826,
+        "brier": 0.08261,
+        "mean_forecast": 0.105248,
+        "observed_rate": 0.119718,
+        "auc": 0.823059,
         "auc_withheld": null
       },
       "jtwc_warning_ingest": {
@@ -90,10 +90,21 @@
         "auc_withheld": "only one outcome occurred: a ranking score is undefined"
       }
     },
-    "total_storms_scored": 341,
-    "total_ri_events": 44
+    "total_storms_scored": 343,
+    "total_ri_events": 45
   },
-  "exact_model_benchmark": null,
+  "exact_model_benchmark": {
+    "availability": "exact_model_benchmark",
+    "label": "Retrospective benchmark available for the current live model version.",
+    "model_version": "hurricane_ri_v8_3",
+    "source_updated_at": null,
+    "auc": null,
+    "auc_ci95": null,
+    "brier": null,
+    "brier_skill_score": null,
+    "reliability_slope": null,
+    "n_cases": null
+  },
   "related_benchmark": null,
   "recommended_action": "Keep scoring matured hurricane forecasts against NHC best track; live AUC stays undefined until at least one rapid-intensification event is observed, so promotion decisions still rest on the retrospective benchmark."
 }
