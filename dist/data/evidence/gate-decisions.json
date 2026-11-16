@@ -1,15 +1,73 @@
 {
   "gate_set_version": "2026.04",
-  "generated_at": "2026-11-16T18:22:03Z",
+  "generated_at": "2026-11-16T20:56:44Z",
   "decisions": [
     {
-      "gate_decision_id": "gdec_to_fcst_20261116_1821",
-      "forecast_id": "to_fcst_20261116_1821",
+      "gate_decision_id": "gdec_to_fcst_20261116_2055",
+      "forecast_id": "to_fcst_20261116_2055",
       "hazard": "tornado",
       "gate_set_version": "hp-gates-v1",
       "decision": "pass",
       "reasons": [],
       "warnings": [],
+      "emitted_at": "2026-11-16T20:55:44Z",
+      "artifact_refs": [
+        "/data/replay/to_fcst_20261116_2055.json"
+      ],
+      "gates": [
+        {
+          "gate_id": "G0_SCHEMA_VALIDITY",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G1_SOURCE_FRESHNESS",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G3_PROVENANCE_COMPLETE",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G4_CALIBRATION_FLOOR",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G5_SPATIOTEMPORAL_SANITY",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G6_ALERT_HARM_GUARD",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G8_REPLAYABILITY_REQUIRED",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G9_PUBLIC_PROJECTION_POLICY",
+          "outcome": "pass",
+          "reason": null
+        }
+      ],
+      "issued_at": "2026-11-16T20:55:44Z"
+    },
+    {
+      "gate_decision_id": "gdec_to_fcst_20261116_1821",
+      "forecast_id": "to_fcst_20261116_1821",
+      "hazard": "tornado",
+      "gate_set_version": "hp-gates-v1",
+      "decision": "degrade",
+      "reasons": [],
+      "warnings": [
+        "source data is aging (2.6h > 2.5h)"
+      ],
       "emitted_at": "2026-11-16T18:21:15Z",
       "artifact_refs": [
         "/data/replay/to_fcst_20261116_1821.json"
@@ -22,8 +80,8 @@
         },
         {
           "gate_id": "G1_SOURCE_FRESHNESS",
-          "outcome": "pass",
-          "reason": null
+          "outcome": "degrade",
+          "reason": "source data is aging (2.6h > 2.5h)"
         },
         {
           "gate_id": "G3_PROVENANCE_COMPLETE",
