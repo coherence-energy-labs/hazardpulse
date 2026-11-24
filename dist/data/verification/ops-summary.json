@@ -1,16 +1,16 @@
 {
-  "generated_at": "2026-11-21T00:34:53Z",
-  "score_as_of": "2026-11-21T00:33:39Z",
+  "generated_at": "2026-11-24T02:35:46Z",
+  "score_as_of": "2026-11-24T02:34:41Z",
   "system": {
-    "frozen_forecasts": 3640,
-    "matured_forecasts": 3499,
+    "frozen_forecasts": 3641,
+    "matured_forecasts": 3530,
     "scored_forecasts": 3490,
-    "matured_unscored_backlog": 9,
+    "matured_unscored_backlog": 40,
     "raw_chain_rows": 3461,
     "hash_chain_mismatches": 0,
     "exact_model_benchmarks": 3,
     "alerts": [
-      "9 matured forecast windows are waiting for scoring."
+      "40 matured forecast windows are waiting for scoring."
     ],
     "rollup_violations": [],
     "ledger_violations": []
@@ -31,15 +31,15 @@
       "homepage_line": "AUC 0.969, pre-registered second read of years already scored",
       "forecast_storage": {
         "n_replay_artifacts": 923,
-        "n_matured_forecasts": 799,
+        "n_matured_forecasts": 813,
         "n_scored_forecasts": 798,
-        "n_backlog": 1,
+        "n_backlog": 15,
         "first_issued_at": "2026-03-13T03:00:00Z",
         "last_issued_at": "2026-11-21T00:00:00Z",
         "last_forecast_id": "eq_fcst_20261121_0000",
         "latest_replay_artifact": "/data/replay/eq_fcst_20261121_0000.json",
         "forecast_horizon": "30 days",
-        "next_mature_at": "2026-11-21T06:00:00Z"
+        "next_mature_at": "2026-11-24T06:00:00Z"
       },
       "ledger": {
         "supported": true,
@@ -102,32 +102,32 @@
     {
       "key": "hu",
       "hazard": "hurricane",
-      "model_version": "hurricane_ri_v8_3",
-      "verification_status": "prospective_scored",
-      "status_badge": "Scored",
-      "verification_status_label": "Prospective live scoring is active for matured hurricane forecasts. 393 storm forecasts scored against NHC best track; 49 rapid-intensification events observed.",
+      "model_version": "hurricane_ri_stack_v1-35938d6c09b7",
+      "verification_status": "prospective_stale",
+      "status_badge": "Stale",
+      "verification_status_label": "Matured hurricane forecasts were scored, but the latest scoring run (2026-11-20T18:16:35Z) is older than 24 h. 393 storm forecasts scored against NHC best track; 49 rapid-intensification events observed.",
       "metric_source": "retrospective_holdout_exact_model",
       "metric_source_label": "Exact-model retrospective benchmark is available.",
-      "auc": null,
-      "brier": null,
-      "brier_skill_score": null,
-      "homepage_line": "247 matured forecasts scored",
+      "auc": 0.9284,
+      "brier": 0.04691,
+      "brier_skill_score": 0.3109,
+      "homepage_line": "AUC 0.928 retrospective holdout",
       "forecast_storage": {
-        "n_replay_artifacts": 256,
-        "n_matured_forecasts": 252,
+        "n_replay_artifacts": 257,
+        "n_matured_forecasts": 256,
         "n_scored_forecasts": 247,
-        "n_backlog": 5,
+        "n_backlog": 9,
         "first_issued_at": "2026-03-13T03:00:00Z",
-        "last_issued_at": "2026-11-20T21:46:56Z",
-        "last_forecast_id": "hu_fcst_20261120_2146",
-        "latest_replay_artifact": "/data/replay/hu_fcst_20261120_2146.json",
+        "last_issued_at": "2026-11-24T02:34:41Z",
+        "last_forecast_id": "hu_fcst_20261124_0234",
+        "latest_replay_artifact": "/data/replay/hu_fcst_20261124_0234.json",
         "forecast_horizon": "24 hours",
-        "next_mature_at": "2026-11-21T03:38:15Z"
+        "next_mature_at": "2026-11-25T02:34:41Z"
       },
       "ledger": {
         "supported": true,
         "path": "/data/hurricane-ledger.jsonl",
-        "n_rows": 197,
+        "n_rows": 198,
         "prev_hash_mismatches": 0,
         "since": "2026-10-03 (earlier hurricane forecasts are kept as replay files, unchained)"
       },
@@ -136,7 +136,7 @@
         "status": "ok",
         "scored_as_of": "2026-11-20T18:16:35Z",
         "n_scored_forecasts": 247,
-        "stale": false,
+        "stale": true,
         "message": null,
         "unit": "storm-cycle: one scored record per storm and synoptic time t, the first made at or after t + 3 h 30 min (docs/HURRICANE_RI_V9_PROGRAM.md amendment 7, rule 1)",
         "pooled": {
@@ -196,15 +196,18 @@
       },
       "exact_model_benchmark": {
         "availability": "exact_model_benchmark",
-        "label": "Retrospective benchmark available for the current live model version.",
-        "model_version": "hurricane_ri_v8_3",
-        "source_updated_at": null,
-        "auc": null,
-        "auc_ci95": null,
-        "brier": null,
-        "brier_skill_score": null,
-        "reliability_slope": null,
-        "n_cases": null
+        "label": "Pre-registered program: candidate A chosen on 2020-2024 by forward chaining, then scored once on the 2025 season (601 NHC-basin cycles, 44 rapid-intensification events, intervals by storm).",
+        "model_version": "hurricane_ri_stack_v1-35938d6c09b7",
+        "source_updated_at": "2026-10-02T17:53:11Z",
+        "auc": 0.9284,
+        "auc_ci95": [
+          0.89,
+          0.9659
+        ],
+        "brier": 0.04691,
+        "brier_skill_score": 0.3109,
+        "reliability_slope": 1.308,
+        "n_cases": 601
       },
       "related_benchmark": null,
       "recommended_action": "Keep scoring matured hurricane forecasts against NHC best track; live AUC stays undefined until at least one rapid-intensification event is observed, so promotion decisions still rest on the retrospective benchmark."
@@ -213,9 +216,9 @@
       "key": "to",
       "hazard": "tornado",
       "model_version": "tornado_v3-05a06c843c87",
-      "verification_status": "prospective_scored",
-      "status_badge": "Scored",
-      "verification_status_label": "Prospective live scoring is active for matured tornado forecasts.",
+      "verification_status": "prospective_stale",
+      "status_badge": "Stale",
+      "verification_status_label": "Matured tornado forecasts were scored, but the latest scoring run (2026-11-20T18:15:03Z) is older than 24 h.",
       "metric_source": "retrospective_holdout_exact_model",
       "metric_source_label": "Pre-registered programme (docs/TORNADO_MODEL_PROGRAM.md): every choice made on 2023, development test 2024, scored once on every 2025 storm observation (1,469,977; 1,579 tornadic). Live record of this version: 35,125 storm forecasts from 653 closed live forecasts, 43 followed by a tornado (SPC reports); Brier skill 0.08 against the base rate of outcomes that had closed before each forecast was issued.",
       "auc": 0.9702,
@@ -232,15 +235,15 @@
       "homepage_line": "AUC 0.970 pre-registered 2025 test \u00b7 live BSS 0.08",
       "forecast_storage": {
         "n_replay_artifacts": 2461,
-        "n_matured_forecasts": 2448,
+        "n_matured_forecasts": 2461,
         "n_scored_forecasts": 2445,
-        "n_backlog": 3,
+        "n_backlog": 16,
         "first_issued_at": "2026-03-13T03:00:00Z",
         "last_issued_at": "2026-11-21T00:33:39Z",
         "last_forecast_id": "to_fcst_20261121_0033",
         "latest_replay_artifact": "/data/replay/to_fcst_20261121_0033.json",
         "forecast_horizon": "24 hours",
-        "next_mature_at": "2026-11-21T01:37:18Z"
+        "next_mature_at": null
       },
       "ledger": {
         "supported": true,
@@ -258,7 +261,7 @@
         "status": "ok",
         "scored_as_of": "2026-11-20T18:15:03Z",
         "n_scored_forecasts": 2445,
-        "stale": false,
+        "stale": true,
         "message": null,
         "outcome_time_convention": "SPC daily files are convective days (12 UTC to 12 UTC); HHMM is UTC; rows before 1200 are placed on the next UTC date",
         "pooled": {

@@ -1,14 +1,76 @@
 {
   "gate_set_version": "2026.04",
-  "generated_at": "2026-11-21T00:34:54Z",
+  "generated_at": "2026-11-24T02:35:48Z",
   "decisions": [
+    {
+      "gate_decision_id": "gdec_hu_fcst_20261124_0234",
+      "forecast_id": "hu_fcst_20261124_0234",
+      "hazard": "hurricane",
+      "gate_set_version": "hp-gates-v1",
+      "decision": "degrade",
+      "reasons": [],
+      "warnings": [
+        "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
+      ],
+      "emitted_at": "2026-11-24T02:34:41Z",
+      "artifact_refs": [
+        "/data/replay/hu_fcst_20261124_0234.json"
+      ],
+      "gates": [
+        {
+          "gate_id": "G0_SCHEMA_VALIDITY",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G1_SOURCE_FRESHNESS",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G3_PROVENANCE_COMPLETE",
+          "outcome": "degrade",
+          "reason": "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256"
+        },
+        {
+          "gate_id": "G4_CALIBRATION_FLOOR",
+          "outcome": "degrade",
+          "reason": "model calibration not yet measured"
+        },
+        {
+          "gate_id": "G5_SPATIOTEMPORAL_SANITY",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G6_ALERT_HARM_GUARD",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G8_REPLAYABILITY_REQUIRED",
+          "outcome": "pass",
+          "reason": null
+        },
+        {
+          "gate_id": "G9_PUBLIC_PROJECTION_POLICY",
+          "outcome": "pass",
+          "reason": null
+        }
+      ],
+      "issued_at": "2026-11-24T02:34:41Z"
+    },
     {
       "gate_decision_id": "gdec_to_fcst_20261121_0033",
       "forecast_id": "to_fcst_20261121_0033",
       "hazard": "tornado",
       "gate_set_version": "hp-gates-v1",
-      "decision": "pass",
-      "reasons": [],
+      "decision": "block",
+      "reasons": [
+        "source data is stale (74.1h > 6h)"
+      ],
       "warnings": [],
       "emitted_at": "2026-11-21T00:33:39Z",
       "artifact_refs": [
@@ -22,8 +84,8 @@
         },
         {
           "gate_id": "G1_SOURCE_FRESHNESS",
-          "outcome": "pass",
-          "reason": null
+          "outcome": "block",
+          "reason": "source data is stale (74.1h > 6h)"
         },
         {
           "gate_id": "G3_PROVENANCE_COMPLETE",
@@ -63,8 +125,10 @@
       "forecast_id": "eq_fcst_20261121_0000",
       "hazard": "earthquake",
       "gate_set_version": "hp-gates-v1",
-      "decision": "degrade",
-      "reasons": [],
+      "decision": "block",
+      "reasons": [
+        "source data is stale (74.6h > 36h)"
+      ],
       "warnings": [
         "model calibration not yet measured"
       ],
@@ -80,8 +144,8 @@
         },
         {
           "gate_id": "G1_SOURCE_FRESHNESS",
-          "outcome": "pass",
-          "reason": null
+          "outcome": "block",
+          "reason": "source data is stale (74.6h > 36h)"
         },
         {
           "gate_id": "G3_PROVENANCE_COMPLETE",
@@ -233,11 +297,14 @@
       "forecast_id": "hu_fcst_20261120_2146",
       "hazard": "hurricane",
       "gate_set_version": "hp-gates-v1",
-      "decision": "degrade",
-      "reasons": [],
+      "decision": "block",
+      "reasons": [
+        "source data is stale (76.8h > 48h)"
+      ],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-20T21:46:56Z",
       "artifact_refs": [
@@ -251,8 +318,8 @@
         },
         {
           "gate_id": "G1_SOURCE_FRESHNESS",
-          "outcome": "pass",
-          "reason": null
+          "outcome": "block",
+          "reason": "source data is stale (76.8h > 48h)"
         },
         {
           "gate_id": "G3_PROVENANCE_COMPLETE",
@@ -522,7 +589,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-20T15:41:01Z",
       "artifact_refs": [
@@ -807,7 +875,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-20T09:39:57Z",
       "artifact_refs": [
@@ -1092,7 +1161,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-20T03:38:15Z",
       "artifact_refs": [
@@ -1377,7 +1447,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-19T21:33:40Z",
       "artifact_refs": [
@@ -1606,7 +1677,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-19T15:36:03Z",
       "artifact_refs": [
@@ -1891,7 +1963,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-19T09:43:34Z",
       "artifact_refs": [
@@ -2176,7 +2249,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-19T03:38:00Z",
       "artifact_refs": [
@@ -2461,7 +2535,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-18T21:33:04Z",
       "artifact_refs": [
@@ -2746,7 +2821,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-18T15:40:40Z",
       "artifact_refs": [
@@ -3031,7 +3107,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-18T09:38:09Z",
       "artifact_refs": [
@@ -3540,7 +3617,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-18T03:37:58Z",
       "artifact_refs": [
@@ -3881,7 +3959,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-17T21:42:02Z",
       "artifact_refs": [
@@ -4166,7 +4245,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-17T15:46:06Z",
       "artifact_refs": [
@@ -4451,7 +4531,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-17T09:33:47Z",
       "artifact_refs": [
@@ -4680,7 +4761,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-17T03:47:51Z",
       "artifact_refs": [
@@ -4965,7 +5047,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-16T21:41:11Z",
       "artifact_refs": [
@@ -5366,7 +5449,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-16T16:00:51Z",
       "artifact_refs": [
@@ -5651,7 +5735,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-16T09:46:34Z",
       "artifact_refs": [
@@ -5936,7 +6021,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-16T03:45:32Z",
       "artifact_refs": [
@@ -6277,7 +6363,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-15T21:34:19Z",
       "artifact_refs": [
@@ -6898,7 +6985,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-15T15:39:41Z",
       "artifact_refs": [
@@ -7239,7 +7327,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-15T09:45:31Z",
       "artifact_refs": [
@@ -7524,7 +7613,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-15T03:36:14Z",
       "artifact_refs": [
@@ -7865,7 +7955,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-14T21:35:09Z",
       "artifact_refs": [
@@ -8150,7 +8241,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-14T15:40:45Z",
       "artifact_refs": [
@@ -8435,7 +8527,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-14T09:39:54Z",
       "artifact_refs": [
@@ -8720,7 +8813,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-14T03:35:51Z",
       "artifact_refs": [
@@ -9005,7 +9099,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-13T21:39:01Z",
       "artifact_refs": [
@@ -9290,7 +9385,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-13T15:41:01Z",
       "artifact_refs": [
@@ -9575,7 +9671,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-13T09:37:48Z",
       "artifact_refs": [
@@ -9860,7 +9957,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-13T03:47:04Z",
       "artifact_refs": [
@@ -10145,7 +10243,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-12T21:32:23Z",
       "artifact_refs": [
@@ -10544,7 +10643,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-12T15:32:59Z",
       "artifact_refs": [
@@ -10829,7 +10929,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-12T09:34:01Z",
       "artifact_refs": [
@@ -11114,7 +11215,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-12T03:43:12Z",
       "artifact_refs": [
@@ -11229,7 +11331,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-12T01:05:34Z",
       "artifact_refs": [
@@ -11574,7 +11677,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-11T15:41:08Z",
       "artifact_refs": [
@@ -11859,7 +11963,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-11T09:36:48Z",
       "artifact_refs": [
@@ -12144,7 +12249,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-11T03:40:03Z",
       "artifact_refs": [
@@ -12429,7 +12535,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-10T21:35:03Z",
       "artifact_refs": [
@@ -12714,7 +12821,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-10T15:37:35Z",
       "artifact_refs": [
@@ -12999,7 +13107,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-10T09:37:54Z",
       "artifact_refs": [
@@ -13284,7 +13393,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-10T03:33:55Z",
       "artifact_refs": [
@@ -13569,7 +13679,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-09T21:44:13Z",
       "artifact_refs": [
@@ -13854,7 +13965,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-09T15:32:29Z",
       "artifact_refs": [
@@ -14139,7 +14251,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-09T09:43:29Z",
       "artifact_refs": [
@@ -14424,7 +14537,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-09T03:33:18Z",
       "artifact_refs": [
@@ -14709,7 +14823,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-08T21:38:42Z",
       "artifact_refs": [
@@ -14994,7 +15109,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-08T15:34:33Z",
       "artifact_refs": [
@@ -15279,7 +15395,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-08T09:37:16Z",
       "artifact_refs": [
@@ -15564,7 +15681,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-08T03:40:06Z",
       "artifact_refs": [
@@ -15849,7 +15967,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-07T21:38:39Z",
       "artifact_refs": [
@@ -16134,7 +16253,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-07T15:34:31Z",
       "artifact_refs": [
@@ -16419,7 +16539,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-07T09:38:12Z",
       "artifact_refs": [
@@ -16704,7 +16825,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-07T03:33:56Z",
       "artifact_refs": [
@@ -16989,7 +17111,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-06T21:38:35Z",
       "artifact_refs": [
@@ -17442,7 +17565,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-06T15:33:02Z",
       "artifact_refs": [
@@ -17727,7 +17851,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-06T09:34:55Z",
       "artifact_refs": [
@@ -18012,7 +18137,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-06T03:38:59Z",
       "artifact_refs": [
@@ -18297,7 +18423,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-05T21:34:14Z",
       "artifact_refs": [
@@ -18582,7 +18709,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-05T15:37:04Z",
       "artifact_refs": [
@@ -18867,7 +18995,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-05T09:31:53Z",
       "artifact_refs": [
@@ -19152,7 +19281,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-05T03:36:28Z",
       "artifact_refs": [
@@ -19381,7 +19511,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-04T21:40:36Z",
       "artifact_refs": [
@@ -19666,7 +19797,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-04T15:34:20Z",
       "artifact_refs": [
@@ -19951,7 +20083,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-04T09:48:54Z",
       "artifact_refs": [
@@ -20236,7 +20369,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-04T03:34:39Z",
       "artifact_refs": [
@@ -20633,7 +20767,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-03T21:38:28Z",
       "artifact_refs": [
@@ -21200,7 +21335,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-03T15:41:16Z",
       "artifact_refs": [
@@ -21485,7 +21621,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-03T09:35:33Z",
       "artifact_refs": [
@@ -21994,7 +22131,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-03T03:49:42Z",
       "artifact_refs": [
@@ -22783,7 +22921,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-02T21:38:27Z",
       "artifact_refs": [
@@ -23068,7 +23207,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-02T15:33:41Z",
       "artifact_refs": [
@@ -23353,7 +23493,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-02T09:39:14Z",
       "artifact_refs": [
@@ -23750,7 +23891,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-02T03:37:19Z",
       "artifact_refs": [
@@ -24035,7 +24177,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-01T21:38:01Z",
       "artifact_refs": [
@@ -24320,7 +24463,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-01T15:34:11Z",
       "artifact_refs": [
@@ -24605,7 +24749,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-01T09:40:17Z",
       "artifact_refs": [
@@ -24890,7 +25035,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-11-01T03:36:55Z",
       "artifact_refs": [
@@ -25175,7 +25321,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-31T21:32:22Z",
       "artifact_refs": [
@@ -25460,7 +25607,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-31T15:37:14Z",
       "artifact_refs": [
@@ -25745,7 +25893,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-31T09:34:02Z",
       "artifact_refs": [
@@ -26030,7 +26179,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-31T03:39:01Z",
       "artifact_refs": [
@@ -26371,7 +26521,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-30T21:39:42Z",
       "artifact_refs": [
@@ -26656,7 +26807,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-30T15:37:21Z",
       "artifact_refs": [
@@ -26941,7 +27093,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-30T09:36:49Z",
       "artifact_refs": [
@@ -27226,7 +27379,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-30T03:32:55Z",
       "artifact_refs": [
@@ -27567,7 +27721,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-29T21:36:52Z",
       "artifact_refs": [
@@ -27852,7 +28007,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-29T15:40:43Z",
       "artifact_refs": [
@@ -28137,7 +28293,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-29T09:40:29Z",
       "artifact_refs": [
@@ -28422,7 +28579,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-29T03:40:38Z",
       "artifact_refs": [
@@ -28819,7 +28977,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-28T21:39:03Z",
       "artifact_refs": [
@@ -29160,7 +29319,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-28T15:41:29Z",
       "artifact_refs": [
@@ -29445,7 +29605,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-28T09:33:55Z",
       "artifact_refs": [
@@ -29730,7 +29891,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-28T03:37:10Z",
       "artifact_refs": [
@@ -30015,7 +30177,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-27T21:32:02Z",
       "artifact_refs": [
@@ -30300,7 +30463,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-27T15:34:37Z",
       "artifact_refs": [
@@ -30585,7 +30749,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-27T09:46:46Z",
       "artifact_refs": [
@@ -30870,7 +31035,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-27T03:36:14Z",
       "artifact_refs": [
@@ -31155,7 +31321,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-26T21:41:11Z",
       "artifact_refs": [
@@ -31384,7 +31551,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-26T15:34:19Z",
       "artifact_refs": [
@@ -31727,7 +31895,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-26T09:33:18Z",
       "artifact_refs": [
@@ -32124,7 +32293,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-26T03:37:38Z",
       "artifact_refs": [
@@ -32409,7 +32579,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-25T21:35:42Z",
       "artifact_refs": [
@@ -32694,7 +32865,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-25T15:46:09Z",
       "artifact_refs": [
@@ -32979,7 +33151,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-25T09:35:04Z",
       "artifact_refs": [
@@ -33264,7 +33437,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-25T03:32:02Z",
       "artifact_refs": [
@@ -33885,7 +34059,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-24T21:35:45Z",
       "artifact_refs": [
@@ -34170,7 +34345,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-24T15:39:35Z",
       "artifact_refs": [
@@ -34455,7 +34631,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-24T09:35:29Z",
       "artifact_refs": [
@@ -34740,7 +34917,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-24T03:33:48Z",
       "artifact_refs": [
@@ -35251,7 +35429,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-23T21:38:24Z",
       "artifact_refs": [
@@ -35536,7 +35715,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-23T15:32:14Z",
       "artifact_refs": [
@@ -35821,7 +36001,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-23T09:36:06Z",
       "artifact_refs": [
@@ -36106,7 +36287,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-23T03:33:32Z",
       "artifact_refs": [
@@ -36897,7 +37079,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-22T21:37:03Z",
       "artifact_refs": [
@@ -37744,7 +37927,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-22T15:40:13Z",
       "artifact_refs": [
@@ -38423,7 +38607,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-22T09:51:05Z",
       "artifact_refs": [
@@ -39268,7 +39453,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-22T03:35:06Z",
       "artifact_refs": [
@@ -40057,7 +40243,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-21T21:39:16Z",
       "artifact_refs": [
@@ -40566,7 +40753,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-21T15:33:04Z",
       "artifact_refs": [
@@ -41019,7 +41207,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-21T09:37:04Z",
       "artifact_refs": [
@@ -41304,7 +41493,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-21T03:33:05Z",
       "artifact_refs": [
@@ -41589,7 +41779,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-20T21:36:57Z",
       "artifact_refs": [
@@ -41874,7 +42065,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-20T15:39:58Z",
       "artifact_refs": [
@@ -42159,7 +42351,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-20T09:40:56Z",
       "artifact_refs": [
@@ -42444,7 +42637,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-20T03:38:41Z",
       "artifact_refs": [
@@ -43009,7 +43203,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-19T21:34:06Z",
       "artifact_refs": [
@@ -43294,7 +43489,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-19T15:43:46Z",
       "artifact_refs": [
@@ -43581,7 +43777,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-19T09:41:02Z",
       "artifact_refs": [
@@ -43866,7 +44063,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-19T03:36:35Z",
       "artifact_refs": [
@@ -44151,7 +44349,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-18T21:32:19Z",
       "artifact_refs": [
@@ -44436,7 +44635,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-18T15:37:27Z",
       "artifact_refs": [
@@ -44721,7 +44921,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-18T09:33:52Z",
       "artifact_refs": [
@@ -45006,7 +45207,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-18T03:39:49Z",
       "artifact_refs": [
@@ -45291,7 +45493,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-17T21:32:02Z",
       "artifact_refs": [
@@ -45576,7 +45779,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-17T15:40:01Z",
       "artifact_refs": [
@@ -45861,7 +46065,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-17T09:36:02Z",
       "artifact_refs": [
@@ -46146,7 +46351,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-17T03:34:24Z",
       "artifact_refs": [
@@ -46431,7 +46637,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-16T21:39:06Z",
       "artifact_refs": [
@@ -46716,7 +46923,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-16T15:33:50Z",
       "artifact_refs": [
@@ -47001,7 +47209,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-16T09:37:38Z",
       "artifact_refs": [
@@ -47286,7 +47495,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-16T03:33:27Z",
       "artifact_refs": [
@@ -47683,7 +47893,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-15T21:38:07Z",
       "artifact_refs": [
@@ -47968,7 +48179,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-15T15:32:33Z",
       "artifact_refs": [
@@ -48253,7 +48465,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-15T09:35:10Z",
       "artifact_refs": [
@@ -48538,7 +48751,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-15T03:38:49Z",
       "artifact_refs": [
@@ -48991,7 +49205,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-14T21:32:54Z",
       "artifact_refs": [
@@ -49276,7 +49491,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-14T15:35:54Z",
       "artifact_refs": [
@@ -49561,7 +49777,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-14T09:46:22Z",
       "artifact_refs": [
@@ -49846,7 +50063,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-14T03:37:03Z",
       "artifact_refs": [
@@ -50355,7 +50573,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-13T21:38:41Z",
       "artifact_refs": [
@@ -50640,7 +50859,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-13T15:41:15Z",
       "artifact_refs": [
@@ -50925,7 +51145,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-13T09:33:48Z",
       "artifact_refs": [
@@ -51210,7 +51431,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-13T03:38:32Z",
       "artifact_refs": [
@@ -51495,7 +51717,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-12T21:33:41Z",
       "artifact_refs": [
@@ -51780,7 +52003,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-12T15:37:34Z",
       "artifact_refs": [
@@ -52065,7 +52289,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-12T09:40:39Z",
       "artifact_refs": [
@@ -52350,7 +52575,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-12T03:36:12Z",
       "artifact_refs": [
@@ -52635,7 +52861,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-11T21:41:03Z",
       "artifact_refs": [
@@ -53314,7 +53541,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-11T15:39:53Z",
       "artifact_refs": [
@@ -53993,7 +54221,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-11T09:36:25Z",
       "artifact_refs": [
@@ -54336,7 +54565,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-11T03:32:49Z",
       "artifact_refs": [
@@ -54845,7 +55075,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-10T21:38:10Z",
       "artifact_refs": [
@@ -55522,7 +55753,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-10T15:33:48Z",
       "artifact_refs": [
@@ -55921,7 +56153,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-10T09:59:27Z",
       "artifact_refs": [
@@ -55980,7 +56213,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-10T09:33:56Z",
       "artifact_refs": [
@@ -56095,7 +56329,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-10T06:15:12Z",
       "artifact_refs": [
@@ -56324,7 +56559,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-10T03:37:55Z",
       "artifact_refs": [
@@ -56665,7 +56901,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-09T21:33:46Z",
       "artifact_refs": [
@@ -57062,7 +57299,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-09T15:37:34Z",
       "artifact_refs": [
@@ -57291,7 +57529,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-09T09:32:08Z",
       "artifact_refs": [
@@ -57576,7 +57815,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-09T03:35:50Z",
       "artifact_refs": [
@@ -57861,7 +58101,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-08T21:40:53Z",
       "artifact_refs": [
@@ -57976,7 +58217,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-08T19:26:40Z",
       "artifact_refs": [
@@ -58205,7 +58447,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-08T15:33:43Z",
       "artifact_refs": [
@@ -58490,7 +58733,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-08T09:35:14Z",
       "artifact_refs": [
@@ -58775,7 +59019,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-08T03:40:04Z",
       "artifact_refs": [
@@ -59060,7 +59305,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-07T21:35:19Z",
       "artifact_refs": [
@@ -59345,7 +59591,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-07T16:24:54Z",
       "artifact_refs": [
@@ -59630,7 +59877,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-07T09:34:44Z",
       "artifact_refs": [
@@ -59915,7 +60163,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-07T03:39:03Z",
       "artifact_refs": [
@@ -60200,7 +60449,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-06T21:33:47Z",
       "artifact_refs": [
@@ -60485,7 +60735,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-06T15:36:18Z",
       "artifact_refs": [
@@ -60770,7 +61021,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-06T09:38:00Z",
       "artifact_refs": [
@@ -61055,7 +61307,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-06T03:32:57Z",
       "artifact_refs": [
@@ -61226,7 +61479,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-06T00:14:28Z",
       "artifact_refs": [
@@ -61401,7 +61655,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-05T17:46:59Z",
       "artifact_refs": [
@@ -61634,7 +61889,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-05T10:38:51Z",
       "artifact_refs": [
@@ -61867,7 +62123,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-05T03:33:52Z",
       "artifact_refs": [
@@ -62158,7 +62415,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-05T00:02:54Z",
       "artifact_refs": [
@@ -62333,7 +62591,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-04T18:43:32Z",
       "artifact_refs": [
@@ -62566,7 +62825,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-04T09:59:43Z",
       "artifact_refs": [
@@ -62799,7 +63059,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-03T23:58:06Z",
       "artifact_refs": [
@@ -62974,7 +63235,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-03T18:46:31Z",
       "artifact_refs": [
@@ -63091,7 +63353,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-03T18:04:32Z",
       "artifact_refs": [
@@ -63206,7 +63469,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-03T16:41:17Z",
       "artifact_refs": [
@@ -63323,7 +63587,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-03T14:36:26Z",
       "artifact_refs": [
@@ -63382,7 +63647,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-03T14:23:19Z",
       "artifact_refs": [
@@ -63499,7 +63765,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-03T12:48:02Z",
       "artifact_refs": [
@@ -63558,7 +63825,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-03T12:23:59Z",
       "artifact_refs": [
@@ -63791,7 +64059,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-03T04:54:56Z",
       "artifact_refs": [
@@ -63850,7 +64119,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-10-03T04:02:16Z",
       "artifact_refs": [
@@ -163627,7 +163897,8 @@
       ],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-26T12:50:43Z",
       "artifact_refs": [
@@ -164504,7 +164775,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-25T13:00:10Z",
       "artifact_refs": [
@@ -165500,7 +165772,8 @@
       "warnings": [
         "source data is aging (24.7h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-24T12:16:41Z",
       "artifact_refs": [
@@ -166495,7 +166768,8 @@
       "warnings": [
         "source data is aging (24.0h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-23T12:13:51Z",
       "artifact_refs": [
@@ -167430,7 +167704,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-22T14:08:46Z",
       "artifact_refs": [
@@ -168368,7 +168643,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-21T14:36:26Z",
       "artifact_refs": [
@@ -169076,7 +169352,8 @@
       "warnings": [
         "source data is aging (24.1h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-20T14:27:54Z",
       "artifact_refs": [
@@ -169784,7 +170061,8 @@
       "warnings": [
         "source data is aging (24.0h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-19T14:27:30Z",
       "artifact_refs": [
@@ -170548,7 +170826,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-18T14:49:11Z",
       "artifact_refs": [
@@ -171371,7 +171650,8 @@
       "warnings": [
         "source data is aging (26.0h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-17T12:47:56Z",
       "artifact_refs": [
@@ -172250,7 +172530,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-16T12:51:50Z",
       "artifact_refs": [
@@ -173073,7 +173354,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-15T13:21:52Z",
       "artifact_refs": [
@@ -173837,7 +174119,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-14T13:22:40Z",
       "artifact_refs": [
@@ -174601,7 +174884,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-13T13:58:57Z",
       "artifact_refs": [
@@ -175307,7 +175591,8 @@
       "warnings": [
         "source data is aging (24.5h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-12T13:31:00Z",
       "artifact_refs": [
@@ -176071,7 +176356,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-11T14:15:57Z",
       "artifact_refs": [
@@ -180764,7 +181050,8 @@
       ],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-05T13:03:36Z",
       "artifact_refs": [
@@ -181643,7 +181930,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-04T13:16:49Z",
       "artifact_refs": [
@@ -182465,7 +182753,8 @@
       "warnings": [
         "source data is aging (24.6h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-03T12:39:09Z",
       "artifact_refs": [
@@ -183344,7 +183633,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-02T12:39:48Z",
       "artifact_refs": [
@@ -184224,7 +184514,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-05-01T12:47:59Z",
       "artifact_refs": [
@@ -185102,7 +185393,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-30T13:14:48Z",
       "artifact_refs": [
@@ -185923,7 +186215,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-29T13:15:48Z",
       "artifact_refs": [
@@ -186687,7 +186980,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-28T13:22:09Z",
       "artifact_refs": [
@@ -187509,7 +187803,8 @@
       "warnings": [
         "source data is aging (24.2h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-27T13:12:04Z",
       "artifact_refs": [
@@ -188331,7 +188626,8 @@
       "warnings": [
         "source data is aging (24.6h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-26T12:35:58Z",
       "artifact_refs": [
@@ -189210,7 +189506,8 @@
       "warnings": [
         "source data is aging (24.0h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-25T12:34:08Z",
       "artifact_refs": [
@@ -190145,7 +190442,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-24T12:52:54Z",
       "artifact_refs": [
@@ -191024,7 +191322,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-23T12:54:27Z",
       "artifact_refs": [
@@ -191903,7 +192202,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-22T12:54:29Z",
       "artifact_refs": [
@@ -192841,7 +193141,8 @@
       "warnings": [
         "source data is aging (24.0h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-21T12:54:25Z",
       "artifact_refs": [
@@ -193603,7 +193904,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-20T20:00:55Z",
       "artifact_refs": [
@@ -193662,7 +193964,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-20T19:59:30Z",
       "artifact_refs": [
@@ -194071,7 +194374,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-20T12:59:30Z",
       "artifact_refs": [
@@ -194950,7 +195254,8 @@
       "warnings": [
         "source data is aging (24.5h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-19T12:32:03Z",
       "artifact_refs": [
@@ -195885,7 +196190,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-18T12:32:34Z",
       "artifact_refs": [
@@ -196820,7 +197126,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-17T12:50:03Z",
       "artifact_refs": [
@@ -197699,7 +198006,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-16T12:58:15Z",
       "artifact_refs": [
@@ -198637,7 +198945,8 @@
       "warnings": [
         "source data is aging (24.1h > 24h)",
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-15T12:53:33Z",
       "artifact_refs": [
@@ -199574,7 +199883,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-14T12:54:26Z",
       "artifact_refs": [
@@ -200336,7 +200646,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-13T15:24:23Z",
       "artifact_refs": [
@@ -200453,7 +200764,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-13T15:12:04Z",
       "artifact_refs": [
@@ -200512,7 +200824,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-13T15:03:50Z",
       "artifact_refs": [
@@ -200571,7 +200884,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-13T15:01:55Z",
       "artifact_refs": [
@@ -200747,7 +201061,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-13T12:55:01Z",
       "artifact_refs": [
@@ -201099,7 +201414,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-13T02:44:04Z",
       "artifact_refs": [
@@ -201158,7 +201474,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-13T02:42:56Z",
       "artifact_refs": [
@@ -201276,7 +201593,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-13T01:44:29Z",
       "artifact_refs": [
@@ -201335,7 +201653,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-13T01:43:04Z",
       "artifact_refs": [
@@ -201394,7 +201713,8 @@
       "reasons": [],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-13T01:41:45Z",
       "artifact_refs": [
@@ -209648,7 +209968,8 @@
       ],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-04-02T17:22:03Z",
       "artifact_refs": [
@@ -209709,7 +210030,8 @@
       ],
       "warnings": [
         "cryptographic provenance incomplete: model_sha256, input_sha256, receipt_sha256",
-        "model calibration not yet measured"
+        "model calibration not yet measured",
+        "no_active_tropical_cyclones_in_feed"
       ],
       "emitted_at": "2026-03-13T03:00:00Z",
       "artifact_refs": [
